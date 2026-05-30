@@ -26,3 +26,9 @@ jwt:
 # 迁移工具专用：源库连接信息（只读，生产数据，不要提交到 git）
 migrate:
   src_dsn: "databaseName:pwd_@tcp(ip:port)/blog?charset=utf8mb4&parseTime=True&loc=Local"
+
+email:
+  host: smtp.xxx.com
+  port: 465
+  from: xxxxx@xx.com
+  password: ""

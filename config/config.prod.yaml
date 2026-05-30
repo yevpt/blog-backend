@@ -7,13 +7,3 @@ server:
 log:
   level: warn
   format: json
-
-db:
-  host: mysql
-  port: 3306
-  name: blog_prod
-  # user/password 通过 BLOG_DB_USER / BLOG_DB_PASSWORD 环境变量注入
-
-redis:
-  addr: redis:6379
-  # password 通过 BLOG_REDIS_PASSWORD 环境变量注入

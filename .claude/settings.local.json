@@ -24,7 +24,12 @@
       "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go test *)",
       "Bash(git commit -m ' *)",
       "Bash(git commit *)",
-      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go run *)"
+      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go run *)",
+      "Bash(go build *)",
+      "Bash(which go *)",
+      "Read(//Users/vpt/go/bin/**)",
+      "Read(//usr/bin/**)",
+      "Read(//Users/vpt/**)"
     ]
   }
 }

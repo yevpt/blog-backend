@@ -33,8 +33,3 @@ storage:
   region: "garage"
   access_key: ""
   secret_key: ""
-
-email:
-  host: smtp.163.com
-  port: 465
-  from: vpt940417@163.com
