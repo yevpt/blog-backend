@@ -79,29 +79,26 @@ type EmailConfig struct {
 	Password string `mapstructure:"password"`
 }
 
-// Load 加载配置，按优先级叠加：config.yaml → config.{env}.yaml → config.local.yaml → 环境变量
+// Load 按优先级叠加加载配置：config.yaml → config.{APP_ENV}.yaml → config.local.yaml → 环境变量（BLOG_ 前缀）
 func Load() (*Config, error) {
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./config")
-	v.AddConfigPath("../config") // 兼容测试时的路径
+	v.AddConfigPath("../config") // 兼容测试时的工作目录
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("读取基础配置失败: %w", err)
 	}
 
-	// 加载环境特定配置（dev / prod），如果存在则覆盖基础配置
 	env := os.Getenv("APP_ENV")
 	if env != "" {
 		mergeConfig(v, fmt.Sprintf("config.%s", env))
 	}
 
-	// 加载本地覆盖配置（优先级最高，用于本地开发密码等）
 	mergeConfig(v, "config.local")
 
-	// 允许通过环境变量覆盖任意配置（前缀 BLOG_，点号用下划线替代）
-	// 例如：BLOG_DB_PASSWORD 对应 db.password
+	// 环境变量优先级最高，点号层级用下划线替代，例如 BLOG_DB_PASSWORD → db.password
 	v.SetEnvPrefix("BLOG")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
@@ -114,7 +111,7 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-// mergeConfig 尝试合并一个可选的配置文件，文件不存在时静默忽略
+// mergeConfig 将可选配置文件的所有键值叠加到主配置，文件不存在时静默忽略
 func mergeConfig(v *viper.Viper, name string) {
 	override := viper.New()
 	override.SetConfigName(name)
@@ -123,10 +120,9 @@ func mergeConfig(v *viper.Viper, name string) {
 	override.AddConfigPath("../config")
 
 	if err := override.ReadInConfig(); err != nil {
-		return // 文件不存在属于正常情况，不报错
+		return
 	}
 
-	// 将覆盖配置中的所有键值合并到主配置
 	for _, key := range override.AllKeys() {
 		v.Set(key, override.Get(key))
 	}

@@ -16,17 +16,15 @@ type Client struct {
 	bucket string
 }
 
-// NewGarage 初始化指向 Garage 的 S3 兼容客户端
-// Garage 使用 S3 协议，只需将 endpoint 指向 Garage 地址即可
+// NewGarage 初始化 S3 兼容客户端，指向自建 Garage 对象存储。
+// Garage 不支持 virtual-hosted-style（endpoint/bucket.host），需强制 path-style 访问。
 func NewGarage(cfg *appconfig.StorageConfig) (*Client, error) {
-	// 自定义 endpoint 解析器，将请求转发到 Garage
 	customResolver := aws.EndpointResolverWithOptionsFunc(
 		func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 			return aws.Endpoint{
 				URL:               cfg.Endpoint,
 				SigningRegion:     cfg.Region,
-				// Garage 使用 path 风格访问（endpoint/bucket/key）
-				HostnameImmutable: true,
+				HostnameImmutable: true, // path-style: endpoint/bucket/key，不改写 Host header
 			}, nil
 		},
 	)

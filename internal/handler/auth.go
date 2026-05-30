@@ -10,7 +10,7 @@ import (
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
-// AuthHandler 处理注册、登录、token 刷新等认证相关接口
+// AuthHandler 认证模块 handler，对应 /auth 路由组
 type AuthHandler struct {
 	svc service.AuthService
 }
@@ -19,7 +19,7 @@ func NewAuthHandler(svc service.AuthService) *AuthHandler {
 	return &AuthHandler{svc: svc}
 }
 
-// SendCode 发送邮箱验证码
+// SendCode 发送邮箱验证码，频率超限时返回 429 而非 400
 // POST /auth/send-code
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	var req dto.SendCodeReq
@@ -40,7 +40,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	response.Success(c, nil)
 }
 
-// Register 邮箱注册
+// Register 邮箱注册，验证码一次性消费，注册成功后直接返回用户信息（无 token）
 // POST /auth/register
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterReq
@@ -58,7 +58,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	response.Success(c, user)
 }
 
-// Login 登录（username / email / phone 三合一）
+// Login 三合一登录（username / email / phone），账号禁用返回 403，其余错误一律 401
 // POST /auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginReq
@@ -80,7 +80,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// Refresh 刷新 access token（token rotation）
+// Refresh 用 refresh token 换发新的 access + refresh token（token rotation），旧 refresh 自动失效
 // POST /auth/refresh
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	var req dto.RefreshReq
@@ -98,7 +98,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// isTooManyRequests 判断是否为频率限制错误
+// isTooManyRequests 合并短期限流与日限两种错误，统一映射到 429 响应
 func isTooManyRequests(err error) bool {
 	return errors.Is(err, service.ErrTooManyRequests) ||
 		errors.Is(err, service.ErrDailyLimitExceeded)

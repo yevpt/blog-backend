@@ -6,8 +6,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Base 是所有数据库模型的公共字段
-// 使用 GORM 的软删除：删除时设置 DeletedAt 而不是真正删除数据
+// Base 所有数据库模型的公共字段，DeletedAt 启用 GORM 软删除（删除时置位而非真删）
 type Base struct {
 	ID        uint           `json:"id" gorm:"primarykey"`
 	CreatedAt time.Time      `json:"created_at"`

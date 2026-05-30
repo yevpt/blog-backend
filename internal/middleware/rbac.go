@@ -7,13 +7,8 @@ import (
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
-// RequireRole 是角色权限中间件工厂函数，类似 Spring 的 @PreAuthorize("hasRole('XXX')")。
-// minRole 是访问该接口所需的最低角色，权重越高（数字越小）的角色包含低权重角色的权限。
-//
-// 使用示例：
-//
-//	admin := r.Group("/admin", middleware.Auth(jwtMgr), middleware.RequireRole(roles.AdminRole))
-//	vip   := r.Group("/",      middleware.Auth(jwtMgr), middleware.RequireRole(roles.VipRole))
+// RequireRole 角色权限中间件工厂，须在 Auth 中间件之后使用。
+// minRole 为访问所需的最低角色，权重更高的角色（如 Admin）自动覆盖低权重接口的权限。
 func RequireRole(minRole string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims := jwt.GetClaims(c)

@@ -8,7 +8,7 @@ import (
 	jwtlib "github.com/golang-jwt/jwt/v5"
 )
 
-// Claims 是 JWT 载荷，TokenType 区分 access / refresh，防止两种 token 混用
+// Claims JWT 载荷，TokenType 区分 access / refresh，防止 refresh token 被直接用于访问接口
 type Claims struct {
 	UserId    int64    `json:"uid"`
 	Username  string   `json:"username"`
@@ -17,7 +17,7 @@ type Claims struct {
 	jwtlib.RegisteredClaims
 }
 
-// contextKey 用于在 gin.Context 中存取 Claims，避免与其他 key 冲突
+// contextKey 强类型 context key，防止与其他包的字符串 key 碰撞
 type contextKey string
 
 const claimsKey contextKey = "claims"
@@ -27,14 +27,13 @@ var (
 	ErrTokenInvalid = errors.New("token 无效")
 )
 
-// Manager 持有 JWT 配置，负责生成和解析 token
+// Manager 持有签名密钥和过期时长，是 JWT 生成与解析的唯一入口
 type Manager struct {
 	secret             []byte
 	expireHours        int
 	refreshExpireHours int
 }
 
-// NewManager 创建 JWT 管理器
 func NewManager(secret string, expireHours int, refreshExpireHours int) *Manager {
 	return &Manager{
 		secret:             []byte(secret),
@@ -43,12 +42,13 @@ func NewManager(secret string, expireHours int, refreshExpireHours int) *Manager
 	}
 }
 
-// GenerateAccess 生成短期 access token（expireHours）
+// GenerateAccess 生成短期 access token，有效期由 expireHours 决定
 func (m *Manager) GenerateAccess(userId int64, username string, roles []string) (string, error) {
 	return m.generate(userId, username, roles, "access", m.expireHours)
 }
 
-// GenerateRefresh 生成长期 refresh token（refreshExpireHours）
+// GenerateRefresh 生成长期 refresh token，有效期由 refreshExpireHours 决定，
+// 仅用于换发新 token，不得用于访问业务接口
 func (m *Manager) GenerateRefresh(userId int64, username string, roles []string) (string, error) {
 	return m.generate(userId, username, roles, "refresh", m.refreshExpireHours)
 }
@@ -68,10 +68,10 @@ func (m *Manager) generate(userId int64, username string, roles []string, tokenT
 	return token.SignedString(m.secret)
 }
 
-// Parse 解析并验证 token，不校验 TokenType（由调用方决定）
+// Parse 解析并验证 token 签名与过期时间，不校验 TokenType，由调用方自行区分 access / refresh
 func (m *Manager) Parse(tokenStr string) (*Claims, error) {
 	token, err := jwtlib.ParseWithClaims(tokenStr, &Claims{}, func(token *jwtlib.Token) (interface{}, error) {
-		// 只接受 HMAC 签名算法
+		// 拒绝非 HMAC 算法，防止 alg:none 攻击
 		if _, ok := token.Method.(*jwtlib.SigningMethodHMAC); !ok {
 			return nil, ErrTokenInvalid
 		}
@@ -93,12 +93,12 @@ func (m *Manager) Parse(tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
-// SetClaims 将 Claims 写入 gin.Context，供后续中间件和 handler 读取
+// SetClaims 将已验证的 Claims 写入 gin.Context，由 Auth 中间件调用
 func SetClaims(c *gin.Context, claims *Claims) {
 	c.Set(string(claimsKey), claims)
 }
 
-// GetClaims 从 gin.Context 中读取 Claims，需在 Auth 中间件之后调用
+// GetClaims 从 gin.Context 读取 Claims，须在 Auth 中间件之后的 handler 中调用，否则返回 nil
 func GetClaims(c *gin.Context) *Claims {
 	val, exists := c.Get(string(claimsKey))
 	if !exists {

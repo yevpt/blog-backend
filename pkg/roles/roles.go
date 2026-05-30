@@ -14,16 +14,14 @@ const (
 	NormalRoleId = 3
 )
 
-// roleWeight 权重越小，权限越高。
-// 访问控制逻辑：用户任意角色的权重 <= 所需角色权重，则放行。
-// 例如：Admin(1) 可以访问 VIP(2) 和 Normal(3) 接口；Normal(3) 不能访问 VIP(2) 接口。
+// roleWeight 权重越小权限越高（Admin=1 可访问所有级别，Normal=3 不能访问 VIP=2 接口）
 var roleWeight = map[string]int{
 	AdminRole:  1,
 	VipRole:    2,
 	NormalRole: 3,
 }
 
-// Weight 返回角色对应的权重，角色不存在时返回最大值（最低权限）
+// Weight 返回角色权重，未知角色返回 999（兜底为最低权限，防止未知角色意外获得访问权）
 func Weight(role string) int {
 	if w, ok := roleWeight[role]; ok {
 		return w
@@ -31,7 +29,7 @@ func Weight(role string) int {
 	return 999
 }
 
-// HasPermission 检查用户角色列表中是否有权限访问 minRole 及以上级别
+// HasPermission 用户持有的任意角色权重 ≤ minRole 权重时返回 true，即高权限角色自动覆盖低权限接口
 func HasPermission(userRoles []string, minRole string) bool {
 	required := Weight(minRole)
 	for _, r := range userRoles {

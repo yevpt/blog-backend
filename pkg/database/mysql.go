@@ -9,21 +9,20 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// NewMySQL 根据配置初始化 GORM MySQL 连接
+// NewMySQL 初始化 GORM MySQL 连接并配置连接池
 func NewMySQL(cfg *config.DBConfig) (*gorm.DB, error) {
-	// gorm 日志级别：生产环境只记录 Error，开发环境记录所有 SQL
+	// 固定 Error 级别：不输出慢查询日志，避免生产环境日志量过大
 	gormLogger := logger.Default.LogMode(logger.Error)
 
 	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
 		Logger: gormLogger,
-		// 禁用自动创建外键约束，表结构由迁移 SQL 管理
+		// 外键约束由迁移 SQL 管理，禁止 GORM AutoMigrate 自动创建
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// 获取底层 sql.DB 设置连接池参数
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, err

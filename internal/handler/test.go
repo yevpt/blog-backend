@@ -9,12 +9,11 @@ import (
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
-// TestHandler 提供开发阶段的测试接口，用于验证中间件和权限体系是否正常工作
+// TestHandler 开发调试用 handler，用于验证中间件和权限体系，不对外暴露业务数据
 type TestHandler struct {
 	jwtManager *jwt.Manager
 }
 
-// NewTestHandler 创建测试 handler
 func NewTestHandler(jwtManager *jwt.Manager) *TestHandler {
 	return &TestHandler{jwtManager: jwtManager}
 }
@@ -49,11 +48,9 @@ func (h *TestHandler) Admin(c *gin.Context) {
 	response.Success(c, gin.H{"message": "管理员接口，仅 ADMIN 可访问"})
 }
 
-// GenToken 生成指定角色的测试 JWT，仅在非生产环境可用
+// GenToken 生成指定角色的测试 JWT，生产环境（APP_ENV=prod）强制返回 403
 // POST /test/token
-// Body: {"user_id": 1, "username": "test", "roles": ["ROLE_ADMIN"]}
 func (h *TestHandler) GenToken(c *gin.Context) {
-	// 安全起见，生产环境禁用此接口
 	if os.Getenv("APP_ENV") == "prod" {
 		response.Forbidden(c)
 		return
@@ -69,7 +66,7 @@ func (h *TestHandler) GenToken(c *gin.Context) {
 		return
 	}
 
-	// 默认给 Normal 角色，防止空角色
+	// 空角色时兜底 Normal，防止生成无角色 token 跳过所有权限检查
 	if len(req.Roles) == 0 {
 		req.Roles = []string{roles.NormalRole}
 	}

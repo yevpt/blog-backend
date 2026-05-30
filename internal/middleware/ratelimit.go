@@ -10,15 +10,15 @@ import (
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
-// RateLimitConfig 限流配置
+// RateLimitConfig 限流参数，软限返回 429，硬限封禁 IP
 type RateLimitConfig struct {
-	Window      time.Duration // 计数窗口
-	SoftLimit   int           // 超过此次数返回 429
-	HardLimit   int           // 超过此次数封禁 IP
+	Window      time.Duration // 计数滑动窗口
+	SoftLimit   int           // 超过此次数触发 429，不封禁
+	HardLimit   int           // 超过此次数写入封禁标记
 	BanDuration time.Duration // 封禁时长
 }
 
-// RateLimitStrict 适用于高风险接口（send-code、register）：5次软/20次硬/15min封禁
+// RateLimitStrict 高风险接口限流（send-code、register），60s 内 5 次软限 / 20 次硬限 / 封禁 15min
 func RateLimitStrict(rdb *redis.Client) gin.HandlerFunc {
 	return newRateLimiter(rdb, RateLimitConfig{
 		Window:      60 * time.Second,
@@ -28,7 +28,7 @@ func RateLimitStrict(rdb *redis.Client) gin.HandlerFunc {
 	})
 }
 
-// RateLimitNormal 适用于普通敏感接口（login）：10次软/30次硬/15min封禁
+// RateLimitNormal 普通敏感接口限流（login），60s 内 10 次软限 / 30 次硬限 / 封禁 15min
 func RateLimitNormal(rdb *redis.Client) gin.HandlerFunc {
 	return newRateLimiter(rdb, RateLimitConfig{
 		Window:      60 * time.Second,
@@ -43,7 +43,6 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 		ctx := context.Background()
 		ip := c.ClientIP()
 
-		// 检查全局封禁
 		banKey := fmt.Sprintf("ban:ip:%s", ip)
 		banned, _ := rdb.Exists(ctx, banKey).Result()
 		if banned > 0 {
@@ -53,8 +52,8 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 			return
 		}
 
-		// 按路由+IP 计数（c.FullPath() 自动派生 key，无需手动传名称）
-		// 使用 Pipeline 原子执行 Incr+Expire，避免 Incr 成功而 Expire 未执行导致 key 永不过期
+		// Pipeline 原子执行 Incr+Expire，避免 Incr 成功而 Expire 未执行导致 key 永不过期
+		// key 包含 FullPath() 实现按路由独立计数，无需手动命名
 		routeKey := fmt.Sprintf("ratelimit:%s:%s", c.FullPath(), ip)
 		pipe := rdb.Pipeline()
 		incrCmd := pipe.Incr(ctx, routeKey)

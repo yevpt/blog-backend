@@ -32,14 +32,13 @@ func Auth(jwtManager *jwt.Manager) gin.HandlerFunc {
 			return
 		}
 
-		// refresh token 只能用于刷新接口，不能访问普通接口
+		// refresh token 仅允许访问 /auth/refresh，拒绝其用于业务接口
 		if claims.TokenType != "access" {
 			response.Unauthorized(c)
 			c.Abort()
 			return
 		}
 
-		// 将用户信息注入 context，handler 层通过 jwt.GetClaims(c) 读取
 		jwt.SetClaims(c, claims)
 		c.Next()
 	}

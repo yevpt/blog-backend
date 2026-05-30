@@ -29,7 +29,7 @@ func NewMailer(cfg *Config) *Mailer {
 	return &Mailer{cfg: cfg}
 }
 
-// SendVerificationCode 向指定邮箱发送 6 位验证码，有效期 5 分钟
+// SendVerificationCode 向指定邮箱发送验证码邮件，有效期在邮件正文中已说明（5分钟）
 func (m *Mailer) SendVerificationCode(to, code string) error {
 	msg := gomail.NewMessage()
 	msg.SetHeader("From", m.cfg.From)
@@ -41,7 +41,7 @@ func (m *Mailer) SendVerificationCode(to, code string) error {
 	))
 
 	d := gomail.NewDialer(m.cfg.Host, m.cfg.Port, m.cfg.From, m.cfg.Password)
-	// 163 SMTP 使用 SSL（端口 465）
+	// 163/QQ SMTP 要求 SSL（端口 465），不能用 STARTTLS
 	d.SSL = true
 	d.TLSConfig = &tls.Config{ServerName: m.cfg.Host}
 	return d.DialAndSend(msg)

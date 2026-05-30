@@ -7,16 +7,14 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// Init 根据配置初始化全局 Zap logger
-// format="json" 适合生产环境日志收集，format="console" 适合本地开发阅读
+// Init 初始化 Zap logger；format="json" 适合生产日志收集，format="console" 适合本地开发阅读
 func Init(level, format string) (*zap.Logger, error) {
-	// 将字符串 level 转为 zap 级别
+	// level 解析失败时回退到 Info，防止配置错误导致启动崩溃
 	var zapLevel zapcore.Level
 	if err := zapLevel.UnmarshalText([]byte(level)); err != nil {
 		zapLevel = zapcore.InfoLevel
 	}
 
-	// 编码器配置
 	encoderCfg := zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",
@@ -35,7 +33,7 @@ func Init(level, format string) (*zap.Logger, error) {
 	if format == "json" {
 		encoder = zapcore.NewJSONEncoder(encoderCfg)
 	} else {
-		// console 模式：彩色输出，方便本地调试
+		// console 模式用彩色级别，方便本地肉眼区分 WARN / ERROR
 		encoderCfg.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		encoder = zapcore.NewConsoleEncoder(encoderCfg)
 	}

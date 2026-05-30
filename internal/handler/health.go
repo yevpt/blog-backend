@@ -10,18 +10,17 @@ import (
 	"gorm.io/gorm"
 )
 
-// HealthHandler 处理健康检查相关请求
+// HealthHandler 健康检查 handler，用于负载均衡存活探测
 type HealthHandler struct {
 	db    *gorm.DB
 	redis *redis.Client
 }
 
-// NewHealthHandler 创建健康检查 handler
 func NewHealthHandler(db *gorm.DB, redis *redis.Client) *HealthHandler {
 	return &HealthHandler{db: db, redis: redis}
 }
 
-// Check 检查 DB 和 Redis 连通状态，供运维和开发调试使用
+// Check 检测 DB 和 Redis 的实际连通状态，结果明文返回便于快速定位故障
 // GET /health
 func (h *HealthHandler) Check(c *gin.Context) {
 	status := gin.H{
