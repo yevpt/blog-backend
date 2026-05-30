@@ -1,0 +1,24 @@
+# 二进制输出
+bin/
+
+# 本地配置（含密码，不提交）
+config/config.local.yaml
+
+# Docker 敏感变量
+.env
+
+# Go 测试缓存
+*.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# swagger 生成文件（可通过 make swag 重新生成）
+docs/swagger.json
+docs/swagger.yaml
+docs/docs.go
+
+# air 临时文件
+tmp/
