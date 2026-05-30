@@ -31,6 +31,12 @@ var (
 	ErrNicknameGenFailed  = errors.New("昵称生成失败，请手动指定昵称")
 )
 
+// 预生成的 dummy hash，用于用户不存在时的时序攻击防护
+// 在包加载时计算一次，避免每次登录都生成
+var dummyHashForTimingProtection, _ = bcrypt.GenerateFromPassword(
+	[]byte("dummy-timing-protection-password"), bcrypt.DefaultCost,
+)
+
 // AuthService 认证业务接口
 type AuthService interface {
 	SendCode(email string, ip string) error
@@ -158,7 +164,7 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 
 	// 用户不存在时仍执行 bcrypt 比对，防止时序攻击
 	if user == nil {
-		bcrypt.CompareHashAndPassword([]byte("$2a$12$dummy"), []byte(req.Password))
+		bcrypt.CompareHashAndPassword(dummyHashForTimingProtection, []byte(req.Password))
 		return nil, ErrInvalidCredential
 	}
 

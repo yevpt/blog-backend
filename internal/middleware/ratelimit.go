@@ -54,11 +54,13 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 		}
 
 		// 按路由+IP 计数（c.FullPath() 自动派生 key，无需手动传名称）
+		// 使用 Pipeline 原子执行 Incr+Expire，避免 Incr 成功而 Expire 未执行导致 key 永不过期
 		routeKey := fmt.Sprintf("ratelimit:%s:%s", c.FullPath(), ip)
-		count, _ := rdb.Incr(ctx, routeKey).Result()
-		if count == 1 {
-			rdb.Expire(ctx, routeKey, cfg.Window)
-		}
+		pipe := rdb.Pipeline()
+		incrCmd := pipe.Incr(ctx, routeKey)
+		pipe.Expire(ctx, routeKey, cfg.Window)
+		pipe.Exec(ctx)
+		count := incrCmd.Val()
 
 		if count > int64(cfg.HardLimit) {
 			rdb.Set(ctx, banKey, 1, cfg.BanDuration)
