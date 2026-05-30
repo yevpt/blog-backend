@@ -137,16 +137,81 @@ response.ServerError(c)                // 500
 
 ## 注释规范
 
-**代码注释全部使用中文。** 注释写"为什么"，不写"做了什么"：
+**除 Go 关键词、包名、类型名等技术术语外，注释全部使用中文。**
+
+注释要覆盖以下层次：
+
+### 公开方法/函数
+说明**职责（是什么）+ 关键约束（为什么这样设计）**：
 
 ```go
-// 好的注释：解释原因/约束
-// 按 username/email/phone 三合一查询，避免用户记不清登录方式
+// FindByIdentifier 根据标识符查询用户，支持 username / email / phone 三合一匹配。
+// 用户可能记不清注册时用的是哪个标识符，三合一避免登录失败的困惑。
+// 找不到时返回 nil, nil（不视为错误），由调用方决定如何处理。
 func (r *userRepo) FindByIdentifier(identifier string) (*model.User, error) { ... }
+```
 
-// 不好的注释：只说了代码在做什么（好名字已经表达了）
-// 查询用户
-func (r *userRepo) FindByIdentifier(identifier string) (*model.User, error) { ... }
+### 公开类型、常量、包级变量
+说明**是什么 + 用途**：
+
+```go
+// ErrTooManyRequests 短期发送频率超限时返回，区别于日频次耗尽的 ErrDailyLimitExceeded。
+var ErrTooManyRequests = errors.New("发送过于频繁，请稍后再试")
+
+// RateLimitConfig 限流中间件的参数配置，通常使用预设的 Strict/Normal，无需手动构造。
+type RateLimitConfig struct {
+    Window      time.Duration // 计数窗口长度，到期后计数重置
+    SoftLimit   int           // 超过此次数触发 429，但不封禁 IP
+    HardLimit   int           // 超过此次数写入全局封禁标记
+    BanDuration time.Duration // IP 封禁持续时长
+}
+```
+
+### 函数体内的关键步骤
+只在**非显而易见的步骤**上注释，说明**原因/约束**，不描述代码在做什么：
+
+```go
+// 用户不存在时仍执行 bcrypt 比对，防止通过响应时间差枚举账号是否存在
+if user == nil {
+    bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
+    return nil, ErrInvalidCredential
+}
+```
+
+### 反例（禁止）
+
+```go
+// 查询用户（❌ 好名字已经说明了，注释毫无价值）
+func (r *userRepo) FindByIdentifier(...) { ... }
+
+// 遍历角色列表（❌ 代码本身已经表达，不需要重复）
+for _, role := range roles { ... }
+```
+
+---
+
+## Commit 规范
+
+格式：`<类型>: <中文描述>`，描述不加句号，首行不超过 72 字符。
+
+| 类型 | 适用场景 |
+|------|---------|
+| `feat` | 新功能、新接口、新模块 |
+| `fix` | 缺陷修复（含安全问题、逻辑错误） |
+| `chore` | 依赖安装、构建配置、工具脚本 |
+| `refactor` | 重构（不改变外部行为） |
+| `test` | 仅新增或修改测试代码 |
+| `docs` | 仅文档变更（README、注释等） |
+| `perf` | 性能优化 |
+
+示例：
+
+```
+feat: JWT 扩展 TokenType，新增 GenerateAccess/GenerateRefresh
+fix: 修复限流中间件 Incr+Expire 竞态，消除 key 永不过期风险
+chore: 添加 gomail、testify、sqlmock、gomock、miniredis 依赖
+refactor: 将 auth 逻辑从 user service 拆分为独立的 auth service
+test: 补充 UserRepository FindByIdentifier 的边界测试用例
 ```
 
 ---
