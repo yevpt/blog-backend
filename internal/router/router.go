@@ -5,6 +5,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/handler"
 	"github.com/vpt/blog-backend/internal/middleware"
+	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/internal/service"
+	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"go.uber.org/zap"
@@ -12,13 +15,13 @@ import (
 )
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
-// 新增业务模块时，在此处追加路由组
 func Setup(
 	r *gin.Engine,
 	log *zap.Logger,
 	jwtManager *jwt.Manager,
 	db *gorm.DB,
 	redisClient *redis.Client,
+	mailer email.MailSender,
 ) {
 	// 信任所有私有网段作为可信代理。
 	// 部署架构：客户端 → 云 Nginx → frp 隧道 → 本地 Docker Go 服务
@@ -42,20 +45,27 @@ func Setup(
 	r.Use(middleware.Logger(log))
 
 	// ───────────────────────────────────────────
-	// handler 初始化（当前阶段只有测试相关 handler）
-	// 后续业务 handler 在此处依次注入依赖
+	// handler 初始化
 	// ───────────────────────────────────────────
 	healthHandler := handler.NewHealthHandler(db, redisClient)
 	testHandler := handler.NewTestHandler(jwtManager)
+
+	userRepo := repository.NewUserRepository(db)
+	authSvc := service.NewAuthService(userRepo, jwtManager, redisClient, mailer)
+	authHandler := handler.NewAuthHandler(authSvc)
 
 	// ───────────────────────────────────────────
 	// ① 公开路由 —— 无需登录，任何人可访问
 	// ───────────────────────────────────────────
 	r.GET("/health", healthHandler.Check)
 	r.GET("/test/public", testHandler.Public)
-
-	// 测试 token 生成（仅非生产环境有效）
 	r.POST("/test/token", testHandler.GenToken)
+
+	// 认证接口（挂限流中间件）
+	r.POST("/auth/send-code", middleware.RateLimitStrict(redisClient), authHandler.SendCode)
+	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), authHandler.Register)
+	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), authHandler.Login)
+	r.POST("/auth/refresh", authHandler.Refresh)
 
 	// ───────────────────────────────────────────
 	// ② 登录路由 —— 需要有效 JWT（任意角色）
@@ -63,10 +73,6 @@ func Setup(
 	authed := r.Group("/", middleware.Auth(jwtManager))
 	{
 		authed.GET("/test/authed", testHandler.Authed)
-
-		// TODO: 后续在此处添加需要登录的业务路由，例如：
-		// authed.POST("/comments", commentHandler.Create)
-		// authed.PUT("/user/profile", userHandler.UpdateProfile)
 	}
 
 	// ───────────────────────────────────────────
@@ -75,9 +81,6 @@ func Setup(
 	vip := r.Group("/", middleware.Auth(jwtManager), middleware.RequireRole(roles.VipRole))
 	{
 		vip.GET("/test/vip", testHandler.Vip)
-
-		// TODO: 后续在此处添加 VIP 专属路由，例如：
-		// vip.GET("/vip/content", contentHandler.GetVipContent)
 	}
 
 	// ───────────────────────────────────────────
@@ -86,9 +89,5 @@ func Setup(
 	admin := r.Group("/admin", middleware.Auth(jwtManager), middleware.RequireRole(roles.AdminRole))
 	{
 		admin.GET("/test", testHandler.Admin)
-
-		// TODO: 后续在此处添加管理员路由，例如：
-		// admin.GET("/users", userHandler.List)
-		// admin.DELETE("/articles/:id", articleHandler.Delete)
 	}
 }

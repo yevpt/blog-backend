@@ -9,6 +9,7 @@ import (
 	"github.com/vpt/blog-backend/pkg/cache"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/database"
+	emailpkg "github.com/vpt/blog-backend/pkg/email"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/logger"
 )
@@ -42,14 +43,22 @@ func main() {
 	// 5. 初始化 JWT 管理器
 	jwtManager := jwtpkg.NewManager(cfg.JWT.Secret, cfg.JWT.ExpireHours, cfg.JWT.RefreshExpireHours)
 
-	// 6. 设置 Gin 运行模式（release 模式关闭调试输出）
+	// 6. 初始化邮件发送器
+	mailer := emailpkg.NewMailer(&emailpkg.Config{
+		Host:     cfg.Email.Host,
+		Port:     cfg.Email.Port,
+		From:     cfg.Email.From,
+		Password: cfg.Email.Password,
+	})
+
+	// 7. 设置 Gin 运行模式（release 模式关闭调试输出）
 	gin.SetMode(cfg.Server.Mode)
 
-	// 7. 初始化 Gin 引擎并注册所有路由
+	// 8. 初始化 Gin 引擎并注册所有路由
 	r := gin.New() // 不使用默认中间件，由 router.Setup 自定义注入
-	router.Setup(r, zapLogger, jwtManager, db, redisClient)
+	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer)
 
-	// 8. 启动 HTTP 服务
+	// 9. 启动 HTTP 服务
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	zapLogger.Info(fmt.Sprintf("服务启动，监听 %s (模式: %s)", addr, cfg.Server.Mode))
 	if err := r.Run(addr); err != nil {
