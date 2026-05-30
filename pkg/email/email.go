@@ -1,0 +1,48 @@
+package email
+
+import (
+	"crypto/tls"
+	"fmt"
+
+	"gopkg.in/gomail.v2"
+)
+
+// MailSender 邮件发送接口，便于在测试中 mock
+type MailSender interface {
+	SendVerificationCode(to, code string) error
+}
+
+// Config 邮件服务配置
+type Config struct {
+	Host     string
+	Port     int
+	From     string
+	Password string
+}
+
+// Mailer 是 MailSender 的 SMTP 实现
+type Mailer struct {
+	cfg *Config
+}
+
+func NewMailer(cfg *Config) *Mailer {
+	return &Mailer{cfg: cfg}
+}
+
+// SendVerificationCode 向指定邮箱发送 6 位验证码，有效期 5 分钟
+func (m *Mailer) SendVerificationCode(to, code string) error {
+	msg := gomail.NewMessage()
+	msg.SetHeader("From", m.cfg.From)
+	msg.SetHeader("To", to)
+	msg.SetHeader("Subject", "【博客】邮箱验证码")
+	msg.SetBody("text/html", fmt.Sprintf(
+		`<p>您的验证码为：<strong style="font-size:24px">%s</strong></p><p>验证码 5 分钟内有效，请勿泄露给他人。</p>`,
+		code,
+	))
+
+	d := gomail.NewDialer(m.cfg.Host, m.cfg.Port, m.cfg.From, m.cfg.Password)
+	// 163 SMTP 使用 SSL（端口 465）
+	d.SSL = true
+	d.TLSConfig = &tls.Config{ServerName: m.cfg.Host}
+	return d.DialAndSend(msg)
+}
