@@ -1,0 +1,19 @@
+# 生产环境配置（APP_ENV=prod 时加载）
+# 密码等敏感信息通过 .env 文件注入为环境变量（BLOG_DB_PASSWORD 等），不写在此处
+
+server:
+  mode: release
+
+log:
+  level: warn
+  format: json
+
+db:
+  host: mysql
+  port: 3306
+  name: blog_prod
+  # user/password 通过 BLOG_DB_USER / BLOG_DB_PASSWORD 环境变量注入
+
+redis:
+  addr: redis:6379
+  # password 通过 BLOG_REDIS_PASSWORD 环境变量注入

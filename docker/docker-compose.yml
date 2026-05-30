@@ -1,0 +1,33 @@
+version: "3.8"
+
+# 博客后端 API 服务
+# MySQL 和 Redis 由宝塔管理，此处只跑 blog-server
+# 使用前：cp .env.example .env 并填写连接信息
+
+services:
+  blog-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: blog-server
+    restart: unless-stopped
+    environment:
+      APP_ENV: prod
+      # 宝塔管理的 MySQL 连接信息
+      BLOG_DB_HOST: ${DB_HOST}
+      BLOG_DB_PORT: ${DB_PORT:-3306}
+      BLOG_DB_NAME: ${DB_NAME:-blog_prod}
+      BLOG_DB_USER: ${DB_USER:-blog}
+      BLOG_DB_PASSWORD: ${DB_PASSWORD}
+      # 宝塔管理的 Redis 连接信息
+      BLOG_REDIS_ADDR: ${REDIS_HOST}:${REDIS_PORT:-6379}
+      BLOG_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      # 其他配置
+      BLOG_JWT_SECRET: ${JWT_SECRET}
+      BLOG_STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-}
+      BLOG_STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-}
+      BLOG_STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-}
+    volumes:
+      - ../config:/app/config:ro
+    ports:
+      - "${SERVER_PORT:-8080}:8080"

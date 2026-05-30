@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Volumes/External/SynologyDrive/Codes/Blog/yevpt-server/model -type f | sort)",
+      "Bash(python3 -c \"import pymysql; print\\('pymysql ok'\\)\")",
+      "Bash(python3 -c \"import mysql.connector; print\\('connector ok'\\)\")",
+      "Bash(pip3 install *)",
+      "Bash(python3 -c ' *)",
+      "Bash(nc -z -w 5 d.yevpt.com 9003)",
+      "Bash(nslookup d.yevpt.com)",
+      "Bash(find /Volumes/External/SynologyDrive/Codes/Blog/yevpt-server/config -type f | xargs grep -l \"mysql\\\\|database\\\\|dsn\" 2>/dev/null | head -5)",
+      "Bash(go get *)",
+      "Bash(find /usr/local /opt /Users/vpt -name \"go\" -type f 2>/dev/null | head -10; echo \"PATH: $PATH\")",
+      "Bash(ls /Users/vpt/go/bin/ 2>&1; ls /usr/local/go 2>&1)",
+      "Bash(grep -E \"^.*/go/bin/go$\")",
+      "Bash(grep \"/bin/go$\")",
+      "Bash(export GOPATH=/Volumes/External/Env/Go/go)",
+      "Bash(export GOMODCACHE=/Volumes/External/Env/Go/go/pkg/mod)",
+      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go version *)",
+      "Bash(export GOENV=/Volumes/External/Env/Go/.g/env)",
+      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go get *)",
+      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go build *)",
+      "Bash(git add *)",
+      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go test *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git commit *)",
+      "Bash(/Volumes/External/Env/Go/.g/versions/1.25.5/bin/go run *)"
+    ]
+  }
+}

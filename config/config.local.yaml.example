@@ -1,0 +1,28 @@
+# 本地开发覆盖配置模板
+# 复制此文件为 config.local.yaml，填入本地连接信息
+# config.local.yaml 已加入 .gitignore，不会提交到 git
+
+server:
+  mode: debug
+
+log:
+  level: debug
+  format: console
+
+db:
+  host: localhost
+  port: 3306
+  name: blog_dev
+  user: root
+  password: your_local_db_password
+
+redis:
+  addr: localhost:6379
+  password: ""
+
+jwt:
+  secret: "local-dev-secret-change-before-prod"
+
+# 迁移工具专用：源库连接信息（只读，生产数据，不要提交到 git）
+migrate:
+  src_dsn: "databaseName:pwd_@tcp(ip:port)/blog?charset=utf8mb4&parseTime=True&loc=Local"

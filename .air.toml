@@ -1,0 +1,30 @@
+# air 热重载配置
+# 安装：go install github.com/air-verse/air@latest
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  # 编译命令
+  cmd = "/Users/vpt/.g/go/bin/go build -o ./tmp/blog-server ./cmd/server"
+  # 启动命令
+  bin = "./tmp/blog-server"
+  # 监听文件变更的目录
+  include_dir = ["cmd", "internal", "pkg", "config"]
+  # 监听这些后缀的文件变化
+  include_ext = ["go", "yaml"]
+  # 忽略这些目录
+  exclude_dir = ["tmp", "bin", "docs", "migrations"]
+  # 编译失败时是否停止旧进程
+  stop_on_error = true
+  # 日志前缀
+  log = "air.log"
+
+[log]
+  time = true
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+  build = "yellow"
+  runner = "green"
