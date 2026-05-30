@@ -1,0 +1,40 @@
+# 公共基础配置 —— 所有环境共享，不含任何敏感信息
+# 优先级最低，会被 config.{env}.yaml 和 config.local.yaml 覆盖
+
+server:
+  port: 8080
+  # debug 模式输出详细日志，生产环境应设为 release
+  mode: debug
+
+log:
+  level: info
+  # json 输出方便日志收集，console 输出方便本地开发阅读
+  format: console
+
+jwt:
+  # 签名密钥，生产环境必须通过环境变量 BLOG_JWT_SECRET 覆盖
+  secret: "change-me-in-production"
+  expire_hours: 2
+  refresh_expire_hours: 168
+
+db:
+  max_open_conns: 10
+  max_idle_conns: 5
+  max_lifetime_minutes: 30
+
+redis:
+  db: 0
+  password: ""
+
+storage:
+  # Garage S3 兼容接口地址，例如 http://garage.example.com
+  endpoint: ""
+  bucket: "blog"
+  region: "garage"
+  access_key: ""
+  secret_key: ""
+
+email:
+  host: smtp.163.com
+  port: 465
+  from: vpt940417@163.com
