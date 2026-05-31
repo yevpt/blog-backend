@@ -67,6 +67,9 @@ func Setup(
 	userRepo := repository.NewUserRepository(db)
 	authSvc := service.NewAuthService(userRepo, jwtManager, redisClient, mailer)
 	authHandler := handler.NewAuthHandler(authSvc)
+	articleRepo := repository.NewArticleRepository(db)
+	articleSvc := service.NewArticleService(articleRepo)
+	articleHandler := handler.NewArticleHandler(articleSvc)
 
 	// ① 公开路由
 	r.GET("/health", healthHandler.Check)
@@ -78,11 +81,17 @@ func Setup(
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), authHandler.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), authHandler.Login)
 	r.POST("/auth/refresh", authHandler.Refresh)
+	r.GET("/articles/ids", articleHandler.ListIDs)
+	r.GET("/articles", articleHandler.ListPublic)
+	r.GET("/articles/:id", articleHandler.GetPublicDetail)
+	r.POST("/articles/:id/read", articleHandler.Read)
 
 	// ② 需登录（任意角色）
 	authed := r.Group("/", middleware.Auth(jwtManager))
 	{
 		authed.GET("/test/authed", testHandler.Authed)
+		authed.GET("/articles/:id/like", articleHandler.IsLiked)
+		authed.POST("/articles/:id/like", articleHandler.ToggleLike)
 	}
 
 	// ③ 需 VIP 或更高权限
@@ -95,5 +104,7 @@ func Setup(
 	admin := r.Group("/admin", middleware.Auth(jwtManager), middleware.RequireRole(roles.AdminRole))
 	{
 		admin.GET("/test", testHandler.Admin)
+		admin.POST("/articles", articleHandler.Save)
+		admin.DELETE("/articles/:id", articleHandler.Delete)
 	}
 }

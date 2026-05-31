@@ -1,0 +1,153 @@
+package handler_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler"
+	"github.com/vpt/blog-backend/internal/service"
+	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
+	"github.com/vpt/blog-backend/pkg/response"
+)
+
+type stubArticleService struct {
+	listReq    dto.ArticleListReq
+	listResp   *dto.ArticlePageResp
+	listErr    error
+	detailResp *dto.ArticleDetailResp
+	detailErr  error
+	saveReq    dto.ArticleSaveReq
+	saveUserID uint
+	saveResp   *dto.ArticleDetailResp
+	saveErr    error
+}
+
+func (s *stubArticleService) ListIDs() (*dto.ArticleIDsResp, error) {
+	return &dto.ArticleIDsResp{}, nil
+}
+func (s *stubArticleService) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageResp, error) {
+	s.listReq = req
+	return s.listResp, s.listErr
+}
+func (s *stubArticleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
+	return s.detailResp, s.detailErr
+}
+func (s *stubArticleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
+	return s.detailResp, s.detailErr
+}
+func (s *stubArticleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {
+	s.saveReq = req
+	s.saveUserID = authorID
+	return s.saveResp, s.saveErr
+}
+func (s *stubArticleService) Delete(id uint) (*dto.ArticleDetailResp, error) {
+	return s.detailResp, s.detailErr
+}
+func (s *stubArticleService) Read(id uint) (*dto.ArticleReadResp, error) {
+	return &dto.ArticleReadResp{ID: id, ReadCount: 2}, nil
+}
+func (s *stubArticleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error) {
+	return &dto.ArticleLikeResp{IsLiked: true, LikeCount: 3}, nil
+}
+func (s *stubArticleService) ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error) {
+	return s.detailResp, s.detailErr
+}
+
+func newArticleRouter(svc service.ArticleService) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := handler.NewArticleHandler(svc)
+	r.GET("/articles", h.ListPublic)
+	r.GET("/articles/:id", h.GetPublicDetail)
+	r.POST("/admin/articles", func(c *gin.Context) {
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "admin"})
+		h.Save(c)
+	})
+	return r
+}
+
+func TestArticleHandler_ListPublic_Success(t *testing.T) {
+	stub := &stubArticleService{
+		listResp: &dto.ArticlePageResp{Page: 1, PageSize: 10, List: []dto.ArticleListItemResp{}},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/articles?page=1&page_size=10&recommend=true", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1, stub.listReq.Page)
+	assert.Equal(t, 10, stub.listReq.PageSize)
+	require.NotNil(t, stub.listReq.Recommend)
+	assert.True(t, *stub.listReq.Recommend)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestArticleHandler_GetPublicDetail_NotFound(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{detailErr: service.ErrArticleNotFound})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/articles/404", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestArticleHandler_Save_UsesClaimsUserID(t *testing.T) {
+	stub := &stubArticleService{
+		saveResp: &dto.ArticleDetailResp{ArticleListItemResp: dto.ArticleListItemResp{ID: 9, Title: "A"}},
+	}
+	r := newArticleRouter(stub)
+	body, _ := json.Marshal(dto.ArticleSaveReq{
+		Title:         "A",
+		Content:       "body",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/articles", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(7), stub.saveUserID)
+	assert.Equal(t, "A", stub.saveReq.Title)
+}
+
+func TestArticleHandler_Save_BadRequest(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{saveErr: service.ErrArticleCategoryRequired})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/articles", bytes.NewReader([]byte(`{"title":"A"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+}
+
+func TestArticleHandler_ListPublic_ServerError(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{listErr: errors.New("db down")})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/articles", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
