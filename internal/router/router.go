@@ -83,7 +83,7 @@ func Setup(
 	r.POST("/auth/refresh", authHandler.Refresh)
 	r.GET("/articles/ids", articleHandler.ListIDs)
 	r.GET("/articles", articleHandler.ListPublic)
-	r.GET("/articles/:id", articleHandler.GetPublicDetail)
+	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), articleHandler.GetPublicDetail)
 	r.POST("/articles/:id/read", articleHandler.Read)
 
 	// ② 需登录（任意角色）

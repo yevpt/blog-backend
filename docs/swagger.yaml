@@ -1,0 +1,846 @@
+basePath: /
+definitions:
+  dto.ArticleDetailResp:
+    properties:
+      categories:
+        description: Categories 分类列表。
+        items:
+          $ref: '#/definitions/dto.ArticleRelationResp'
+        type: array
+      category_ids:
+        description: CategoryIDs 分类 ID 列表。
+        items:
+          type: integer
+        type: array
+      comment_count:
+        description: CommentCount 评论数量。
+        example: 2
+        type: integer
+      comment_status:
+        description: CommentStatus 评论状态。
+        example: 1
+        type: integer
+      content:
+        description: Content 文章正文。
+        type: string
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: false
+        type: boolean
+      is_recommended:
+        description: IsRecommended 是否为推荐文章。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+      music:
+        description: Music 音乐列表。
+        items:
+          $ref: '#/definitions/dto.ArticleMusicResp'
+        type: array
+      music_ids:
+        description: MusicIDs 音乐 ID 列表。
+        items:
+          type: integer
+        type: array
+      passworded:
+        description: Passworded 是否为加密文章。
+        example: false
+        type: boolean
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 20
+        type: integer
+      recommend_seq:
+        description: RecommendSeq 推荐排序值。
+        example: 10
+        type: integer
+      short_content:
+        description: ShortContent 文章摘要。
+        type: string
+      status:
+        description: Status 文章状态。
+        example: 1
+        type: integer
+      tag_ids:
+        description: TagIDs 标签 ID 列表。
+        items:
+          type: integer
+        type: array
+      tags:
+        description: Tags 标签列表。
+        items:
+          $ref: '#/definitions/dto.ArticleRelationResp'
+        type: array
+      title:
+        description: Title 文章标题。
+        example: 文章标题
+        type: string
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user_id:
+        description: UserID 作者用户 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.ArticleIDsResp:
+    properties:
+      ids:
+        description: IDs 文章 ID 列表。
+        example:
+        - 1
+        - 2
+        - 3
+        items:
+          type: integer
+        type: array
+    type: object
+  dto.ArticleLikeResp:
+    properties:
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+    type: object
+  dto.ArticleListItemResp:
+    properties:
+      comment_count:
+        description: CommentCount 评论数量。
+        example: 2
+        type: integer
+      comment_status:
+        description: CommentStatus 评论状态。
+        example: 1
+        type: integer
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      is_recommended:
+        description: IsRecommended 是否为推荐文章。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 20
+        type: integer
+      short_content:
+        description: ShortContent 文章摘要。
+        type: string
+      status:
+        description: Status 文章状态。
+        example: 1
+        type: integer
+      title:
+        description: Title 文章标题。
+        example: 文章标题
+        type: string
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user_id:
+        description: UserID 作者用户 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.ArticleMusicResp:
+    properties:
+      album:
+        description: Album 专辑名称。
+        example: Album
+        type: string
+      cover_img_url:
+        description: CoverImgUrl 音乐封面图地址。
+        type: string
+      duration:
+        description: Duration 音乐时长，单位为秒。
+        example: 240
+        type: integer
+      id:
+        description: ID 音乐 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 音乐名称。
+        example: Song
+        type: string
+      singer:
+        description: Singer 歌手名称。
+        example: Singer
+        type: string
+      url:
+        description: URL 音乐播放地址。
+        type: string
+    type: object
+  dto.ArticlePageResp:
+    properties:
+      list:
+        description: List 文章列表。
+        items:
+          $ref: '#/definitions/dto.ArticleListItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
+  dto.ArticleReadResp:
+    properties:
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 21
+        type: integer
+    type: object
+  dto.ArticleRelationResp:
+    properties:
+      cover_img_url:
+        description: CoverImgUrl 关联资源封面图地址。
+        type: string
+      description:
+        description: Description 关联资源描述。
+        type: string
+      icon:
+        description: Icon 关联资源图标。
+        type: string
+      id:
+        description: ID 关联资源 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 关联资源名称。
+        example: Go
+        type: string
+      url:
+        description: URL 关联资源访问地址或别名。
+        example: go
+        type: string
+    type: object
+  dto.ArticleSaveReq:
+    properties:
+      category_ids:
+        description: CategoryIDs 分类 ID 列表，至少一个。
+        example:
+        - 1
+        items:
+          type: integer
+        minItems: 1
+        type: array
+      comment_status:
+        description: CommentStatus 评论状态：0 关闭，1 开启。
+        enum:
+        - 0
+        - 1
+        example: 1
+        type: integer
+      content:
+        description: Content Markdown 正文内容。
+        example: Markdown 正文
+        type: string
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        example: https://example.com/cover.jpg
+        type: string
+      id:
+        description: ID 文章 ID，为空或 0 表示新增。
+        example: 1
+        type: integer
+      music_ids:
+        description: MusicIDs 音乐 ID 列表。
+        example:
+        - 1
+        items:
+          type: integer
+        type: array
+      password:
+        description: Password 加密文章密码。
+        example: secret
+        type: string
+      recommend:
+        description: Recommend 是否推荐文章。
+        example: false
+        type: boolean
+      recommend_seq:
+        description: RecommendSeq 推荐排序值。
+        example: 10
+        type: integer
+      short_content:
+        description: ShortContent 文章摘要。
+        example: 摘要
+        type: string
+      status:
+        description: Status 文章状态：0 隐藏，1 公开，2 加密。
+        enum:
+        - 0
+        - 1
+        - 2
+        example: 1
+        type: integer
+      tag_ids:
+        description: TagIDs 标签 ID 列表。
+        example:
+        - 1
+        items:
+          type: integer
+        type: array
+      title:
+        description: Title 文章标题。
+        example: 文章标题
+        type: string
+    required:
+    - category_ids
+    - content
+    - title
+    type: object
+  dto.LoginReq:
+    properties:
+      identifier:
+        type: string
+      password:
+        type: string
+    required:
+    - identifier
+    - password
+    type: object
+  dto.LoginResp:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        description: 单位：秒，固定 7200（2h）
+        type: integer
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/dto.UserResp'
+    type: object
+  dto.RefreshReq:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  dto.RegisterReq:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      nickname:
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - code
+    - email
+    - password
+    type: object
+  dto.SendCodeReq:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  dto.TokenResp:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+    type: object
+  dto.UserResp:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      nickname:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      username:
+        type: string
+    type: object
+  response.Response:
+    properties:
+      code:
+        description: 0 表示成功，非 0 为业务错误码
+        type: integer
+      data:
+        description: 失败时省略，不输出 null
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: 个人博客后端 API 服务，所有业务接口均使用统一响应结构。
+  title: Blog Backend API
+  version: "1.0"
+paths:
+  /admin/articles:
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增或更新文章，并同步分类、标签、音乐和推荐关系。
+      parameters:
+      - description: 文章保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ArticleSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误或业务错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleDetailResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或更新文章
+      tags:
+      - 文章管理
+  /admin/articles/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员软删除文章。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleDetailResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除文章
+      tags:
+      - 文章管理
+  /articles:
+    get:
+      consumes:
+      - application/json
+      description: 按页码分页查询公开文章，支持推荐、分类和标签过滤；加密文章只在详情接口隐藏正文。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 是否只查询推荐文章
+        in: query
+        name: recommend
+        type: boolean
+      - description: 分类 ID
+        in: query
+        name: category_id
+        type: integer
+      - description: 标签 ID
+        in: query
+        name: tag_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticlePageResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询公开文章
+      tags:
+      - 文章
+  /articles/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 查询公开或加密文章详情；加密文章在公开接口中不返回正文。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleDetailResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询文章详情
+      tags:
+      - 文章
+  /articles/{id}/like:
+    get:
+      consumes:
+      - application/json
+      description: 查询当前登录用户是否已点赞指定文章。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询文章点赞状态
+      tags:
+      - 文章
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleDetailResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换文章点赞
+      tags:
+      - 文章
+  /articles/{id}/read:
+    post:
+      consumes:
+      - application/json
+      description: 使用数据库原子更新将文章阅读数增加 1。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示更新成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleReadResp'
+              type: object
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 增加文章阅读数
+      tags:
+      - 文章
+  /articles/ids:
+    get:
+      consumes:
+      - application/json
+      description: 返回所有公开文章 ID，按发布时间倒序排列。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleIDsResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开文章 ID 列表
+      tags:
+      - 文章
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 支持用户名、邮箱或手机号作为登录标识，成功后返回 access token、refresh token 和用户信息。
+      parameters:
+      - description: 登录请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.LoginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LoginResp'
+              type: object
+        "401":
+          description: 账号或密码错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 账号被禁用
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 用户登录
+      tags:
+      - 认证
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 使用 refresh token 换发新的 access token 和 refresh token；旧 refresh token
+        会在业务层失效。
+      parameters:
+      - description: 刷新令牌请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RefreshReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 刷新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TokenResp'
+              type: object
+        "401":
+          description: refresh token 非法、过期或类型不匹配
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 刷新令牌
+      tags:
+      - 认证
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: 使用邮箱、密码和验证码创建用户；参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。
+      parameters:
+      - description: 注册请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.RegisterReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserResp'
+              type: object
+      summary: 邮箱注册
+      tags:
+      - 认证
+  /auth/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 向指定邮箱发送注册验证码；参数错误或普通业务错误通过统一响应 code 表达，发送频率超限时返回 HTTP 429。
+      parameters:
+      - description: 发送验证码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendCodeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示发送成功，code=400 表示参数错误或业务错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 发送频率超限
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 发送邮箱验证码
+      tags:
+      - 认证
+swagger: "2.0"

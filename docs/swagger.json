@@ -1,0 +1,1268 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "description": "个人博客后端 API 服务，所有业务接口均使用统一响应结构。",
+        "title": "Blog Backend API",
+        "contact": {},
+        "version": "1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/admin/articles": {
+            "post": {
+                "description": "管理员新增或更新文章，并同步分类、标签、音乐和推荐关系。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "新增或更新文章",
+                "parameters": [
+                    {
+                        "description": "文章保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ArticleSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/articles/{id}": {
+            "delete": {
+                "description": "管理员软删除文章。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "删除文章",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/articles": {
+            "get": {
+                "description": "按页码分页查询公开文章，支持推荐、分类和标签过滤；加密文章只在详情接口隐藏正文。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章"
+                ],
+                "summary": "分页查询公开文章",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否只查询推荐文章",
+                        "name": "recommend",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "tag_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticlePageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/ids": {
+            "get": {
+                "description": "返回所有公开文章 ID，按发布时间倒序排列。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章"
+                ],
+                "summary": "查询公开文章 ID 列表",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleIDsResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/{id}": {
+            "get": {
+                "description": "查询公开或加密文章详情；加密文章在公开接口中不返回正文。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章"
+                ],
+                "summary": "查询文章详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Authorization header 存在但 token 非法或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/{id}/like": {
+            "get": {
+                "description": "查询当前登录用户是否已点赞指定文章。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章"
+                ],
+                "summary": "查询文章点赞状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleLikeResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "当前用户未点赞时点赞，已点赞时取消点赞。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章"
+                ],
+                "summary": "切换文章点赞",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示切换成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/articles/{id}/read": {
+            "post": {
+                "description": "使用数据库原子更新将文章阅读数增加 1。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章"
+                ],
+                "summary": "增加文章阅读数",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示更新成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleReadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "支持用户名、邮箱或手机号作为登录标识，成功后返回 access token、refresh token 和用户信息。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "用户登录",
+                "parameters": [
+                    {
+                        "description": "登录请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.LoginReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.LoginResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "账号或密码错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "账号被禁用",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "使用 refresh token 换发新的 access token 和 refresh token；旧 refresh token 会在业务层失效。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "刷新令牌",
+                "parameters": [
+                    {
+                        "description": "刷新令牌请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RefreshReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "刷新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TokenResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "refresh token 非法、过期或类型不匹配",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "使用邮箱、密码和验证码创建用户；参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "邮箱注册",
+                "parameters": [
+                    {
+                        "description": "注册请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.RegisterReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/send-code": {
+            "post": {
+                "description": "向指定邮箱发送注册验证码；参数错误或普通业务错误通过统一响应 code 表达，发送频率超限时返回 HTTP 429。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "发送邮箱验证码",
+                "parameters": [
+                    {
+                        "description": "发送验证码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SendCodeReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示发送成功，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "发送频率超限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "dto.ArticleDetailResp": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "description": "Categories 分类列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleRelationResp"
+                    }
+                },
+                "category_ids": {
+                    "description": "CategoryIDs 分类 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "comment_count": {
+                    "description": "CommentCount 评论数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "comment_status": {
+                    "description": "CommentStatus 评论状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 文章正文。",
+                    "type": "string"
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_recommended": {
+                    "description": "IsRecommended 是否为推荐文章。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                },
+                "music": {
+                    "description": "Music 音乐列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleMusicResp"
+                    }
+                },
+                "music_ids": {
+                    "description": "MusicIDs 音乐 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "passworded": {
+                    "description": "Passworded 是否为加密文章。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "recommend_seq": {
+                    "description": "RecommendSeq 推荐排序值。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "short_content": {
+                    "description": "ShortContent 文章摘要。",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status 文章状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "tag_ids": {
+                    "description": "TagIDs 标签 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "tags": {
+                    "description": "Tags 标签列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleRelationResp"
+                    }
+                },
+                "title": {
+                    "description": "Title 文章标题。",
+                    "type": "string",
+                    "example": "文章标题"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "UserID 作者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.ArticleIDsResp": {
+            "type": "object",
+            "properties": {
+                "ids": {
+                    "description": "IDs 文章 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            }
+        },
+        "dto.ArticleLikeResp": {
+            "type": "object",
+            "properties": {
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "dto.ArticleListItemResp": {
+            "type": "object",
+            "properties": {
+                "comment_count": {
+                    "description": "CommentCount 评论数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "comment_status": {
+                    "description": "CommentStatus 评论状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_recommended": {
+                    "description": "IsRecommended 是否为推荐文章。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "short_content": {
+                    "description": "ShortContent 文章摘要。",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status 文章状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "title": {
+                    "description": "Title 文章标题。",
+                    "type": "string",
+                    "example": "文章标题"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "UserID 作者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.ArticleMusicResp": {
+            "type": "object",
+            "properties": {
+                "album": {
+                    "description": "Album 专辑名称。",
+                    "type": "string",
+                    "example": "Album"
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 音乐封面图地址。",
+                    "type": "string"
+                },
+                "duration": {
+                    "description": "Duration 音乐时长，单位为秒。",
+                    "type": "integer",
+                    "example": 240
+                },
+                "id": {
+                    "description": "ID 音乐 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 音乐名称。",
+                    "type": "string",
+                    "example": "Song"
+                },
+                "singer": {
+                    "description": "Singer 歌手名称。",
+                    "type": "string",
+                    "example": "Singer"
+                },
+                "url": {
+                    "description": "URL 音乐播放地址。",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.ArticlePageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 文章列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleListItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "dto.ArticleReadResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 21
+                }
+            }
+        },
+        "dto.ArticleRelationResp": {
+            "type": "object",
+            "properties": {
+                "cover_img_url": {
+                    "description": "CoverImgUrl 关联资源封面图地址。",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description 关联资源描述。",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "Icon 关联资源图标。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 关联资源 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 关联资源名称。",
+                    "type": "string",
+                    "example": "Go"
+                },
+                "url": {
+                    "description": "URL 关联资源访问地址或别名。",
+                    "type": "string",
+                    "example": "go"
+                }
+            }
+        },
+        "dto.ArticleSaveReq": {
+            "type": "object",
+            "required": [
+                "category_ids",
+                "content",
+                "title"
+            ],
+            "properties": {
+                "category_ids": {
+                    "description": "CategoryIDs 分类 ID 列表，至少一个。",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1
+                    ]
+                },
+                "comment_status": {
+                    "description": "CommentStatus 评论状态：0 关闭，1 开启。",
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content Markdown 正文内容。",
+                    "type": "string",
+                    "example": "Markdown 正文"
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string",
+                    "example": "https://example.com/cover.jpg"
+                },
+                "id": {
+                    "description": "ID 文章 ID，为空或 0 表示新增。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "music_ids": {
+                    "description": "MusicIDs 音乐 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1
+                    ]
+                },
+                "password": {
+                    "description": "Password 加密文章密码。",
+                    "type": "string",
+                    "example": "secret"
+                },
+                "recommend": {
+                    "description": "Recommend 是否推荐文章。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "recommend_seq": {
+                    "description": "RecommendSeq 推荐排序值。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "short_content": {
+                    "description": "ShortContent 文章摘要。",
+                    "type": "string",
+                    "example": "摘要"
+                },
+                "status": {
+                    "description": "Status 文章状态：0 隐藏，1 公开，2 加密。",
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1,
+                        2
+                    ],
+                    "example": 1
+                },
+                "tag_ids": {
+                    "description": "TagIDs 标签 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1
+                    ]
+                },
+                "title": {
+                    "description": "Title 文章标题。",
+                    "type": "string",
+                    "example": "文章标题"
+                }
+            }
+        },
+        "dto.LoginReq": {
+            "type": "object",
+            "required": [
+                "identifier",
+                "password"
+            ],
+            "properties": {
+                "identifier": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.LoginResp": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "description": "单位：秒，固定 7200（2h）",
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/dto.UserResp"
+                }
+            }
+        },
+        "dto.RefreshReq": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.RegisterReq": {
+            "type": "object",
+            "required": [
+                "code",
+                "email",
+                "password"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
+        "dto.SendCodeReq": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.TokenResp": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UserResp": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "response.Response": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "0 表示成功，非 0 为业务错误码",
+                    "type": "integer"
+                },
+                "data": {
+                    "description": "失败时省略，不输出 null"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

@@ -68,6 +68,7 @@ func (h *ArticleHandler) ListPublic(c *gin.Context) {
 // @Produce json
 // @Param id path int true "文章 ID"
 // @Success 200 {object} response.Response{data=dto.ArticleDetailResp} "统一响应；code=0 表示查询成功，code=400 表示参数错误"
+// @Failure 401 {object} response.Response "Authorization header 存在但 token 非法或已过期"
 // @Failure 404 {object} response.Response "文章不存在"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /articles/{id} [get]
