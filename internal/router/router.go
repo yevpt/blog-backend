@@ -45,7 +45,14 @@ func Setup(
 	if allowedOrigins == "" || allowedOrigins == "*" {
 		corsCfg.AllowAllOrigins = true
 	} else {
-		corsCfg.AllowOrigins = strings.Split(allowedOrigins, ",")
+		parts := strings.Split(allowedOrigins, ",")
+		origins := make([]string, 0, len(parts))
+		for _, p := range parts {
+			if o := strings.TrimSpace(p); o != "" {
+				origins = append(origins, o)
+			}
+		}
+		corsCfg.AllowOrigins = origins
 	}
 	// Authorization header 不在 DefaultConfig 的默认允许列表中，需要显式添加
 	corsCfg.AllowHeaders = append(corsCfg.AllowHeaders, "Authorization")
