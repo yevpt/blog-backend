@@ -1,6 +1,10 @@
 package router
 
 import (
+	"os"
+	"strings"
+
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/handler"
@@ -33,6 +37,19 @@ func Setup(
 		"172.16.0.0/12",
 		"192.168.0.0/16",
 	})
+
+	// CORS 配置：开发环境允许所有来源（*）；生产环境由 Nginx 负责跨域，此处仍保持宽松。
+	// 通过环境变量 CORS_ALLOWED_ORIGINS 覆盖，多个来源用逗号分隔。
+	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	corsCfg := cors.DefaultConfig()
+	if allowedOrigins == "" || allowedOrigins == "*" {
+		corsCfg.AllowAllOrigins = true
+	} else {
+		corsCfg.AllowOrigins = strings.Split(allowedOrigins, ",")
+	}
+	// Authorization header 不在 DefaultConfig 的默认允许列表中，需要显式添加
+	corsCfg.AllowHeaders = append(corsCfg.AllowHeaders, "Authorization")
+	r.Use(cors.New(corsCfg))
 
 	r.Use(middleware.Recovery(log))
 	r.Use(middleware.Logger(log))
