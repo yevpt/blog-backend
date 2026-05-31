@@ -29,7 +29,14 @@
       "Bash(which go *)",
       "Read(//Users/vpt/go/bin/**)",
       "Read(//usr/bin/**)",
-      "Read(//Users/vpt/**)"
+      "Read(//Users/vpt/**)",
+      "Bash(/usr/local/go/bin/go build *)",
+      "Read(//Volumes/External/Env/Go/go/bin/**)",
+      "Read(//opt/go/**)",
+      "Bash(find / -name \"go\" -perm /111 -type f)",
+      "Bash(~/go/bin/go build *)",
+      "Bash(mdfind -name \"go\" -onlyin /usr/local)",
+      "Bash(grep \"bin/go$\")"
     ]
   }
 }

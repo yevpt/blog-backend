@@ -23,6 +23,7 @@ var roleWeight = map[string]int{
 
 // Weight 返回角色权重，未知角色返回 999（兜底为最低权限，防止未知角色意外获得访问权）
 func Weight(role string) int {
+	// 在权重表中查找对应权重，未知角色返回 999 兜底（最低权限，防止未知角色意外获得访问权）
 	if w, ok := roleWeight[role]; ok {
 		return w
 	}
@@ -32,6 +33,7 @@ func Weight(role string) int {
 // HasPermission 用户持有的任意角色权重 ≤ minRole 权重时返回 true，即高权限角色自动覆盖低权限接口
 func HasPermission(userRoles []string, minRole string) bool {
 	required := Weight(minRole)
+	// 遍历用户持有的所有角色，任意一个满足条件即有权限（OR 语义）
 	for _, r := range userRoles {
 		if Weight(r) <= required {
 			return true

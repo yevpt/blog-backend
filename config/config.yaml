@@ -26,10 +26,20 @@ redis:
   db: 0
   password: ""
 
-storage:
+garage:
   # Garage S3 兼容接口地址，例如 http://garage.example.com
   endpoint: ""
-  bucket: "blog"
-  region: "garage"
-  access_key: ""
-  secret_key: ""
+  bucket: ""
+  region: ""
+  accessKeyID: ""
+  secretAccessKey: ""
+  # 是否优先返回 CDN 私有签名 URL；关闭时返回 Garage S3 预签名 URL
+  cdn: false
+
+cdn:
+  # CDN 访问域名，例如 https://blog-oss.example.com
+  host: ""
+  secret: ""
+  signQueryName: "a"
+  timestampQueryName: "b"
+

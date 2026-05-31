@@ -23,6 +23,20 @@ redis:
 jwt:
   secret: "local-dev-secret-change-before-prod"
 
+garage:
+  endpoint: "https://garage-s3-api.example.com"
+  region: "garage"
+  bucket: "blog"
+  accessKeyID: "your_garage_access_key_id"
+  secretAccessKey: "your_garage_secret_access_key"
+  cdn: true
+
+cdn:
+  host: "https://blog-oss.example.com"
+  secret: "your_cdn_sign_secret"
+  signQueryName: "a"
+  timestampQueryName: "b"
+
 # 迁移工具专用：源库连接信息（只读，生产数据，不要提交到 git）
 migrate:
   src_dsn: "databaseName:pwd_@tcp(ip:port)/blog?charset=utf8mb4&parseTime=True&loc=Local"

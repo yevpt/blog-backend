@@ -21,13 +21,13 @@ import (
 )
 
 var (
-	ErrInvalidCode        = errors.New("验证码无效或已过期")
-	ErrEmailTaken         = errors.New("该邮箱已被注册")
-	ErrInvalidCredential  = errors.New("账号或密码错误")
-	ErrUserDisabled       = errors.New("账号已被禁用")
-	ErrInvalidToken       = errors.New("token 无效或已过期")
+	ErrInvalidCode       = errors.New("验证码无效或已过期")
+	ErrEmailTaken        = errors.New("该邮箱已被注册")
+	ErrInvalidCredential = errors.New("账号或密码错误")
+	ErrUserDisabled      = errors.New("账号已被禁用")
+	ErrInvalidToken      = errors.New("token 无效或已过期")
 	// ErrTooManyRequests 短期发送频率超限，区别于日频次耗尽的 ErrDailyLimitExceeded
-	ErrTooManyRequests    = errors.New("发送过于频繁，请稍后再试")
+	ErrTooManyRequests = errors.New("发送过于频繁，请稍后再试")
 	// ErrDailyLimitExceeded 当日发送次数达到上限（7次），次日自动重置
 	ErrDailyLimitExceeded = errors.New("今日发送次数已达上限")
 	ErrNicknameGenFailed  = errors.New("昵称生成失败，请手动指定昵称")
@@ -76,6 +76,7 @@ func (s *authService) SendCode(to string, ip string) error {
 		return ErrTooManyRequests
 	}
 
+	// 10分钟内发送次数检查（上限2次），首次 Incr 后立即设过期时间，避免 key 永久存在
 	key10m := fmt.Sprintf("email:10m:%s", to)
 	c10m, _ := s.rdb.Incr(ctx, key10m).Result()
 	if c10m == 1 {
@@ -85,6 +86,7 @@ func (s *authService) SendCode(to string, ip string) error {
 		return ErrTooManyRequests
 	}
 
+	// 当日发送次数检查（上限7次），键不存在时首次计数后设24小时过期，次日自动重置
 	key1d := fmt.Sprintf("email:1d:%s", to)
 	c1d, _ := s.rdb.Incr(ctx, key1d).Result()
 	if c1d == 1 {
@@ -94,21 +96,25 @@ func (s *authService) SendCode(to string, ip string) error {
 		return ErrDailyLimitExceeded
 	}
 
+	// 所有频率限制通过，生成6位密码学安全随机验证码
 	code, err := generateNumericCode(6)
 	if err != nil {
 		return err
 	}
 
+	// 写入验证码（5分钟有效）和冷却标记（60秒），两个 key 独立管理生命周期
 	codeKey := fmt.Sprintf("email:code:%s", to)
 	s.rdb.Set(ctx, codeKey, code, 5*time.Minute)
 	s.rdb.Set(ctx, cdKey, 1, 60*time.Second)
 
+	// 发送验证码邮件，SMTP 失败时错误直接返回给调用方，不做重试
 	return s.mailer.SendVerificationCode(to, code)
 }
 
 func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 	ctx := context.Background()
 
+	// 从 Redis 读取存储的验证码并与用户提交值对比
 	codeKey := fmt.Sprintf("email:code:%s", req.Email)
 	stored, err := s.rdb.Get(ctx, codeKey).Result()
 	if err != nil || stored != req.Code {
@@ -117,6 +123,7 @@ func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 	// 验证码比对成功后立即删除，确保一次性语义
 	s.rdb.Del(ctx, codeKey)
 
+	// 检查邮箱是否已被其他账号占用
 	taken, err := s.repo.ExistsByEmail(req.Email)
 	if err != nil {
 		return nil, err
@@ -125,6 +132,7 @@ func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 		return nil, ErrEmailTaken
 	}
 
+	// 解析昵称：用户填写则直接用，未填写则以邮箱前缀+随机串自动生成
 	nickname, err := s.resolveNickname(req.Nickname, req.Email)
 	if err != nil {
 		return nil, err
@@ -145,10 +153,12 @@ func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 		Status:   1,
 	}
 
+	// 在事务中同时写入用户记录和角色关联，保证两张表数据一致
 	if err := s.repo.Create(user, roles.NormalRoleId); err != nil {
 		return nil, err
 	}
 
+	// 组装响应 DTO，不暴露密码等敏感字段
 	return &dto.UserResp{
 		ID:       user.ID,
 		Username: user.Username,
@@ -158,6 +168,7 @@ func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 }
 
 func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
+	// 支持 username / email / phone 三合一查询用户
 	user, err := s.repo.FindByIdentifier(req.Identifier)
 	if err != nil {
 		return nil, err
@@ -169,19 +180,23 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 		return nil, ErrInvalidCredential
 	}
 
+	// 用户存在时比对密码哈希，不匹配则拒绝
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
 		return nil, ErrInvalidCredential
 	}
 
+	// 密码正确后再检查账号状态，避免通过错误类型泄露账号是否存在
 	if user.Status != 1 {
 		return nil, ErrUserDisabled
 	}
 
+	// 查询用户所有角色名称，用于写入 JWT claims
 	userRoles, err := s.repo.FindRolesByUserID(user.ID)
 	if err != nil {
 		return nil, err
 	}
 
+	// 签发 access + refresh 双 token，access 短期用于接口访问，refresh 长期用于续签
 	userId := int64(user.ID)
 	accessToken, err := s.jwt.GenerateAccess(userId, user.Username, userRoles)
 	if err != nil {
@@ -195,6 +210,7 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 	// 异步写入，不让非关键操作拖慢登录响应
 	go func() { s.repo.UpdateLastLoginAt(user.ID) }()
 
+	// 组装登录响应，含双 token 和用户基本信息
 	return &dto.LoginResp{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
@@ -210,14 +226,17 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 }
 
 func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
+	// 解析并验证 token 签名与过期时间
 	claims, err := s.jwt.Parse(refreshToken)
 	if err != nil {
 		return nil, ErrInvalidToken
 	}
+	// 拒绝用 access token 来换发，只允许 refresh token 进入此接口
 	if claims.TokenType != "refresh" {
 		return nil, ErrInvalidToken
 	}
 
+	// 用原 claims 中的用户信息签发新的双 token（token rotation）
 	newAccess, err := s.jwt.GenerateAccess(claims.UserId, claims.Username, claims.Roles)
 	if err != nil {
 		return nil, err
@@ -227,6 +246,7 @@ func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
 		return nil, err
 	}
 
+	// 返回新双 token，旧 refresh token 从此不再有效（无状态 rotation，旧 token 自然过期）
 	return &dto.TokenResp{
 		AccessToken:  newAccess,
 		RefreshToken: newRefresh,
@@ -237,20 +257,25 @@ func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
 // resolveNickname 优先使用用户指定昵称；未指定时以邮箱前缀（≤6字符）+ 4位随机串自动生成，
 // 最多重试 10 次避免极端碰撞情况。
 func (s *authService) resolveNickname(nickname *string, emailAddr string) (string, error) {
+	// 用户已填写昵称时直接使用，不走自动生成流程
 	if nickname != nil && strings.TrimSpace(*nickname) != "" {
 		return *nickname, nil
 	}
 
+	// 以 @ 前的邮箱前缀作为自动昵称的可读部分
 	prefix := emailAddr
 	if idx := strings.Index(emailAddr, "@"); idx > 0 {
 		prefix = emailAddr[:idx]
 	}
+	// 截断至6字符，避免昵称过长影响展示
 	if len(prefix) > 6 {
 		prefix = prefix[:6]
 	}
 
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
+	// 最多重试10次避免极端碰撞（碰撞概率极低，重试上限作为兜底保险）
 	for i := 0; i < 10; i++ {
+		// 生成4位随机字母数字后缀，拼接 prefix 构成候选昵称
 		suffix := make([]byte, 4)
 		for j := range suffix {
 			n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
@@ -260,6 +285,7 @@ func (s *authService) resolveNickname(nickname *string, emailAddr string) (strin
 			suffix[j] = charset[n.Int64()]
 		}
 		candidate := prefix + string(suffix)
+		// 检查候选昵称是否已被占用，未占用则直接返回
 		exists, err := s.repo.ExistsByNickname(candidate)
 		if err != nil {
 			return "", err
@@ -275,10 +301,12 @@ func (s *authService) resolveNickname(nickname *string, emailAddr string) (strin
 func generateNumericCode(length int) (string, error) {
 	digits := make([]byte, length)
 	for i := range digits {
+		// 从 [0, 10) 范围内取密码学安全随机整数，保证不可预测性
 		n, err := rand.Int(rand.Reader, big.NewInt(10))
 		if err != nil {
 			return "", err
 		}
+		// 将整数转换为对应的 ASCII 数字字符（'0'=48, '9'=57）
 		digits[i] = byte('0') + byte(n.Int64())
 	}
 	return string(digits), nil

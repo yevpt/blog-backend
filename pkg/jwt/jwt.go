@@ -54,30 +54,35 @@ func (m *Manager) GenerateRefresh(userId int64, username string, roles []string)
 }
 
 func (m *Manager) generate(userId int64, username string, roles []string, tokenType string, hours int) (string, error) {
+	// 填充自定义 claims：用户信息、角色列表、token 类型标识
 	claims := Claims{
 		UserId:    userId,
 		Username:  username,
 		Roles:     roles,
 		TokenType: tokenType,
+		// 标准 claims：签发时间（iat）和过期时间（exp），过期时间 = 当前时间 + hours 小时
 		RegisteredClaims: jwtlib.RegisteredClaims{
 			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Duration(hours) * time.Hour)),
 			IssuedAt:  jwtlib.NewNumericDate(time.Now()),
 		},
 	}
+	// 使用 HS256 对称签名算法生成 JWT 字符串
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
 	return token.SignedString(m.secret)
 }
 
 // Parse 解析并验证 token 签名与过期时间，不校验 TokenType，由调用方自行区分 access / refresh
 func (m *Manager) Parse(tokenStr string) (*Claims, error) {
+	// 解析 token，keyFunc 同时验证算法类型，防止签名绕过
 	token, err := jwtlib.ParseWithClaims(tokenStr, &Claims{}, func(token *jwtlib.Token) (interface{}, error) {
-		// 拒绝非 HMAC 算法，防止 alg:none 攻击
+		// 拒绝非 HMAC 算法，防止 alg:none 攻击（攻击者将 alg 设为 none 可绕过签名验证）
 		if _, ok := token.Method.(*jwtlib.SigningMethodHMAC); !ok {
 			return nil, ErrTokenInvalid
 		}
 		return m.secret, nil
 	})
 
+	// 区分过期错误和其他无效错误，便于调用方给前端提供不同的提示
 	if err != nil {
 		if errors.Is(err, jwtlib.ErrTokenExpired) {
 			return nil, ErrTokenExpired
@@ -85,6 +90,7 @@ func (m *Manager) Parse(tokenStr string) (*Claims, error) {
 		return nil, ErrTokenInvalid
 	}
 
+	// 二次验证：类型断言确认 claims 格式，token.Valid 确认整体校验通过
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, ErrTokenInvalid

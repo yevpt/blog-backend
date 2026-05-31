@@ -43,9 +43,11 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 		ctx := context.Background()
 		ip := c.ClientIP()
 
+		// 优先检查 IP 是否处于硬封禁状态，封禁期内直接拒绝，跳过后续计数操作
 		banKey := fmt.Sprintf("ban:ip:%s", ip)
 		banned, _ := rdb.Exists(ctx, banKey).Result()
 		if banned > 0 {
+			// 读取剩余封禁时间并写入 Retry-After header，告知客户端最早重试时机
 			ttl, _ := rdb.TTL(ctx, banKey).Result()
 			response.TooManyRequests(c, "IP 已被封禁，请稍后再试", int(ttl.Seconds()))
 			c.Abort()
@@ -61,6 +63,7 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 		pipe.Exec(ctx)
 		count := incrCmd.Val()
 
+		// 超过硬限：写入封禁标记并拒绝请求，后续请求直接走封禁逻辑，不再计数
 		if count > int64(cfg.HardLimit) {
 			rdb.Set(ctx, banKey, 1, cfg.BanDuration)
 			response.TooManyRequests(c, "请求过于频繁，IP 已被临时封禁", int(cfg.BanDuration.Seconds()))
@@ -68,6 +71,7 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 			return
 		}
 
+		// 超过软限：返回 429 但不封禁，给客户端减速信号
 		if count > int64(cfg.SoftLimit) {
 			response.TooManyRequests(c, "请求过于频繁，请稍后再试", int(cfg.Window.Seconds()))
 			c.Abort()
