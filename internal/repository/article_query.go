@@ -119,7 +119,7 @@ func (r *articleRepo) findArticleDetail(id uint, viewerID *uint, publicOnly bool
 	var article model.Article
 	query := r.db.Model(&model.Article{}).Where("id = ?", id)
 	if publicOnly {
-		query = query.Where("article.status = ?", uint8(1))
+		query = query.Where("article.status IN ?", []uint{1, 2})
 	}
 	err := query.First(&article).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {

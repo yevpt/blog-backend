@@ -79,7 +79,7 @@ func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 	repo := repository.NewArticleRepository(db)
 
 	mock.ExpectQuery("SELECT \\* FROM `article`").
-		WithArgs(uint(99), uint8(1), 1).
+		WithArgs(uint(99), uint(1), uint(2), 1).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
@@ -89,6 +89,29 @@ func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 	detail, err := repo.FindPublicDetail(99, nil)
 	require.NoError(t, err)
 	assert.Nil(t, detail)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_FindPublicDetail_ReturnsEncryptedArticleShell(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewArticleRepository(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(11), uint(1), uint(2), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(11, now, now, nil, "Locked", nil, "summary", "secret", 1, 2, 1, "pwd", 5))
+	expectEmptyArticleAggregateQueries(mock, 11)
+
+	detail, err := repo.FindPublicDetail(11, nil)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	assert.Equal(t, uint8(2), detail.Article.Status)
+	assert.Equal(t, "secret", detail.Article.Content)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

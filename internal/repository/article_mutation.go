@@ -87,7 +87,7 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 	liked := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var article model.Article
-		if err := tx.Where("status = ?", uint8(1)).First(&article, articleID).Error; err != nil {
+		if err := tx.Where("status IN ?", []uint{1, 2}).First(&article, articleID).Error; err != nil {
 			return err
 		}
 
