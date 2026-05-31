@@ -68,6 +68,7 @@ func (r *articleRepo) IncrementReadCount(id uint) (*model.Article, error) {
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&model.Article{}).
 			Where("id = ?", id).
+			Where("status IN ?", visibleArticleStatuses()).
 			Update("read_count", gorm.Expr("read_count + 1"))
 		if res.Error != nil {
 			return res.Error
@@ -87,7 +88,7 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 	liked := false
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		var article model.Article
-		if err := tx.Where("status IN ?", []uint{1, 2}).First(&article, articleID).Error; err != nil {
+		if err := tx.Where("status IN ?", visibleArticleStatuses()).First(&article, articleID).Error; err != nil {
 			return err
 		}
 
@@ -97,14 +98,20 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 			First(&like).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			liked = true
-			return tx.Create(&model.UserLike{UserID: userID, TargetID: articleID, Type: ArticleLikeType}).Error
+			if err := tx.Create(&model.UserLike{UserID: userID, TargetID: articleID, Type: ArticleLikeType}).Error; err != nil {
+				return err
+			}
+			return createArticleLikeMessage(tx, article, userID)
 		}
 		if err != nil {
 			return err
 		}
 		if like.DeletedAt.Valid {
 			liked = true
-			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
+			if err := tx.Unscoped().Model(&like).Update("deleted_at", nil).Error; err != nil {
+				return err
+			}
+			return createArticleLikeMessage(tx, article, userID)
 		}
 
 		liked = false
@@ -119,6 +126,34 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 
 	detail, err := r.FindPublicDetail(articleID, &userID)
 	return detail, liked, err
+}
+
+func visibleArticleStatuses() []uint {
+	return []uint{1, 2}
+}
+
+func createArticleLikeMessage(tx *gorm.DB, article model.Article, fromUserID uint) error {
+	if article.UserID == fromUserID {
+		return nil
+	}
+	title := "文章点赞"
+	content := ""
+	message := model.Message{
+		Title:      &title,
+		Content:    &content,
+		Type:       "article_like",
+		TypeID:     article.ID,
+		FromUserID: fromUserID,
+		ArticleID:  &article.ID,
+	}
+	if err := tx.Create(&message).Error; err != nil {
+		return err
+	}
+	return tx.Create(&model.UserMessage{
+		UserID:    article.UserID,
+		MessageID: message.ID,
+		IsRead:    false,
+	}).Error
 }
 
 func articleUpdateFields(article model.Article) map[string]interface{} {

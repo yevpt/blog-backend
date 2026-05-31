@@ -154,8 +154,8 @@ func TestArticleRepository_IncrementReadCount_UsesAtomicUpdate(t *testing.T) {
 
 	now := time.Now()
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1,`updated_at`=\\? WHERE id = \\? AND `article`.`deleted_at` IS NULL").
-		WithArgs(sqlmock.AnyArg(), uint(7)).
+	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1,`updated_at`=\\? WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
+		WithArgs(sqlmock.AnyArg(), uint(7), uint(1), uint(2)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT \\* FROM `article`").
 		WithArgs(uint(7), 1).
@@ -170,6 +170,23 @@ func TestArticleRepository_IncrementReadCount_UsesAtomicUpdate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, article)
 	assert.Equal(t, uint(12), article.ReadCount)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_IncrementReadCount_HiddenArticleNotFound(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewArticleRepository(db)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1,`updated_at`=\\? WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
+		WithArgs(sqlmock.AnyArg(), uint(8), uint(1), uint(2)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectRollback()
+
+	article, err := repo.IncrementReadCount(8)
+	require.NoError(t, err)
+	assert.Nil(t, article)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -233,6 +250,74 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, uint(7), result.Article.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_IsLiked_HiddenArticleNotFound(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewArticleRepository(db)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article`").
+		WithArgs(uint(8), uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	liked, count, err := repo.IsLiked(8, 1)
+	require.Error(t, err)
+	assert.False(t, liked)
+	assert.Equal(t, int64(0), count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewArticleRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(1), uint(2), uint(7), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+	mock.ExpectQuery("SELECT \\* FROM `user_like`").
+		WithArgs(uint(7), uint(1), uint8(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "target_id", "type",
+		}))
+	mock.ExpectExec("INSERT INTO `user_like`").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO `message`").
+		WillReturnResult(sqlmock.NewResult(12, 1))
+	mock.ExpectExec("INSERT INTO `user_message`").
+		WillReturnResult(sqlmock.NewResult(13, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(7), uint(1), uint(2), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+	expectEmptyArticleAggregateQueries(mock, 7)
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article`").
+		WithArgs(uint(7), uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user_like`").
+		WithArgs(uint(7), uint(1), uint8(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user_like`").
+		WithArgs(uint(7), uint8(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	detail, liked, err := repo.ToggleLike(7, 1)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	assert.True(t, liked)
+	assert.True(t, detail.IsLiked)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

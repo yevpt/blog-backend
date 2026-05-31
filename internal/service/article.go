@@ -7,6 +7,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository"
+	"gorm.io/gorm"
 )
 
 var (
@@ -148,6 +149,9 @@ func (s *articleService) Read(id uint) (*dto.ArticleReadResp, error) {
 func (s *articleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error) {
 	liked, count, err := s.repo.IsLiked(id, userID)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrArticleNotFound
+		}
 		return nil, err
 	}
 	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: count}, nil

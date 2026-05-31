@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/vpt/blog-backend/internal/repository"
 	"github.com/vpt/blog-backend/internal/repository/mock"
 	"github.com/vpt/blog-backend/internal/service"
+	"gorm.io/gorm"
 )
 
 func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
@@ -193,4 +195,19 @@ func TestArticleService_GetPublicDetail_NotFound(t *testing.T) {
 
 	_, err := svc.GetPublicDetail(404, nil)
 	require.ErrorIs(t, err, service.ErrArticleNotFound)
+}
+
+func TestArticleService_IsLiked_NotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := service.NewArticleService(repo)
+
+	repo.EXPECT().
+		IsLiked(uint(8), uint(1)).
+		Return(false, int64(0), gorm.ErrRecordNotFound)
+
+	_, err := svc.IsLiked(8, 1)
+	require.ErrorIs(t, err, service.ErrArticleNotFound)
+	assert.True(t, errors.Is(err, service.ErrArticleNotFound))
 }

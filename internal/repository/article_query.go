@@ -61,6 +61,16 @@ func (r *articleRepo) FindAdminDetail(id uint, viewerID *uint) (*ArticleAggregat
 }
 
 func (r *articleRepo) IsLiked(articleID uint, userID uint) (bool, int64, error) {
+	var articleCount int64
+	if err := r.db.Model(&model.Article{}).
+		Where("id = ? AND status IN ?", articleID, visibleArticleStatuses()).
+		Count(&articleCount).Error; err != nil {
+		return false, 0, err
+	}
+	if articleCount == 0 {
+		return false, 0, gorm.ErrRecordNotFound
+	}
+
 	var likedCount int64
 	if err := r.db.Model(&model.UserLike{}).
 		Where("target_id = ? AND user_id = ? AND type = ?", articleID, userID, ArticleLikeType).
@@ -119,7 +129,7 @@ func (r *articleRepo) findArticleDetail(id uint, viewerID *uint, publicOnly bool
 	var article model.Article
 	query := r.db.Model(&model.Article{}).Where("id = ?", id)
 	if publicOnly {
-		query = query.Where("article.status IN ?", []uint{1, 2})
+		query = query.Where("article.status IN ?", visibleArticleStatuses())
 	}
 	err := query.First(&article).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
