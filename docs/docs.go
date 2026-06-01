@@ -509,6 +509,362 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/tags": {
+            "post": {
+                "description": "管理员新增标签。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "新增标签",
+                "parameters": [
+                    {
+                        "description": "标签新增请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TagCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示新增成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tags/{id}": {
+            "put": {
+                "description": "管理员修改标签名称、排序、图标、描述、封面等属性。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "修改标签",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "标签修改请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TagUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示修改成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员删除标签，并清空该标签下文章关联；文章本身不会被删除。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "删除标签",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/tags/{id}/articles": {
+            "post": {
+                "description": "管理员给单篇或多篇文章添加标签；已存在的关联会跳过。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "给文章添加标签",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "文章 ID 列表",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TagArticlesReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示添加成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagArticlesResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "标签或文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员批量移除文章的某个标签；文章本身不会被删除。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "删除文章标签",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "文章 ID 列表",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.TagArticlesReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示移除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagArticlesResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/articles": {
             "get": {
                 "description": "按页码分页查询公开文章，支持推荐、分类和标签过滤；加密文章只在详情接口隐藏正文。",
@@ -1694,6 +2050,162 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "留言不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/tags": {
+            "get": {
+                "description": "返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "查询标签列表",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/tags/{id}": {
+            "get": {
+                "description": "返回单个标签元数据及其公开文章数量。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "查询标签详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TagItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/tags/{id}/articles": {
+            "get": {
+                "description": "分页返回指定标签下的公开文章，响应结构与文章分页接口一致。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "标签"
+                ],
+                "summary": "查询标签下文章",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticlePageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "标签不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -2893,6 +3405,174 @@ const docTemplate = `{
             "properties": {
                 "email": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.TagArticlesReq": {
+            "type": "object",
+            "required": [
+                "article_ids"
+            ],
+            "properties": {
+                "article_ids": {
+                    "description": "ArticleIDs 文章 ID 列表；单篇文章也使用一个元素的数组。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1
+                    ]
+                }
+            }
+        },
+        "dto.TagArticlesResp": {
+            "type": "object",
+            "properties": {
+                "affected_count": {
+                    "description": "AffectedCount 实际影响的关联数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "article_ids": {
+                    "description": "ArticleIDs 本次请求归一化后的文章 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "tag_id": {
+                    "description": "TagID 标签 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.TagCreateReq": {
+            "type": "object",
+            "required": [
+                "name",
+                "seq"
+            ],
+            "properties": {
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址或对象 key。",
+                    "type": "string",
+                    "example": "covers/go.jpg"
+                },
+                "description": {
+                    "description": "Description 标签描述。",
+                    "type": "string",
+                    "example": "Go 语言相关内容"
+                },
+                "icon": {
+                    "description": "Icon 图标地址或对象 key。",
+                    "type": "string",
+                    "example": "icons/go.svg"
+                },
+                "name": {
+                    "description": "Name 标签名称。",
+                    "type": "string",
+                    "example": "Go"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 标签路由别名。",
+                    "type": "string",
+                    "example": "go"
+                }
+            }
+        },
+        "dto.TagItemResp": {
+            "type": "object",
+            "properties": {
+                "article_count": {
+                    "description": "ArticleCount 该标签下的公开文章数量。",
+                    "type": "integer",
+                    "example": 12
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址或对象 key。",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description 标签描述。",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "Icon 图标 URL 或对象 key。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 标签 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 标签名称。",
+                    "type": "string",
+                    "example": "Go"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 标签路由别名。",
+                    "type": "string",
+                    "example": "go"
+                }
+            }
+        },
+        "dto.TagListResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 标签列表，按 seq ASC、文章数量 DESC 排序。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.TagItemResp"
+                    }
+                }
+            }
+        },
+        "dto.TagUpdateReq": {
+            "type": "object",
+            "properties": {
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址或对象 key；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "covers/go.jpg"
+                },
+                "description": {
+                    "description": "Description 标签描述；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "Go 语言相关内容"
+                },
+                "icon": {
+                    "description": "Icon 图标地址或对象 key；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "icons/go.svg"
+                },
+                "name": {
+                    "description": "Name 标签名称。",
+                    "type": "string",
+                    "example": "Go"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 标签路由别名；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "go"
                 }
             }
         },

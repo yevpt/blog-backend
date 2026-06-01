@@ -184,28 +184,6 @@ func newCategoryUpdateData(req dto.CategoryUpdateReq) (repository.CategoryUpdate
 	return data, nil
 }
 
-func cleanOptionalString(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	trimmed := strings.TrimSpace(*value)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
-}
-
-func cleanOptionalUpdateString(value *string) (*string, bool) {
-	if value == nil {
-		return nil, false
-	}
-	trimmed := strings.TrimSpace(*value)
-	if trimmed == "" {
-		return nil, true
-	}
-	return &trimmed, true
-}
-
 func normalizeCategoryArticleIDs(ids []uint) ([]uint, error) {
 	unique := uniqueCategoryArticleIDs(ids)
 	if len(unique) == 0 {

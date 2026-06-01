@@ -39,6 +39,7 @@ type routeHandlers struct {
 	comment   *commenthandler.CommentHandler
 	guestbook *guestbookhandler.GuestbookHandler
 	category  *handler.CategoryHandler
+	tag       *handler.TagHandler
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -142,6 +143,9 @@ func newRouteHandlers(
 	categoryRepo := repository.NewCategoryRepository(db)
 	categorySvc := service.NewCategoryService(categoryRepo)
 
+	tagRepo := repository.NewTagRepository(db)
+	tagSvc := service.NewTagService(tagRepo, articleSvc)
+
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo)
 
@@ -156,6 +160,7 @@ func newRouteHandlers(
 		comment:   commenthandler.NewCommentHandler(commentSvc),
 		guestbook: guestbookhandler.NewGuestbookHandler(guestbookSvc),
 		category:  handler.NewCategoryHandler(categorySvc),
+		tag:       handler.NewTagHandler(tagSvc),
 	}
 }
 
@@ -176,6 +181,9 @@ func registerPublicRoutes(
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
 	r.POST("/auth/refresh", handlers.auth.Refresh)
 	r.GET("/categories", handlers.category.ListTabs)
+	r.GET("/tags", handlers.tag.List)
+	r.GET("/tags/:id", handlers.tag.Get)
+	r.GET("/tags/:id/articles", handlers.tag.ListArticles)
 	r.GET("/articles/ids", handlers.article.ListIDs)
 	r.GET("/articles", handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
@@ -216,4 +224,9 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.DELETE("/categories/:id", handlers.category.Delete)
 	admin.POST("/categories/:id/articles", handlers.category.AddArticles)
 	admin.DELETE("/categories/:id/articles", handlers.category.RemoveArticles)
+	admin.POST("/tags", handlers.tag.Create)
+	admin.PUT("/tags/:id", handlers.tag.Update)
+	admin.DELETE("/tags/:id", handlers.tag.Delete)
+	admin.POST("/tags/:id/articles", handlers.tag.AddArticles)
+	admin.DELETE("/tags/:id/articles", handlers.tag.RemoveArticles)
 }

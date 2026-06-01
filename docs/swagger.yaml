@@ -879,6 +879,131 @@ definitions:
     required:
     - email
     type: object
+  dto.TagArticlesReq:
+    properties:
+      article_ids:
+        description: ArticleIDs 文章 ID 列表；单篇文章也使用一个元素的数组。
+        example:
+        - 1
+        items:
+          type: integer
+        type: array
+    required:
+    - article_ids
+    type: object
+  dto.TagArticlesResp:
+    properties:
+      affected_count:
+        description: AffectedCount 实际影响的关联数量。
+        example: 2
+        type: integer
+      article_ids:
+        description: ArticleIDs 本次请求归一化后的文章 ID 列表。
+        items:
+          type: integer
+        type: array
+      tag_id:
+        description: TagID 标签 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.TagCreateReq:
+    properties:
+      cover_img_url:
+        description: CoverImgUrl 封面图地址或对象 key。
+        example: covers/go.jpg
+        type: string
+      description:
+        description: Description 标签描述。
+        example: Go 语言相关内容
+        type: string
+      icon:
+        description: Icon 图标地址或对象 key。
+        example: icons/go.svg
+        type: string
+      name:
+        description: Name 标签名称。
+        example: Go
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
+        example: 0
+        type: integer
+      url:
+        description: URL 标签路由别名。
+        example: go
+        type: string
+    required:
+    - name
+    - seq
+    type: object
+  dto.TagItemResp:
+    properties:
+      article_count:
+        description: ArticleCount 该标签下的公开文章数量。
+        example: 12
+        type: integer
+      cover_img_url:
+        description: CoverImgUrl 封面图地址或对象 key。
+        type: string
+      description:
+        description: Description 标签描述。
+        type: string
+      icon:
+        description: Icon 图标 URL 或对象 key。
+        type: string
+      id:
+        description: ID 标签 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 标签名称。
+        example: Go
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      url:
+        description: URL 标签路由别名。
+        example: go
+        type: string
+    type: object
+  dto.TagListResp:
+    properties:
+      list:
+        description: List 标签列表，按 seq ASC、文章数量 DESC 排序。
+        items:
+          $ref: '#/definitions/dto.TagItemResp'
+        type: array
+    type: object
+  dto.TagUpdateReq:
+    properties:
+      cover_img_url:
+        description: CoverImgUrl 封面图地址或对象 key；传空字符串表示清空。
+        example: covers/go.jpg
+        type: string
+      description:
+        description: Description 标签描述；传空字符串表示清空。
+        example: Go 语言相关内容
+        type: string
+      icon:
+        description: Icon 图标地址或对象 key；传空字符串表示清空。
+        example: icons/go.svg
+        type: string
+      name:
+        description: Name 标签名称。
+        example: Go
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      url:
+        description: URL 标签路由别名；传空字符串表示清空。
+        example: go
+        type: string
+    type: object
   dto.TokenResp:
     properties:
       access_token:
@@ -1225,6 +1350,227 @@ paths:
       summary: 添加文章到分类
       tags:
       - 分类
+  /admin/tags:
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增标签。
+      parameters:
+      - description: 标签新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TagCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增标签
+      tags:
+      - 标签
+  /admin/tags/{id}:
+    delete:
+      description: 管理员删除标签，并清空该标签下文章关联；文章本身不会被删除。
+      parameters:
+      - description: 标签 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 标签不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除标签
+      tags:
+      - 标签
+    put:
+      consumes:
+      - application/json
+      description: 管理员修改标签名称、排序、图标、描述、封面等属性。
+      parameters:
+      - description: 标签 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 标签修改请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TagUpdateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示修改成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 标签不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 修改标签
+      tags:
+      - 标签
+  /admin/tags/{id}/articles:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员批量移除文章的某个标签；文章本身不会被删除。
+      parameters:
+      - description: 标签 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 文章 ID 列表
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TagArticlesReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示移除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagArticlesResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 标签不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除文章标签
+      tags:
+      - 标签
+    post:
+      consumes:
+      - application/json
+      description: 管理员给单篇或多篇文章添加标签；已存在的关联会跳过。
+      parameters:
+      - description: 标签 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 文章 ID 列表
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.TagArticlesReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示添加成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagArticlesResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 标签或文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 给文章添加标签
+      tags:
+      - 标签
   /articles:
     get:
       consumes:
@@ -1960,4 +2306,98 @@ paths:
       summary: 切换留言点赞
       tags:
       - 留言板
+  /tags:
+    get:
+      description: 返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagListResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询标签列表
+      tags:
+      - 标签
+  /tags/{id}:
+    get:
+      description: 返回单个标签元数据及其公开文章数量。
+      parameters:
+      - description: 标签 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.TagItemResp'
+              type: object
+        "404":
+          description: 标签不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询标签详情
+      tags:
+      - 标签
+  /tags/{id}/articles:
+    get:
+      description: 分页返回指定标签下的公开文章，响应结构与文章分页接口一致。
+      parameters:
+      - description: 标签 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticlePageResp'
+              type: object
+        "404":
+          description: 标签不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询标签下文章
+      tags:
+      - 标签
 swagger: "2.0"
