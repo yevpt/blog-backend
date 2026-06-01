@@ -151,7 +151,7 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 	require.ErrorIs(t, err, articleservice.ErrArticlePasswordRequired)
 }
 
-func TestArticleService_SaveDeduplicatesRelationIDs(t *testing.T) {
+func TestArticleService_SaveKeepsFirstCategoryAndDeduplicatesOtherRelationIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
@@ -161,7 +161,7 @@ func TestArticleService_SaveDeduplicatesRelationIDs(t *testing.T) {
 	repo.EXPECT().
 		Save(gomock.Any()).
 		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
-			assert.Equal(t, []uint{1, 2}, data.CategoryIDs)
+			assert.Equal(t, []uint{1}, data.CategoryIDs)
 			assert.Equal(t, []uint{3, 4}, data.TagIDs)
 			assert.Equal(t, []uint{5, 6}, data.MusicIDs)
 			return &articlerepo.ArticleAggregate{

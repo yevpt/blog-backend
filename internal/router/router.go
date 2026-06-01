@@ -10,12 +10,18 @@ import (
 	"github.com/vpt/blog-backend/internal/handler"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
+	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
+	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	"github.com/vpt/blog-backend/internal/middleware"
 	"github.com/vpt/blog-backend/internal/repository"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	"github.com/vpt/blog-backend/internal/service"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
+	commentservice "github.com/vpt/blog-backend/internal/service/comment"
+	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -26,11 +32,13 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health   *handler.HealthHandler
-	test     *handler.TestHandler
-	auth     *authhandler.AuthHandler
-	article  *articlehandler.ArticleHandler
-	category *handler.CategoryHandler
+	health    *handler.HealthHandler
+	test      *handler.TestHandler
+	auth      *authhandler.AuthHandler
+	article   *articlehandler.ArticleHandler
+	comment   *commenthandler.CommentHandler
+	guestbook *guestbookhandler.GuestbookHandler
+	category  *handler.CategoryHandler
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -134,12 +142,20 @@ func newRouteHandlers(
 	categoryRepo := repository.NewCategoryRepository(db)
 	categorySvc := service.NewCategoryService(categoryRepo)
 
+	commentRepo := commentrepo.NewCommentRepository(db)
+	commentSvc := commentservice.NewCommentService(commentRepo)
+
+	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
+	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo)
+
 	return routeHandlers{
-		health:   handler.NewHealthHandler(db, redisClient),
-		test:     handler.NewTestHandler(jwtManager),
-		auth:     authhandler.NewAuthHandler(authSvc),
-		article:  articlehandler.NewArticleHandler(articleSvc),
-		category: handler.NewCategoryHandler(categorySvc),
+		health:    handler.NewHealthHandler(db, redisClient),
+		test:      handler.NewTestHandler(jwtManager),
+		auth:      authhandler.NewAuthHandler(authSvc),
+		article:   articlehandler.NewArticleHandler(articleSvc),
+		comment:   commenthandler.NewCommentHandler(commentSvc),
+		guestbook: guestbookhandler.NewGuestbookHandler(guestbookSvc),
+		category:  handler.NewCategoryHandler(categorySvc),
 	}
 }
 
@@ -164,6 +180,8 @@ func registerPublicRoutes(
 	r.GET("/articles", handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
 	r.POST("/articles/:id/read", handlers.article.Read)
+	r.GET("/comments", handlers.comment.List)
+	r.GET("/guestbook", middleware.OptionalAuth(jwtManager), handlers.guestbook.List)
 }
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
@@ -172,6 +190,13 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.GET("/test/authed", handlers.test.Authed)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
+	authed.POST("/comments", handlers.comment.Create)
+	authed.POST("/comments/:id/replies", handlers.comment.Reply)
+	authed.DELETE("/comments/:id", handlers.comment.Delete)
+	authed.DELETE("/comment-replies/:id", handlers.comment.DeleteReply)
+	authed.POST("/guestbook", handlers.guestbook.Create)
+	authed.POST("/guestbook/:id/like", handlers.guestbook.ToggleLike)
+	authed.DELETE("/guestbook/:id", handlers.guestbook.Delete)
 }
 
 func registerVIPRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
@@ -186,4 +211,9 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.GET("/test", handlers.test.Admin)
 	admin.POST("/articles", handlers.article.Save)
 	admin.DELETE("/articles/:id", handlers.article.Delete)
+	admin.POST("/categories", handlers.category.Create)
+	admin.PUT("/categories/:id", handlers.category.Update)
+	admin.DELETE("/categories/:id", handlers.category.Delete)
+	admin.POST("/categories/:id/articles", handlers.category.AddArticles)
+	admin.DELETE("/categories/:id/articles", handlers.category.RemoveArticles)
 }

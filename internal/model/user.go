@@ -30,7 +30,7 @@ type UserLike struct {
 	Base
 	UserID   uint  `gorm:"not null;uniqueIndex:idx_user_like,priority:1;comment:用户ID" json:"user_id"`
 	TargetID uint  `gorm:"not null;uniqueIndex:idx_user_like,priority:2;comment:目标ID" json:"target_id"`
-	Type     uint8 `gorm:"type:tinyint;not null;uniqueIndex:idx_user_like,priority:3;comment:类型 1=文章 2=文章评论 3=说说 4=说说评论" json:"type"`
+	Type     uint8 `gorm:"type:tinyint;not null;uniqueIndex:idx_user_like,priority:3;comment:类型 1=文章 2=文章评论 3=说说 4=说说评论 5=留言板留言" json:"type"`
 }
 
 func (UserLike) TableName() string { return "user_like" }

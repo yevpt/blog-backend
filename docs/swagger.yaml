@@ -7,6 +7,10 @@ definitions:
         items:
           $ref: '#/definitions/dto.ArticleRelationResp'
         type: array
+      category:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleRelationResp'
+        description: Category 文章所属分类（每篇文章归属一个分类）。
       category_ids:
         description: CategoryIDs 分类 ID 列表。
         items:
@@ -121,6 +125,10 @@ definitions:
     type: object
   dto.ArticleListItemResp:
     properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleRelationResp'
+        description: Category 文章所属分类（每篇文章归属一个分类）。
       comment_count:
         description: CommentCount 评论数量。
         example: 2
@@ -261,7 +269,7 @@ definitions:
   dto.ArticleSaveReq:
     properties:
       category_ids:
-        description: CategoryIDs 分类 ID 列表，至少一个。
+        description: CategoryIDs 分类 ID 列表，至少一个；当前每篇文章只归属第一个有效分类。
         example:
         - 1
         items:
@@ -333,6 +341,491 @@ definitions:
     - category_ids
     - content
     - title
+    type: object
+  dto.CategoryArticlesReq:
+    properties:
+      article_ids:
+        description: ArticleIDs 文章 ID 列表；单篇文章也使用一个元素的数组。
+        example:
+        - 1
+        items:
+          type: integer
+        type: array
+    required:
+    - article_ids
+    type: object
+  dto.CategoryArticlesResp:
+    properties:
+      affected_count:
+        description: AffectedCount 实际影响的关联数量。
+        example: 2
+        type: integer
+      article_ids:
+        description: ArticleIDs 本次请求归一化后的文章 ID 列表。
+        items:
+          type: integer
+        type: array
+      category_id:
+        description: CategoryID 分类 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.CategoryCreateReq:
+    properties:
+      cover_img_url:
+        description: CoverImgUrl 封面图地址或对象 key。
+        example: covers/programming.jpg
+        type: string
+      description:
+        description: Description 分类描述。
+        example: 编程学习与工程实践
+        type: string
+      icon:
+        description: Icon 图标地址或对象 key。
+        example: icons/programming.svg
+        type: string
+      name:
+        description: Name 分类名称。
+        example: 编程
+        type: string
+      parent_id:
+        description: ParentID 父分类 ID，当前仅预留，不参与层级逻辑。
+        example: 1
+        type: integer
+      seq:
+        description: Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
+        example: 0
+        type: integer
+      url:
+        description: URL 分类路由别名。
+        example: programming
+        type: string
+    required:
+    - cover_img_url
+    - description
+    - icon
+    - name
+    - seq
+    type: object
+  dto.CategoryItemResp:
+    properties:
+      article_count:
+        description: ArticleCount 该分类下的公开文章数量。
+        example: 12
+        type: integer
+      cover_img_url:
+        description: CoverImgUrl 封面图地址或对象 key。
+        type: string
+      description:
+        description: Description 分类描述。
+        type: string
+      icon:
+        description: Icon 图标 URL 或对象 key。
+        type: string
+      id:
+        description: ID 分类 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 分类名称。
+        example: 编程
+        type: string
+      parent_id:
+        description: ParentID 父分类 ID，当前仅预留。
+        example: 1
+        type: integer
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      url:
+        description: URL 分类路由别名。
+        example: programming
+        type: string
+    type: object
+  dto.CategoryTabItem:
+    properties:
+      article_count:
+        description: ArticleCount 该分类下的公开文章数量。
+        example: 12
+        type: integer
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        type: string
+      description:
+        description: Description 分类描述。
+        type: string
+      icon:
+        description: Icon 图标 URL。
+        type: string
+      id:
+        description: ID 分类 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 分类名称。
+        example: 编程
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      url:
+        description: URL 分类路由别名。
+        example: programming
+        type: string
+    type: object
+  dto.CategoryTabsResp:
+    properties:
+      list:
+        description: List 分类列表，按 seq ASC、文章数量 DESC 排序。
+        items:
+          $ref: '#/definitions/dto.CategoryTabItem'
+        type: array
+    type: object
+  dto.CategoryUpdateReq:
+    properties:
+      cover_img_url:
+        description: CoverImgUrl 封面图地址或对象 key；传空字符串表示清空。
+        example: covers/programming.jpg
+        type: string
+      description:
+        description: Description 分类描述；传空字符串表示清空。
+        example: 编程学习与工程实践
+        type: string
+      icon:
+        description: Icon 图标地址或对象 key；传空字符串表示清空。
+        example: icons/programming.svg
+        type: string
+      name:
+        description: Name 分类名称。
+        example: 编程
+        type: string
+      parent_id:
+        description: ParentID 父分类 ID，当前仅预留，不参与层级逻辑。
+        example: 1
+        type: integer
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      url:
+        description: URL 分类路由别名；传空字符串表示清空。
+        example: programming
+        type: string
+    type: object
+  dto.CommentCreateReq:
+    properties:
+      content:
+        description: Content 评论内容，去除首尾空白后不能为空，最多 2000 字符。
+        example: 写得真好
+        maxLength: 2000
+        type: string
+      target_id:
+        description: TargetID 评论目标 ID；文章为 article_id，说说为 moment_id，留言板为 owner_user_id。
+        example: 1
+        type: integer
+      target_type:
+        description: TargetType 评论目标类型：article、moment、guestbook。
+        enum:
+        - article
+        - moment
+        - guestbook
+        example: article
+        type: string
+    required:
+    - content
+    - target_id
+    - target_type
+    type: object
+  dto.CommentDeleteResp:
+    properties:
+      id:
+        description: ID 被删除的评论或回复 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.CommentItemResp:
+    properties:
+      content:
+        description: Content 评论内容。
+        example: 写得真好
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      id:
+        description: ID 评论 ID。
+        example: 1
+        type: integer
+      replies:
+        description: Replies 当前页一级评论下的回复列表。
+        items:
+          $ref: '#/definitions/dto.CommentReplyResp'
+        type: array
+      target_id:
+        description: TargetID 评论目标 ID。
+        example: 1
+        type: integer
+      target_type:
+        description: TargetType 评论目标类型。
+        example: article
+        type: string
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.CommentUserResp'
+        description: User 评论者用户摘要。
+      user_id:
+        description: UserID 评论者用户 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.CommentPageResp:
+    properties:
+      list:
+        description: List 评论列表。
+        items:
+          $ref: '#/definitions/dto.CommentItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
+  dto.CommentReplyCreateReq:
+    properties:
+      content:
+        description: Content 回复内容，去除首尾空白后不能为空，最多 2000 字符。
+        example: 收到
+        maxLength: 2000
+        type: string
+      parent_reply_id:
+        description: ParentReplyID 上级回复 ID；0 表示直接回复一级评论。
+        example: 0
+        type: integer
+      target_type:
+        description: TargetType 评论目标类型：article、moment、guestbook，用于定位一级评论所在表。
+        enum:
+        - article
+        - moment
+        - guestbook
+        example: article
+        type: string
+    required:
+    - content
+    - target_type
+    type: object
+  dto.CommentReplyResp:
+    properties:
+      comment_id:
+        description: CommentID 一级评论 ID。
+        example: 1
+        type: integer
+      content:
+        description: Content 回复内容。
+        example: 收到
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      from_user:
+        allOf:
+        - $ref: '#/definitions/dto.CommentUserResp'
+        description: FromUser 回复者用户摘要。
+      from_user_id:
+        description: FromUserID 回复者用户 ID。
+        example: 2
+        type: integer
+      id:
+        description: ID 回复 ID。
+        example: 1
+        type: integer
+      parent_reply_id:
+        description: ParentReplyID 上级回复 ID；0 表示直接回复一级评论。
+        example: 0
+        type: integer
+      target_type:
+        description: TargetType 评论目标类型。
+        example: article
+        type: string
+      to_user:
+        allOf:
+        - $ref: '#/definitions/dto.CommentUserResp'
+        description: ToUser 被回复者用户摘要。
+      to_user_id:
+        description: ToUserID 被回复者用户 ID。
+        example: 1
+        type: integer
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+    type: object
+  dto.CommentUserResp:
+    properties:
+      avatar_url:
+        description: AvatarUrl 用户头像地址。
+        example: https://example.com/avatar.png
+        type: string
+      id:
+        description: ID 用户 ID。
+        example: 1
+        type: integer
+      mark:
+        description: Mark 用户身份标签。
+        example: 注册会员
+        type: string
+      nickname:
+        description: Nickname 用户昵称。
+        example: VPT
+        type: string
+      site:
+        description: Site 用户个人站点。
+        example: https://yevpt.com
+        type: string
+      username:
+        description: Username 登录账号。
+        example: vpt
+        type: string
+    type: object
+  dto.GuestbookCreateReq:
+    properties:
+      content:
+        description: Content 留言内容，去除首尾空白后不能为空，最多 2000 字符。
+        example: 来踩踩，博客很棒
+        maxLength: 2000
+        type: string
+      owner_user_id:
+        description: OwnerUserID 留言板主人用户 ID；省略时默认给博主 1 留言。
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - content
+    type: object
+  dto.GuestbookDeleteResp:
+    properties:
+      id:
+        description: ID 被删除的留言 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.GuestbookItemResp:
+    properties:
+      content:
+        description: Content 留言内容。
+        example: 来踩踩，博客很棒
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      from_user_id:
+        description: FromUserID 留言者用户 ID。
+        example: 7
+        type: integer
+      id:
+        description: ID 留言 ID。
+        example: 1
+        type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: false
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+      owner_user_id:
+        description: OwnerUserID 留言板主人用户 ID。
+        example: 1
+        type: integer
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.GuestbookUserResp'
+        description: User 留言者用户摘要。
+    type: object
+  dto.GuestbookLikeResp:
+    properties:
+      id:
+        description: ID 留言 ID。
+        example: 1
+        type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+    type: object
+  dto.GuestbookPageResp:
+    properties:
+      list:
+        description: List 留言列表。
+        items:
+          $ref: '#/definitions/dto.GuestbookItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
+  dto.GuestbookUserResp:
+    properties:
+      avatar_url:
+        description: AvatarUrl 用户头像地址。
+        example: https://example.com/avatar.png
+        type: string
+      id:
+        description: ID 用户 ID。
+        example: 1
+        type: integer
+      mark:
+        description: Mark 用户身份标签。
+        example: 注册会员
+        type: string
+      nickname:
+        description: Nickname 用户昵称。
+        example: VPT
+        type: string
+      site:
+        description: Site 用户个人站点。
+        example: https://yevpt.com
+        type: string
+      username:
+        description: Username 登录账号。
+        example: vpt
+        type: string
     type: object
   dto.LoginReq:
     properties:
@@ -511,6 +1004,227 @@ paths:
       summary: 删除文章
       tags:
       - 文章管理
+  /admin/categories:
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增分类；父分类字段仅预留，当前不处理父子层级。
+      parameters:
+      - description: 分类新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CategoryCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CategoryItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增分类
+      tags:
+      - 分类
+  /admin/categories/{id}:
+    delete:
+      description: 管理员删除分类，并清空该分类下文章关联；文章本身不会被删除。
+      parameters:
+      - description: 分类 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CategoryItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 分类不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除分类
+      tags:
+      - 分类
+    put:
+      consumes:
+      - application/json
+      description: 管理员修改分类名称、排序、图标、描述、封面等属性。
+      parameters:
+      - description: 分类 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 分类修改请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CategoryUpdateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示修改成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CategoryItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 分类不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 修改分类
+      tags:
+      - 分类
+  /admin/categories/{id}/articles:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员批量移除分类下文章关联；文章本身不会被删除。
+      parameters:
+      - description: 分类 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 文章 ID 列表
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CategoryArticlesReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示移除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CategoryArticlesResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 分类不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除分类下文章
+      tags:
+      - 分类
+    post:
+      consumes:
+      - application/json
+      description: 管理员把单篇或多篇文章加入分类；文章原有分类关系会迁移到当前分类。
+      parameters:
+      - description: 分类 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 文章 ID 列表
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CategoryArticlesReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示添加成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CategoryArticlesResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 分类或文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 添加文章到分类
+      tags:
+      - 分类
   /articles:
     get:
       consumes:
@@ -843,4 +1557,407 @@ paths:
       summary: 发送邮箱验证码
       tags:
       - 认证
+  /categories:
+    get:
+      description: 返回所有分类及其公开文章数量，按 seq ASC、文章数量 DESC 排序。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CategoryTabsResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询分类 Tab 列表
+      tags:
+      - 分类
+  /comment-replies/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 回复作者可删除自己的回复；管理员可删除任意回复。
+      parameters:
+      - description: 回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除回复
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除评论回复
+      tags:
+      - 评论
+  /comments:
+    get:
+      consumes:
+      - application/json
+      description: 按目标类型和目标 ID 查询一级评论，并附带当前页评论下的回复列表。
+      parameters:
+      - description: 目标类型：article、moment、guestbook
+        in: query
+        name: target_type
+        required: true
+        type: string
+      - description: 目标 ID
+        in: query
+        name: target_id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentPageResp'
+              type: object
+        "404":
+          description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询评论
+      tags:
+      - 评论
+    post:
+      consumes:
+      - application/json
+      description: 登录用户为文章、说说或留言板新增一级评论；目标关闭评论时会拒绝提交。
+      parameters:
+      - description: 评论新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误或评论关闭
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增一级评论
+      tags:
+      - 评论
+  /comments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 评论作者可删除自己的一级评论；管理员可删除任意评论，同时删除其下回复。
+      parameters:
+      - description: 一级评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 目标类型：article、moment、guestbook
+        in: query
+        name: target_type
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除评论
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除一级评论
+      tags:
+      - 评论
+  /comments/{id}/replies:
+    post:
+      consumes:
+      - application/json
+      description: 登录用户回复一级评论或回复；parent_reply_id 为 0 时直接回复一级评论。
+      parameters:
+      - description: 一级评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增评论回复
+      tags:
+      - 评论
+  /guestbook:
+    get:
+      consumes:
+      - application/json
+      description: 查询指定用户留言板的留言；owner_user_id 可省略，默认查询博主 1 的留言板。
+      parameters:
+      - description: 留言板主人用户 ID，默认 1
+        in: query
+        name: owner_user_id
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GuestbookPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 留言板主人不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询留言板留言
+      tags:
+      - 留言板
+    post:
+      consumes:
+      - application/json
+      description: 登录用户发表留言；owner_user_id 可省略，默认给博主 1 留言。
+      parameters:
+      - description: 留言发表请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GuestbookCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示发表成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GuestbookItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 留言板主人不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 发表留言
+      tags:
+      - 留言板
+  /guestbook/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 留言作者、留言板主人或管理员可删除留言。
+      parameters:
+      - description: 留言 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GuestbookDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除留言
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 留言不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除留言
+      tags:
+      - 留言板
+  /guestbook/{id}/like:
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 留言 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GuestbookLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 留言不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换留言点赞
+      tags:
+      - 留言板
 swagger: "2.0"

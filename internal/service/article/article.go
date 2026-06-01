@@ -91,7 +91,7 @@ func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDe
 }
 
 func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {
-	categoryIDs := uniqueUintIDs(req.CategoryIDs)
+	categoryIDs := firstCategoryID(req.CategoryIDs)
 	if len(categoryIDs) == 0 {
 		return nil, ErrArticleCategoryRequired
 	}

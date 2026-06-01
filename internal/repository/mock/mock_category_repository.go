@@ -7,6 +7,7 @@ package mock
 import (
 	reflect "reflect"
 
+	model "github.com/vpt/blog-backend/internal/model"
 	repository "github.com/vpt/blog-backend/internal/repository"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -35,6 +36,51 @@ func (m *MockCategoryRepository) EXPECT() *MockCategoryRepositoryMockRecorder {
 	return m.recorder
 }
 
+// AddArticles mocks base method.
+func (m *MockCategoryRepository) AddArticles(categoryID uint, articleIDs []uint) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddArticles", categoryID, articleIDs)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddArticles indicates an expected call of AddArticles.
+func (mr *MockCategoryRepositoryMockRecorder) AddArticles(categoryID, articleIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddArticles", reflect.TypeOf((*MockCategoryRepository)(nil).AddArticles), categoryID, articleIDs)
+}
+
+// Create mocks base method.
+func (m *MockCategoryRepository) Create(category model.Category) (*repository.CategoryWithCount, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Create", category)
+	ret0, _ := ret[0].(*repository.CategoryWithCount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockCategoryRepositoryMockRecorder) Create(category interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockCategoryRepository)(nil).Create), category)
+}
+
+// Delete mocks base method.
+func (m *MockCategoryRepository) Delete(id uint) (*model.Category, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Delete", id)
+	ret0, _ := ret[0].(*model.Category)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockCategoryRepositoryMockRecorder) Delete(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockCategoryRepository)(nil).Delete), id)
+}
+
 // ListWithArticleCount mocks base method.
 func (m *MockCategoryRepository) ListWithArticleCount() ([]repository.CategoryWithCount, error) {
 	m.ctrl.T.Helper()
@@ -48,4 +94,34 @@ func (m *MockCategoryRepository) ListWithArticleCount() ([]repository.CategoryWi
 func (mr *MockCategoryRepositoryMockRecorder) ListWithArticleCount() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWithArticleCount", reflect.TypeOf((*MockCategoryRepository)(nil).ListWithArticleCount))
+}
+
+// RemoveArticles mocks base method.
+func (m *MockCategoryRepository) RemoveArticles(categoryID uint, articleIDs []uint) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveArticles", categoryID, articleIDs)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RemoveArticles indicates an expected call of RemoveArticles.
+func (mr *MockCategoryRepositoryMockRecorder) RemoveArticles(categoryID, articleIDs interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveArticles", reflect.TypeOf((*MockCategoryRepository)(nil).RemoveArticles), categoryID, articleIDs)
+}
+
+// Update mocks base method.
+func (m *MockCategoryRepository) Update(id uint, data repository.CategoryUpdateData) (*repository.CategoryWithCount, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", id, data)
+	ret0, _ := ret[0].(*repository.CategoryWithCount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockCategoryRepositoryMockRecorder) Update(id, data interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockCategoryRepository)(nil).Update), id, data)
 }

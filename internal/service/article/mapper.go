@@ -234,3 +234,12 @@ func uniqueUintIDs(ids []uint) []uint {
 	}
 	return unique
 }
+
+func firstCategoryID(ids []uint) []uint {
+	for _, id := range ids {
+		if id != 0 {
+			return []uint{id}
+		}
+	}
+	return nil
+}

@@ -34,7 +34,7 @@ type ArticleSaveReq struct {
 	CommentStatus uint8 `json:"comment_status" binding:"oneof=0 1" example:"1"`
 	// Password 加密文章密码。
 	Password *string `json:"password" example:"secret"`
-	// CategoryIDs 分类 ID 列表，至少一个。
+	// CategoryIDs 分类 ID 列表，至少一个；当前每篇文章只归属第一个有效分类。
 	CategoryIDs []uint `json:"category_ids" binding:"required,min=1" example:"1"`
 	// TagIDs 标签 ID 列表。
 	TagIDs []uint `json:"tag_ids" example:"1"`

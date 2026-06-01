@@ -153,6 +153,362 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/categories": {
+            "post": {
+                "description": "管理员新增分类；父分类字段仅预留，当前不处理父子层级。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "新增分类",
+                "parameters": [
+                    {
+                        "description": "分类新增请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CategoryCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示新增成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/categories/{id}": {
+            "put": {
+                "description": "管理员修改分类名称、排序、图标、描述、封面等属性。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "修改分类",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "分类修改请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CategoryUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示修改成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "分类不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员删除分类，并清空该分类下文章关联；文章本身不会被删除。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "删除分类",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "分类不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/categories/{id}/articles": {
+            "post": {
+                "description": "管理员把单篇或多篇文章加入分类；文章原有分类关系会迁移到当前分类。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "添加文章到分类",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "文章 ID 列表",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CategoryArticlesReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示添加成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryArticlesResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "分类或文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员批量移除分类下文章关联；文章本身不会被删除。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "删除分类下文章",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "文章 ID 列表",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CategoryArticlesReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示移除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryArticlesResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "分类不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/articles": {
             "get": {
                 "description": "按页码分页查询公开文章，支持推荐、分类和标签过滤；加密文章只在详情接口隐藏正文。",
@@ -696,6 +1052,660 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/categories": {
+            "get": {
+                "description": "返回所有分类及其公开文章数量，按 seq ASC、文章数量 DESC 排序。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "查询分类 Tab 列表",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryTabsResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/comment-replies/{id}": {
+            "delete": {
+                "description": "回复作者可删除自己的回复；管理员可删除任意回复。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "删除评论回复",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "回复 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentDeleteResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权删除回复",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/comments": {
+            "get": {
+                "description": "按目标类型和目标 ID 查询一级评论，并附带当前页评论下的回复列表。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "分页查询评论",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "目标类型：article、moment、guestbook",
+                        "name": "target_type",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "目标 ID",
+                        "name": "target_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "评论目标不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "登录用户为文章、说说或留言板新增一级评论；目标关闭评论时会拒绝提交。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "新增一级评论",
+                "parameters": [
+                    {
+                        "description": "评论新增请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示新增成功，code=400 表示参数错误或评论关闭",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "评论目标不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/comments/{id}": {
+            "delete": {
+                "description": "评论作者可删除自己的一级评论；管理员可删除任意评论，同时删除其下回复。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "删除一级评论",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "一级评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "目标类型：article、moment、guestbook",
+                        "name": "target_type",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentDeleteResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权删除评论",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "评论不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/comments/{id}/replies": {
+            "post": {
+                "description": "登录用户回复一级评论或回复；parent_reply_id 为 0 时直接回复一级评论。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "新增评论回复",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "一级评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "回复新增请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentReplyCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示新增成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentReplyResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "评论或回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/guestbook": {
+            "get": {
+                "description": "查询指定用户留言板的留言；owner_user_id 可省略，默认查询博主 1 的留言板。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "留言板"
+                ],
+                "summary": "分页查询留言板留言",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "留言板主人用户 ID，默认 1",
+                        "name": "owner_user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.GuestbookPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Authorization header 存在但 token 非法或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "留言板主人不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "登录用户发表留言；owner_user_id 可省略，默认给博主 1 留言。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "留言板"
+                ],
+                "summary": "发表留言",
+                "parameters": [
+                    {
+                        "description": "留言发表请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GuestbookCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示发表成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.GuestbookItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "留言板主人不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/guestbook/{id}": {
+            "delete": {
+                "description": "留言作者、留言板主人或管理员可删除留言。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "留言板"
+                ],
+                "summary": "删除留言",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "留言 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.GuestbookDeleteResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权删除留言",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "留言不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/guestbook/{id}/like": {
+            "post": {
+                "description": "当前用户未点赞时点赞，已点赞时取消点赞。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "留言板"
+                ],
+                "summary": "切换留言点赞",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "留言 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示切换成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.GuestbookLikeResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "留言不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -708,6 +1718,14 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.ArticleRelationResp"
                     }
+                },
+                "category": {
+                    "description": "Category 文章所属分类（每篇文章归属一个分类）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ArticleRelationResp"
+                        }
+                    ]
                 },
                 "category_ids": {
                     "description": "CategoryIDs 分类 ID 列表。",
@@ -861,6 +1879,14 @@ const docTemplate = `{
         "dto.ArticleListItemResp": {
             "type": "object",
             "properties": {
+                "category": {
+                    "description": "Category 文章所属分类（每篇文章归属一个分类）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ArticleRelationResp"
+                        }
+                    ]
+                },
                 "comment_count": {
                     "description": "CommentCount 评论数量。",
                     "type": "integer",
@@ -1050,7 +2076,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "category_ids": {
-                    "description": "CategoryIDs 分类 ID 列表，至少一个。",
+                    "description": "CategoryIDs 分类 ID 列表，至少一个；当前每篇文章只归属第一个有效分类。",
                     "type": "array",
                     "minItems": 1,
                     "items": {
@@ -1138,6 +2164,657 @@ const docTemplate = `{
                     "description": "Title 文章标题。",
                     "type": "string",
                     "example": "文章标题"
+                }
+            }
+        },
+        "dto.CategoryArticlesReq": {
+            "type": "object",
+            "required": [
+                "article_ids"
+            ],
+            "properties": {
+                "article_ids": {
+                    "description": "ArticleIDs 文章 ID 列表；单篇文章也使用一个元素的数组。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1
+                    ]
+                }
+            }
+        },
+        "dto.CategoryArticlesResp": {
+            "type": "object",
+            "properties": {
+                "affected_count": {
+                    "description": "AffectedCount 实际影响的关联数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "article_ids": {
+                    "description": "ArticleIDs 本次请求归一化后的文章 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "category_id": {
+                    "description": "CategoryID 分类 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.CategoryCreateReq": {
+            "type": "object",
+            "required": [
+                "cover_img_url",
+                "description",
+                "icon",
+                "name",
+                "seq"
+            ],
+            "properties": {
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址或对象 key。",
+                    "type": "string",
+                    "example": "covers/programming.jpg"
+                },
+                "description": {
+                    "description": "Description 分类描述。",
+                    "type": "string",
+                    "example": "编程学习与工程实践"
+                },
+                "icon": {
+                    "description": "Icon 图标地址或对象 key。",
+                    "type": "string",
+                    "example": "icons/programming.svg"
+                },
+                "name": {
+                    "description": "Name 分类名称。",
+                    "type": "string",
+                    "example": "编程"
+                },
+                "parent_id": {
+                    "description": "ParentID 父分类 ID，当前仅预留，不参与层级逻辑。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 分类路由别名。",
+                    "type": "string",
+                    "example": "programming"
+                }
+            }
+        },
+        "dto.CategoryItemResp": {
+            "type": "object",
+            "properties": {
+                "article_count": {
+                    "description": "ArticleCount 该分类下的公开文章数量。",
+                    "type": "integer",
+                    "example": 12
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址或对象 key。",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description 分类描述。",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "Icon 图标 URL 或对象 key。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 分类 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 分类名称。",
+                    "type": "string",
+                    "example": "编程"
+                },
+                "parent_id": {
+                    "description": "ParentID 父分类 ID，当前仅预留。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 分类路由别名。",
+                    "type": "string",
+                    "example": "programming"
+                }
+            }
+        },
+        "dto.CategoryTabItem": {
+            "type": "object",
+            "properties": {
+                "article_count": {
+                    "description": "ArticleCount 该分类下的公开文章数量。",
+                    "type": "integer",
+                    "example": 12
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description 分类描述。",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "Icon 图标 URL。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 分类 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 分类名称。",
+                    "type": "string",
+                    "example": "编程"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 分类路由别名。",
+                    "type": "string",
+                    "example": "programming"
+                }
+            }
+        },
+        "dto.CategoryTabsResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 分类列表，按 seq ASC、文章数量 DESC 排序。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CategoryTabItem"
+                    }
+                }
+            }
+        },
+        "dto.CategoryUpdateReq": {
+            "type": "object",
+            "properties": {
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址或对象 key；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "covers/programming.jpg"
+                },
+                "description": {
+                    "description": "Description 分类描述；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "编程学习与工程实践"
+                },
+                "icon": {
+                    "description": "Icon 图标地址或对象 key；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "icons/programming.svg"
+                },
+                "name": {
+                    "description": "Name 分类名称。",
+                    "type": "string",
+                    "example": "编程"
+                },
+                "parent_id": {
+                    "description": "ParentID 父分类 ID，当前仅预留，不参与层级逻辑。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "url": {
+                    "description": "URL 分类路由别名；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "programming"
+                }
+            }
+        },
+        "dto.CommentCreateReq": {
+            "type": "object",
+            "required": [
+                "content",
+                "target_id",
+                "target_type"
+            ],
+            "properties": {
+                "content": {
+                    "description": "Content 评论内容，去除首尾空白后不能为空，最多 2000 字符。",
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "写得真好"
+                },
+                "target_id": {
+                    "description": "TargetID 评论目标 ID；文章为 article_id，说说为 moment_id，留言板为 owner_user_id。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "target_type": {
+                    "description": "TargetType 评论目标类型：article、moment、guestbook。",
+                    "type": "string",
+                    "enum": [
+                        "article",
+                        "moment",
+                        "guestbook"
+                    ],
+                    "example": "article"
+                }
+            }
+        },
+        "dto.CommentDeleteResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 被删除的评论或回复 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.CommentItemResp": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 评论内容。",
+                    "type": "string",
+                    "example": "写得真好"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 评论 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "replies": {
+                    "description": "Replies 当前页一级评论下的回复列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CommentReplyResp"
+                    }
+                },
+                "target_id": {
+                    "description": "TargetID 评论目标 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "target_type": {
+                    "description": "TargetType 评论目标类型。",
+                    "type": "string",
+                    "example": "article"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User 评论者用户摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CommentUserResp"
+                        }
+                    ]
+                },
+                "user_id": {
+                    "description": "UserID 评论者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.CommentPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 评论列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CommentItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "dto.CommentReplyCreateReq": {
+            "type": "object",
+            "required": [
+                "content",
+                "target_type"
+            ],
+            "properties": {
+                "content": {
+                    "description": "Content 回复内容，去除首尾空白后不能为空，最多 2000 字符。",
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "收到"
+                },
+                "parent_reply_id": {
+                    "description": "ParentReplyID 上级回复 ID；0 表示直接回复一级评论。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "target_type": {
+                    "description": "TargetType 评论目标类型：article、moment、guestbook，用于定位一级评论所在表。",
+                    "type": "string",
+                    "enum": [
+                        "article",
+                        "moment",
+                        "guestbook"
+                    ],
+                    "example": "article"
+                }
+            }
+        },
+        "dto.CommentReplyResp": {
+            "type": "object",
+            "properties": {
+                "comment_id": {
+                    "description": "CommentID 一级评论 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 回复内容。",
+                    "type": "string",
+                    "example": "收到"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "from_user": {
+                    "description": "FromUser 回复者用户摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CommentUserResp"
+                        }
+                    ]
+                },
+                "from_user_id": {
+                    "description": "FromUserID 回复者用户 ID。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "id": {
+                    "description": "ID 回复 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "parent_reply_id": {
+                    "description": "ParentReplyID 上级回复 ID；0 表示直接回复一级评论。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "target_type": {
+                    "description": "TargetType 评论目标类型。",
+                    "type": "string",
+                    "example": "article"
+                },
+                "to_user": {
+                    "description": "ToUser 被回复者用户摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CommentUserResp"
+                        }
+                    ]
+                },
+                "to_user_id": {
+                    "description": "ToUserID 被回复者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CommentUserResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 用户头像地址。",
+                    "type": "string",
+                    "example": "https://example.com/avatar.png"
+                },
+                "id": {
+                    "description": "ID 用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "mark": {
+                    "description": "Mark 用户身份标签。",
+                    "type": "string",
+                    "example": "注册会员"
+                },
+                "nickname": {
+                    "description": "Nickname 用户昵称。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "site": {
+                    "description": "Site 用户个人站点。",
+                    "type": "string",
+                    "example": "https://yevpt.com"
+                },
+                "username": {
+                    "description": "Username 登录账号。",
+                    "type": "string",
+                    "example": "vpt"
+                }
+            }
+        },
+        "dto.GuestbookCreateReq": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "content": {
+                    "description": "Content 留言内容，去除首尾空白后不能为空，最多 2000 字符。",
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "来踩踩，博客很棒"
+                },
+                "owner_user_id": {
+                    "description": "OwnerUserID 留言板主人用户 ID；省略时默认给博主 1 留言。",
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 1
+                }
+            }
+        },
+        "dto.GuestbookDeleteResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 被删除的留言 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.GuestbookItemResp": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "description": "Content 留言内容。",
+                    "type": "string",
+                    "example": "来踩踩，博客很棒"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "from_user_id": {
+                    "description": "FromUserID 留言者用户 ID。",
+                    "type": "integer",
+                    "example": 7
+                },
+                "id": {
+                    "description": "ID 留言 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                },
+                "owner_user_id": {
+                    "description": "OwnerUserID 留言板主人用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User 留言者用户摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.GuestbookUserResp"
+                        }
+                    ]
+                }
+            }
+        },
+        "dto.GuestbookLikeResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 留言 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "dto.GuestbookPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 留言列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.GuestbookItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "dto.GuestbookUserResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 用户头像地址。",
+                    "type": "string",
+                    "example": "https://example.com/avatar.png"
+                },
+                "id": {
+                    "description": "ID 用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "mark": {
+                    "description": "Mark 用户身份标签。",
+                    "type": "string",
+                    "example": "注册会员"
+                },
+                "nickname": {
+                    "description": "Nickname 用户昵称。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "site": {
+                    "description": "Site 用户个人站点。",
+                    "type": "string",
+                    "example": "https://yevpt.com"
+                },
+                "username": {
+                    "description": "Username 登录账号。",
+                    "type": "string",
+                    "example": "vpt"
                 }
             }
         },
