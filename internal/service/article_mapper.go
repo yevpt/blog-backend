@@ -108,6 +108,18 @@ func deletedArticleToDTO(article *model.Article) *dto.ArticleDetailResp {
 
 func articleListItemToDTO(aggregate *repository.ArticleAggregate) dto.ArticleListItemResp {
 	article := aggregate.Article
+	var category *dto.ArticleRelationResp
+	if len(aggregate.Categories) > 0 {
+		c := aggregate.Categories[0]
+		category = &dto.ArticleRelationResp{
+			ID:          c.ID,
+			Name:        c.Name,
+			URL:         c.URL,
+			Icon:        c.Icon,
+			Description: c.Description,
+			CoverImgUrl: c.CoverImgUrl,
+		}
+	}
 	return dto.ArticleListItemResp{
 		ID:            article.ID,
 		Title:         article.Title,
@@ -120,6 +132,7 @@ func articleListItemToDTO(aggregate *repository.ArticleAggregate) dto.ArticleLis
 		LikeCount:     aggregate.LikeCount,
 		CommentCount:  aggregate.CommentCount,
 		IsRecommended: aggregate.Recommend != nil,
+		Category:      category,
 		CreatedAt:     article.CreatedAt,
 		UpdatedAt:     article.UpdatedAt,
 	}

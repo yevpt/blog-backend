@@ -104,6 +104,8 @@ type ArticleListItemResp struct {
 	CommentCount int64 `json:"comment_count" example:"2"`
 	// IsRecommended 是否为推荐文章。
 	IsRecommended bool `json:"is_recommended" example:"true"`
+	// Category 文章所属分类（每篇文章归属一个分类）。
+	Category *ArticleRelationResp `json:"category,omitempty"`
 	// CreatedAt 创建时间。
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt 更新时间。

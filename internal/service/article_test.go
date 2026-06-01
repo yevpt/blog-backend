@@ -71,6 +71,41 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 	assert.Equal(t, []string{cover}, resolver.objectNames)
 }
 
+func TestArticleService_ListPublic_IncludesCategoriesInListItem(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := service.NewArticleService(repo, nil)
+
+	categoryURL := "tech"
+	repo.EXPECT().
+		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 10}).
+		Return(&repository.ArticlePageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 10,
+			Articles: []repository.ArticleAggregate{{
+				Article: model.Article{
+					Base:   model.Base{ID: 1},
+					Title:  "Hello",
+					UserID: 1,
+					Status: 1,
+				},
+				Categories: []model.Category{
+					{Base: model.Base{ID: 3}, Name: "Tech", URL: &categoryURL},
+				},
+			}},
+		}, nil)
+
+	resp, err := svc.ListPublic(dto.ArticleListReq{})
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	require.NotNil(t, resp.List[0].Category)
+	assert.Equal(t, uint(3), resp.List[0].Category.ID)
+	assert.Equal(t, "Tech", resp.List[0].Category.Name)
+	assert.Equal(t, &categoryURL, resp.List[0].Category.URL)
+}
+
 func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
