@@ -1,4 +1,4 @@
-package handler_test
+package auth_test
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/handler"
-	"github.com/vpt/blog-backend/internal/service"
+	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
+	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -39,10 +39,10 @@ func (s *stubAuthService) Refresh(rt string) (*dto.TokenResp, error) {
 	return s.refreshResp, s.refreshErr
 }
 
-func newTestRouter(svc service.AuthService) *gin.Engine {
+func newTestRouter(svc authservice.AuthService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewAuthHandler(svc)
+	h := authhandler.NewAuthHandler(svc)
 	r.POST("/auth/send-code", h.SendCode)
 	r.POST("/auth/register", h.Register)
 	r.POST("/auth/login", h.Login)
@@ -81,7 +81,7 @@ func TestAuthHandler_SendCode_InvalidEmail(t *testing.T) {
 }
 
 func TestAuthHandler_SendCode_TooManyRequests(t *testing.T) {
-	r := newTestRouter(&stubAuthService{sendCodeErr: service.ErrTooManyRequests})
+	r := newTestRouter(&stubAuthService{sendCodeErr: authservice.ErrTooManyRequests})
 	body, _ := json.Marshal(map[string]string{"email": "user@example.com"})
 
 	w := httptest.NewRecorder()
@@ -136,7 +136,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 }
 
 func TestAuthHandler_Login_Disabled(t *testing.T) {
-	stub := &stubAuthService{loginErr: service.ErrUserDisabled}
+	stub := &stubAuthService{loginErr: authservice.ErrUserDisabled}
 	r := newTestRouter(stub)
 	body, _ := json.Marshal(map[string]string{
 		"identifier": "user@example.com", "password": "password123",

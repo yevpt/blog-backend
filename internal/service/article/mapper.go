@@ -1,4 +1,4 @@
-package service
+package article
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 )
 
 type articleContentPolicy uint8
@@ -17,7 +17,7 @@ const (
 	articleContentAdmin
 )
 
-func articlePageToDTO(result *repository.ArticlePageResult, objectURLResolver ObjectURLResolver) (*dto.ArticlePageResp, error) {
+func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver ObjectURLResolver) (*dto.ArticlePageResp, error) {
 	items := make([]dto.ArticleListItemResp, 0, len(result.Articles))
 	for _, aggregate := range result.Articles {
 		item := articleListItemToDTO(&aggregate)
@@ -67,7 +67,7 @@ func isAbsoluteURL(value string) bool {
 	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
 }
 
-func articleDetailToDTO(aggregate *repository.ArticleAggregate, policy articleContentPolicy) *dto.ArticleDetailResp {
+func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleContentPolicy) *dto.ArticleDetailResp {
 	item := articleListItemToDTO(aggregate)
 	passworded := aggregate.Article.Status == 2
 	content := ""
@@ -117,7 +117,7 @@ func categoryToRelationDTO(c model.Category) dto.ArticleRelationResp {
 	}
 }
 
-func articleListItemToDTO(aggregate *repository.ArticleAggregate) dto.ArticleListItemResp {
+func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleListItemResp {
 	article := aggregate.Article
 	var category *dto.ArticleRelationResp
 	// 每篇文章仅属一个分类，取索引 0

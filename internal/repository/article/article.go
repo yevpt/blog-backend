@@ -1,4 +1,4 @@
-package repository
+package article
 
 import (
 	"github.com/vpt/blog-backend/internal/model"

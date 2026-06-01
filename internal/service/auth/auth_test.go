@@ -1,4 +1,4 @@
-package service_test
+package auth_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository/mock"
-	"github.com/vpt/blog-backend/internal/service"
+	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 )
 
@@ -31,7 +31,7 @@ func (m *mockMailSender) SendVerificationCode(to, code string) error {
 	return m.err
 }
 
-func setupService(t *testing.T) (service.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender) {
+func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
 
@@ -42,7 +42,7 @@ func setupService(t *testing.T) (service.AuthService, *mock.MockUserRepository, 
 	mailer := &mockMailSender{}
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 
-	svc := service.NewAuthService(repo, jwtMgr, rdb, mailer)
+	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer)
 	return svc, repo, rdb, mr, mailer
 }
 

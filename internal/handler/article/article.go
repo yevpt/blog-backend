@@ -1,4 +1,4 @@
-package handler
+package article
 
 import (
 	"errors"
@@ -7,17 +7,17 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/service"
+	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 // ArticleHandler 文章模块 HTTP 入口，只负责参数绑定、调用 service 和选择响应。
 type ArticleHandler struct {
-	svc service.ArticleService
+	svc articleservice.ArticleService
 }
 
-func NewArticleHandler(svc service.ArticleService) *ArticleHandler {
+func NewArticleHandler(svc articleservice.ArticleService) *ArticleHandler {
 	return &ArticleHandler{svc: svc}
 }
 
@@ -239,11 +239,11 @@ func writeArticleResponse(c *gin.Context, data interface{}, err error) {
 		response.Success(c, data)
 		return
 	}
-	if errors.Is(err, service.ErrArticleNotFound) {
+	if errors.Is(err, articleservice.ErrArticleNotFound) {
 		response.NotFound(c)
 		return
 	}
-	if errors.Is(err, service.ErrArticlePasswordRequired) || errors.Is(err, service.ErrArticleCategoryRequired) {
+	if errors.Is(err, articleservice.ErrArticlePasswordRequired) || errors.Is(err, articleservice.ErrArticleCategoryRequired) {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}

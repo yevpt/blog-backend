@@ -1,4 +1,4 @@
-package service_test
+package article_test
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
-	"github.com/vpt/blog-backend/internal/repository/mock"
-	"github.com/vpt/blog-backend/internal/service"
+	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	"github.com/vpt/blog-backend/internal/repository/article/mock"
+	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	"gorm.io/gorm"
 )
 
@@ -22,11 +22,11 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
-		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 50}).
-		Return(&repository.ArticlePageResult{Total: 0, Page: 1, PageSize: 50}, nil)
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 50}).
+		Return(&articlerepo.ArticlePageResult{Total: 0, Page: 1, PageSize: 50}, nil)
 
 	resp, err := svc.ListPublic(dto.ArticleListReq{Page: -1, PageSize: 99})
 	require.NoError(t, err)
@@ -43,16 +43,16 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 			"post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg": "https://cdn.example.com/blog/post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg?a=sign&b=1700000000",
 		},
 	}
-	svc := service.NewArticleService(repo, resolver)
+	svc := articleservice.NewArticleService(repo, resolver)
 
 	cover := "post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg"
 	repo.EXPECT().
-		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 10}).
-		Return(&repository.ArticlePageResult{
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}).
+		Return(&articlerepo.ArticlePageResult{
 			Total:    1,
 			Page:     1,
 			PageSize: 10,
-			Articles: []repository.ArticleAggregate{{
+			Articles: []articlerepo.ArticleAggregate{{
 				Article: model.Article{
 					Base:        model.Base{ID: 1},
 					Title:       "Cover",
@@ -75,16 +75,16 @@ func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	categoryURL := "tech"
 	repo.EXPECT().
-		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 10}).
-		Return(&repository.ArticlePageResult{
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}).
+		Return(&articlerepo.ArticlePageResult{
 			Total:    1,
 			Page:     1,
 			PageSize: 10,
-			Articles: []repository.ArticleAggregate{{
+			Articles: []articlerepo.ArticleAggregate{{
 				Article: model.Article{
 					Base:   model.Base{ID: 1},
 					Title:  "Hello",
@@ -110,15 +110,15 @@ func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
-		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 10}).
-		Return(&repository.ArticlePageResult{
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}).
+		Return(&articlerepo.ArticlePageResult{
 			Total:    1,
 			Page:     1,
 			PageSize: 10,
-			Articles: []repository.ArticleAggregate{{
+			Articles: []articlerepo.ArticleAggregate{{
 				Article: model.Article{
 					Base:   model.Base{ID: 1},
 					Title:  "No Category",
@@ -139,7 +139,7 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	_, err := svc.Save(dto.ArticleSaveReq{
 		Title:         "Secret",
@@ -148,23 +148,23 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 		CommentStatus: 1,
 		CategoryIDs:   []uint{1},
 	}, 1)
-	require.ErrorIs(t, err, service.ErrArticlePasswordRequired)
+	require.ErrorIs(t, err, articleservice.ErrArticlePasswordRequired)
 }
 
 func TestArticleService_SaveDeduplicatesRelationIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	now := time.Now()
 	repo.EXPECT().
 		Save(gomock.Any()).
-		DoAndReturn(func(data repository.ArticleSaveData) (*repository.ArticleAggregate, error) {
+		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
 			assert.Equal(t, []uint{1, 2}, data.CategoryIDs)
 			assert.Equal(t, []uint{3, 4}, data.TagIDs)
 			assert.Equal(t, []uint{5, 6}, data.MusicIDs)
-			return &repository.ArticleAggregate{
+			return &articlerepo.ArticleAggregate{
 				Article: model.Article{
 					Base:          model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
 					Title:         data.Article.Title,
@@ -193,11 +193,11 @@ func TestArticleService_GetPublicDetail_HidesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(2), (*uint)(nil)).
-		Return(&repository.ArticleAggregate{
+		Return(&articlerepo.ArticleAggregate{
 			Article: model.Article{
 				Base:    model.Base{ID: 2},
 				Title:   "Secret",
@@ -217,11 +217,11 @@ func TestArticleService_GetAdminDetail_IncludesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		FindAdminDetail(uint(2), (*uint)(nil)).
-		Return(&repository.ArticleAggregate{
+		Return(&articlerepo.ArticleAggregate{
 			Article: model.Article{
 				Base:    model.Base{ID: 2},
 				Title:   "Secret",
@@ -241,7 +241,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	now := time.Now()
 	categoryURL := "tech"
@@ -251,7 +251,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	viewerID := uint(10)
 	repo.EXPECT().
 		FindPublicDetail(uint(3), &viewerID).
-		Return(&repository.ArticleAggregate{
+		Return(&articlerepo.ArticleAggregate{
 			Article: model.Article{
 				Base:          model.Base{ID: 3, CreatedAt: now, UpdatedAt: now},
 				Title:         "A",
@@ -289,29 +289,29 @@ func TestArticleService_GetPublicDetail_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(404), (*uint)(nil)).
 		Return(nil, nil)
 
 	_, err := svc.GetPublicDetail(404, nil)
-	require.ErrorIs(t, err, service.ErrArticleNotFound)
+	require.ErrorIs(t, err, articleservice.ErrArticleNotFound)
 }
 
 func TestArticleService_IsLiked_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		IsLiked(uint(8), uint(1)).
 		Return(false, int64(0), gorm.ErrRecordNotFound)
 
 	_, err := svc.IsLiked(8, 1)
-	require.ErrorIs(t, err, service.ErrArticleNotFound)
-	assert.True(t, errors.Is(err, service.ErrArticleNotFound))
+	require.ErrorIs(t, err, articleservice.ErrArticleNotFound)
+	assert.True(t, errors.Is(err, articleservice.ErrArticleNotFound))
 }
 
 type stubObjectURLResolver struct {

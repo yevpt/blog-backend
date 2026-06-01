@@ -1,4 +1,4 @@
-package handler
+package auth
 
 import (
 	"errors"
@@ -6,16 +6,16 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/service"
+	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 // AuthHandler 认证模块 handler，对应 /auth 路由组
 type AuthHandler struct {
-	svc service.AuthService
+	svc authservice.AuthService
 }
 
-func NewAuthHandler(svc service.AuthService) *AuthHandler {
+func NewAuthHandler(svc authservice.AuthService) *AuthHandler {
 	return &AuthHandler{svc: svc}
 }
 
@@ -103,7 +103,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	resp, err := h.svc.Login(&req, c.ClientIP())
 	if err != nil {
 		// 账号被禁用返回 403（身份已验证但无权访问），其余凭证错误统一返回 401
-		if errors.Is(err, service.ErrUserDisabled) {
+		if errors.Is(err, authservice.ErrUserDisabled) {
 			response.Forbidden(c)
 			return
 		}
@@ -146,6 +146,6 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 
 // isTooManyRequests 合并短期限流与日限两种错误，统一映射到 429 响应
 func isTooManyRequests(err error) bool {
-	return errors.Is(err, service.ErrTooManyRequests) ||
-		errors.Is(err, service.ErrDailyLimitExceeded)
+	return errors.Is(err, authservice.ErrTooManyRequests) ||
+		errors.Is(err, authservice.ErrDailyLimitExceeded)
 }

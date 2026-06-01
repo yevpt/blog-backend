@@ -1,4 +1,4 @@
-package repository_test
+package article_test
 
 import (
 	"testing"
@@ -9,13 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	article "github.com/vpt/blog-backend/internal/repository/article"
 )
 
 func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	now := time.Now()
 	articleRows := sqlmock.NewRows([]string{
@@ -62,7 +62,7 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 			"lyric", "duration", "seq",
 		}))
 
-	result, err := repo.ListPublic(repository.ArticleListFilter{Page: 2, PageSize: 10, Recommend: &recommend})
+	result, err := repo.ListPublic(article.ArticleListFilter{Page: 2, PageSize: 10, Recommend: &recommend})
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), result.Total)
 	assert.Equal(t, 2, result.Page)
@@ -76,7 +76,7 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	mock.ExpectQuery("SELECT \\* FROM `article`").
 		WithArgs(uint(99), uint(1), uint(2), 1).
@@ -95,7 +95,7 @@ func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 func TestArticleRepository_FindPublicDetail_ReturnsEncryptedArticleShell(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	now := time.Now()
 	mock.ExpectQuery("SELECT \\* FROM `article`").
@@ -118,7 +118,7 @@ func TestArticleRepository_FindPublicDetail_ReturnsEncryptedArticleShell(t *test
 func TestArticleRepository_ListPublic_FiltersIgnoreDeletedCategoryAndTag(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	categoryID := uint(3)
 	tagID := uint(4)
@@ -135,7 +135,7 @@ func TestArticleRepository_ListPublic_FiltersIgnoreDeletedCategoryAndTag(t *test
 			"password", "read_count",
 		}))
 
-	result, err := repo.ListPublic(repository.ArticleListFilter{
+	result, err := repo.ListPublic(article.ArticleListFilter{
 		Page:       1,
 		PageSize:   10,
 		CategoryID: &categoryID,
@@ -150,7 +150,7 @@ func TestArticleRepository_ListPublic_FiltersIgnoreDeletedCategoryAndTag(t *test
 func TestArticleRepository_IncrementReadCount_UsesAtomicUpdate(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -176,7 +176,7 @@ func TestArticleRepository_IncrementReadCount_UsesAtomicUpdate(t *testing.T) {
 func TestArticleRepository_IncrementReadCount_HiddenArticleNotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	mock.ExpectBegin()
 	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1,`updated_at`=\\? WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
@@ -193,7 +193,7 @@ func TestArticleRepository_IncrementReadCount_HiddenArticleNotFound(t *testing.T
 func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	now := time.Now()
 	shortContent := "摘要"
@@ -231,7 +231,7 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 		}).AddRow(7, now, now, nil, "A", cover, shortContent, "body", 1, 1, 1, nil, 0))
 	expectEmptyArticleAggregateQueries(mock, 7)
 
-	result, err := repo.Save(repository.ArticleSaveData{
+	result, err := repo.Save(article.ArticleSaveData{
 		Article: model.Article{
 			Title:         "A",
 			CoverImgUrl:   &cover,
@@ -256,7 +256,7 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 func TestArticleRepository_IsLiked_HiddenArticleNotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article`").
 		WithArgs(uint(8), uint(1), uint(2)).
@@ -272,7 +272,7 @@ func TestArticleRepository_IsLiked_HiddenArticleNotFound(t *testing.T) {
 func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -324,7 +324,7 @@ func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testi
 func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewArticleRepository(db)
+	repo := article.NewArticleRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -358,7 +358,7 @@ func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *t
 		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 1, 1, 1, nil, 0))
 	expectEmptyArticleAggregateQueries(mock, 7)
 
-	result, err := repo.Save(repository.ArticleSaveData{
+	result, err := repo.Save(article.ArticleSaveData{
 		Article: model.Article{
 			Base:          model.Base{ID: 7},
 			Title:         "A",

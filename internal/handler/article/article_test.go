@@ -1,4 +1,4 @@
-package handler_test
+package article_test
 
 import (
 	"bytes"
@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/handler"
-	"github.com/vpt/blog-backend/internal/service"
+	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
+	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -62,10 +62,10 @@ func (s *stubArticleService) ToggleLike(id uint, userID uint) (*dto.ArticleDetai
 	return s.detailResp, s.detailErr
 }
 
-func newArticleRouter(svc service.ArticleService) *gin.Engine {
+func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewArticleHandler(svc)
+	h := articlehandler.NewArticleHandler(svc)
 	r.GET("/articles", h.ListPublic)
 	r.GET("/articles/:id", h.GetPublicDetail)
 	r.POST("/admin/articles", func(c *gin.Context) {
@@ -96,7 +96,7 @@ func TestArticleHandler_ListPublic_Success(t *testing.T) {
 }
 
 func TestArticleHandler_GetPublicDetail_NotFound(t *testing.T) {
-	r := newArticleRouter(&stubArticleService{detailErr: service.ErrArticleNotFound})
+	r := newArticleRouter(&stubArticleService{detailErr: articleservice.ErrArticleNotFound})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/articles/404", nil)
@@ -129,7 +129,7 @@ func TestArticleHandler_Save_UsesClaimsUserID(t *testing.T) {
 }
 
 func TestArticleHandler_Save_BadRequest(t *testing.T) {
-	r := newArticleRouter(&stubArticleService{saveErr: service.ErrArticleCategoryRequired})
+	r := newArticleRouter(&stubArticleService{saveErr: articleservice.ErrArticleCategoryRequired})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/admin/articles", bytes.NewReader([]byte(`{"title":"A"}`)))

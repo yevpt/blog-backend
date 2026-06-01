@@ -1,4 +1,4 @@
-package service
+package article
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	"gorm.io/gorm"
 )
 
@@ -36,12 +36,12 @@ type ObjectURLResolver interface {
 }
 
 type articleService struct {
-	repo              repository.ArticleRepository
+	repo              articlerepo.ArticleRepository
 	objectURLResolver ObjectURLResolver
 }
 
 // NewArticleService 创建文章业务服务实例。
-func NewArticleService(repo repository.ArticleRepository, objectURLResolver ObjectURLResolver) ArticleService {
+func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver ObjectURLResolver) ArticleService {
 	return &articleService{repo: repo, objectURLResolver: objectURLResolver}
 }
 
@@ -54,7 +54,7 @@ func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
 }
 
 func (s *articleService) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageResp, error) {
-	filter := repository.ArticleListFilter{
+	filter := articlerepo.ArticleListFilter{
 		Page:       normalizeArticlePage(req.Page),
 		PageSize:   normalizeArticlePageSize(req.PageSize),
 		Recommend:  req.Recommend,
@@ -114,7 +114,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		article.ID = *req.ID
 	}
 
-	aggregate, err := s.repo.Save(repository.ArticleSaveData{
+	aggregate, err := s.repo.Save(articlerepo.ArticleSaveData{
 		Article:      article,
 		CategoryIDs:  categoryIDs,
 		TagIDs:       uniqueUintIDs(req.TagIDs),

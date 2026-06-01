@@ -8,9 +8,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/handler"
+	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
+	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
 	"github.com/vpt/blog-backend/internal/middleware"
 	"github.com/vpt/blog-backend/internal/repository"
+	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	"github.com/vpt/blog-backend/internal/service"
+	articleservice "github.com/vpt/blog-backend/internal/service/article"
+	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -21,10 +26,11 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health  *handler.HealthHandler
-	test    *handler.TestHandler
-	auth    *handler.AuthHandler
-	article *handler.ArticleHandler
+	health   *handler.HealthHandler
+	test     *handler.TestHandler
+	auth     *authhandler.AuthHandler
+	article  *articlehandler.ArticleHandler
+	category *handler.CategoryHandler
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -35,7 +41,7 @@ func Setup(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	mailer email.MailSender,
-	objectURLResolver service.ObjectURLResolver,
+	objectURLResolver articleservice.ObjectURLResolver,
 ) {
 	// 配置信任代理，确保反向代理链路下能拿到真实客户端 IP。
 	configureTrustedProxies(r)
@@ -115,21 +121,25 @@ func newRouteHandlers(
 	redisClient *redis.Client,
 	jwtManager *jwt.Manager,
 	mailer email.MailSender,
-	objectURLResolver service.ObjectURLResolver,
+	objectURLResolver articleservice.ObjectURLResolver,
 ) routeHandlers {
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := repository.NewUserRepository(db)
-	authSvc := service.NewAuthService(userRepo, jwtManager, redisClient, mailer)
+	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer)
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
-	articleRepo := repository.NewArticleRepository(db)
-	articleSvc := service.NewArticleService(articleRepo, objectURLResolver)
+	articleRepo := articlerepo.NewArticleRepository(db)
+	articleSvc := articleservice.NewArticleService(articleRepo, objectURLResolver)
+
+	categoryRepo := repository.NewCategoryRepository(db)
+	categorySvc := service.NewCategoryService(categoryRepo)
 
 	return routeHandlers{
-		health:  handler.NewHealthHandler(db, redisClient),
-		test:    handler.NewTestHandler(jwtManager),
-		auth:    handler.NewAuthHandler(authSvc),
-		article: handler.NewArticleHandler(articleSvc),
+		health:   handler.NewHealthHandler(db, redisClient),
+		test:     handler.NewTestHandler(jwtManager),
+		auth:     authhandler.NewAuthHandler(authSvc),
+		article:  articlehandler.NewArticleHandler(articleSvc),
+		category: handler.NewCategoryHandler(categorySvc),
 	}
 }
 
@@ -149,6 +159,7 @@ func registerPublicRoutes(
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
 	r.POST("/auth/refresh", handlers.auth.Refresh)
+	r.GET("/categories", handlers.category.ListTabs)
 	r.GET("/articles/ids", handlers.article.ListIDs)
 	r.GET("/articles", handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
