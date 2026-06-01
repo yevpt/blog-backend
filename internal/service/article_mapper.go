@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"math"
 	"strings"
 
@@ -16,10 +17,14 @@ const (
 	articleContentAdmin
 )
 
-func articlePageToDTO(result *repository.ArticlePageResult) *dto.ArticlePageResp {
+func articlePageToDTO(result *repository.ArticlePageResult, objectURLResolver ObjectURLResolver) (*dto.ArticlePageResp, error) {
 	items := make([]dto.ArticleListItemResp, 0, len(result.Articles))
 	for _, aggregate := range result.Articles {
-		items = append(items, articleListItemToDTO(&aggregate))
+		item := articleListItemToDTO(&aggregate)
+		if err := resolveListItemCoverURL(&item, objectURLResolver); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
 	}
 
 	pages := 0
@@ -33,7 +38,33 @@ func articlePageToDTO(result *repository.ArticlePageResult) *dto.ArticlePageResp
 		Page:     result.Page,
 		PageSize: result.PageSize,
 		List:     items,
+	}, nil
+}
+
+func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver ObjectURLResolver) error {
+	// 未注入对象存储解析器时保留原值，方便纯业务测试和局部调用。
+	if objectURLResolver == nil || item.CoverImgUrl == nil {
+		return nil
 	}
+
+	// 空值或已经是完整 URL 时不再重复签名。
+	objectName := strings.TrimSpace(*item.CoverImgUrl)
+	if objectName == "" || isAbsoluteURL(objectName) {
+		return nil
+	}
+
+	// 通过对象存储客户端生成 Garage 预签名或 CDN 私有签名访问 URL。
+	objectURL, err := objectURLResolver.ObjectURL(context.Background(), objectName)
+	if err != nil {
+		return err
+	}
+	item.CoverImgUrl = &objectURL
+	return nil
+}
+
+func isAbsoluteURL(value string) bool {
+	// 已保存为外部 URL 的历史数据直接返回，避免把完整 URL 当作对象 key 处理。
+	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
 }
 
 func articleDetailToDTO(aggregate *repository.ArticleAggregate, policy articleContentPolicy) *dto.ArticleDetailResp {

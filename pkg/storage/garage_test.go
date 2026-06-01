@@ -18,6 +18,7 @@ import (
 type fakePresigner struct {
 	url     string        // mock 返回的预签名 URL
 	err     error         // mock 返回的错误
+	calls   int           // 记录预签名调用次数
 	bucket  string        // 记录调用方传入的 bucket
 	key     string        // 记录调用方传入的对象 key
 	expires time.Duration // 记录调用方设置的过期时间
@@ -28,6 +29,9 @@ func (f *fakePresigner) PresignGetObject(
 	in *s3.GetObjectInput,
 	opts ...func(*s3.PresignOptions),
 ) (*v4.PresignedHTTPRequest, error) {
+	// 记录调用次数，用于验证缓存命中不会重复生成 URL。
+	f.calls++
+
 	// 记录请求参数，用于断言业务代码传入了正确 bucket 和 key。
 	f.bucket = aws.ToString(in.Bucket)
 	f.key = aws.ToString(in.Key)

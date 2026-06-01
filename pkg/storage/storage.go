@@ -2,13 +2,18 @@ package storage
 
 import (
 	"context"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/redis/go-redis/v9"
 	appconfig "github.com/vpt/blog-backend/pkg/config"
 )
 
 // 本文件是 pkg/storage 的对外入口。
 // 调用方式看这里；具体实现分别在 garage.go、cdn.go、path.go 中。
+
+// DefaultObjectURLCacheTTL 是对象访问 URL 的默认 Redis 缓存时间，短于 Garage 预签名默认 7 天有效期。
+const DefaultObjectURLCacheTTL = 6 * 24 * time.Hour
 
 // Client 封装 Garage S3 客户端和对象访问 URL 生成能力。
 type Client struct {
@@ -19,6 +24,22 @@ type Client struct {
 func NewGarage(cfg *appconfig.GarageConfig, cdnCfg *appconfig.CDNConfig) (*Client, error) {
 	// 对外入口保持轻量，具体初始化流程交给内部实现。
 	return newGarageClient(cfg, cdnCfg)
+}
+
+// NewCachedGarage 初始化 Garage/S3 客户端，并用 Redis 缓存对象访问 URL。
+func NewCachedGarage(
+	cfg *appconfig.GarageConfig,
+	cdnCfg *appconfig.CDNConfig,
+	rdb *redis.Client,
+) (*CachedObjectURLResolver, error) {
+	// 先创建底层对象存储客户端，保留配置校验和错误返回。
+	client, err := NewGarage(cfg, cdnCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// 再套上 Redis 缓存包装，调用方只需要持有 ObjectURL 能力。
+	return NewCachedObjectURLResolver(client, rdb, DefaultObjectURLCacheTTL), nil
 }
 
 // ObjectURL 按配置返回对象访问 URL：启用 CDN 时返回 CDN 签名 URL，否则返回 S3 预签名 URL。
@@ -43,6 +64,23 @@ func (c *Client) S3() *s3.Client {
 func (c *Client) Bucket() string {
 	// 返回配置中的默认 bucket，便于上层构造对象路径。
 	return c.impl.bucket
+}
+
+// CachedObjectURLResolver 为对象访问 URL 增加 Redis 缓存，避免同一对象反复生成不同签名 URL。
+type CachedObjectURLResolver struct {
+	impl *cachedObjectURLResolverImpl // 内部实现，外部调用方只需要调用 ObjectURL
+}
+
+// NewCachedObjectURLResolver 创建带 Redis 缓存的对象访问 URL 解析器。
+func NewCachedObjectURLResolver(client *Client, rdb *redis.Client, ttl time.Duration) *CachedObjectURLResolver {
+	// 对外入口保持薄转发，缓存 key、命中和回填逻辑交给内部实现。
+	return newCachedObjectURLResolver(client, rdb, ttl)
+}
+
+// ObjectURL 返回对象访问 URL，优先读取 Redis 缓存，未命中时再生成并写回缓存。
+func (r *CachedObjectURLResolver) ObjectURL(ctx context.Context, objectName string) (string, error) {
+	// 对外方法只表达缓存解析语义，具体流程由内部方法处理。
+	return r.objectURL(ctx, objectName)
 }
 
 // CDNSigner 使用腾讯云 CDN TypeD 兼容算法生成私有读 URL。

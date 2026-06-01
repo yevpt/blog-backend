@@ -6,6 +6,7 @@
 
 - `garage.go`：Garage/S3 客户端初始化、对象 URL 策略、S3 预签名。
 - `cdn.go`：CDN TypeD 签名算法。
+- `cache.go`：对象访问 URL 的 Redis 缓存包装。
 - `path.go`：bucket/object 路径清理和默认值处理。
 
 ## 配置
@@ -53,6 +54,24 @@ if err != nil {
 }
 ```
 
+给对象访问 URL 增加 Redis 缓存：
+
+```go
+resolver, err := storage.NewCachedGarage(&cfg.Garage, &cfg.CDN, redisClient)
+if err != nil {
+	return err
+}
+url, err := resolver.ObjectURL(ctx, "images/cat.jpg")
+if err != nil {
+	return err
+}
+```
+
+缓存 key 使用原始对象名归一化后的值：
+
+- CDN 模式：`cdn:images/cat.jpg`
+- Garage 模式：`garage:images/cat.jpg`
+
 只生成 S3 预签名 URL：
 
 ```go
@@ -72,6 +91,8 @@ bucket := store.Bucket()
 ## 返回值约定
 
 - 空对象名返回空字符串和 `nil` 错误。
+- 缓存解析器命中 Redis 时直接返回缓存 URL，不会重新签名。
+- 缓存解析器在 Redis 未命中时生成 URL 并写入带 TTL 的缓存；Redis 读写异常不会阻断 URL 生成。
 - CDN 配置开启但 CDN 签名器未初始化时返回错误。
 - S3 预签名失败时返回带业务上下文的错误。
 - 对象名允许带前导 `/`，内部会统一清理。

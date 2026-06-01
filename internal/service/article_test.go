@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -21,7 +22,7 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 50}).
@@ -33,11 +34,48 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	assert.Equal(t, 50, resp.PageSize)
 }
 
+func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	resolver := &stubObjectURLResolver{
+		urls: map[string]string{
+			"post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg": "https://cdn.example.com/blog/post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg?a=sign&b=1700000000",
+		},
+	}
+	svc := service.NewArticleService(repo, resolver)
+
+	cover := "post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg"
+	repo.EXPECT().
+		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 10}).
+		Return(&repository.ArticlePageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 10,
+			Articles: []repository.ArticleAggregate{{
+				Article: model.Article{
+					Base:        model.Base{ID: 1},
+					Title:       "Cover",
+					CoverImgUrl: &cover,
+					UserID:      1,
+					Status:      1,
+				},
+			}},
+		}, nil)
+
+	resp, err := svc.ListPublic(dto.ArticleListReq{})
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	require.NotNil(t, resp.List[0].CoverImgUrl)
+	assert.Equal(t, resolver.urls[cover], *resp.List[0].CoverImgUrl)
+	assert.Equal(t, []string{cover}, resolver.objectNames)
+}
+
 func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	_, err := svc.Save(dto.ArticleSaveReq{
 		Title:         "Secret",
@@ -53,7 +91,7 @@ func TestArticleService_SaveDeduplicatesRelationIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	now := time.Now()
 	repo.EXPECT().
@@ -91,7 +129,7 @@ func TestArticleService_GetPublicDetail_HidesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(2), (*uint)(nil)).
@@ -115,7 +153,7 @@ func TestArticleService_GetAdminDetail_IncludesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		FindAdminDetail(uint(2), (*uint)(nil)).
@@ -139,7 +177,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	now := time.Now()
 	categoryURL := "tech"
@@ -187,7 +225,7 @@ func TestArticleService_GetPublicDetail_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(404), (*uint)(nil)).
@@ -201,7 +239,7 @@ func TestArticleService_IsLiked_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := service.NewArticleService(repo)
+	svc := service.NewArticleService(repo, nil)
 
 	repo.EXPECT().
 		IsLiked(uint(8), uint(1)).
@@ -210,4 +248,14 @@ func TestArticleService_IsLiked_NotFound(t *testing.T) {
 	_, err := svc.IsLiked(8, 1)
 	require.ErrorIs(t, err, service.ErrArticleNotFound)
 	assert.True(t, errors.Is(err, service.ErrArticleNotFound))
+}
+
+type stubObjectURLResolver struct {
+	urls        map[string]string
+	objectNames []string
+}
+
+func (r *stubObjectURLResolver) ObjectURL(_ context.Context, objectName string) (string, error) {
+	r.objectNames = append(r.objectNames, objectName)
+	return r.urls[objectName], nil
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -29,13 +30,19 @@ type ArticleService interface {
 	ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error)
 }
 
+// ObjectURLResolver 解析对象存储 key，返回可直接访问的 Garage 或 CDN 签名 URL。
+type ObjectURLResolver interface {
+	ObjectURL(ctx context.Context, objectName string) (string, error)
+}
+
 type articleService struct {
-	repo repository.ArticleRepository
+	repo              repository.ArticleRepository
+	objectURLResolver ObjectURLResolver
 }
 
 // NewArticleService 创建文章业务服务实例。
-func NewArticleService(repo repository.ArticleRepository) ArticleService {
-	return &articleService{repo: repo}
+func NewArticleService(repo repository.ArticleRepository, objectURLResolver ObjectURLResolver) ArticleService {
+	return &articleService{repo: repo, objectURLResolver: objectURLResolver}
 }
 
 func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -58,7 +65,7 @@ func (s *articleService) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageRes
 	if err != nil {
 		return nil, err
 	}
-	return articlePageToDTO(result), nil
+	return articlePageToDTO(result, s.objectURLResolver)
 }
 
 func (s *articleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {

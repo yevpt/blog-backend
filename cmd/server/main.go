@@ -1,17 +1,8 @@
 package main
 
 import (
-	"fmt"
-	"log"
-
-	"github.com/gin-gonic/gin"
+	"github.com/vpt/blog-backend/internal/bootstrap"
 	"github.com/vpt/blog-backend/internal/router"
-	"github.com/vpt/blog-backend/pkg/cache"
-	"github.com/vpt/blog-backend/pkg/config"
-	"github.com/vpt/blog-backend/pkg/database"
-	emailpkg "github.com/vpt/blog-backend/pkg/email"
-	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
-	"github.com/vpt/blog-backend/pkg/logger"
 )
 
 // @title Blog Backend API
@@ -19,55 +10,37 @@ import (
 // @description 个人博客后端 API 服务，所有业务接口均使用统一响应结构。
 // @BasePath /
 func main() {
-	// 加载配置（config.yaml + 环境覆盖 + 环境变量），任何失败均阻断启动
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("配置加载失败: %v", err)
-	}
+	// 加载配置：合并基础配置、环境配置、本地配置和环境变量。
+	cfg := bootstrap.MustLoadConfig()
 
-	// 初始化结构化日志，format/level 由配置决定
-	zapLogger, err := logger.Init(cfg.Log.Level, cfg.Log.Format)
-	if err != nil {
-		log.Fatalf("日志初始化失败: %v", err)
-	}
-	// Sync 在进程退出前刷新缓冲区，避免丢失最后一批日志
-	defer zapLogger.Sync()
+	// 初始化日志：创建 Zap logger，供中间件和启动日志使用。
+	zapLogger := bootstrap.MustInitLogger(cfg)
+	defer func() {
+		// stdout/stderr 在部分系统上会返回无害的 sync 错误，退出前显式忽略。
+		_ = zapLogger.Sync()
+	}()
 
-	// 连接 MySQL，内部已配置连接池参数
-	db, err := database.NewMySQL(&cfg.DB)
-	if err != nil {
-		log.Fatalf("数据库连接失败: %v", err)
-	}
+	// 连接数据库：初始化 MySQL 与 GORM 连接池。
+	db := bootstrap.MustInitMySQL(cfg)
 
-	// 连接 Redis，内部会 Ping 验证连通性
-	redisClient, err := cache.NewRedis(&cfg.Redis)
-	if err != nil {
-		log.Fatalf("Redis 连接失败: %v", err)
-	}
+	// 连接缓存：初始化 Redis，用于验证码、限流和对象 URL 缓存。
+	redisClient := bootstrap.MustInitRedis(cfg)
 
-	// 创建 JWT 管理器，持有签名密钥和过期时长配置
-	jwtManager := jwtpkg.NewManager(cfg.JWT.Secret, cfg.JWT.ExpireHours, cfg.JWT.RefreshExpireHours)
+	// 初始化认证：创建 JWT 管理器，负责 token 签发和解析。
+	jwtManager := bootstrap.InitJWT(cfg)
 
-	// 创建邮件发送器，使用配置中的 SMTP 参数
-	mailer := emailpkg.NewMailer(&emailpkg.Config{
-		Host:     cfg.Email.Host,
-		Port:     cfg.Email.Port,
-		From:     cfg.Email.From,
-		Password: cfg.Email.Password,
-	})
+	// 初始化邮件：创建 SMTP 邮件发送器，负责验证码发送。
+	mailer := bootstrap.InitMailer(cfg)
 
-	// 设置 Gin 运行模式（debug 模式打印路由，release 模式关闭调试输出）
-	gin.SetMode(cfg.Server.Mode)
+	// 初始化存储：创建 Garage/CDN 对象 URL 解析器，并接入 Redis 缓存。
+	objectURLResolver := bootstrap.MustInitStorage(cfg, redisClient)
 
-	// gin.New() 而非 gin.Default()，由 router.Setup 自定义注入中间件，避免引入默认 Logger/Recovery
-	r := gin.New()
-	// 注册所有路由、中间件和依赖注入
-	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer)
+	// 初始化 HTTP 引擎：设置 Gin 模式并创建空路由引擎。
+	r := bootstrap.InitGin(cfg)
 
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	zapLogger.Info(fmt.Sprintf("服务启动，监听 %s (模式: %s)", addr, cfg.Server.Mode))
-	// 启动 HTTP 服务，阻塞运行直到出错或进程终止
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
-	}
+	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
+	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver)
+
+	// 启动服务：监听配置端口，启动失败时终止进程。
+	bootstrap.MustRunHTTP(r, cfg, zapLogger)
 }

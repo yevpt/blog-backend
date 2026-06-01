@@ -26,6 +26,7 @@ func Setup(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	mailer email.MailSender,
+	objectURLResolver service.ObjectURLResolver,
 ) {
 	// 部署链路：客户端 → 云 Nginx → frp 隧道 → 本地 Docker Go 服务
 	// Gin 直接接收的来源是 frpc/Docker 内网 IP，需信任私有网段才能读到 Nginx 写入的真实客户端 IP。
@@ -68,7 +69,7 @@ func Setup(
 	authSvc := service.NewAuthService(userRepo, jwtManager, redisClient, mailer)
 	authHandler := handler.NewAuthHandler(authSvc)
 	articleRepo := repository.NewArticleRepository(db)
-	articleSvc := service.NewArticleService(articleRepo)
+	articleSvc := service.NewArticleService(articleRepo, objectURLResolver)
 	articleHandler := handler.NewArticleHandler(articleSvc)
 
 	// ① 公开路由
