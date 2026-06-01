@@ -106,19 +106,24 @@ func deletedArticleToDTO(article *model.Article) *dto.ArticleDetailResp {
 	}}
 }
 
+func categoryToRelationDTO(c model.Category) dto.ArticleRelationResp {
+	return dto.ArticleRelationResp{
+		ID:          c.ID,
+		Name:        c.Name,
+		URL:         c.URL,
+		Icon:        c.Icon,
+		Description: c.Description,
+		CoverImgUrl: c.CoverImgUrl,
+	}
+}
+
 func articleListItemToDTO(aggregate *repository.ArticleAggregate) dto.ArticleListItemResp {
 	article := aggregate.Article
 	var category *dto.ArticleRelationResp
+	// 每篇文章仅属一个分类，取索引 0
 	if len(aggregate.Categories) > 0 {
-		c := aggregate.Categories[0]
-		category = &dto.ArticleRelationResp{
-			ID:          c.ID,
-			Name:        c.Name,
-			URL:         c.URL,
-			Icon:        c.Icon,
-			Description: c.Description,
-			CoverImgUrl: c.CoverImgUrl,
-		}
+		rel := categoryToRelationDTO(aggregate.Categories[0])
+		category = &rel
 	}
 	return dto.ArticleListItemResp{
 		ID:            article.ID,
@@ -143,14 +148,7 @@ func categoryDTOs(categories []model.Category) ([]uint, []dto.ArticleRelationRes
 	items := make([]dto.ArticleRelationResp, 0, len(categories))
 	for _, category := range categories {
 		ids = append(ids, category.ID)
-		items = append(items, dto.ArticleRelationResp{
-			ID:          category.ID,
-			Name:        category.Name,
-			URL:         category.URL,
-			Icon:        category.Icon,
-			Description: category.Description,
-			CoverImgUrl: category.CoverImgUrl,
-		})
+		items = append(items, categoryToRelationDTO(category))
 	}
 	return ids, items
 }

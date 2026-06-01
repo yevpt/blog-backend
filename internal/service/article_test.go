@@ -71,7 +71,7 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 	assert.Equal(t, []string{cover}, resolver.objectNames)
 }
 
-func TestArticleService_ListPublic_IncludesCategoriesInListItem(t *testing.T) {
+func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
@@ -104,6 +104,35 @@ func TestArticleService_ListPublic_IncludesCategoriesInListItem(t *testing.T) {
 	assert.Equal(t, uint(3), resp.List[0].Category.ID)
 	assert.Equal(t, "Tech", resp.List[0].Category.Name)
 	assert.Equal(t, &categoryURL, resp.List[0].Category.URL)
+}
+
+func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := service.NewArticleService(repo, nil)
+
+	repo.EXPECT().
+		ListPublic(repository.ArticleListFilter{Page: 1, PageSize: 10}).
+		Return(&repository.ArticlePageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 10,
+			Articles: []repository.ArticleAggregate{{
+				Article: model.Article{
+					Base:   model.Base{ID: 1},
+					Title:  "No Category",
+					UserID: 1,
+					Status: 1,
+				},
+				Categories: nil,
+			}},
+		}, nil)
+
+	resp, err := svc.ListPublic(dto.ArticleListReq{})
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.Nil(t, resp.List[0].Category)
 }
 
 func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T) {
