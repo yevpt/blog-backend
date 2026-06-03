@@ -92,6 +92,42 @@ func TestCommentRepository_Reply_ParentReplyBecomesToUser(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestCommentRepository_Create_MomentCommentCreatesMessage(t *testing.T) {
+	db, mock, sqlDB := newCommentMockDB(t)
+	defer sqlDB.Close()
+	repo := commentrepo.NewCommentRepository(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT `id`,`comment_status` FROM `moment`").
+		WithArgs(uint(9), uint8(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "comment_status"}).AddRow(9, 1))
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `moment_comment`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(9), uint(7), "好碎语").
+		WillReturnResult(sqlmock.NewResult(12, 1))
+	mock.ExpectQuery("SELECT `id`,`user_id` FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id"}).AddRow(9, 1))
+	mock.ExpectExec("INSERT INTO `message`").
+		WillReturnResult(sqlmock.NewResult(15, 1))
+	mock.ExpectExec("INSERT INTO `user_message`").
+		WillReturnResult(sqlmock.NewResult(16, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `user`").
+		WithArgs(uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "username", "password", "nickname",
+			"email", "phone", "site", "avatar_url", "mark", "status", "last_login_at",
+		}).AddRow(7, now, now, nil, "from", "", nil, nil, nil, nil, nil, nil, 1, nil))
+
+	resp, err := repo.Create(commentrepo.Target{Type: commentrepo.TargetMoment, ID: 9}, 7, "好碎语")
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, uint(12), resp.Comment.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestCommentRepository_DeleteComment_FindsCommentByTypeAndID(t *testing.T) {
 	db, mock, sqlDB := newCommentMockDB(t)
 	defer sqlDB.Close()

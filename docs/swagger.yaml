@@ -849,6 +849,249 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResp'
     type: object
+  dto.MomentDeleteResp:
+    properties:
+      id:
+        description: ID 被删除的碎语 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.MomentItemResp:
+    properties:
+      comment_count:
+        description: CommentCount 评论数量。
+        example: 2
+        type: integer
+      comment_status:
+        description: CommentStatus 评论状态：0 关闭，1 开启。
+        example: 1
+        type: integer
+      content:
+        description: Content 碎语正文。
+        example: 今天的风很温柔
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      id:
+        description: ID 碎语 ID。
+        example: 1
+        type: integer
+      images:
+        description: Images 图片列表。
+        items:
+          $ref: '#/definitions/dto.MomentMediaResp'
+        type: array
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: false
+        type: boolean
+      is_top:
+        description: IsTop 是否置顶。
+        example: false
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 20
+        type: integer
+      status:
+        description: Status 状态：0 隐藏，1 公开。
+        example: 1
+        type: integer
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.MomentUserResp'
+        description: User 作者摘要。
+      user_id:
+        description: UserID 作者用户 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.MomentLikeResp:
+    properties:
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+    type: object
+  dto.MomentMediaReq:
+    properties:
+      file_type:
+        description: FileType 图片文件类型或扩展名。
+        example: jpg
+        type: string
+      name:
+        description: Name 图片原始文件名。
+        example: cat.jpg
+        type: string
+      seq:
+        description: Seq 图片排序值，越小越靠前。
+        example: 1
+        type: integer
+      size:
+        description: Size 图片大小，单位字节。
+        example: 1024
+        type: integer
+      url:
+        description: URL 图片对象 key 或可访问 URL。
+        example: moments/cat.jpg
+        maxLength: 1000
+        type: string
+    required:
+    - url
+    type: object
+  dto.MomentMediaResp:
+    properties:
+      access_url:
+        description: AccessURL 可直接访问的图片地址。
+        example: https://cdn.example.com/moments/cat.jpg
+        type: string
+      file_type:
+        description: FileType 图片文件类型或扩展名。
+        example: jpg
+        type: string
+      id:
+        description: ID 图片 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 图片原始文件名。
+        example: cat.jpg
+        type: string
+      seq:
+        description: Seq 图片排序值。
+        example: 1
+        type: integer
+      size:
+        description: Size 图片大小，单位字节。
+        example: 1024
+        type: integer
+      url:
+        description: URL 图片对象 key 或原始 URL。
+        example: moments/cat.jpg
+        type: string
+    type: object
+  dto.MomentPageResp:
+    properties:
+      list:
+        description: List 碎语列表。
+        items:
+          $ref: '#/definitions/dto.MomentItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
+  dto.MomentReadResp:
+    properties:
+      id:
+        description: ID 碎语 ID。
+        example: 1
+        type: integer
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 21
+        type: integer
+    type: object
+  dto.MomentSaveReq:
+    properties:
+      comment_status:
+        description: CommentStatus 评论状态：0 关闭，1 开启。
+        enum:
+        - 0
+        - 1
+        example: 1
+        type: integer
+      content:
+        description: Content 碎语正文，去除首尾空白后不能为空，最多 800 字符。
+        example: 今天的风很温柔
+        maxLength: 800
+        type: string
+      id:
+        description: ID 碎语 ID，为空或 0 表示新增。
+        example: 1
+        type: integer
+      images:
+        description: Images 图片列表，会整体替换该碎语原有图片。
+        items:
+          $ref: '#/definitions/dto.MomentMediaReq'
+        type: array
+      status:
+        description: Status 状态：0 隐藏，1 公开。
+        enum:
+        - 0
+        - 1
+        example: 1
+        type: integer
+      user_id:
+        description: UserID 作者用户 ID；管理员可传入代管作者，普通用户会被强制设置为当前登录用户。
+        example: 1
+        type: integer
+    required:
+    - content
+    type: object
+  dto.MomentTopResp:
+    properties:
+      id:
+        description: ID 碎语 ID。
+        example: 1
+        type: integer
+      is_top:
+        description: IsTop 是否置顶。
+        example: true
+        type: boolean
+    type: object
+  dto.MomentUserResp:
+    properties:
+      avatar_url:
+        description: AvatarUrl 用户头像地址。
+        example: https://example.com/avatar.png
+        type: string
+      id:
+        description: ID 用户 ID。
+        example: 1
+        type: integer
+      mark:
+        description: Mark 用户身份标签。
+        example: 博主
+        type: string
+      nickname:
+        description: Nickname 用户昵称。
+        example: VPT
+        type: string
+      site:
+        description: Site 用户个人站点。
+        example: https://yevpt.com
+        type: string
+      username:
+        description: Username 登录账号。
+        example: vpt
+        type: string
+    type: object
   dto.RefreshReq:
     properties:
       refresh_token:
@@ -2306,6 +2549,364 @@ paths:
       summary: 切换留言点赞
       tags:
       - 留言板
+  /moments:
+    get:
+      consumes:
+      - application/json
+      description: 查询公开碎语列表，支持按作者或角色过滤；登录态可返回当前用户点赞状态。
+      parameters:
+      - description: 作者用户 ID
+        in: query
+        name: user_id
+        type: integer
+      - description: 作者角色 ID
+        in: query
+        name: role_id
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询公开碎语
+      tags:
+      - 碎语
+    post:
+      consumes:
+      - application/json
+      description: 登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者，并同步图片列表。
+      parameters:
+      - description: 碎语保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MomentSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误或业务错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权操作碎语
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语或作者不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或更新碎语
+      tags:
+      - 碎语
+  /moments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 碎语作者或管理员可软删除碎语。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权操作碎语
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除碎语
+      tags:
+      - 碎语
+    get:
+      consumes:
+      - application/json
+      description: 查询公开碎语详情，包含作者、图片、点赞数和评论数。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentItemResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询碎语详情
+      tags:
+      - 碎语
+  /moments/{id}/like:
+    get:
+      consumes:
+      - application/json
+      description: 查询当前登录用户是否已点赞指定碎语。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询碎语点赞状态
+      tags:
+      - 碎语
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换碎语点赞
+      tags:
+      - 碎语
+  /moments/{id}/read:
+    post:
+      consumes:
+      - application/json
+      description: 使用数据库原子更新将碎语阅读数增加 1。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示更新成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentReadResp'
+              type: object
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 增加碎语阅读数
+      tags:
+      - 碎语
+  /moments/{id}/top:
+    delete:
+      consumes:
+      - application/json
+      description: 碎语作者或管理员可取消置顶碎语。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示取消成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentTopResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权操作碎语
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 取消置顶碎语
+      tags:
+      - 碎语
+    post:
+      consumes:
+      - application/json
+      description: 碎语作者或管理员可置顶碎语；每个作者最多置顶三条。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示置顶成功，code=400 表示参数错误或达到上限
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentTopResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权操作碎语
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 置顶碎语
+      tags:
+      - 碎语
   /tags:
     get:
       description: 返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。

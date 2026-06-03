@@ -2063,6 +2063,587 @@ const docTemplate = `{
                 }
             }
         },
+        "/moments": {
+            "get": {
+                "description": "查询公开碎语列表，支持按作者或角色过滤；登录态可返回当前用户点赞状态。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "分页查询公开碎语",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "作者用户 ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "作者角色 ID",
+                        "name": "role_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Authorization header 存在但 token 非法或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者，并同步图片列表。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "新增或更新碎语",
+                "parameters": [
+                    {
+                        "description": "碎语保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MomentSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作碎语",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语或作者不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/moments/{id}": {
+            "get": {
+                "description": "查询公开碎语详情，包含作者、图片、点赞数和评论数。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "查询碎语详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Authorization header 存在但 token 非法或已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "碎语作者或管理员可软删除碎语。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "删除碎语",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentDeleteResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作碎语",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/moments/{id}/like": {
+            "get": {
+                "description": "查询当前登录用户是否已点赞指定碎语。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "查询碎语点赞状态",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentLikeResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "当前用户未点赞时点赞，已点赞时取消点赞。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "切换碎语点赞",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示切换成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/moments/{id}/read": {
+            "post": {
+                "description": "使用数据库原子更新将碎语阅读数增加 1。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "增加碎语阅读数",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示更新成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentReadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/moments/{id}/top": {
+            "post": {
+                "description": "碎语作者或管理员可置顶碎语；每个作者最多置顶三条。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "置顶碎语",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示置顶成功，code=400 表示参数错误或达到上限",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentTopResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作碎语",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "碎语作者或管理员可取消置顶碎语。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "取消置顶碎语",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示取消成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentTopResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "无权操作碎语",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/tags": {
             "get": {
                 "description": "返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。",
@@ -3360,6 +3941,329 @@ const docTemplate = `{
                 },
                 "user": {
                     "$ref": "#/definitions/dto.UserResp"
+                }
+            }
+        },
+        "dto.MomentDeleteResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 被删除的碎语 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.MomentItemResp": {
+            "type": "object",
+            "properties": {
+                "comment_count": {
+                    "description": "CommentCount 评论数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "comment_status": {
+                    "description": "CommentStatus 评论状态：0 关闭，1 开启。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 碎语正文。",
+                    "type": "string",
+                    "example": "今天的风很温柔"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 碎语 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "images": {
+                    "description": "Images 图片列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MomentMediaResp"
+                    }
+                },
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_top": {
+                    "description": "IsTop 是否置顶。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "status": {
+                    "description": "Status 状态：0 隐藏，1 公开。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User 作者摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.MomentUserResp"
+                        }
+                    ]
+                },
+                "user_id": {
+                    "description": "UserID 作者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.MomentLikeResp": {
+            "type": "object",
+            "properties": {
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "dto.MomentMediaReq": {
+            "type": "object",
+            "required": [
+                "url"
+            ],
+            "properties": {
+                "file_type": {
+                    "description": "FileType 图片文件类型或扩展名。",
+                    "type": "string",
+                    "example": "jpg"
+                },
+                "name": {
+                    "description": "Name 图片原始文件名。",
+                    "type": "string",
+                    "example": "cat.jpg"
+                },
+                "seq": {
+                    "description": "Seq 图片排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "size": {
+                    "description": "Size 图片大小，单位字节。",
+                    "type": "integer",
+                    "example": 1024
+                },
+                "url": {
+                    "description": "URL 图片对象 key 或可访问 URL。",
+                    "type": "string",
+                    "maxLength": 1000,
+                    "example": "moments/cat.jpg"
+                }
+            }
+        },
+        "dto.MomentMediaResp": {
+            "type": "object",
+            "properties": {
+                "access_url": {
+                    "description": "AccessURL 可直接访问的图片地址。",
+                    "type": "string",
+                    "example": "https://cdn.example.com/moments/cat.jpg"
+                },
+                "file_type": {
+                    "description": "FileType 图片文件类型或扩展名。",
+                    "type": "string",
+                    "example": "jpg"
+                },
+                "id": {
+                    "description": "ID 图片 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 图片原始文件名。",
+                    "type": "string",
+                    "example": "cat.jpg"
+                },
+                "seq": {
+                    "description": "Seq 图片排序值。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "size": {
+                    "description": "Size 图片大小，单位字节。",
+                    "type": "integer",
+                    "example": 1024
+                },
+                "url": {
+                    "description": "URL 图片对象 key 或原始 URL。",
+                    "type": "string",
+                    "example": "moments/cat.jpg"
+                }
+            }
+        },
+        "dto.MomentPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 碎语列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MomentItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "dto.MomentReadResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 碎语 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 21
+                }
+            }
+        },
+        "dto.MomentSaveReq": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "comment_status": {
+                    "description": "CommentStatus 评论状态：0 关闭，1 开启。",
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 碎语正文，去除首尾空白后不能为空，最多 800 字符。",
+                    "type": "string",
+                    "maxLength": 800,
+                    "example": "今天的风很温柔"
+                },
+                "id": {
+                    "description": "ID 碎语 ID，为空或 0 表示新增。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "images": {
+                    "description": "Images 图片列表，会整体替换该碎语原有图片。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MomentMediaReq"
+                    }
+                },
+                "status": {
+                    "description": "Status 状态：0 隐藏，1 公开。",
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "example": 1
+                },
+                "user_id": {
+                    "description": "UserID 作者用户 ID；管理员可传入代管作者，普通用户会被强制设置为当前登录用户。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.MomentTopResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 碎语 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_top": {
+                    "description": "IsTop 是否置顶。",
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
+        "dto.MomentUserResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 用户头像地址。",
+                    "type": "string",
+                    "example": "https://example.com/avatar.png"
+                },
+                "id": {
+                    "description": "ID 用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "mark": {
+                    "description": "Mark 用户身份标签。",
+                    "type": "string",
+                    "example": "博主"
+                },
+                "nickname": {
+                    "description": "Nickname 用户昵称。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "site": {
+                    "description": "Site 用户个人站点。",
+                    "type": "string",
+                    "example": "https://yevpt.com"
+                },
+                "username": {
+                    "description": "Username 登录账号。",
+                    "type": "string",
+                    "example": "vpt"
                 }
             }
         },

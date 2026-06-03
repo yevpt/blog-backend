@@ -12,16 +12,19 @@ import (
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
+	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
 	"github.com/vpt/blog-backend/internal/middleware"
 	"github.com/vpt/blog-backend/internal/repository"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	"github.com/vpt/blog-backend/internal/service"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
+	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -38,6 +41,7 @@ type routeHandlers struct {
 	article   *articlehandler.ArticleHandler
 	comment   *commenthandler.CommentHandler
 	guestbook *guestbookhandler.GuestbookHandler
+	moment    *momenthandler.MomentHandler
 	category  *handler.CategoryHandler
 	tag       *handler.TagHandler
 }
@@ -152,6 +156,9 @@ func newRouteHandlers(
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
 	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo)
 
+	momentRepo := momentrepo.NewMomentRepository(db)
+	momentSvc := momentservice.NewMomentService(momentRepo, objectURLResolver)
+
 	return routeHandlers{
 		health:    handler.NewHealthHandler(db, redisClient),
 		test:      handler.NewTestHandler(jwtManager),
@@ -159,6 +166,7 @@ func newRouteHandlers(
 		article:   articlehandler.NewArticleHandler(articleSvc),
 		comment:   commenthandler.NewCommentHandler(commentSvc),
 		guestbook: guestbookhandler.NewGuestbookHandler(guestbookSvc),
+		moment:    momenthandler.NewMomentHandler(momentSvc),
 		category:  handler.NewCategoryHandler(categorySvc),
 		tag:       handler.NewTagHandler(tagSvc),
 	}
@@ -190,6 +198,9 @@ func registerPublicRoutes(
 	r.POST("/articles/:id/read", handlers.article.Read)
 	r.GET("/comments", handlers.comment.List)
 	r.GET("/guestbook", middleware.OptionalAuth(jwtManager), handlers.guestbook.List)
+	r.GET("/moments", middleware.OptionalAuth(jwtManager), handlers.moment.List)
+	r.GET("/moments/:id", middleware.OptionalAuth(jwtManager), handlers.moment.GetDetail)
+	r.POST("/moments/:id/read", handlers.moment.Read)
 }
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
@@ -205,6 +216,12 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.POST("/guestbook", handlers.guestbook.Create)
 	authed.POST("/guestbook/:id/like", handlers.guestbook.ToggleLike)
 	authed.DELETE("/guestbook/:id", handlers.guestbook.Delete)
+	authed.POST("/moments", handlers.moment.Save)
+	authed.DELETE("/moments/:id", handlers.moment.Delete)
+	authed.POST("/moments/:id/top", handlers.moment.SetTop)
+	authed.DELETE("/moments/:id/top", handlers.moment.RemoveTop)
+	authed.GET("/moments/:id/like", handlers.moment.IsLiked)
+	authed.POST("/moments/:id/like", handlers.moment.ToggleLike)
 }
 
 func registerVIPRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
