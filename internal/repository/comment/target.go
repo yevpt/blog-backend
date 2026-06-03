@@ -24,7 +24,7 @@ func (r *commentRepo) ensureArticleCommentable(articleID uint) error {
 	var article model.Article
 	err := r.db.
 		Select("id", "comment_status").
-		Where("id = ? AND status IN ?", articleID, []uint8{1, 2}).
+		Where("id = ? AND status IN ?", articleID, readableArticleStatuses()).
 		First(&article).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrTargetNotFound
@@ -41,7 +41,7 @@ func (r *commentRepo) ensureArticleCommentable(articleID uint) error {
 func (r *commentRepo) ensureArticleReadable(articleID uint) error {
 	var count int64
 	err := r.db.Model(&model.Article{}).
-		Where("id = ? AND status IN ?", articleID, []uint8{1, 2}).
+		Where("id = ? AND status IN ?", articleID, readableArticleStatuses()).
 		Count(&count).Error
 	if err != nil {
 		return err
@@ -50,6 +50,10 @@ func (r *commentRepo) ensureArticleReadable(articleID uint) error {
 		return ErrTargetNotFound
 	}
 	return nil
+}
+
+func readableArticleStatuses() []uint {
+	return []uint{1, 2}
 }
 
 func (r *commentRepo) ensureMomentCommentable(momentID uint) error {

@@ -34,8 +34,8 @@ func TestCommentRepository_Create_ClosedArticleReturnsCommentClosed(t *testing.T
 	repo := commentrepo.NewCommentRepository(db)
 
 	now := time.Now()
-	mock.ExpectQuery("SELECT `id`,`comment_status` FROM `article`").
-		WithArgs(uint(3), []uint8{1, 2}, 1).
+	mock.ExpectQuery("SELECT `id`,`comment_status` FROM `article`.*status IN \\(\\?,\\?\\)").
+		WithArgs(uint(3), sqlmock.AnyArg(), sqlmock.AnyArg(), 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "comment_status"}).AddRow(3, 0))
 
 	resp, err := repo.Create(commentrepo.Target{Type: commentrepo.TargetArticle, ID: 3}, 7, "好文章")
@@ -43,6 +43,31 @@ func TestCommentRepository_Create_ClosedArticleReturnsCommentClosed(t *testing.T
 	require.ErrorIs(t, err, commentrepo.ErrTargetCommentClosed)
 	assert.Nil(t, resp)
 	assert.WithinDuration(t, now, time.Now(), time.Second)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCommentRepository_List_ExpandsArticleReadableStatuses(t *testing.T) {
+	db, mock, sqlDB := newCommentMockDB(t)
+	defer sqlDB.Close()
+	repo := commentrepo.NewCommentRepository(db)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article`.*status IN \\(\\?,\\?\\)").
+		WithArgs(uint(50), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article_comment`").
+		WithArgs(uint(50)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery("SELECT \\* FROM `article_comment`").
+		WithArgs(uint(50), 10).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "article_id", "user_id", "content",
+		}))
+
+	resp, err := repo.List(commentrepo.Target{Type: commentrepo.TargetArticle, ID: 50}, 1, 10)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, int64(0), resp.Total)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
