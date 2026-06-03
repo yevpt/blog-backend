@@ -1,11 +1,11 @@
 package moment
 
 import (
-	"context"
 	"errors"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 var (
@@ -17,16 +17,11 @@ var (
 	ErrMomentAuthorNotFound = errors.New("碎语作者不存在")
 	// ErrMomentContentRequired 表示碎语正文不能为空。
 	ErrMomentContentRequired = errors.New("碎语内容不能为空")
-	// ErrMomentNoPermission 表示当前用户无权操作碎语。
+	// ErrMomentNoPermission 表示当前用户无权操作该碎语。
 	ErrMomentNoPermission = errors.New("无权操作碎语")
 	// ErrMomentTopLimitExceeded 表示置顶碎语数量已达上限。
 	ErrMomentTopLimitExceeded = errors.New("最多置顶三条碎语")
 )
-
-// ObjectURLResolver 解析对象存储 key，返回可直接访问的图片 URL。
-type ObjectURLResolver interface {
-	ObjectURL(ctx context.Context, objectName string) (string, error)
-}
 
 // MomentService 碎语业务接口，负责查询、发布、删除、置顶、点赞和阅读计数。
 type MomentService interface {
@@ -43,10 +38,10 @@ type MomentService interface {
 
 type momentService struct {
 	repo              momentrepo.MomentRepository
-	objectURLResolver ObjectURLResolver
+	objectURLResolver storage.ObjectURLResolver
 }
 
 // NewMomentService 创建碎语业务服务实例。
-func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver ObjectURLResolver) MomentService {
+func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver) MomentService {
 	return &momentService{repo: repo, objectURLResolver: objectURLResolver}
 }

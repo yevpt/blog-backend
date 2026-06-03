@@ -34,6 +34,18 @@ cdn:
 - `true`：`ObjectURL` 返回 CDN 私有签名 URL，路径格式为 `/bucket/object`。
 - `false`：`ObjectURL` 返回 Garage S3 `GetObject` 预签名 URL。
 
+## 接口
+
+`ObjectURLResolver` 是 service 层依赖的抽象，解耦具体实现：
+
+```go
+type ObjectURLResolver interface {
+    ObjectURL(ctx context.Context, objectName string) (string, error)
+}
+```
+
+`Client` 和 `CachedObjectURLResolver` 都实现了该接口。service 层通过构造函数注入，测试时可以用 mock 替代。
+
 ## 调用方式
 
 创建客户端：

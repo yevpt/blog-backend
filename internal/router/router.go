@@ -28,6 +28,7 @@ import (
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"github.com/vpt/blog-backend/pkg/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
@@ -54,7 +55,7 @@ func Setup(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	mailer email.MailSender,
-	objectURLResolver articleservice.ObjectURLResolver,
+	objectURLResolver storage.ObjectURLResolver,
 ) {
 	// 配置信任代理，确保反向代理链路下能拿到真实客户端 IP。
 	configureTrustedProxies(r)
@@ -134,7 +135,7 @@ func newRouteHandlers(
 	redisClient *redis.Client,
 	jwtManager *jwt.Manager,
 	mailer email.MailSender,
-	objectURLResolver articleservice.ObjectURLResolver,
+	objectURLResolver storage.ObjectURLResolver,
 ) routeHandlers {
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := repository.NewUserRepository(db)

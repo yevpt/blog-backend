@@ -8,6 +8,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 type articleContentPolicy uint8
@@ -17,7 +18,7 @@ const (
 	articleContentAdmin
 )
 
-func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver ObjectURLResolver) (*dto.ArticlePageResp, error) {
+func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver storage.ObjectURLResolver) (*dto.ArticlePageResp, error) {
 	items := make([]dto.ArticleListItemResp, 0, len(result.Articles))
 	for _, aggregate := range result.Articles {
 		item := articleListItemToDTO(&aggregate)
@@ -41,7 +42,7 @@ func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver O
 	}, nil
 }
 
-func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver ObjectURLResolver) error {
+func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver storage.ObjectURLResolver) error {
 	// 未注入对象存储解析器时保留原值，方便纯业务测试和局部调用。
 	if objectURLResolver == nil || item.CoverImgUrl == nil {
 		return nil

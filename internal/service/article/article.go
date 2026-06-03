@@ -1,13 +1,13 @@
 package article
 
 import (
-	"context"
 	"errors"
 	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	"github.com/vpt/blog-backend/pkg/storage"
 	"gorm.io/gorm"
 )
 
@@ -30,18 +30,13 @@ type ArticleService interface {
 	ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error)
 }
 
-// ObjectURLResolver 解析对象存储 key，返回可直接访问的 Garage 或 CDN 签名 URL。
-type ObjectURLResolver interface {
-	ObjectURL(ctx context.Context, objectName string) (string, error)
-}
-
 type articleService struct {
 	repo              articlerepo.ArticleRepository
-	objectURLResolver ObjectURLResolver
+	objectURLResolver storage.ObjectURLResolver
 }
 
 // NewArticleService 创建文章业务服务实例。
-func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver ObjectURLResolver) ArticleService {
+func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver storage.ObjectURLResolver) ArticleService {
 	return &articleService{repo: repo, objectURLResolver: objectURLResolver}
 }
 

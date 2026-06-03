@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	"github.com/vpt/blog-backend/pkg/cache"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/database"
@@ -70,7 +69,7 @@ func InitMailer(cfg *config.Config) email.MailSender {
 }
 
 // MustInitStorage 创建对象 URL 解析器，内部处理 Garage/CDN 签名和 Redis 缓存。
-func MustInitStorage(cfg *config.Config, redisClient *redis.Client) articleservice.ObjectURLResolver {
+func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.ObjectURLResolver {
 	objectURLResolver, err := storage.NewCachedGarage(&cfg.Garage, &cfg.CDN, redisClient)
 	if err != nil {
 		log.Fatalf("对象存储初始化失败: %v", err)
