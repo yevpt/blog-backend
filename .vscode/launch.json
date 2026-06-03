@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "调试 API 服务",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/server",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "APP_ENV": "dev"
+      },
+      "args": []
+    },
+    {
+      "name": "调试数据迁移",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/migrate",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "APP_ENV": "dev"
+      },
+      "args": []
+    }
+  ]
+}

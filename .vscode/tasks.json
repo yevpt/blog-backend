@@ -1,0 +1,41 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "启动 API 服务",
+      "type": "shell",
+      "command": "make run",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": "$go"
+    },
+    {
+      "label": "热重载启动 API 服务",
+      "type": "shell",
+      "command": "make dev",
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "运行测试",
+      "type": "shell",
+      "command": "make test",
+      "group": "test",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "problemMatcher": "$go"
+    }
+  ]
+}
