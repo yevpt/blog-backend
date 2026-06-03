@@ -36,7 +36,24 @@
       "Bash(find / -name \"go\" -perm /111 -type f)",
       "Bash(~/go/bin/go build *)",
       "Bash(mdfind -name \"go\" -onlyin /usr/local)",
-      "Bash(grep \"bin/go$\")"
+      "Bash(grep \"bin/go$\")",
+      "Bash(xargs cat)",
+      "Read(//usr/local/go/**)",
+      "Read(//usr/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//opt/**)",
+      "Bash(ls /usr/local/go1* 2>/dev/null; ls ~/sdk/ 2>/dev/null; ls ~/go/ 2>/dev/null)",
+      "Bash(~/go/bin/go version *)",
+      "Bash(find /Library -name \"go\" -type f 2>/dev/null | head -5; find ~/Library -name \"go\" -type f 2>/dev/null | head -5)",
+      "Bash(claude mcp *)",
+      "mcp__mcp-registry__search_mcp_registry",
+      "Bash(curl -X POST http://h.yevpt.com:19800/v1/models -H 'Authorization: Bearer Lryyld527' -H 'Content-Type: application/json')",
+      "Bash(curl -X GET http://h.yevpt.com:19800/v1/models -H 'Authorization: Bearer Lryyld527' -H 'Content-Type: application/json')",
+      "mcp__mcp-registry__list_connectors",
+      "mcp__houtini-lm__list_models",
+      "Bash(jq '.mcpServers.houtini-lm = { *)",
+      "Bash(mv /tmp/.claude.json /Users/vpt/.claude.json)",
+      "Bash(jq '.mcpServers[\"houtini-lm\"] = { *)"
     ]
   }
 }

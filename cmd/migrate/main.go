@@ -299,6 +299,17 @@ func parseSongDate(s sql.NullString) *time.Time {
 	return nil
 }
 
+// remapMediaOwnerType 将旧系统 media.owner_type 映射到新系统语义。
+// 旧系统：1=say（碎语）；新系统：1=文章 2=说说 3=用户。
+func remapMediaOwnerType(old int) uint8 {
+	switch old {
+	case 1: // 旧系统 say = 新系统 说说
+		return 2
+	default:
+		return uint8(old)
+	}
+}
+
 // nullUint 将 sql.NullInt64 转为 *uint，0 值也转为 nil
 func nullUint(ni sql.NullInt64) *uint {
 	if !ni.Valid || ni.Int64 == 0 {
@@ -1087,6 +1098,10 @@ func migrateFriendLink(src *sql.DB, dst *gorm.DB) error {
 // user_id → uploader_id（字段语义改名，更明确）
 // status varchar '01'/'00' → tinyint 1/0
 // url 从 longtext 缩至 varchar(1000)
+//
+// owner_type 重映射（旧系统与新系统语义不同）：
+//   旧 1 (say/碎语) → 新 2 (说说)
+//   其他值保持原样
 
 func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 	rows, err := src.Query(`
@@ -1130,11 +1145,14 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 			}
 		}
 
+		// 旧系统用 1 表示 say（碎语），新系统用 2 表示说说；迁移时重映射。
+		newOwnerType := remapMediaOwnerType(ownerType)
+
 		m := model.Media{
 			Base:       model.Base{ID: id},
 			UploaderID: uint(userID.Int64),
 			OwnerID:    uint(ownerID),
-			OwnerType:  uint8(ownerType),
+			OwnerType:  newOwnerType,
 			Type:       uint8(typ),
 			FileType:   fileType.String,
 			Name:       name.String,
