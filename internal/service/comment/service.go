@@ -18,7 +18,7 @@ func (s *commentService) List(req dto.CommentListReq) (*dto.CommentPageResp, err
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return commentPageToDTO(result, target.Type), nil
+	return commentPageToDTO(result, target.Type, s.objectURLResolver), nil
 }
 
 func (s *commentService) Create(req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
@@ -35,7 +35,7 @@ func (s *commentService) Create(req dto.CommentCreateReq, userID uint) (*dto.Com
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return commentToDTO(*aggregate, target.Type), nil
+	return commentToDTO(*aggregate, target.Type, s.objectURLResolver), nil
 }
 
 func (s *commentService) Reply(commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
@@ -58,7 +58,7 @@ func (s *commentService) Reply(commentID uint, req dto.CommentReplyCreateReq, us
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return replyToDTO(*aggregate), nil
+	return replyToDTO(*aggregate, s.objectURLResolver), nil
 }
 
 func (s *commentService) DeleteComment(targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {

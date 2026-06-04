@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 var (
@@ -34,10 +35,11 @@ type CommentService interface {
 }
 
 type commentService struct {
-	repo commentrepo.CommentRepository
+	repo              commentrepo.CommentRepository
+	objectURLResolver storage.ObjectURLResolver
 }
 
 // NewCommentService 创建评论业务服务实例。
-func NewCommentService(repo commentrepo.CommentRepository) CommentService {
-	return &commentService{repo: repo}
+func NewCommentService(repo commentrepo.CommentRepository, objectURLResolver storage.ObjectURLResolver) CommentService {
+	return &commentService{repo: repo, objectURLResolver: objectURLResolver}
 }

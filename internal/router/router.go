@@ -152,7 +152,7 @@ func newRouteHandlers(
 	tagSvc := service.NewTagService(tagRepo, articleSvc)
 
 	commentRepo := commentrepo.NewCommentRepository(db)
-	commentSvc := commentservice.NewCommentService(commentRepo)
+	commentSvc := commentservice.NewCommentService(commentRepo, objectURLResolver)
 
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
 	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo)

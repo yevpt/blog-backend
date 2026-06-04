@@ -68,7 +68,7 @@ func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo)
+	svc := commentservice.NewCommentService(repo, nil)
 
 	resp, err := svc.Create(dto.CommentCreateReq{
 		TargetType: "article",
@@ -86,7 +86,7 @@ func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {
 }
 
 func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
-	svc := commentservice.NewCommentService(&fakeCommentRepo{})
+	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil)
 
 	_, err := svc.Create(dto.CommentCreateReq{
 		TargetType: "article",
@@ -99,7 +99,7 @@ func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
 
 func TestCommentService_Create_MapsClosedTarget(t *testing.T) {
 	repo := &fakeCommentRepo{createErr: commentrepo.ErrTargetCommentClosed}
-	svc := commentservice.NewCommentService(repo)
+	svc := commentservice.NewCommentService(repo, nil)
 
 	_, err := svc.Create(dto.CommentCreateReq{
 		TargetType: "article",
@@ -125,7 +125,7 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo)
+	svc := commentservice.NewCommentService(repo, nil)
 
 	resp, err := svc.Reply(9, dto.CommentReplyCreateReq{
 		TargetType:    "article",
@@ -142,7 +142,7 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 
 func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo)
+	svc := commentservice.NewCommentService(repo, nil)
 
 	_, err := svc.DeleteComment("article", 9, 7, []string{roles.AdminRole})
 
@@ -153,7 +153,7 @@ func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 func TestCommentService_List_MapsRepositoryErrors(t *testing.T) {
 	repo := &fakeCommentRepo{}
 	repo.createErr = errors.New("unused")
-	svc := commentservice.NewCommentService(repo)
+	svc := commentservice.NewCommentService(repo, nil)
 
 	resp, err := svc.List(dto.CommentListReq{TargetType: "article", TargetID: 3, Page: 0, PageSize: 99})
 
