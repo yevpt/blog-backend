@@ -195,8 +195,8 @@ func registerPublicRoutes(
 	r.POST("/test/token", handlers.test.GenToken)
 
 	// 认证接口独立挂载限流，不放入公开 group 以便精确控制
-	r.POST("/captcha/register/challenge", middleware.RateLimitStrict(redisClient), handlers.captcha.GenerateRegistrationChallenge)
-	r.POST("/captcha/register/verify", middleware.RateLimitStrict(redisClient), handlers.captcha.VerifyRegistrationChallenge)
+	r.POST("/captcha/register/challenge", handlers.captcha.GenerateRegistrationChallenge)
+	r.POST("/captcha/register/verify", handlers.captcha.VerifyRegistrationChallenge)
 	r.POST("/auth/send-code", middleware.RateLimitStrict(redisClient), handlers.auth.SendCode)
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
