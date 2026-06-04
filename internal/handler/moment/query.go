@@ -3,7 +3,7 @@ package moment
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/pkg/response"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 )
 
 // List 分页查询公开碎语。
@@ -22,8 +22,7 @@ import (
 // @Router /moments [get]
 func (h *MomentHandler) List(c *gin.Context) {
 	var req dto.MomentListReq
-	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.Query(c, &req) {
 		return
 	}
 

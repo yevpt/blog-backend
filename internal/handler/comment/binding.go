@@ -1,22 +1,15 @@
 package comment
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 func bindCommentID(c *gin.Context, name string) (uint, bool) {
-	raw := c.Param(name)
-	id, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || id == 0 {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
-		return 0, false
-	}
-	return uint(id), true
+	return reqbind.PathUint(c, name, "评论 ID")
 }
 
 func requiredCommentClaims(c *gin.Context) (uint, []string, bool) {

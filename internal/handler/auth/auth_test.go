@@ -140,6 +140,39 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	assert.Equal(t, 0, resp.Code)
 }
 
+func TestAuthHandler_Register_ShortPasswordReturnsReadableMessage(t *testing.T) {
+	r := newTestRouter(&stubAuthService{})
+	body, _ := json.Marshal(map[string]string{
+		"email": "alice@example.com", "password": "123456", "code": "123456",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "密码长度不能短于 8 个字符", resp.Message)
+}
+
+func TestAuthHandler_SendCode_InvalidJSONReturnsReadableMessage(t *testing.T) {
+	r := newTestRouter(&stubAuthService{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", bytes.NewReader([]byte(`{"email":}`)))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "请求体必须是合法的 JSON", resp.Message)
+}
+
 func TestAuthHandler_Login_Success(t *testing.T) {
 	stub := &stubAuthService{
 		loginResp: &dto.LoginResp{
@@ -174,6 +207,67 @@ func TestAuthHandler_Login_Disabled(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeForbidden, resp.Code)
+	assert.Equal(t, "账号已被禁用", resp.Message)
+}
+
+func TestAuthHandler_Login_UserNotFound(t *testing.T) {
+	stub := &stubAuthService{loginErr: authservice.ErrUserNotFound}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"identifier": "nobody", "password": "password123",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeUnauth, resp.Code)
+	assert.Equal(t, "账号不存在", resp.Message)
+}
+
+func TestAuthHandler_Login_WrongPassword(t *testing.T) {
+	stub := &stubAuthService{loginErr: authservice.ErrWrongPassword}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"identifier": "user@example.com", "password": "wrongpassword",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeUnauth, resp.Code)
+	assert.Equal(t, "密码错误", resp.Message)
+}
+
+func TestAuthHandler_Login_InternalError(t *testing.T) {
+	stub := &stubAuthService{loginErr: errors.New("load roles failed")}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"identifier": "user@example.com", "password": "password123",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeServerError, resp.Code)
+	assert.Equal(t, "服务器内部错误", resp.Message)
 }
 
 func TestAuthHandler_Refresh_InvalidToken(t *testing.T) {

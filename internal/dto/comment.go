@@ -14,6 +14,12 @@ type CommentListReq struct {
 	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
 }
 
+// CommentDeleteReq 删除一级评论请求。
+type CommentDeleteReq struct {
+	// TargetType 评论目标类型：article、moment、guestbook。
+	TargetType string `form:"target_type" binding:"required,oneof=article moment guestbook" example:"article"`
+}
+
 // CommentCreateReq 新增一级评论请求。
 type CommentCreateReq struct {
 	// TargetType 评论目标类型：article、moment、guestbook。

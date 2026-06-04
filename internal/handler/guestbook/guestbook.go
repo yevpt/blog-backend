@@ -1,10 +1,9 @@
 package guestbook
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -21,13 +20,7 @@ func NewGuestbookHandler(svc guestbookservice.GuestbookService) *GuestbookHandle
 }
 
 func bindGuestbookID(c *gin.Context, name string) (uint, bool) {
-	raw := c.Param(name)
-	id, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || id == 0 {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
-		return 0, false
-	}
-	return uint(id), true
+	return reqbind.PathUint(c, name, "留言 ID")
 }
 
 func requiredUser(c *gin.Context) (uint, []string, bool) {

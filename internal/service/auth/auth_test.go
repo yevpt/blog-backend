@@ -186,6 +186,7 @@ func TestAuthService_Login_WrongPassword(t *testing.T) {
 		Password:   "wrongpassword",
 	}, "127.0.0.1")
 	assert.Error(t, err)
+	assert.ErrorIs(t, err, authservice.ErrWrongPassword)
 }
 
 func TestAuthService_Login_UserNotFound(t *testing.T) {
@@ -199,6 +200,7 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 		Password:   "anypassword",
 	}, "127.0.0.1")
 	assert.Error(t, err)
+	assert.ErrorIs(t, err, authservice.ErrUserNotFound)
 }
 
 func TestAuthService_Refresh_Success(t *testing.T) {

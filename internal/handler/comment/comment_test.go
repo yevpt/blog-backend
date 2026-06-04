@@ -123,3 +123,17 @@ func TestCommentHandler_Create_BadRequestBusinessError(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeBadRequest, resp.Code)
 }
+
+func TestCommentHandler_List_InvalidTargetTypeReturnsReadableMessage(t *testing.T) {
+	r := newCommentRouter(&stubCommentService{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/comments?target_type=post&target_id=3", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "评论目标类型只能是 article、moment、guestbook", resp.Message)
+}

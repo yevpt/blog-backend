@@ -23,6 +23,8 @@ import (
 var (
 	ErrInvalidCode       = errors.New("验证码无效或已过期")
 	ErrEmailTaken        = errors.New("该邮箱已被注册")
+	ErrUserNotFound      = errors.New("账号不存在")
+	ErrWrongPassword     = errors.New("密码错误")
 	ErrInvalidCredential = errors.New("账号或密码错误")
 	ErrUserDisabled      = errors.New("账号已被禁用")
 	ErrInvalidToken      = errors.New("token 无效或已过期")
@@ -192,15 +194,15 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 		return nil, err
 	}
 
-	// 用户不存在时仍执行 bcrypt，使不存在与密码错误两种情况的响应时间一致，防止枚举账号
+	// 用户不存在时仍执行 bcrypt，使不存在与密码错误两种情况的响应时间尽量一致
 	if user == nil {
 		bcrypt.CompareHashAndPassword(dummyHashForTimingProtection, []byte(req.Password))
-		return nil, ErrInvalidCredential
+		return nil, ErrUserNotFound
 	}
 
 	// 用户存在时比对密码哈希，不匹配则拒绝
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-		return nil, ErrInvalidCredential
+		return nil, ErrWrongPassword
 	}
 
 	// 密码正确后再检查账号状态，避免通过错误类型泄露账号是否存在

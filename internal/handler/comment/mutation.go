@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/pkg/response"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 )
 
 // Create 新增一级评论。
@@ -26,8 +26,7 @@ func (h *CommentHandler) Create(c *gin.Context) {
 	}
 
 	var req dto.CommentCreateReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 
@@ -59,8 +58,7 @@ func (h *CommentHandler) Reply(c *gin.Context) {
 	}
 
 	var req dto.CommentReplyCreateReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 
@@ -92,7 +90,12 @@ func (h *CommentHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.DeleteComment(c.Query("target_type"), commentID, userID, roleNames)
+	var req dto.CommentDeleteReq
+	if !reqbind.Query(c, &req) {
+		return
+	}
+
+	resp, err := h.svc.DeleteComment(req.TargetType, commentID, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }
 

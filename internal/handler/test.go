@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -61,8 +62,7 @@ func (h *TestHandler) GenToken(c *gin.Context) {
 		Username string   `json:"username"`
 		Roles    []string `json:"roles"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 

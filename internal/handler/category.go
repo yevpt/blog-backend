@@ -2,10 +2,10 @@ package handler
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/internal/service"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -50,8 +50,7 @@ func (h *CategoryHandler) ListTabs(c *gin.Context) {
 // @Router /admin/categories [post]
 func (h *CategoryHandler) Create(c *gin.Context) {
 	var req dto.CategoryCreateReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	resp, err := h.svc.Create(req)
@@ -78,8 +77,7 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 		return
 	}
 	var req dto.CategoryUpdateReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	resp, err := h.svc.Update(id, req)
@@ -127,8 +125,7 @@ func (h *CategoryHandler) AddArticles(c *gin.Context) {
 		return
 	}
 	var req dto.CategoryArticlesReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	resp, err := h.svc.AddArticles(id, req)
@@ -155,8 +152,7 @@ func (h *CategoryHandler) RemoveArticles(c *gin.Context) {
 		return
 	}
 	var req dto.CategoryArticlesReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	resp, err := h.svc.RemoveArticles(id, req)
@@ -164,12 +160,7 @@ func (h *CategoryHandler) RemoveArticles(c *gin.Context) {
 }
 
 func bindCategoryID(c *gin.Context) (uint, bool) {
-	id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil || id64 == 0 {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
-		return 0, false
-	}
-	return uint(id64), true
+	return reqbind.PathUint(c, "id", "分类 ID")
 }
 
 func writeCategoryResponse(c *gin.Context, data any, err error) {

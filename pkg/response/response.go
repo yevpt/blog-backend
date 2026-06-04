@@ -9,7 +9,7 @@ import (
 
 // Response 所有 API 接口的统一响应包装
 type Response struct {
-	Code    int         `json:"code"`           // 0 表示成功，非 0 为业务错误码
+	Code    int         `json:"code"` // 0 表示成功，非 0 为业务错误码
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"` // 失败时省略，不输出 null
 }
@@ -44,17 +44,27 @@ func Fail(c *gin.Context, code int, message string) {
 
 // Unauthorized 返回 401，用于 token 缺失、格式错误或已过期
 func Unauthorized(c *gin.Context) {
+	AuthFailed(c, "未登录或 token 已过期")
+}
+
+// AuthFailed 返回 401，用于登录凭证错误等认证失败场景。
+func AuthFailed(c *gin.Context, message string) {
 	c.JSON(http.StatusUnauthorized, Response{
 		Code:    CodeUnauth,
-		Message: "未登录或 token 已过期",
+		Message: message,
 	})
 }
 
 // Forbidden 返回 403，身份已验证但角色权限不足
 func Forbidden(c *gin.Context) {
+	ForbiddenWithMessage(c, "权限不足")
+}
+
+// ForbiddenWithMessage 返回 403，并允许业务场景指定可展示的禁止访问原因。
+func ForbiddenWithMessage(c *gin.Context, message string) {
 	c.JSON(http.StatusForbidden, Response{
 		Code:    CodeForbidden,
-		Message: "权限不足",
+		Message: message,
 	})
 }
 

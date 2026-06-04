@@ -151,3 +151,31 @@ func TestArticleHandler_ListPublic_ServerError(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
+
+func TestArticleHandler_ListPublic_InvalidPageSizeReturnsReadableMessage(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/articles?page_size=100", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "每页数量不能大于 50", resp.Message)
+}
+
+func TestArticleHandler_GetPublicDetail_InvalidIDReturnsReadableMessage(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/articles/abc", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "文章 ID 必须是大于 0 的整数", resp.Message)
+}

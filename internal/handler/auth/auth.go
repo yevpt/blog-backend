@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -32,8 +33,7 @@ func NewAuthHandler(svc authservice.AuthService) *AuthHandler {
 func (h *AuthHandler) SendCode(c *gin.Context) {
 	// 绑定并校验请求参数（email 为 required 且格式合法）
 	var req dto.SendCodeReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 
@@ -64,8 +64,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 func (h *AuthHandler) Register(c *gin.Context) {
 	// 绑定并校验请求参数（email、password、code 均为 required）
 	var req dto.RegisterReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 
@@ -80,7 +79,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	response.Success(c, user)
 }
 
-// Login 三合一登录（username / email / phone），账号禁用返回 403，其余错误一律 401。
+// Login 三合一登录（username / email / phone），按失败原因返回前端可展示文案。
 // @Summary 用户登录
 // @Description 支持用户名、邮箱或手机号作为登录标识，成功后返回 access token、refresh token 和用户信息。
 // @Tags 认证
@@ -88,26 +87,36 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Produce json
 // @Param request body dto.LoginReq true "登录请求"
 // @Success 200 {object} response.Response{data=dto.LoginResp} "登录成功"
-// @Failure 401 {object} response.Response "账号或密码错误"
-// @Failure 403 {object} response.Response "账号被禁用"
+// @Failure 401 {object} response.Response "账号不存在或密码错误"
+// @Failure 403 {object} response.Response "账号已被禁用"
+// @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	// 绑定并校验请求参数（identifier、password 均为 required）
 	var req dto.LoginReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 
 	// 调用 service 执行登录：查用户 → 比对密码 → 校验状态 → 签发双 token
 	resp, err := h.svc.Login(&req, c.ClientIP())
 	if err != nil {
-		// 账号被禁用返回 403（身份已验证但无权访问），其余凭证错误统一返回 401
-		if errors.Is(err, authservice.ErrUserDisabled) {
-			response.Forbidden(c)
+		// 按 service 返回的明确错误选择响应，避免登录页显示 token 相关文案
+		switch {
+		case errors.Is(err, authservice.ErrUserNotFound):
+			response.AuthFailed(c, authservice.ErrUserNotFound.Error())
+			return
+		case errors.Is(err, authservice.ErrWrongPassword):
+			response.AuthFailed(c, authservice.ErrWrongPassword.Error())
+			return
+		case errors.Is(err, authservice.ErrInvalidCredential):
+			response.AuthFailed(c, authservice.ErrInvalidCredential.Error())
+			return
+		case errors.Is(err, authservice.ErrUserDisabled):
+			response.ForbiddenWithMessage(c, authservice.ErrUserDisabled.Error())
 			return
 		}
-		response.Unauthorized(c)
+		response.ServerError(c)
 		return
 	}
 
@@ -128,8 +137,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	// 绑定并校验请求参数（refresh_token 为 required）
 	var req dto.RefreshReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 

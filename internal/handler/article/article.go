@@ -2,11 +2,11 @@ package article
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -51,8 +51,7 @@ func (h *ArticleHandler) ListIDs(c *gin.Context) {
 // @Router /articles [get]
 func (h *ArticleHandler) ListPublic(c *gin.Context) {
 	var req dto.ArticleListReq
-	if err := c.ShouldBindQuery(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.Query(c, &req) {
 		return
 	}
 
@@ -174,8 +173,7 @@ func (h *ArticleHandler) Save(c *gin.Context) {
 	}
 
 	var req dto.ArticleSaveReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误: "+err.Error())
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 
@@ -207,13 +205,7 @@ func (h *ArticleHandler) Delete(c *gin.Context) {
 }
 
 func bindUintPath(c *gin.Context, name string) (uint, bool) {
-	raw := c.Param(name)
-	id, err := strconv.ParseUint(raw, 10, 64)
-	if err != nil || id == 0 {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
-		return 0, false
-	}
-	return uint(id), true
+	return reqbind.PathUint(c, name, "文章 ID")
 }
 
 func requiredUserID(c *gin.Context) (uint, bool) {
