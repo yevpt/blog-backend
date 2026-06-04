@@ -2,7 +2,8 @@ package dto
 
 // SendCodeReq 发送邮箱验证码请求
 type SendCodeReq struct {
-	Email string `json:"email" binding:"required,email"`
+	Email        string `json:"email" binding:"required,email"`
+	CaptchaToken string `json:"captcha_token" binding:"required"`
 }
 
 // RegisterReq 注册请求

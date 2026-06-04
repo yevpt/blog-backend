@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -31,7 +32,19 @@ func (m *mockMailSender) SendVerificationCode(to, code string) error {
 	return m.err
 }
 
-func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender) {
+type mockCaptchaTokenConsumer struct {
+	err           error
+	consumedToken string
+	consumedIP    string
+}
+
+func (m *mockCaptchaTokenConsumer) ConsumeRegistrationToken(token string, ip string) error {
+	m.consumedToken = token
+	m.consumedIP = ip
+	return m.err
+}
+
+func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
 
@@ -40,17 +53,18 @@ func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserReposito
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 
 	mailer := &mockMailSender{}
+	captchaConsumer := &mockCaptchaTokenConsumer{}
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 
-	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer)
-	return svc, repo, rdb, mr, mailer
+	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer)
+	return svc, repo, rdb, mr, mailer, captchaConsumer
 }
 
 func TestAuthService_SendCode_Success(t *testing.T) {
-	svc, _, rdb, mr, mailer := setupService(t)
+	svc, _, rdb, mr, mailer, captchaConsumer := setupService(t)
 	defer mr.Close()
 
-	err := svc.SendCode("user@example.com", "127.0.0.1")
+	err := svc.SendCode("user@example.com", "127.0.0.1", "captcha-token")
 	require.NoError(t, err)
 
 	// 验证码已写入 Redis
@@ -58,21 +72,37 @@ func TestAuthService_SendCode_Success(t *testing.T) {
 	require.NoError(t, redisErr)
 	assert.Len(t, val, 6)
 	assert.Equal(t, "user@example.com", mailer.sentTo)
+	assert.Equal(t, "captcha-token", captchaConsumer.consumedToken)
+	assert.Equal(t, "127.0.0.1", captchaConsumer.consumedIP)
 }
 
 func TestAuthService_SendCode_CooldownBlocks(t *testing.T) {
-	svc, _, rdb, mr, _ := setupService(t)
+	svc, _, rdb, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	// 预写入冷却 key（TTL=0 表示永不过期，仅测试用）
 	rdb.Set(context.Background(), "email:cd:user@example.com", 1, 0)
 
-	err := svc.SendCode("user@example.com", "127.0.0.1")
+	err := svc.SendCode("user@example.com", "127.0.0.1", "captcha-token")
 	assert.Error(t, err)
 }
 
+func TestAuthService_SendCode_InvalidCaptchaToken(t *testing.T) {
+	svc, _, rdb, mr, mailer, captchaConsumer := setupService(t)
+	defer mr.Close()
+	captchaConsumer.err = errors.New("请先完成图形验证码")
+
+	err := svc.SendCode("user@example.com", "127.0.0.1", "bad-token")
+
+	assert.Error(t, err)
+	assert.Empty(t, mailer.sentTo)
+	exists, redisErr := rdb.Exists(context.Background(), "email:code:user@example.com").Result()
+	require.NoError(t, redisErr)
+	assert.Equal(t, int64(0), exists)
+}
+
 func TestAuthService_Register_Success(t *testing.T) {
-	svc, repo, rdb, mr, _ := setupService(t)
+	svc, repo, rdb, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	// 预写入验证码
@@ -94,7 +124,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 }
 
 func TestAuthService_Register_WrongCode(t *testing.T) {
-	svc, _, rdb, mr, _ := setupService(t)
+	svc, _, rdb, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	rdb.Set(context.Background(), "email:code:x@example.com", "999999", 0)
@@ -108,7 +138,7 @@ func TestAuthService_Register_WrongCode(t *testing.T) {
 }
 
 func TestAuthService_Login_Success(t *testing.T) {
-	svc, repo, _, mr, _ := setupService(t)
+	svc, repo, _, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	// 用 bcrypt 动态生成 hash，避免硬编码失效
@@ -139,7 +169,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 }
 
 func TestAuthService_Login_WrongPassword(t *testing.T) {
-	svc, repo, _, mr, _ := setupService(t)
+	svc, repo, _, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	rawPwd := "password123"
@@ -159,7 +189,7 @@ func TestAuthService_Login_WrongPassword(t *testing.T) {
 }
 
 func TestAuthService_Login_UserNotFound(t *testing.T) {
-	svc, repo, _, mr, _ := setupService(t)
+	svc, repo, _, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	repo.EXPECT().FindByIdentifier("nobody").Return(nil, nil)
@@ -172,7 +202,7 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 }
 
 func TestAuthService_Refresh_Success(t *testing.T) {
-	svc, _, _, mr, _ := setupService(t)
+	svc, _, _, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
@@ -185,7 +215,7 @@ func TestAuthService_Refresh_Success(t *testing.T) {
 }
 
 func TestAuthService_Refresh_AccessTokenRejected(t *testing.T) {
-	svc, _, _, mr, _ := setupService(t)
+	svc, _, _, mr, _, _ := setupService(t)
 	defer mr.Close()
 
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)

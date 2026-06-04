@@ -1371,7 +1371,7 @@ const docTemplate = `{
         },
         "/auth/send-code": {
             "post": {
-                "description": "向指定邮箱发送注册验证码；参数错误或普通业务错误通过统一响应 code 表达，发送频率超限时返回 HTTP 429。",
+                "description": "消费 GoCaptcha 一次性票据后向指定邮箱发送注册验证码；参数错误或普通业务错误通过统一响应 code 表达，发送频率超限时返回 HTTP 429。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1404,6 +1404,93 @@ const docTemplate = `{
                         "description": "发送频率超限",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/captcha/register/challenge": {
+            "post": {
+                "description": "返回 GoCaptcha 滑块主图、滑块图和挑战 ID；后端只保存答案，不向前端暴露目标 X 坐标。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "图形验证码"
+                ],
+                "summary": "生成注册图形验证码",
+                "responses": {
+                    "200": {
+                        "description": "生成成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CaptchaChallengeResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "生成失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/captcha/register/verify": {
+            "post": {
+                "description": "校验通过后返回短期一次性 captcha_token，用于 /auth/send-code。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "图形验证码"
+                ],
+                "summary": "校验注册图形验证码",
+                "parameters": [
+                    {
+                        "description": "图形验证码校验请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CaptchaVerifyReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示校验成功，code=400 表示参数错误或验证码错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CaptchaVerifyResp"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -3260,6 +3347,78 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CaptchaChallengeResp": {
+            "type": "object",
+            "properties": {
+                "challenge_id": {
+                    "description": "挑战 ID，校验时原样带回",
+                    "type": "string"
+                },
+                "image_height": {
+                    "description": "主图高度",
+                    "type": "integer"
+                },
+                "image_width": {
+                    "description": "主图宽度",
+                    "type": "integer"
+                },
+                "master_image": {
+                    "description": "带 data URI 前缀的主图 JPEG base64",
+                    "type": "string"
+                },
+                "tile_height": {
+                    "description": "滑块高度",
+                    "type": "integer"
+                },
+                "tile_image": {
+                    "description": "带 data URI 前缀的滑块 PNG base64",
+                    "type": "string"
+                },
+                "tile_width": {
+                    "description": "滑块宽度",
+                    "type": "integer"
+                },
+                "tile_x": {
+                    "description": "滑块初始 X 坐标",
+                    "type": "integer"
+                },
+                "tile_y": {
+                    "description": "滑块初始 Y 坐标",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.CaptchaVerifyReq": {
+            "type": "object",
+            "required": [
+                "challenge_id",
+                "x",
+                "y"
+            ],
+            "properties": {
+                "challenge_id": {
+                    "description": "挑战 ID",
+                    "type": "string"
+                },
+                "x": {
+                    "description": "用户拖动后的 X 坐标",
+                    "type": "integer"
+                },
+                "y": {
+                    "description": "用户拖动后的 Y 坐标",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.CaptchaVerifyResp": {
+            "type": "object",
+            "properties": {
+                "captcha_token": {
+                    "description": "一次性通行票据，仅用于发送邮箱验证码",
+                    "type": "string"
+                }
+            }
+        },
         "dto.CategoryArticlesReq": {
             "type": "object",
             "required": [
@@ -4304,9 +4463,13 @@ const docTemplate = `{
         "dto.SendCodeReq": {
             "type": "object",
             "required": [
+                "captcha_token",
                 "email"
             ],
             "properties": {
+                "captcha_token": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 }

@@ -10,6 +10,7 @@ import (
 	"github.com/vpt/blog-backend/internal/handler"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
+	captchahandler "github.com/vpt/blog-backend/internal/handler/captcha"
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
@@ -22,6 +23,7 @@ import (
 	"github.com/vpt/blog-backend/internal/service"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
+	captchaservice "github.com/vpt/blog-backend/internal/service/captcha"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
@@ -39,6 +41,7 @@ type routeHandlers struct {
 	health    *handler.HealthHandler
 	test      *handler.TestHandler
 	auth      *authhandler.AuthHandler
+	captcha   *captchahandler.CaptchaHandler
 	article   *articlehandler.ArticleHandler
 	comment   *commenthandler.CommentHandler
 	guestbook *guestbookhandler.GuestbookHandler
@@ -137,9 +140,15 @@ func newRouteHandlers(
 	mailer email.MailSender,
 	objectURLResolver storage.ObjectURLResolver,
 ) routeHandlers {
+	// 组装图形验证码链路，注册发送邮箱验证码前会消费它签发的一次性票据。
+	captchaSvc, err := captchaservice.NewService(redisClient)
+	if err != nil {
+		panic(err)
+	}
+
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := repository.NewUserRepository(db)
-	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer)
+	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc)
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
@@ -164,6 +173,7 @@ func newRouteHandlers(
 		health:    handler.NewHealthHandler(db, redisClient),
 		test:      handler.NewTestHandler(jwtManager),
 		auth:      authhandler.NewAuthHandler(authSvc),
+		captcha:   captchahandler.NewCaptchaHandler(captchaSvc),
 		article:   articlehandler.NewArticleHandler(articleSvc),
 		comment:   commenthandler.NewCommentHandler(commentSvc),
 		guestbook: guestbookhandler.NewGuestbookHandler(guestbookSvc),
@@ -185,6 +195,8 @@ func registerPublicRoutes(
 	r.POST("/test/token", handlers.test.GenToken)
 
 	// 认证接口独立挂载限流，不放入公开 group 以便精确控制
+	r.POST("/captcha/register/challenge", middleware.RateLimitStrict(redisClient), handlers.captcha.GenerateRegistrationChallenge)
+	r.POST("/captcha/register/verify", middleware.RateLimitStrict(redisClient), handlers.captcha.VerifyRegistrationChallenge)
 	r.POST("/auth/send-code", middleware.RateLimitStrict(redisClient), handlers.auth.SendCode)
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)

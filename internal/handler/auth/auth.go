@@ -19,9 +19,9 @@ func NewAuthHandler(svc authservice.AuthService) *AuthHandler {
 	return &AuthHandler{svc: svc}
 }
 
-// SendCode 发送邮箱验证码，频率超限时返回 429 而非 400。
+// SendCode 发送邮箱验证码，要求先完成 GoCaptcha 图形验证，频率超限时返回 429 而非 400。
 // @Summary 发送邮箱验证码
-// @Description 向指定邮箱发送注册验证码；参数错误或普通业务错误通过统一响应 code 表达，发送频率超限时返回 HTTP 429。
+// @Description 消费 GoCaptcha 一次性票据后向指定邮箱发送注册验证码；参数错误或普通业务错误通过统一响应 code 表达，发送频率超限时返回 HTTP 429。
 // @Tags 认证
 // @Accept json
 // @Produce json
@@ -37,8 +37,8 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 		return
 	}
 
-	// 调用 service 发送验证码，IP 透传供 service 层后续扩展使用
-	if err := h.svc.SendCode(req.Email, c.ClientIP()); err != nil {
+	// 调用 service 发送验证码，IP 透传用于校验图形验证码票据归属
+	if err := h.svc.SendCode(req.Email, c.ClientIP(), req.CaptchaToken); err != nil {
 		// 频率超限（冷却/10分钟/日限）映射到 429，其余业务错误映射到 400
 		if isTooManyRequests(err) {
 			response.TooManyRequests(c, err.Error(), 0)

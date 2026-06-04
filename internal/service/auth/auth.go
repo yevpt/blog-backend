@@ -42,7 +42,7 @@ var dummyHashForTimingProtection, _ = bcrypt.GenerateFromPassword(
 // AuthService 认证业务接口，涵盖验证码发送、注册、登录、token 刷新全链路
 type AuthService interface {
 	// SendCode 向邮箱发送验证码，内置三层频率控制（冷却 / 10分钟 / 日限）
-	SendCode(email string, ip string) error
+	SendCode(email string, ip string, captchaToken string) error
 	// Register 校验验证码并创建用户，验证码一次性消费，邮箱全局唯一
 	Register(req *dto.RegisterReq) (*dto.UserResp, error)
 	// Login 三合一登录（username / email / phone），用户不存在时仍执行 bcrypt 防止时序攻击
@@ -52,10 +52,16 @@ type AuthService interface {
 }
 
 type authService struct {
-	repo   repository.UserRepository
-	jwt    *jwtpkg.Manager
-	rdb    *redis.Client
-	mailer email.MailSender
+	repo            repository.UserRepository
+	jwt             *jwtpkg.Manager
+	rdb             *redis.Client
+	mailer          email.MailSender
+	captchaConsumer CaptchaTokenConsumer
+}
+
+// CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
+type CaptchaTokenConsumer interface {
+	ConsumeRegistrationToken(token string, ip string) error
 }
 
 func NewAuthService(
@@ -63,17 +69,29 @@ func NewAuthService(
 	jwt *jwtpkg.Manager,
 	rdb *redis.Client,
 	mailer email.MailSender,
+	captchaConsumer CaptchaTokenConsumer,
 ) AuthService {
-	return &authService{repo: repo, jwt: jwt, rdb: rdb, mailer: mailer}
+	return &authService{
+		repo:            repo,
+		jwt:             jwt,
+		rdb:             rdb,
+		mailer:          mailer,
+		captchaConsumer: captchaConsumer,
+	}
 }
 
-func (s *authService) SendCode(to string, ip string) error {
+func (s *authService) SendCode(to string, ip string, captchaToken string) error {
 	ctx := context.Background()
 
 	// 冷却检查优先，避免后续 Incr 在冷却期内重复计数
 	cdKey := fmt.Sprintf("email:cd:%s", to)
 	if n, _ := s.rdb.Exists(ctx, cdKey).Result(); n > 0 {
 		return ErrTooManyRequests
+	}
+
+	// 发送邮件验证码前必须消费一次性图形验证码票据，防止绕过前端直接刷邮件接口
+	if err := s.captchaConsumer.ConsumeRegistrationToken(captchaToken, ip); err != nil {
+		return err
 	}
 
 	// 10分钟内发送次数检查（上限2次），首次 Incr 后立即设过期时间，避免 key 永久存在

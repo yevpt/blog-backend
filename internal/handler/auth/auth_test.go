@@ -28,7 +28,9 @@ type stubAuthService struct {
 	refreshErr   error
 }
 
-func (s *stubAuthService) SendCode(email, ip string) error { return s.sendCodeErr }
+func (s *stubAuthService) SendCode(email, ip string, captchaToken string) error {
+	return s.sendCodeErr
+}
 func (s *stubAuthService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 	return s.registerResp, s.registerErr
 }
@@ -52,7 +54,10 @@ func newTestRouter(svc authservice.AuthService) *gin.Engine {
 
 func TestAuthHandler_SendCode_Success(t *testing.T) {
 	r := newTestRouter(&stubAuthService{})
-	body, _ := json.Marshal(map[string]string{"email": "user@example.com"})
+	body, _ := json.Marshal(map[string]string{
+		"email":         "user@example.com",
+		"captcha_token": "captcha-token",
+	})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/auth/send-code", bytes.NewReader(body))
@@ -67,7 +72,25 @@ func TestAuthHandler_SendCode_Success(t *testing.T) {
 
 func TestAuthHandler_SendCode_InvalidEmail(t *testing.T) {
 	r := newTestRouter(&stubAuthService{})
-	body, _ := json.Marshal(map[string]string{"email": "notanemail"})
+	body, _ := json.Marshal(map[string]string{
+		"email":         "notanemail",
+		"captcha_token": "captcha-token",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+}
+
+func TestAuthHandler_SendCode_MissingCaptchaToken(t *testing.T) {
+	r := newTestRouter(&stubAuthService{})
+	body, _ := json.Marshal(map[string]string{"email": "user@example.com"})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/auth/send-code", bytes.NewReader(body))
@@ -82,7 +105,10 @@ func TestAuthHandler_SendCode_InvalidEmail(t *testing.T) {
 
 func TestAuthHandler_SendCode_TooManyRequests(t *testing.T) {
 	r := newTestRouter(&stubAuthService{sendCodeErr: authservice.ErrTooManyRequests})
-	body, _ := json.Marshal(map[string]string{"email": "user@example.com"})
+	body, _ := json.Marshal(map[string]string{
+		"email":         "user@example.com",
+		"captcha_token": "captcha-token",
+	})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/auth/send-code", bytes.NewReader(body))
