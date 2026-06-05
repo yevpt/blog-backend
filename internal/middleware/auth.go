@@ -18,7 +18,7 @@ const userDetailKey userDetailContextKey = "userDetail"
 // GetUserDetail 从 gin.Context 读取已认证用户资料，须在 Auth 中间件之后调用。
 // 返回 nil 时表示未经过 Auth 中间件或用户加载失败。
 func GetUserDetail(c *gin.Context) *dto.UserDetailResp {
-	val, exists := c.Get(string(userDetailKey))
+	val, exists := c.Get(userDetailKey)
 	if !exists {
 		return nil
 	}
@@ -60,12 +60,12 @@ func Auth(jwtManager *jwt.Manager, userCache service.UserCacheService) gin.Handl
 
 		if userCache != nil {
 			detail, cacheErr := userCache.Get(context.Background(), claims.UserId)
-			if cacheErr != nil || detail.Status != 1 {
+			if cacheErr != nil || detail == nil || detail.Status != 1 {
 				response.Unauthorized(c)
 				c.Abort()
 				return
 			}
-			c.Set(string(userDetailKey), detail)
+			c.Set(userDetailKey, detail)
 		}
 
 		jwt.SetClaims(c, claims)
