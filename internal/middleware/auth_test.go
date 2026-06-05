@@ -18,7 +18,7 @@ func newJWTManager() *jwt.Manager {
 func TestAuth_MissingToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/", middleware.Auth(newJWTManager()), func(c *gin.Context) {
+	r.GET("/", middleware.Auth(newJWTManager(), nil), func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
@@ -30,10 +30,10 @@ func TestAuth_MissingToken(t *testing.T) {
 func TestAuth_ValidAccessToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	m := newJWTManager()
-	token, _ := m.GenerateAccess(1, "alice", []string{"ROLE_NORMAL"})
+	token, _ := m.GenerateAccess(1)
 
 	r := gin.New()
-	r.GET("/", middleware.Auth(m), func(c *gin.Context) {
+	r.GET("/", middleware.Auth(m, nil), func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
@@ -47,11 +47,10 @@ func TestAuth_ValidAccessToken(t *testing.T) {
 func TestAuth_RefreshTokenRejected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	m := newJWTManager()
-	// refresh token 不能当 access token 用
-	token, _ := m.GenerateRefresh(1, "alice", []string{"ROLE_NORMAL"})
+	token, _ := m.GenerateRefresh(1)
 
 	r := gin.New()
-	r.GET("/", middleware.Auth(m), func(c *gin.Context) {
+	r.GET("/", middleware.Auth(m, nil), func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
@@ -72,14 +71,13 @@ func TestOptionalAuth_AllowsAnonymous(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
-
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestOptionalAuth_AttachesClaimsWhenTokenPresent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	m := newJWTManager()
-	token, _ := m.GenerateAccess(9, "alice", []string{"ROLE_NORMAL"})
+	token, _ := m.GenerateAccess(9)
 
 	r := gin.New()
 	r.GET("/", middleware.OptionalAuth(m), func(c *gin.Context) {
@@ -93,7 +91,6 @@ func TestOptionalAuth_AttachesClaimsWhenTokenPresent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	r.ServeHTTP(w, req)
-
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
@@ -108,14 +105,13 @@ func TestOptionalAuth_RejectsBadTokenWhenPresent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer bad.token")
 	r.ServeHTTP(w, req)
-
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
 func TestOptionalAuth_RejectsRefreshTokenWhenPresent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	m := newJWTManager()
-	token, _ := m.GenerateRefresh(1, "alice", []string{"ROLE_NORMAL"})
+	token, _ := m.GenerateRefresh(1)
 
 	r := gin.New()
 	r.GET("/", middleware.OptionalAuth(m), func(c *gin.Context) {
@@ -126,6 +122,5 @@ func TestOptionalAuth_RejectsRefreshTokenWhenPresent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	r.ServeHTTP(w, req)
-
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
