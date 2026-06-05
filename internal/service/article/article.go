@@ -71,7 +71,7 @@ func (s *articleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleD
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return articleDetailToDTO(aggregate, articleContentPublic), nil
+	return articleDetailToDTO(aggregate, articleContentPublic, s.objectURLResolver)
 }
 
 func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
@@ -82,7 +82,7 @@ func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDe
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return articleDetailToDTO(aggregate, articleContentAdmin), nil
+	return articleDetailToDTO(aggregate, articleContentAdmin, s.objectURLResolver)
 }
 
 func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {
@@ -123,7 +123,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return articleDetailToDTO(aggregate, articleContentAdmin), nil
+	return articleDetailToDTO(aggregate, articleContentAdmin, s.objectURLResolver)
 }
 
 func (s *articleService) Delete(id uint) (*dto.ArticleDetailResp, error) {

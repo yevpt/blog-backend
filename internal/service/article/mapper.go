@@ -42,24 +42,49 @@ func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver s
 	}, nil
 }
 
-func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver storage.ObjectURLResolver) error {
+func resolveURL(value *string, objectURLResolver storage.ObjectURLResolver) (*string, error) {
 	// 未注入对象存储解析器时保留原值，方便纯业务测试和局部调用。
-	if objectURLResolver == nil || item.CoverImgUrl == nil {
-		return nil
+	if objectURLResolver == nil || value == nil {
+		return value, nil
 	}
 
 	// 空值或已经是完整 URL 时不再重复签名。
-	objectName := strings.TrimSpace(*item.CoverImgUrl)
+	objectName := strings.TrimSpace(*value)
 	if objectName == "" || isAbsoluteURL(objectName) {
-		return nil
+		return value, nil
 	}
 
 	// 通过对象存储客户端生成 Garage 预签名或 CDN 私有签名访问 URL。
 	objectURL, err := objectURLResolver.ObjectURL(context.Background(), objectName)
 	if err != nil {
+		return nil, err
+	}
+	return &objectURL, nil
+}
+
+func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver storage.ObjectURLResolver) error {
+	url, err := resolveURL(item.CoverImgUrl, objectURLResolver)
+	if err != nil {
 		return err
 	}
-	item.CoverImgUrl = &objectURL
+	item.CoverImgUrl = url
+	return nil
+}
+
+func resolveMusicURLs(items []dto.ArticleMusicResp, objectURLResolver storage.ObjectURLResolver) error {
+	for i := range items {
+		url, err := resolveURL(items[i].URL, objectURLResolver)
+		if err != nil {
+			return err
+		}
+		items[i].URL = url
+
+		coverURL, err := resolveURL(items[i].CoverImgUrl, objectURLResolver)
+		if err != nil {
+			return err
+		}
+		items[i].CoverImgUrl = coverURL
+	}
 	return nil
 }
 
@@ -68,8 +93,11 @@ func isAbsoluteURL(value string) bool {
 	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
 }
 
-func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleContentPolicy) *dto.ArticleDetailResp {
+func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleContentPolicy, objectURLResolver storage.ObjectURLResolver) (*dto.ArticleDetailResp, error) {
 	item := articleListItemToDTO(aggregate)
+	if err := resolveListItemCoverURL(&item, objectURLResolver); err != nil {
+		return nil, err
+	}
 	passworded := aggregate.Article.Status == 2
 	content := ""
 	if policy == articleContentAdmin || !passworded {
@@ -85,11 +113,14 @@ func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleC
 	resp.CategoryIDs, resp.Categories = categoryDTOs(aggregate.Categories)
 	resp.TagIDs, resp.Tags = tagDTOs(aggregate.Tags)
 	resp.MusicIDs, resp.Music = musicDTOs(aggregate.Music)
+	if err := resolveMusicURLs(resp.Music, objectURLResolver); err != nil {
+		return nil, err
+	}
 	if aggregate.Recommend != nil {
 		resp.IsRecommended = true
 		resp.RecommendSeq = &aggregate.Recommend.Seq
 	}
-	return resp
+	return resp, nil
 }
 
 func deletedArticleToDTO(article *model.Article) *dto.ArticleDetailResp {
