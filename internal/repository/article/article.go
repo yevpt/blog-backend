@@ -49,7 +49,7 @@ type ArticleSaveData struct {
 
 // ArticleRepository 文章数据访问接口，只返回 model 或聚合模型。
 type ArticleRepository interface {
-	ListPublic(filter ArticleListFilter) (*ArticlePageResult, error)
+	ListPublic(filter ArticleListFilter, viewerID *uint) (*ArticlePageResult, error)
 	ListPublicIDs() ([]uint, error)
 	FindPublicDetail(id uint, viewerID *uint) (*ArticleAggregate, error)
 	FindAdminDetail(id uint, viewerID *uint) (*ArticleAggregate, error)

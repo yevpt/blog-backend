@@ -212,7 +212,7 @@ func registerPublicRoutes(
 	r.GET("/tags/:id", handlers.tag.Get)
 	r.GET("/tags/:id/articles", handlers.tag.ListArticles)
 	r.GET("/articles/ids", handlers.article.ListIDs)
-	r.GET("/articles", handlers.article.ListPublic)
+	r.GET("/articles", middleware.OptionalAuth(jwtManager), handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
 	r.POST("/articles/:id/read", handlers.article.Read)
 	r.GET("/comments", handlers.comment.List)

@@ -102,6 +102,8 @@ type ArticleListItemResp struct {
 	LikeCount int64 `json:"like_count" example:"3"`
 	// CommentCount 评论数量。
 	CommentCount int64 `json:"comment_count" example:"2"`
+	// IsLiked 当前用户是否已点赞；未登录时恒为 false。
+	IsLiked bool `json:"is_liked" example:"false"`
 	// IsRecommended 是否为推荐文章。
 	IsRecommended bool `json:"is_recommended" example:"true"`
 	// Category 文章所属分类（每篇文章归属一个分类）。

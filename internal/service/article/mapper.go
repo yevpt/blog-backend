@@ -137,6 +137,7 @@ func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleLi
 		ReadCount:     article.ReadCount,
 		LikeCount:     aggregate.LikeCount,
 		CommentCount:  aggregate.CommentCount,
+		IsLiked:       aggregate.IsLiked,
 		IsRecommended: aggregate.Recommend != nil,
 		Category:      category,
 		CreatedAt:     article.CreatedAt,

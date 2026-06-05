@@ -46,7 +46,7 @@ func (h *ArticleHandler) ListIDs(c *gin.Context) {
 // @Param recommend query bool false "是否只查询推荐文章"
 // @Param category_id query int false "分类 ID"
 // @Param tag_id query int false "标签 ID"
-// @Success 200 {object} response.Response{data=dto.ArticlePageResp} "统一响应；code=0 表示查询成功，code=400 表示参数错误"
+// @Success 200 {object} response.Response{data=dto.ArticlePageResp} "统一响应；code=0 表示查询成功，已登录时列表项包含 is_liked，code=400 表示参数错误"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /articles [get]
 func (h *ArticleHandler) ListPublic(c *gin.Context) {
@@ -55,7 +55,7 @@ func (h *ArticleHandler) ListPublic(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.ListPublic(req)
+	resp, err := h.svc.ListPublic(req, optionalUserID(c))
 	writeArticleResponse(c, resp, err)
 }
 
@@ -134,7 +134,7 @@ func (h *ArticleHandler) IsLiked(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "文章 ID"
-// @Success 200 {object} response.Response{data=dto.ArticleDetailResp} "统一响应；code=0 表示切换成功，code=400 表示参数错误"
+// @Success 200 {object} response.Response{data=dto.ArticleLikeResp} "统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 404 {object} response.Response "文章不存在"
 // @Failure 500 {object} response.Response "服务器内部错误"

@@ -25,10 +25,10 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
-		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 50}).
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 50}, (*uint)(nil)).
 		Return(&articlerepo.ArticlePageResult{Total: 0, Page: 1, PageSize: 50}, nil)
 
-	resp, err := svc.ListPublic(dto.ArticleListReq{Page: -1, PageSize: 99})
+	resp, err := svc.ListPublic(dto.ArticleListReq{Page: -1, PageSize: 99}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, resp.Page)
 	assert.Equal(t, 50, resp.PageSize)
@@ -47,7 +47,7 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 
 	cover := "post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg"
 	repo.EXPECT().
-		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}).
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, (*uint)(nil)).
 		Return(&articlerepo.ArticlePageResult{
 			Total:    1,
 			Page:     1,
@@ -63,7 +63,7 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 			}},
 		}, nil)
 
-	resp, err := svc.ListPublic(dto.ArticleListReq{})
+	resp, err := svc.ListPublic(dto.ArticleListReq{}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.List, 1)
 	require.NotNil(t, resp.List[0].CoverImgUrl)
@@ -79,7 +79,7 @@ func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 
 	categoryURL := "tech"
 	repo.EXPECT().
-		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}).
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, (*uint)(nil)).
 		Return(&articlerepo.ArticlePageResult{
 			Total:    1,
 			Page:     1,
@@ -94,16 +94,18 @@ func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 				Categories: []model.Category{
 					{Base: model.Base{ID: 3}, Name: "Tech", URL: &categoryURL},
 				},
+				IsLiked: true,
 			}},
 		}, nil)
 
-	resp, err := svc.ListPublic(dto.ArticleListReq{})
+	resp, err := svc.ListPublic(dto.ArticleListReq{}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.List, 1)
 	require.NotNil(t, resp.List[0].Category)
 	assert.Equal(t, uint(3), resp.List[0].Category.ID)
 	assert.Equal(t, "Tech", resp.List[0].Category.Name)
 	assert.Equal(t, &categoryURL, resp.List[0].Category.URL)
+	assert.True(t, resp.List[0].IsLiked)
 }
 
 func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
@@ -113,7 +115,7 @@ func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
 	svc := articleservice.NewArticleService(repo, nil)
 
 	repo.EXPECT().
-		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}).
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, (*uint)(nil)).
 		Return(&articlerepo.ArticlePageResult{
 			Total:    1,
 			Page:     1,
@@ -129,10 +131,42 @@ func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
 			}},
 		}, nil)
 
-	resp, err := svc.ListPublic(dto.ArticleListReq{})
+	resp, err := svc.ListPublic(dto.ArticleListReq{}, nil)
 	require.NoError(t, err)
 	require.Len(t, resp.List, 1)
 	assert.Nil(t, resp.List[0].Category)
+}
+
+func TestArticleService_ListPublic_PassesViewerIDForLikedState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil)
+
+	viewerID := uint(9)
+	repo.EXPECT().
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, &viewerID).
+		Return(&articlerepo.ArticlePageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 10,
+			Articles: []articlerepo.ArticleAggregate{{
+				Article: model.Article{
+					Base:   model.Base{ID: 1},
+					Title:  "Liked",
+					UserID: 1,
+					Status: 1,
+				},
+				LikeCount: 3,
+				IsLiked:   true,
+			}},
+		}, nil)
+
+	resp, err := svc.ListPublic(dto.ArticleListReq{}, &viewerID)
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.True(t, resp.List[0].IsLiked)
+	assert.Equal(t, int64(3), resp.List[0].LikeCount)
 }
 
 func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T) {
@@ -312,6 +346,31 @@ func TestArticleService_IsLiked_NotFound(t *testing.T) {
 	_, err := svc.IsLiked(8, 1)
 	require.ErrorIs(t, err, articleservice.ErrArticleNotFound)
 	assert.True(t, errors.Is(err, articleservice.ErrArticleNotFound))
+}
+
+func TestArticleService_ToggleLike_ReturnsLatestLikeState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil)
+
+	repo.EXPECT().
+		ToggleLike(uint(8), uint(3)).
+		Return(&articlerepo.ArticleAggregate{
+			Article: model.Article{
+				Base:   model.Base{ID: 8},
+				Title:  "A",
+				UserID: 1,
+				Status: 1,
+			},
+			LikeCount: 11,
+			IsLiked:   true,
+		}, true, nil)
+
+	resp, err := svc.ToggleLike(8, 3)
+	require.NoError(t, err)
+	assert.True(t, resp.IsLiked)
+	assert.Equal(t, int64(11), resp.LikeCount)
 }
 
 type stubObjectURLResolver struct {

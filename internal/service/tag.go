@@ -78,7 +78,7 @@ func (s *tagService) ListArticles(id uint, req dto.ArticleListReq) (*dto.Article
 	}
 	// 文章分页复用文章模块能力，保持过滤、排序和响应转换一致。
 	req.TagID = &id
-	return s.articleSvc.ListPublic(req)
+	return s.articleSvc.ListPublic(req, nil)
 }
 
 func (s *tagService) Create(req dto.TagCreateReq) (*dto.TagItemResp, error) {

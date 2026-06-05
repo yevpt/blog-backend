@@ -26,7 +26,7 @@ func (s *stubArticleServiceForTag) ListIDs() (*dto.ArticleIDsResp, error) {
 	return nil, nil
 }
 
-func (s *stubArticleServiceForTag) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageResp, error) {
+func (s *stubArticleServiceForTag) ListPublic(req dto.ArticleListReq, viewerID *uint) (*dto.ArticlePageResp, error) {
 	s.req = req
 	return s.res, s.err
 }
@@ -55,7 +55,7 @@ func (s *stubArticleServiceForTag) IsLiked(id uint, userID uint) (*dto.ArticleLi
 	return nil, nil
 }
 
-func (s *stubArticleServiceForTag) ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error) {
+func (s *stubArticleServiceForTag) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error) {
 	return nil, nil
 }
 

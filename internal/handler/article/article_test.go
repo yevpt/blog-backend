@@ -21,6 +21,7 @@ import (
 
 type stubArticleService struct {
 	listReq    dto.ArticleListReq
+	listViewer *uint
 	listResp   *dto.ArticlePageResp
 	listErr    error
 	detailResp *dto.ArticleDetailResp
@@ -29,13 +30,16 @@ type stubArticleService struct {
 	saveUserID uint
 	saveResp   *dto.ArticleDetailResp
 	saveErr    error
+	likeResp   *dto.ArticleLikeResp
+	likeErr    error
 }
 
 func (s *stubArticleService) ListIDs() (*dto.ArticleIDsResp, error) {
 	return &dto.ArticleIDsResp{}, nil
 }
-func (s *stubArticleService) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageResp, error) {
+func (s *stubArticleService) ListPublic(req dto.ArticleListReq, viewerID *uint) (*dto.ArticlePageResp, error) {
 	s.listReq = req
+	s.listViewer = viewerID
 	return s.listResp, s.listErr
 }
 func (s *stubArticleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
@@ -58,8 +62,8 @@ func (s *stubArticleService) Read(id uint) (*dto.ArticleReadResp, error) {
 func (s *stubArticleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error) {
 	return &dto.ArticleLikeResp{IsLiked: true, LikeCount: 3}, nil
 }
-func (s *stubArticleService) ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error) {
-	return s.detailResp, s.detailErr
+func (s *stubArticleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error) {
+	return s.likeResp, s.likeErr
 }
 
 func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
@@ -67,7 +71,15 @@ func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 	r := gin.New()
 	h := articlehandler.NewArticleHandler(svc)
 	r.GET("/articles", h.ListPublic)
+	r.GET("/authed/articles", func(c *gin.Context) {
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
+		h.ListPublic(c)
+	})
 	r.GET("/articles/:id", h.GetPublicDetail)
+	r.POST("/articles/:id/like", func(c *gin.Context) {
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
+		h.ToggleLike(c)
+	})
 	r.POST("/admin/articles", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		h.Save(c)
@@ -93,6 +105,21 @@ func TestArticleHandler_ListPublic_Success(t *testing.T) {
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestArticleHandler_ListPublic_PassesOptionalViewerID(t *testing.T) {
+	stub := &stubArticleService{
+		listResp: &dto.ArticlePageResp{Page: 1, PageSize: 10, List: []dto.ArticleListItemResp{}},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/authed/articles", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, stub.listViewer)
+	assert.Equal(t, uint(9), *stub.listViewer)
 }
 
 func TestArticleHandler_GetPublicDetail_NotFound(t *testing.T) {
@@ -178,4 +205,20 @@ func TestArticleHandler_GetPublicDetail_InvalidIDReturnsReadableMessage(t *testi
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeBadRequest, resp.Code)
 	assert.Equal(t, "文章 ID 必须是大于 0 的整数", resp.Message)
+}
+
+func TestArticleHandler_ToggleLike_ReturnsLatestLikeState(t *testing.T) {
+	stub := &stubArticleService{
+		likeResp: &dto.ArticleLikeResp{IsLiked: true, LikeCount: 12},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/articles/12/like", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
 }

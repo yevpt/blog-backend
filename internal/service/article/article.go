@@ -20,14 +20,14 @@ var (
 // ArticleService 文章业务接口，负责文章查询、保存、点赞和阅读计数。
 type ArticleService interface {
 	ListIDs() (*dto.ArticleIDsResp, error)
-	ListPublic(req dto.ArticleListReq) (*dto.ArticlePageResp, error)
+	ListPublic(req dto.ArticleListReq, viewerID *uint) (*dto.ArticlePageResp, error)
 	GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
 	GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
 	Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error)
 	Delete(id uint) (*dto.ArticleDetailResp, error)
 	Read(id uint) (*dto.ArticleReadResp, error)
 	IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error)
-	ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error)
+	ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error)
 }
 
 type articleService struct {
@@ -48,7 +48,7 @@ func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
 	return &dto.ArticleIDsResp{IDs: ids}, nil
 }
 
-func (s *articleService) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageResp, error) {
+func (s *articleService) ListPublic(req dto.ArticleListReq, viewerID *uint) (*dto.ArticlePageResp, error) {
 	filter := articlerepo.ArticleListFilter{
 		Page:       normalizeArticlePage(req.Page),
 		PageSize:   normalizeArticlePageSize(req.PageSize),
@@ -56,7 +56,7 @@ func (s *articleService) ListPublic(req dto.ArticleListReq) (*dto.ArticlePageRes
 		CategoryID: req.CategoryID,
 		TagID:      req.TagID,
 	}
-	result, err := s.repo.ListPublic(filter)
+	result, err := s.repo.ListPublic(filter, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -159,13 +159,13 @@ func (s *articleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, er
 	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: count}, nil
 }
 
-func (s *articleService) ToggleLike(id uint, userID uint) (*dto.ArticleDetailResp, error) {
-	aggregate, _, err := s.repo.ToggleLike(id, userID)
+func (s *articleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error) {
+	aggregate, liked, err := s.repo.ToggleLike(id, userID)
 	if err != nil {
 		return nil, err
 	}
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return articleDetailToDTO(aggregate, articleContentPublic), nil
+	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: aggregate.LikeCount}, nil
 }

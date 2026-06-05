@@ -36,17 +36,17 @@ func (m *MockArticleRepository) EXPECT() *MockArticleRepositoryMockRecorder {
 	return m.recorder
 }
 
-func (m *MockArticleRepository) ListPublic(filter article.ArticleListFilter) (*article.ArticlePageResult, error) {
+func (m *MockArticleRepository) ListPublic(filter article.ArticleListFilter, viewerID *uint) (*article.ArticlePageResult, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListPublic", filter)
+	ret := m.ctrl.Call(m, "ListPublic", filter, viewerID)
 	ret0, _ := ret[0].(*article.ArticlePageResult)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-func (mr *MockArticleRepositoryMockRecorder) ListPublic(filter any) *gomock.Call {
+func (mr *MockArticleRepositoryMockRecorder) ListPublic(filter, viewerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublic", reflect.TypeOf((*MockArticleRepository)(nil).ListPublic), filter)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublic", reflect.TypeOf((*MockArticleRepository)(nil).ListPublic), filter, viewerID)
 }
 
 func (m *MockArticleRepository) ListPublicIDs() ([]uint, error) {

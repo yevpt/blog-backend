@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *articleRepo) ListPublic(filter ArticleListFilter) (*ArticlePageResult, error) {
+func (r *articleRepo) ListPublic(filter ArticleListFilter, viewerID *uint) (*ArticlePageResult, error) {
 	page, pageSize := normalizeArticlePage(filter.Page, filter.PageSize)
 
 	var total int64
@@ -29,7 +29,7 @@ func (r *articleRepo) ListPublic(filter ArticleListFilter) (*ArticlePageResult, 
 		return nil, err
 	}
 
-	aggregates, err := r.attachArticleCollections(articles, nil)
+	aggregates, err := r.attachArticleCollections(articles, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -180,6 +180,13 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 	if err != nil {
 		return nil, err
 	}
+	likedMap := map[uint]bool{}
+	if viewerID != nil {
+		likedMap, err = r.articleLikedMap(ids, *viewerID)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	for _, article := range articles {
 		aggregate := ArticleAggregate{
@@ -191,13 +198,7 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 			LikeCount:    likeCounts[article.ID],
 			CommentCount: commentCounts[article.ID],
 		}
-		if viewerID != nil {
-			liked, _, err := r.IsLiked(article.ID, *viewerID)
-			if err != nil {
-				return nil, err
-			}
-			aggregate.IsLiked = liked
-		}
+		aggregate.IsLiked = likedMap[article.ID]
 		aggregates = append(aggregates, aggregate)
 	}
 	return aggregates, nil
@@ -225,6 +226,22 @@ func (r *articleRepo) articleLikeCounts(ids []uint) (map[uint]int64, error) {
 	result := make(map[uint]int64, len(rows))
 	for _, row := range rows {
 		result[row.TargetID] = row.Count
+	}
+	return result, err
+}
+
+func (r *articleRepo) articleLikedMap(ids []uint, userID uint) (map[uint]bool, error) {
+	type row struct {
+		TargetID uint
+	}
+	var rows []row
+	err := r.db.Model(&model.UserLike{}).
+		Select("target_id").
+		Where("type = ? AND user_id = ? AND target_id IN ?", ArticleLikeType, userID, ids).
+		Scan(&rows).Error
+	result := make(map[uint]bool, len(rows))
+	for _, row := range rows {
+		result[row.TargetID] = true
 	}
 	return result, err
 }
