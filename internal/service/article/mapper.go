@@ -3,6 +3,7 @@ package article
 import (
 	"context"
 	"math"
+	"regexp"
 	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
@@ -10,6 +11,8 @@ import (
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
+
+var markdownInlineLinkPattern = regexp.MustCompile(`(!?\[[^\]]*\])\(([^)]+)\)`)
 
 type articleContentPolicy uint8
 
@@ -88,6 +91,58 @@ func resolveMusicURLs(items []dto.ArticleMusicResp, objectURLResolver storage.Ob
 	return nil
 }
 
+func resolveArticleContent(content string, objectURLResolver storage.ObjectURLResolver) (string, error) {
+	// 无内容或无解析器时直接返回原文，避免对非对象存储场景做无意义处理。
+	if content == "" || objectURLResolver == nil {
+		return content, nil
+	}
+
+	matches := markdownInlineLinkPattern.FindAllStringSubmatchIndex(content, -1)
+	// 没有 Markdown 行内链接时保留原文，避免额外分配。
+	if len(matches) == 0 {
+		return content, nil
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(content))
+	last := 0
+
+	for _, match := range matches {
+		labelEnd := match[3]
+		targetStart, targetEnd := match[4], match[5]
+
+		// 先写入上一个匹配之后到当前匹配之前的原文，保持正文结构不变。
+		builder.WriteString(content[last:match[0]])
+
+		target := content[targetStart:targetEnd]
+		resolvedTarget, err := resolveMarkdownLinkTarget(target, objectURLResolver)
+		if err != nil {
+			return "", err
+		}
+
+		// 只替换链接目标地址，链接文本和是否图片链接都保留原状。
+		builder.WriteString(content[match[0]:labelEnd])
+		builder.WriteByte('(')
+		builder.WriteString(resolvedTarget)
+		builder.WriteByte(')')
+		last = match[1]
+	}
+
+	builder.WriteString(content[last:])
+	return builder.String(), nil
+}
+
+func resolveMarkdownLinkTarget(target string, objectURLResolver storage.ObjectURLResolver) (string, error) {
+	resolved, err := resolveURL(&target, objectURLResolver)
+	if err != nil {
+		return "", err
+	}
+	if resolved == nil {
+		return "", nil
+	}
+	return *resolved, nil
+}
+
 func isAbsoluteURL(value string) bool {
 	// 已保存为外部 URL 的历史数据直接返回，避免把完整 URL 当作对象 key 处理。
 	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
@@ -101,7 +156,11 @@ func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleC
 	passworded := aggregate.Article.Status == 2
 	content := ""
 	if policy == articleContentAdmin || !passworded {
-		content = aggregate.Article.Content
+		resolvedContent, err := resolveArticleContent(aggregate.Article.Content, objectURLResolver)
+		if err != nil {
+			return nil, err
+		}
+		content = resolvedContent
 	}
 
 	resp := &dto.ArticleDetailResp{

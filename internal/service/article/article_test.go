@@ -319,6 +319,37 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	assert.Equal(t, uint16(240), resp.Music[0].Duration)
 }
 
+func TestArticleService_GetPublicDetail_ResolvesMarkdownObjectLinksInContent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	resolver := &stubObjectURLResolver{
+		urls: map[string]string{
+			"posts/attachments/manual.pdf": "https://cdn.example.com/blog/posts/attachments/manual.pdf?sign=1",
+		},
+	}
+	svc := articleservice.NewArticleService(repo, resolver)
+
+	viewerID := uint(10)
+	content := "下载[说明书](posts/attachments/manual.pdf)，外链[官网](https://example.com/docs)保持不变。"
+	repo.EXPECT().
+		FindPublicDetail(uint(3), &viewerID).
+		Return(&articlerepo.ArticleAggregate{
+			Article: model.Article{
+				Base:    model.Base{ID: 3},
+				Title:   "A",
+				Content: content,
+				UserID:  1,
+				Status:  1,
+			},
+		}, nil)
+
+	resp, err := svc.GetPublicDetail(3, &viewerID)
+	require.NoError(t, err)
+	assert.Equal(t, "下载[说明书](https://cdn.example.com/blog/posts/attachments/manual.pdf?sign=1)，外链[官网](https://example.com/docs)保持不变。", resp.Content)
+	assert.Equal(t, []string{"posts/attachments/manual.pdf"}, resolver.objectNames)
+}
+
 func TestArticleService_GetPublicDetail_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
