@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -46,16 +47,21 @@ func (s *userCacheService) Get(ctx context.Context, userId int64) (*dto.UserDeta
 	key := userCacheKey(userId)
 	// GETEX 原子地读取并将 TTL 重置为 7 天（Redis 6.2+；go-redis v9 支持）
 	val, err := s.rdb.GetEx(ctx, key, userCacheTTL).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		// Redis 故障（网络断开、超时等），不穿透 DB，直接返回错误
+		return nil, fmt.Errorf("user cache get: %w", err)
+	}
 	if err == nil {
 		var profile dto.UserDetailResp
 		if jsonErr := json.Unmarshal([]byte(val), &profile); jsonErr == nil {
 			return &profile, nil
 		}
-		// JSON 损坏，删掉强制重建
+		// JSON 损坏，删掉强制重建（Del 失败时忽略，下次读取会再次尝试重建）
 		s.rdb.Del(ctx, key)
 	}
 
-	// Cache miss：查询 DB，组装 DTO，回填缓存
+	// cache miss：高并发下多个 goroutine 可能同时到达此处（Thundering Herd）。
+	// 博客场景写操作稀少，接受此权衡；生产大流量场景可引入 singleflight 防护。
 	aggregate, dbErr := s.repo.FindDetailByID(uint(userId))
 	if dbErr != nil {
 		return nil, dbErr

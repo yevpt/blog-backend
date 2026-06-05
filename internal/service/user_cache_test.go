@@ -124,3 +124,18 @@ func TestUserCacheService_Get_CorruptJSON_Rebuilds(t *testing.T) {
 	var rebuilt dto.UserDetailResp
 	assert.NoError(t, json.Unmarshal([]byte(cached), &rebuilt))
 }
+
+func TestUserCacheService_Get_RedisError_ReturnsError(t *testing.T) {
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	// 关闭 miniredis 模拟 Redis 故障
+	mr.Close()
+
+	svc := service.NewUserCacheService(&stubUserRepo{}, nil, rdb)
+	_, err = svc.Get(context.Background(), 1)
+	assert.Error(t, err)
+	// 确认不是 ErrUserNotFound（DB 没被调用）
+	assert.NotErrorIs(t, err, service.ErrUserNotFound)
+}

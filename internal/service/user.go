@@ -21,5 +21,7 @@ func NewUserService(cache UserCacheService) UserService {
 }
 
 func (s *userService) GetDetail(userID uint) (*dto.UserDetailResp, error) {
+	// context.Background() 是有意为之：此方法仅供 handler 过渡期使用，
+	// Task 4 后 handler 将直接从 gin.Context 读取 UserDetail，此方法弃用。
 	return s.cache.Get(context.Background(), int64(userID))
 }
