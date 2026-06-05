@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 
 	model "github.com/vpt/blog-backend/internal/model"
+	repository "github.com/vpt/blog-backend/internal/repository"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -97,6 +98,21 @@ func (m *MockUserRepository) FindByID(id uint) (*model.User, error) {
 func (mr *MockUserRepositoryMockRecorder) FindByID(id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByID", reflect.TypeOf((*MockUserRepository)(nil).FindByID), id)
+}
+
+// FindDetailByID mocks base method.
+func (m *MockUserRepository) FindDetailByID(id uint) (*repository.UserDetailAggregate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindDetailByID", id)
+	ret0, _ := ret[0].(*repository.UserDetailAggregate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindDetailByID indicates an expected call of FindDetailByID.
+func (mr *MockUserRepositoryMockRecorder) FindDetailByID(id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindDetailByID", reflect.TypeOf((*MockUserRepository)(nil).FindDetailByID), id)
 }
 
 // FindByIdentifier mocks base method.

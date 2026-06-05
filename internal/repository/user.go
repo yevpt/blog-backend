@@ -8,12 +8,23 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 )
 
+// UserDetailAggregate 用户详情聚合，供 service 层转换为 DTO。
+type UserDetailAggregate struct {
+	User        model.User
+	Roles       []string
+	Meta        *model.UserMeta
+	Setting     *model.UserSetting
+	SocialLinks []model.UserSocialLink
+}
+
 // UserRepository 用户数据访问接口，所有方法返回 model 而非 dto，转换由上层负责
 type UserRepository interface {
 	// FindByIdentifier 支持 username / email / phone 三合一查询；未找到时返回 nil, nil
 	FindByIdentifier(identifier string) (*model.User, error)
 	// FindByID 按主键查询；未找到时返回 nil, nil
 	FindByID(id uint) (*model.User, error)
+	// FindDetailByID 查询用户详情聚合，包含角色、扩展资料、偏好设置和社交链接。
+	FindDetailByID(id uint) (*UserDetailAggregate, error)
 	ExistsByEmail(email string) (bool, error)
 	ExistsByNickname(nickname string) (bool, error)
 	// Create 在事务中同时插入用户记录和角色关联，保证数据一致性
@@ -52,6 +63,41 @@ func (r *userRepo) FindByID(id uint) (*model.User, error) {
 		return nil, nil
 	}
 	return &user, err
+}
+
+func (r *userRepo) FindDetailByID(id uint) (*UserDetailAggregate, error) {
+	// 先读取主用户记录，不存在时直接返回 nil。
+	user, err := r.FindByID(id)
+	if err != nil || user == nil {
+		return nil, err
+	}
+
+	// 再补齐角色、扩展信息、偏好设置和社交链接。
+	roles, err := r.FindRolesByUserID(id)
+	if err != nil {
+		return nil, err
+	}
+	meta, err := r.findUserMetaByUserID(id)
+	if err != nil {
+		return nil, err
+	}
+	setting, err := r.findUserSettingByUserID(id)
+	if err != nil {
+		return nil, err
+	}
+	socialLinks, err := r.findUserSocialLinksByUserID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 返回 repository 层聚合，DTO 转换交给 service。
+	return &UserDetailAggregate{
+		User:        *user,
+		Roles:       roles,
+		Meta:        meta,
+		Setting:     setting,
+		SocialLinks: socialLinks,
+	}, nil
 }
 
 func (r *userRepo) ExistsByEmail(email string) (bool, error) {
@@ -94,4 +140,31 @@ func (r *userRepo) UpdateLastLoginAt(userID uint) error {
 	// 用 NOW() 由数据库生成时间，避免应用服务器与 DB 时区不一致带来的时间偏差
 	return r.db.Model(&model.User{}).Where("id = ?", userID).
 		Update("last_login_at", gorm.Expr("NOW()")).Error
+}
+
+func (r *userRepo) findUserMetaByUserID(userID uint) (*model.UserMeta, error) {
+	var meta model.UserMeta
+	// 用户扩展资料是 1:1 关系，缺失时按 nil 处理。
+	err := r.db.Where("user_id = ?", userID).First(&meta).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &meta, err
+}
+
+func (r *userRepo) findUserSettingByUserID(userID uint) (*model.UserSetting, error) {
+	var setting model.UserSetting
+	// 用户偏好设置是 1:1 关系，缺失时返回 nil 让上层按未配置处理。
+	err := r.db.Where("user_id = ?", userID).First(&setting).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &setting, err
+}
+
+func (r *userRepo) findUserSocialLinksByUserID(userID uint) ([]model.UserSocialLink, error) {
+	var links []model.UserSocialLink
+	// 社交链接按平台名稳定排序，便于前端渲染与测试断言。
+	err := r.db.Where("user_id = ?", userID).Order("platform ASC").Find(&links).Error
+	return links, err
 }

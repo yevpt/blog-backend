@@ -3,6 +3,7 @@ package repository_test
 import (
 	"database/sql"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -91,6 +92,85 @@ func TestUserRepository_FindRolesByUserID(t *testing.T) {
 	roles, err := repo.FindRolesByUserID(1)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"ROLE_NORMAL"}, roles)
+}
+
+func TestUserRepository_FindDetailByID_Found(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewUserRepository(db)
+
+	email := "alice@example.com"
+	nickname := "Alice"
+	avatar := "avatars/alice.png"
+	lastLogin := time.Date(2026, 6, 5, 12, 0, 0, 0, time.UTC)
+	birthday := time.Date(1994, 4, 17, 0, 0, 0, 0, time.UTC)
+	description := "喜欢写点东西"
+	showName := true
+
+	userRows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at",
+		"username", "password", "nickname", "email", "phone",
+		"site", "avatar_url", "mark", "status", "last_login_at",
+	}).AddRow(7, nil, nil, nil, "alice", "hashed", nickname, email, nil, nil, avatar, "注册会员", 1, lastLogin)
+	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
+		WithArgs(uint(7), 1).
+		WillReturnRows(userRows)
+
+	roleRows := sqlmock.NewRows([]string{"name"}).AddRow("ROLE_NORMAL").AddRow("ROLE_VIP")
+	mock.ExpectQuery(`SELECT .+ FROM \x60user_role\x60`).
+		WithArgs(uint(7)).
+		WillReturnRows(roleRows)
+
+	metaRows := sqlmock.NewRows([]string{
+		"user_id", "name", "description", "gender", "birthday", "id_card",
+		"country", "province", "city", "address", "created_at", "updated_at",
+	}).AddRow(7, "Alice Wang", description, 1, birthday, nil, "中国", "上海", "上海", "徐汇区", birthday, birthday)
+	mock.ExpectQuery(`SELECT \* FROM \x60user_meta\x60`).
+		WithArgs(uint(7), 1).
+		WillReturnRows(metaRows)
+
+	settingRows := sqlmock.NewRows([]string{
+		"user_id", "mail_show", "mail_receive", "dark_mode", "receive_mail",
+		"show_name", "show_age", "show_phone", "show_qq", "show_wechat",
+		"show_zhihu", "show_sina", "show_bili", "show_position", "created_at", "updated_at",
+	}).AddRow(7, 1, 1, 2, true, showName, true, false, false, false, true, false, true, true, birthday, birthday)
+	mock.ExpectQuery(`SELECT \* FROM \x60user_setting\x60`).
+		WithArgs(uint(7), 1).
+		WillReturnRows(settingRows)
+
+	socialRows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "user_id", "platform", "url",
+	}).AddRow(1, birthday, birthday, nil, 7, "github", "https://github.com/alice").
+		AddRow(2, birthday, birthday, nil, 7, "zhihu", "https://www.zhihu.com/people/alice")
+	mock.ExpectQuery(`SELECT \* FROM \x60user_social_link\x60`).
+		WithArgs(uint(7)).
+		WillReturnRows(socialRows)
+
+	detail, err := repo.FindDetailByID(7)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	assert.Equal(t, uint(7), detail.User.ID)
+	assert.Equal(t, []string{"ROLE_NORMAL", "ROLE_VIP"}, detail.Roles)
+	require.NotNil(t, detail.Meta)
+	assert.Equal(t, description, *detail.Meta.Description)
+	require.NotNil(t, detail.Setting)
+	assert.True(t, detail.Setting.ShowName)
+	require.Len(t, detail.SocialLinks, 2)
+	assert.Equal(t, "github", detail.SocialLinks[0].Platform)
+}
+
+func TestUserRepository_FindDetailByID_NotFound(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewUserRepository(db)
+
+	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
+		WithArgs(uint(99), 1).
+		WillReturnRows(sqlmock.NewRows(nil))
+
+	detail, err := repo.FindDetailByID(99)
+	require.NoError(t, err)
+	assert.Nil(t, detail)
 }
 
 func TestUserRepository_Create_Success(t *testing.T) {

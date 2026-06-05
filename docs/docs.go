@@ -2892,6 +2892,59 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/users/me": {
+            "get": {
+                "description": "返回当前 access token 对应用户的完整资料、角色、扩展信息、偏好设置和社交链接。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "查询当前登录用户详情",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -4663,6 +4716,88 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UserDetailResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "mark": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/dto.UserMetaResp"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "setting": {
+                    "$ref": "#/definitions/dto.UserSettingResp"
+                },
+                "site": {
+                    "type": "string"
+                },
+                "social_links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UserSocialLinkResp"
+                    }
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UserMetaResp": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "birthday": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "province": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.UserResp": {
             "type": "object",
             "properties": {
@@ -4682,6 +4817,61 @@ const docTemplate = `{
                     }
                 },
                 "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UserSettingResp": {
+            "type": "object",
+            "properties": {
+                "dark_mode": {
+                    "type": "integer"
+                },
+                "mail_receive": {
+                    "type": "integer"
+                },
+                "mail_show": {
+                    "type": "integer"
+                },
+                "receive_mail": {
+                    "type": "boolean"
+                },
+                "show_age": {
+                    "type": "boolean"
+                },
+                "show_bili": {
+                    "type": "boolean"
+                },
+                "show_name": {
+                    "type": "boolean"
+                },
+                "show_phone": {
+                    "type": "boolean"
+                },
+                "show_position": {
+                    "type": "boolean"
+                },
+                "show_qq": {
+                    "type": "boolean"
+                },
+                "show_sina": {
+                    "type": "boolean"
+                },
+                "show_wechat": {
+                    "type": "boolean"
+                },
+                "show_zhihu": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.UserSocialLinkResp": {
+            "type": "object",
+            "properties": {
+                "platform": {
+                    "type": "string"
+                },
+                "url": {
                     "type": "string"
                 }
             }
