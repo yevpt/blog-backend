@@ -13,6 +13,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
+	"github.com/vpt/blog-backend/internal/middleware"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -73,15 +74,18 @@ func newGuestbookRouter(svc guestbookservice.GuestbookService) *gin.Engine {
 	h := guestbookhandler.NewGuestbookHandler(svc)
 	r.GET("/guestbook", h.List)
 	r.POST("/guestbook", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "alice"})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
 		h.Create(c)
 	})
 	r.POST("/guestbook/:id/like", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "alice"})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
 		h.ToggleLike(c)
 	})
 	r.DELETE("/guestbook/:id", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "alice", Roles: []string{roles.AdminRole}})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1, Roles: []string{roles.AdminRole}})
 		h.Delete(c)
 	})
 	return r

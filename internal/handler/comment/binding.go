@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
-	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
+	"github.com/vpt/blog-backend/internal/middleware"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -13,10 +13,10 @@ func bindCommentID(c *gin.Context, name string) (uint, bool) {
 }
 
 func requiredCommentClaims(c *gin.Context) (uint, []string, bool) {
-	claims := jwtpkg.GetClaims(c)
-	if claims == nil || claims.UserId <= 0 {
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
 		response.Unauthorized(c)
 		return 0, nil, false
 	}
-	return uint(claims.UserId), claims.Roles, true
+	return uint(detail.ID), detail.Roles, true
 }

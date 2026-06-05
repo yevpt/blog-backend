@@ -38,17 +38,18 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health    *handler.HealthHandler
-	test      *handler.TestHandler
-	auth      *authhandler.AuthHandler
-	captcha   *captchahandler.CaptchaHandler
-	article   *articlehandler.ArticleHandler
-	comment   *commenthandler.CommentHandler
-	guestbook *guestbookhandler.GuestbookHandler
-	moment    *momenthandler.MomentHandler
-	user      *handler.UserHandler
-	category  *handler.CategoryHandler
-	tag       *handler.TagHandler
+	health     *handler.HealthHandler
+	test       *handler.TestHandler
+	auth       *authhandler.AuthHandler
+	captcha    *captchahandler.CaptchaHandler
+	article    *articlehandler.ArticleHandler
+	comment    *commenthandler.CommentHandler
+	guestbook  *guestbookhandler.GuestbookHandler
+	moment     *momenthandler.MomentHandler
+	user       *handler.UserHandler
+	category   *handler.CategoryHandler
+	tag        *handler.TagHandler
+	userCache  service.UserCacheService
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -149,8 +150,8 @@ func newRouteHandlers(
 
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := repository.NewUserRepository(db)
-	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc)
 	userCacheSvc := service.NewUserCacheService(userRepo, objectURLResolver, redisClient)
+	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
 	userSvc := service.NewUserService(userCacheSvc)
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
@@ -184,6 +185,7 @@ func newRouteHandlers(
 		user:      handler.NewUserHandler(userSvc),
 		category:  handler.NewCategoryHandler(categorySvc),
 		tag:       handler.NewTagHandler(tagSvc),
+		userCache: userCacheSvc,
 	}
 }
 
@@ -222,7 +224,7 @@ func registerPublicRoutes(
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
 	// 登录路由要求任意已认证用户。
-	authed := r.Group("/", middleware.Auth(jwtManager))
+	authed := r.Group("/", middleware.Auth(jwtManager, handlers.userCache))
 	authed.GET("/test/authed", handlers.test.Authed)
 	authed.GET("/users/me", handlers.user.GetDetail)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
@@ -244,13 +246,13 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 
 func registerVIPRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
 	// VIP 路由要求 VIP 或更高权限。
-	vip := r.Group("/", middleware.Auth(jwtManager), middleware.RequireRole(roles.VipRole))
+	vip := r.Group("/", middleware.Auth(jwtManager, handlers.userCache), middleware.RequireRole(roles.VipRole))
 	vip.GET("/test/vip", handlers.test.Vip)
 }
 
 func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
 	// 管理员路由统一挂在 /admin 前缀下。
-	admin := r.Group("/admin", middleware.Auth(jwtManager), middleware.RequireRole(roles.AdminRole))
+	admin := r.Group("/admin", middleware.Auth(jwtManager, handlers.userCache), middleware.RequireRole(roles.AdminRole))
 	admin.GET("/test", handlers.test.Admin)
 	admin.POST("/articles", handlers.article.Save)
 	admin.DELETE("/articles/:id", handlers.article.Delete)

@@ -26,6 +26,11 @@ func GetUserDetail(c *gin.Context) *dto.UserDetailResp {
 	return detail
 }
 
+// SetUserDetail 将用户资料写入 gin.Context，主要供单元测试中绕过 Auth 中间件时使用。
+func SetUserDetail(c *gin.Context, detail *dto.UserDetailResp) {
+	c.Set(userDetailKey, detail)
+}
+
 // Auth 校验 Bearer access token，并从 Redis/DB 加载完整用户资料写入 Context。
 // userCache 为 nil 时跳过缓存加载（仅用于测试）。
 // 用户被禁用（Status != 1）时也返回 401。

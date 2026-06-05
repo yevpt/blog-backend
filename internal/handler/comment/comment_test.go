@@ -13,6 +13,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
+	"github.com/vpt/blog-backend/internal/middleware"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -61,11 +62,13 @@ func newCommentRouter(svc commentservice.CommentService) *gin.Engine {
 	h := commenthandler.NewCommentHandler(svc)
 	r.GET("/comments", h.List)
 	r.POST("/comments", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "vpt"})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "vpt", Status: 1})
 		h.Create(c)
 	})
 	r.POST("/comments/:id/replies", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "vpt"})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "vpt", Status: 1})
 		h.Reply(c)
 	})
 	return r

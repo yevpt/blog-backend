@@ -69,7 +69,7 @@ func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 	r.GET("/articles", h.ListPublic)
 	r.GET("/articles/:id", h.GetPublicDetail)
 	r.POST("/admin/articles", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "admin"})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		h.Save(c)
 	})
 	return r

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
+	"github.com/vpt/blog-backend/internal/middleware"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -94,15 +95,18 @@ func newMomentRouter(svc momentservice.MomentService) *gin.Engine {
 	h := momenthandler.NewMomentHandler(svc)
 	r.GET("/moments", h.List)
 	r.POST("/moments", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "alice", Roles: []string{roles.AdminRole}})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1, Roles: []string{roles.AdminRole}})
 		h.Save(c)
 	})
 	r.POST("/moments/:id/like", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "alice"})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
 		h.ToggleLike(c)
 	})
 	r.DELETE("/moments/:id", func(c *gin.Context) {
-		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7, Username: "alice", Roles: []string{roles.AdminRole}})
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1, Roles: []string{roles.AdminRole}})
 		h.Delete(c)
 	})
 	return r

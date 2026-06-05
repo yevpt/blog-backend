@@ -56,7 +56,7 @@ func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserReposito
 	captchaConsumer := &mockCaptchaTokenConsumer{}
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 
-	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer)
+	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil)
 	return svc, repo, rdb, mr, mailer, captchaConsumer
 }
 
@@ -208,7 +208,7 @@ func TestAuthService_Refresh_Success(t *testing.T) {
 	defer mr.Close()
 
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
-	refreshToken, _ := jwtMgr.GenerateRefresh(1, "alice", []string{"ROLE_NORMAL"})
+	refreshToken, _ := jwtMgr.GenerateRefresh(1)
 
 	resp, err := svc.Refresh(refreshToken)
 	require.NoError(t, err)
@@ -222,7 +222,7 @@ func TestAuthService_Refresh_AccessTokenRejected(t *testing.T) {
 
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 	// access token 不能用于 refresh
-	accessToken, _ := jwtMgr.GenerateAccess(1, "alice", []string{"ROLE_NORMAL"})
+	accessToken, _ := jwtMgr.GenerateAccess(1)
 
 	_, err := svc.Refresh(accessToken)
 	assert.Error(t, err)

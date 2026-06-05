@@ -15,6 +15,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/internal/service"
 	"github.com/vpt/blog-backend/pkg/email"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -59,6 +60,7 @@ type authService struct {
 	rdb             *redis.Client
 	mailer          email.MailSender
 	captchaConsumer CaptchaTokenConsumer
+	cache           service.UserCacheService
 }
 
 // CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
@@ -72,6 +74,7 @@ func NewAuthService(
 	rdb *redis.Client,
 	mailer email.MailSender,
 	captchaConsumer CaptchaTokenConsumer,
+	cache service.UserCacheService,
 ) AuthService {
 	return &authService{
 		repo:            repo,
@@ -79,6 +82,7 @@ func NewAuthService(
 		rdb:             rdb,
 		mailer:          mailer,
 		captchaConsumer: captchaConsumer,
+		cache:           cache,
 	}
 }
 
@@ -210,25 +214,32 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 		return nil, ErrUserDisabled
 	}
 
-	// 查询用户所有角色名称，用于写入 JWT claims
-	userRoles, err := s.repo.FindRolesByUserID(user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 签发 access + refresh 双 token，access 短期用于接口访问，refresh 长期用于续签
+	// 签发 access + refresh 双 token，JWT claims 只含 userId，角色由 Redis 缓存动态加载
 	userId := int64(user.ID)
-	accessToken, err := s.jwt.GenerateAccess(userId, user.Username, userRoles)
+	accessToken, err := s.jwt.GenerateAccess(userId)
 	if err != nil {
 		return nil, err
 	}
-	refreshToken, err := s.jwt.GenerateRefresh(userId, user.Username, userRoles)
+	refreshToken, err := s.jwt.GenerateRefresh(userId)
 	if err != nil {
 		return nil, err
 	}
 
 	// 异步写入，不让非关键操作拖慢登录响应
 	go func() { s.repo.UpdateLastLoginAt(user.ID) }()
+
+	// 让缓存失效，下次 /users/me 请求时自动从 DB 重建
+	if s.cache != nil {
+		go func() {
+			_ = s.cache.Invalidate(context.Background(), userId)
+		}()
+	}
+
+	// 查询角色用于响应 DTO（返回给客户端展示，不再写入 JWT）
+	userRoles, err := s.repo.FindRolesByUserID(user.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	// 组装登录响应，含双 token 和用户基本信息
 	return &dto.LoginResp{
@@ -256,12 +267,20 @@ func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
 		return nil, ErrInvalidToken
 	}
 
-	// 用原 claims 中的用户信息签发新的双 token（token rotation）
-	newAccess, err := s.jwt.GenerateAccess(claims.UserId, claims.Username, claims.Roles)
+	// 验证用户仍然有效，防止被禁用的用户通过 refresh token 续签
+	if s.cache != nil {
+		detail, cacheErr := s.cache.Get(context.Background(), claims.UserId)
+		if cacheErr != nil || detail == nil || detail.Status != 1 {
+			return nil, ErrInvalidToken
+		}
+	}
+
+	// 用 userId 签发新的双 token（token rotation），角色由 Redis 缓存动态加载
+	newAccess, err := s.jwt.GenerateAccess(claims.UserId)
 	if err != nil {
 		return nil, err
 	}
-	newRefresh, err := s.jwt.GenerateRefresh(claims.UserId, claims.Username, claims.Roles)
+	newRefresh, err := s.jwt.GenerateRefresh(claims.UserId)
 	if err != nil {
 		return nil, err
 	}
