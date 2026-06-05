@@ -49,12 +49,13 @@ func (m *Manager) GenerateRefresh(userId int64) (string, error) {
 }
 
 func (m *Manager) generate(userId int64, tokenType string, hours int) (string, error) {
+	now := time.Now()
 	claims := Claims{
 		UserId:    userId,
 		TokenType: tokenType,
 		RegisteredClaims: jwtlib.RegisteredClaims{
-			ExpiresAt: jwtlib.NewNumericDate(time.Now().Add(time.Duration(hours) * time.Hour)),
-			IssuedAt:  jwtlib.NewNumericDate(time.Now()),
+			ExpiresAt: jwtlib.NewNumericDate(now.Add(time.Duration(hours) * time.Hour)),
+			IssuedAt:  jwtlib.NewNumericDate(now),
 		},
 	}
 	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)

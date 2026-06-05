@@ -39,3 +39,24 @@ func TestParse_InvalidToken(t *testing.T) {
 	_, err := m.Parse("not.a.token")
 	assert.ErrorIs(t, err, jwt.ErrTokenInvalid)
 }
+
+func TestParse_ExpiredToken(t *testing.T) {
+	// expireHours=-1 让 token 立即过期
+	m := jwt.NewManager("test-secret", -1, 168)
+	token, err := m.GenerateAccess(1)
+	require.NoError(t, err)
+
+	_, parseErr := m.Parse(token)
+	assert.ErrorIs(t, parseErr, jwt.ErrTokenExpired)
+}
+
+func TestParse_WrongSecret(t *testing.T) {
+	m1 := jwt.NewManager("secret-A", 2, 168)
+	m2 := jwt.NewManager("secret-B", 2, 168)
+
+	token, err := m1.GenerateAccess(1)
+	require.NoError(t, err)
+
+	_, parseErr := m2.Parse(token)
+	assert.ErrorIs(t, parseErr, jwt.ErrTokenInvalid)
+}
