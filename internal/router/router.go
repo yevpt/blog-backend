@@ -46,6 +46,7 @@ type routeHandlers struct {
 	comment   *commenthandler.CommentHandler
 	guestbook *guestbookhandler.GuestbookHandler
 	moment    *momenthandler.MomentHandler
+	user      *handler.UserHandler
 	category  *handler.CategoryHandler
 	tag       *handler.TagHandler
 }
@@ -149,6 +150,8 @@ func newRouteHandlers(
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := repository.NewUserRepository(db)
 	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc)
+	userCacheSvc := service.NewUserCacheService(userRepo, objectURLResolver, redisClient)
+	userSvc := service.NewUserService(userCacheSvc)
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
@@ -178,6 +181,7 @@ func newRouteHandlers(
 		comment:   commenthandler.NewCommentHandler(commentSvc),
 		guestbook: guestbookhandler.NewGuestbookHandler(guestbookSvc),
 		moment:    momenthandler.NewMomentHandler(momentSvc),
+		user:      handler.NewUserHandler(userSvc),
 		category:  handler.NewCategoryHandler(categorySvc),
 		tag:       handler.NewTagHandler(tagSvc),
 	}
@@ -220,6 +224,7 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	// 登录路由要求任意已认证用户。
 	authed := r.Group("/", middleware.Auth(jwtManager))
 	authed.GET("/test/authed", handlers.test.Authed)
+	authed.GET("/users/me", handlers.user.GetDetail)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
 	authed.POST("/comments", handlers.comment.Create)
