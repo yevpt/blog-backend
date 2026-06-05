@@ -14,24 +14,24 @@ func newTestManager() *jwt.Manager {
 
 func TestGenerateAccess_TokenType(t *testing.T) {
 	m := newTestManager()
-	token, err := m.GenerateAccess(1, "alice", []string{"ROLE_NORMAL"})
+	token, err := m.GenerateAccess(1)
 	require.NoError(t, err)
 
 	claims, err := m.Parse(token)
 	require.NoError(t, err)
 	assert.Equal(t, "access", claims.TokenType)
 	assert.Equal(t, int64(1), claims.UserId)
-	assert.Equal(t, "alice", claims.Username)
 }
 
 func TestGenerateRefresh_TokenType(t *testing.T) {
 	m := newTestManager()
-	token, err := m.GenerateRefresh(1, "alice", []string{"ROLE_NORMAL"})
+	token, err := m.GenerateRefresh(1)
 	require.NoError(t, err)
 
 	claims, err := m.Parse(token)
 	require.NoError(t, err)
 	assert.Equal(t, "refresh", claims.TokenType)
+	assert.Equal(t, int64(1), claims.UserId)
 }
 
 func TestParse_InvalidToken(t *testing.T) {
