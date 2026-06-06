@@ -92,10 +92,6 @@ response.TooManyRequests(c, "请求过于频繁", retryAfterSeconds)
 - 测试文件 `xxx_test.go`，包名用 `_test` 后缀（同包测试仅在确需访问内部实现时使用）。
 - 修改接口至少跑相关包测试；修改公共逻辑跑 `go test ./...`。
 
-## Commit 规范
-
-格式：`<类型>: <中文描述>`，不加句号，首行不超过 72 字符。类型：`feat`、`fix`、`chore`、`refactor`、`test`、`docs`、`perf`。
-
 ## 禁止事项
 
 - handler 写 SQL/GORM/业务逻辑。
