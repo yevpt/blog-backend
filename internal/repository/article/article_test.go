@@ -1,6 +1,7 @@
 package article_test
 
 import (
+	"database/sql/driver"
 	"testing"
 	"time"
 
@@ -61,6 +62,7 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 			"singer", "album", "song_date", "url", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleUsers(mock, 1)
 
 	result, err := repo.ListPublic(article.ArticleListFilter{Page: 2, PageSize: 10, Recommend: &recommend}, nil)
 	require.NoError(t, err)
@@ -105,13 +107,42 @@ func TestArticleRepository_FindPublicDetail_ReturnsEncryptedArticleShell(t *test
 			"short_content", "content", "user_id", "status", "comment_status",
 			"password", "read_count",
 		}).AddRow(11, now, now, nil, "Locked", nil, "summary", "secret", 1, 2, 1, "pwd", 5))
-	expectEmptyArticleAggregateQueries(mock, 11)
+	expectEmptyArticleAggregateQueries(mock, 11, 1)
 
 	detail, err := repo.FindPublicDetail(11, nil)
 	require.NoError(t, err)
 	require.NotNil(t, detail)
 	assert.Equal(t, uint8(2), detail.Article.Status)
 	assert.Equal(t, "secret", detail.Article.Content)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_FindPublicDetail_LoadsAuthorUser(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	now := time.Now()
+	nickname := "VPT"
+	avatar := "avatars/vpt.png"
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(12), uint(1), uint(2), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(12, now, now, nil, "With Author", nil, "summary", "body", 7, 1, 1, nil, 5))
+	expectEmptyArticleAggregateQueries(mock, 12)
+	expectArticleUsers(mock, 7).AddRow(7, now, now, nil, "vpt", "hash", nickname, nil, nil, nil, avatar, nil, 1, nil)
+
+	detail, err := repo.FindPublicDetail(12, nil)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	require.NotNil(t, detail.User)
+	assert.Equal(t, uint(7), detail.User.ID)
+	assert.Equal(t, "vpt", detail.User.Username)
+	assert.Equal(t, &nickname, detail.User.Nickname)
+	assert.Equal(t, &avatar, detail.User.AvatarUrl)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -229,7 +260,7 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 			"short_content", "content", "user_id", "status", "comment_status",
 			"password", "read_count",
 		}).AddRow(7, now, now, nil, "A", cover, shortContent, "body", 1, 1, 1, nil, 0))
-	expectEmptyArticleAggregateQueries(mock, 7)
+	expectEmptyArticleAggregateQueries(mock, 7, 1)
 
 	result, err := repo.Save(article.ArticleSaveData{
 		Article: model.Article{
@@ -300,7 +331,7 @@ func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testi
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-		"password", "read_count",
+			"password", "read_count",
 		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
 		WithArgs(uint8(1), uint(7)).
@@ -332,6 +363,7 @@ func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testi
 			"singer", "album", "song_date", "url", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleUsers(mock, 2)
 	mock.ExpectQuery("SELECT `target_id` FROM `user_like`").
 		WithArgs(uint8(1), uint(1), uint(7)).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id"}).AddRow(7))
@@ -380,7 +412,7 @@ func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *t
 			"short_content", "content", "user_id", "status", "comment_status",
 			"password", "read_count",
 		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 1, 1, 1, nil, 0))
-	expectEmptyArticleAggregateQueries(mock, 7)
+	expectEmptyArticleAggregateQueries(mock, 7, 1)
 
 	result, err := repo.Save(article.ArticleSaveData{
 		Article: model.Article{
@@ -400,7 +432,7 @@ func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *t
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func expectEmptyArticleAggregateQueries(mock sqlmock.Sqlmock, articleID uint) {
+func expectEmptyArticleAggregateQueries(mock sqlmock.Sqlmock, articleID uint, userIDs ...uint) {
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
 		WithArgs(uint8(1), articleID).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}))
@@ -431,4 +463,27 @@ func expectEmptyArticleAggregateQueries(mock sqlmock.Sqlmock, articleID uint) {
 			"singer", "album", "song_date", "url", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	if len(userIDs) > 0 {
+		expectArticleUsers(mock, userIDs...)
+	}
+}
+
+func expectArticleUsers(mock sqlmock.Sqlmock, userIDs ...uint) *sqlmock.Rows {
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "username", "password",
+		"nickname", "email", "phone", "site", "avatar_url", "mark", "status",
+		"last_login_at",
+	})
+	mock.ExpectQuery("SELECT \\* FROM `user`").
+		WithArgs(uintArgs(userIDs)...).
+		WillReturnRows(rows)
+	return rows
+}
+
+func uintArgs(ids []uint) []driver.Value {
+	args := make([]driver.Value, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	return args
 }

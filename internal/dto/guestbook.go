@@ -48,6 +48,8 @@ type GuestbookItemResp struct {
 	Content string `json:"content" example:"来踩踩，博客很棒"`
 	// User 留言者用户摘要。
 	User *GuestbookUserResp `json:"user,omitempty"`
+	// ReplyCount 回复数量。
+	ReplyCount int64 `json:"reply_count" example:"3"`
 	// LikeCount 点赞数量。
 	LikeCount int64 `json:"like_count" example:"3"`
 	// IsLiked 当前用户是否已点赞。

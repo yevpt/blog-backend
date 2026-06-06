@@ -5,7 +5,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *commentRepo) List(target Target, page int, pageSize int) (*PageResult, error) {
+func (r *commentRepo) List(target Target, viewerID *uint, page int, pageSize int) (*PageResult, error) {
 	if err := r.ensureTargetReadable(target); err != nil {
 		return nil, err
 	}
@@ -20,7 +20,7 @@ func (r *commentRepo) List(target Target, page int, pageSize int) (*PageResult, 
 	if err != nil {
 		return nil, err
 	}
-	aggregates, err := r.attachCommentRelations(target.Type, comments)
+	aggregates, err := r.attachCommentRelations(target, comments, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +44,36 @@ func (r *commentRepo) ensureTargetReadable(target Target) error {
 	default:
 		return ErrTargetNotFound
 	}
+}
+
+func (r *commentRepo) ListReplies(target Target, commentID uint, viewerID *uint, page int, pageSize int) (*ReplyPageResult, error) {
+	if err := r.ensureTargetReadable(target); err != nil {
+		return nil, err
+	}
+	if _, err := r.findCommentByID(target.Type, commentID); err != nil {
+		return nil, err
+	}
+
+	page, pageSize = normalizePage(page, pageSize)
+	total, err := r.countReplies(target.Type, commentID)
+	if err != nil {
+		return nil, err
+	}
+	replies, err := r.listReplies(target.Type, commentID, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	aggregates, err := r.attachReplyRelations(target, replies, viewerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ReplyPageResult{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Replies:  aggregates,
+	}, nil
 }
 
 func normalizePage(page int, pageSize int) (int, int) {
@@ -107,12 +137,21 @@ func (r *commentRepo) commentTable(target Target) *gorm.DB {
 	}
 }
 
-func (r *commentRepo) attachCommentRelations(commentType uint8, comments []CommentRecord) ([]CommentAggregate, error) {
+func (r *commentRepo) attachCommentRelations(target Target, comments []CommentRecord, viewerID *uint) ([]CommentAggregate, error) {
 	userMap, err := r.usersByID(commentUserIDs(comments))
 	if err != nil {
 		return nil, err
 	}
-	repliesByCommentID, err := r.repliesByCommentID(commentType, commentIDs(comments))
+	commentIDs := commentIDs(comments)
+	replyCounts, err := r.replyCounts(target.Type, commentIDs)
+	if err != nil {
+		return nil, err
+	}
+	likeCounts, err := r.commentLikeCounts(target.Type, commentIDs)
+	if err != nil {
+		return nil, err
+	}
+	likedIDs, err := r.commentLikedIDs(target.Type, commentIDs, viewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,9 +159,11 @@ func (r *commentRepo) attachCommentRelations(commentType uint8, comments []Comme
 	aggregates := make([]CommentAggregate, 0, len(comments))
 	for _, comment := range comments {
 		aggregates = append(aggregates, CommentAggregate{
-			Comment: comment,
-			User:    userMap[comment.UserID],
-			Replies: repliesByCommentID[comment.ID],
+			Comment:    comment,
+			User:       userMap[comment.UserID],
+			ReplyCount: replyCounts[comment.ID],
+			LikeCount:  likeCounts[comment.ID],
+			IsLiked:    likedIDs[comment.ID],
 		})
 	}
 	return aggregates, nil

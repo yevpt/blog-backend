@@ -52,6 +52,9 @@ func TestGuestbookRepository_List_LoadsMessagesUsersAndLikes(t *testing.T) {
 			"id", "created_at", "updated_at", "deleted_at", "username", "password", "nickname",
 			"email", "phone", "site", "avatar_url", "mark", "status", "last_login_at",
 		}).AddRow(8, now, now, nil, "alice", "", nil, nil, nil, nil, nil, nil, 1, nil))
+	mock.ExpectQuery("SELECT comment_id, count\\(\\*\\) as count FROM `guestbook_reply`").
+		WithArgs(uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{"comment_id", "count"}).AddRow(9, 3))
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
 		WithArgs(guestbookrepo.LikeType, uint(9)).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}).AddRow(9, 2))
@@ -64,6 +67,7 @@ func TestGuestbookRepository_List_LoadsMessagesUsersAndLikes(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, resp.Messages, 1)
 	assert.Equal(t, int64(1), resp.Total)
+	assert.Equal(t, int64(3), resp.Messages[0].ReplyCount)
 	assert.Equal(t, int64(2), resp.Messages[0].LikeCount)
 	assert.True(t, resp.Messages[0].IsLiked)
 	assert.Equal(t, "alice", resp.Messages[0].User.Username)

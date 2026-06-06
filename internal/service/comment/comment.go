@@ -27,11 +27,14 @@ var (
 
 // CommentService 评论业务接口，负责评论、回复的查询、创建和删除。
 type CommentService interface {
-	List(req dto.CommentListReq) (*dto.CommentPageResp, error)
-	Create(req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error)
-	Reply(commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error)
+	List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error)
+	Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error)
+	ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error)
+	Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error)
+	ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error)
+	ToggleReplyLike(targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error)
 	DeleteComment(targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
-	DeleteReply(replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
+	DeleteReply(targetType string, replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
 }
 
 type commentService struct {

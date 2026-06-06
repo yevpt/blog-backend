@@ -76,7 +76,17 @@ func TestGuestbookService_List_DefaultsOwnerAndPagination(t *testing.T) {
 			Total:    0,
 			Page:     1,
 			PageSize: 10,
-			Messages: []guestbookrepo.GuestbookAggregate{},
+			Messages: []guestbookrepo.GuestbookAggregate{
+				{
+					Message: model.Guestbook{
+						Base:        model.Base{ID: 9},
+						OwnerUserID: 1,
+						FromUserID:  7,
+						Content:     "你好",
+					},
+					ReplyCount: 2,
+				},
+			},
 		},
 	}
 	svc := guestbookservice.NewGuestbookService(repo)
@@ -90,6 +100,8 @@ func TestGuestbookService_List_DefaultsOwnerAndPagination(t *testing.T) {
 	assert.Equal(t, 50, repo.listPageSize)
 	assert.Equal(t, 1, resp.Page)
 	assert.Equal(t, 10, resp.PageSize)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, int64(2), resp.List[0].ReplyCount)
 }
 
 func TestGuestbookService_Create_TrimsContentAndDefaultsOwner(t *testing.T) {

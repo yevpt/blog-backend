@@ -95,6 +95,10 @@ definitions:
       updated_at:
         description: UpdatedAt 更新时间。
         type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleUserResp'
+        description: User 作者摘要。
       user_id:
         description: UserID 作者用户 ID。
         example: 1
@@ -147,6 +151,10 @@ definitions:
         description: ID 文章 ID。
         example: 1
         type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞；未登录时恒为 false。
+        example: false
+        type: boolean
       is_recommended:
         description: IsRecommended 是否为推荐文章。
         example: true
@@ -173,6 +181,10 @@ definitions:
       updated_at:
         description: UpdatedAt 更新时间。
         type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleUserResp'
+        description: User 作者摘要。
       user_id:
         description: UserID 作者用户 ID。
         example: 1
@@ -341,6 +353,33 @@ definitions:
     - category_ids
     - content
     - title
+    type: object
+  dto.ArticleUserResp:
+    properties:
+      avatar_url:
+        description: AvatarUrl 用户头像 CDN 访问地址。
+        example: https://cdn.example.com/avatar.png
+        type: string
+      id:
+        description: ID 用户 ID。
+        example: 1
+        type: integer
+      mark:
+        description: Mark 身份标签。
+        example: 博主
+        type: string
+      nickname:
+        description: Nickname 用户昵称。
+        example: Yevpt
+        type: string
+      site:
+        description: Site 个人站点。
+        example: https://yevpt.com
+        type: string
+      username:
+        description: Username 登录账号。
+        example: vpt
+        type: string
     type: object
   dto.CaptchaChallengeResp:
     properties:
@@ -573,22 +612,8 @@ definitions:
         example: 写得真好
         maxLength: 2000
         type: string
-      target_id:
-        description: TargetID 评论目标 ID；文章为 article_id，说说为 moment_id，留言板为 owner_user_id。
-        example: 1
-        type: integer
-      target_type:
-        description: TargetType 评论目标类型：article、moment、guestbook。
-        enum:
-        - article
-        - moment
-        - guestbook
-        example: article
-        type: string
     required:
     - content
-    - target_id
-    - target_type
     type: object
   dto.CommentDeleteResp:
     properties:
@@ -610,11 +635,18 @@ definitions:
         description: ID 评论 ID。
         example: 1
         type: integer
-      replies:
-        description: Replies 当前页一级评论下的回复列表。
-        items:
-          $ref: '#/definitions/dto.CommentReplyResp'
-        type: array
+      is_liked:
+        description: IsLiked 当前用户是否已点赞；未登录时恒为 false。
+        example: false
+        type: boolean
+      like_count:
+        description: LikeCount 评论点赞数量。
+        example: 3
+        type: integer
+      reply_count:
+        description: ReplyCount 回复数量。
+        example: 3
+        type: integer
       target_id:
         description: TargetID 评论目标 ID。
         example: 1
@@ -633,6 +665,17 @@ definitions:
       user_id:
         description: UserID 评论者用户 ID。
         example: 1
+        type: integer
+    type: object
+  dto.CommentLikeResp:
+    properties:
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
         type: integer
     type: object
   dto.CommentPageResp:
@@ -670,17 +713,32 @@ definitions:
         description: ParentReplyID 上级回复 ID；0 表示直接回复一级评论。
         example: 0
         type: integer
-      target_type:
-        description: TargetType 评论目标类型：article、moment、guestbook，用于定位一级评论所在表。
-        enum:
-        - article
-        - moment
-        - guestbook
-        example: article
-        type: string
     required:
     - content
-    - target_type
+    type: object
+  dto.CommentReplyPageResp:
+    properties:
+      list:
+        description: List 回复列表。
+        items:
+          $ref: '#/definitions/dto.CommentReplyResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
     type: object
   dto.CommentReplyResp:
     properties:
@@ -706,6 +764,14 @@ definitions:
       id:
         description: ID 回复 ID。
         example: 1
+        type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞；未登录时恒为 false。
+        example: false
+        type: boolean
+      like_count:
+        description: LikeCount 回复点赞数量。
+        example: 3
         type: integer
       parent_reply_id:
         description: ParentReplyID 上级回复 ID；0 表示直接回复一级评论。
@@ -1989,7 +2055,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          description: 统一响应；code=0 表示查询成功，已登录时列表项包含 is_liked，code=400 表示参数错误
           schema:
             allOf:
             - $ref: '#/definitions/response.Response'
@@ -2042,6 +2108,95 @@ paths:
       summary: 查询文章详情
       tags:
       - 文章
+  /articles/{id}/comments:
+    get:
+      consumes:
+      - application/json
+      description: 查询指定文章的一级评论列表；登录态可返回当前用户点赞状态，回复通过独立接口懒加载。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询文章评论
+      tags:
+      - 评论
+    post:
+      consumes:
+      - application/json
+      description: 登录用户为指定文章新增一级评论；目标关闭评论时会拒绝提交。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 评论新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误或评论关闭
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增文章一级评论
+      tags:
+      - 评论
   /articles/{id}/like:
     get:
       consumes:
@@ -2090,13 +2245,13 @@ paths:
       - application/json
       responses:
         "200":
-          description: 统一响应；code=0 表示切换成功，code=400 表示参数错误
+          description: 统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误
           schema:
             allOf:
             - $ref: '#/definitions/response.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/dto.ArticleDetailResp'
+                  $ref: '#/definitions/dto.ArticleLikeResp'
               type: object
         "401":
           description: 未登录或 token 已过期
@@ -2147,6 +2302,255 @@ paths:
       summary: 增加文章阅读数
       tags:
       - 文章
+  /articles/comment-replies/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 回复作者可删除自己的文章评论回复；管理员可删除任意回复。
+      parameters:
+      - description: 文章评论回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除回复
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除文章评论回复
+      tags:
+      - 评论
+  /articles/comments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 评论作者可删除自己的文章评论；管理员可删除任意文章评论，同时删除其下回复。
+      parameters:
+      - description: 文章评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除评论
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除文章评论
+      tags:
+      - 评论
+  /articles/comments/{id}/like:
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 文章评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换文章评论点赞
+      tags:
+      - 评论
+  /articles/comments/{id}/replies:
+    get:
+      consumes:
+      - application/json
+      description: 查询指定文章评论下的回复列表，支持分页懒加载；登录态可返回当前用户点赞状态。
+      parameters:
+      - description: 文章评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询文章评论回复
+      tags:
+      - 评论
+    post:
+      consumes:
+      - application/json
+      description: 登录用户回复文章评论或其回复；parent_reply_id 为 0 时直接回复一级评论。
+      parameters:
+      - description: 文章评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增文章评论回复
+      tags:
+      - 评论
+  /articles/comments/{id}/replies/{replyId}/like:
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 文章评论回复 ID
+        in: path
+        name: replyId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换文章评论回复点赞
+      tags:
+      - 评论
   /articles/ids:
     get:
       consumes:
@@ -2369,224 +2773,6 @@ paths:
       summary: 查询分类 Tab 列表
       tags:
       - 分类
-  /comment-replies/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 回复作者可删除自己的回复；管理员可删除任意回复。
-      parameters:
-      - description: 回复 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.CommentDeleteResp'
-              type: object
-        "401":
-          description: 未登录或 token 已过期
-          schema:
-            $ref: '#/definitions/response.Response'
-        "403":
-          description: 无权删除回复
-          schema:
-            $ref: '#/definitions/response.Response'
-        "404":
-          description: 回复不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 删除评论回复
-      tags:
-      - 评论
-  /comments:
-    get:
-      consumes:
-      - application/json
-      description: 按目标类型和目标 ID 查询一级评论，并附带当前页评论下的回复列表。
-      parameters:
-      - description: 目标类型：article、moment、guestbook
-        in: query
-        name: target_type
-        required: true
-        type: string
-      - description: 目标 ID
-        in: query
-        name: target_id
-        required: true
-        type: integer
-      - description: 页码，从 1 开始
-        in: query
-        name: page
-        type: integer
-      - description: 每页数量，默认 10，最大 50
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.CommentPageResp'
-              type: object
-        "404":
-          description: 评论目标不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 分页查询评论
-      tags:
-      - 评论
-    post:
-      consumes:
-      - application/json
-      description: 登录用户为文章、说说或留言板新增一级评论；目标关闭评论时会拒绝提交。
-      parameters:
-      - description: 评论新增请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CommentCreateReq'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误或评论关闭
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.CommentItemResp'
-              type: object
-        "401":
-          description: 未登录或 token 已过期
-          schema:
-            $ref: '#/definitions/response.Response'
-        "404":
-          description: 评论目标不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 新增一级评论
-      tags:
-      - 评论
-  /comments/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: 评论作者可删除自己的一级评论；管理员可删除任意评论，同时删除其下回复。
-      parameters:
-      - description: 一级评论 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 目标类型：article、moment、guestbook
-        in: query
-        name: target_type
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.CommentDeleteResp'
-              type: object
-        "401":
-          description: 未登录或 token 已过期
-          schema:
-            $ref: '#/definitions/response.Response'
-        "403":
-          description: 无权删除评论
-          schema:
-            $ref: '#/definitions/response.Response'
-        "404":
-          description: 评论不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 删除一级评论
-      tags:
-      - 评论
-  /comments/{id}/replies:
-    post:
-      consumes:
-      - application/json
-      description: 登录用户回复一级评论或回复；parent_reply_id 为 0 时直接回复一级评论。
-      parameters:
-      - description: 一级评论 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: 回复新增请求
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CommentReplyCreateReq'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.CommentReplyResp'
-              type: object
-        "401":
-          description: 未登录或 token 已过期
-          schema:
-            $ref: '#/definitions/response.Response'
-        "404":
-          description: 评论或回复不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 新增评论回复
-      tags:
-      - 评论
   /guestbook:
     get:
       consumes:
@@ -2750,6 +2936,217 @@ paths:
       summary: 切换留言点赞
       tags:
       - 留言板
+  /guestbook/comment-replies/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 回复作者可删除自己的留言回复；管理员可删除任意回复。
+      parameters:
+      - description: 留言回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除回复
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除留言回复
+      tags:
+      - 评论
+  /guestbook/comments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 留言作者可删除自己的留言；管理员可删除任意留言，同时删除其下回复。
+      parameters:
+      - description: 留言 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除评论
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除留言
+      tags:
+      - 评论
+  /guestbook/comments/{id}/replies:
+    get:
+      consumes:
+      - application/json
+      description: 查询指定留言下的回复列表，支持分页懒加载；登录态可返回当前用户点赞状态。
+      parameters:
+      - description: 留言 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询留言回复
+      tags:
+      - 评论
+    post:
+      consumes:
+      - application/json
+      description: 登录用户回复留言或其回复；parent_reply_id 为 0 时直接回复一级留言。
+      parameters:
+      - description: 留言 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增留言回复
+      tags:
+      - 评论
+  /guestbook/comments/{id}/replies/{replyId}/like:
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 留言回复 ID
+        in: path
+        name: replyId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换留言回复点赞
+      tags:
+      - 评论
   /moments:
     get:
       consumes:
@@ -2916,6 +3313,95 @@ paths:
       summary: 查询碎语详情
       tags:
       - 碎语
+  /moments/{id}/comments:
+    get:
+      consumes:
+      - application/json
+      description: 查询指定碎语的一级评论列表；登录态可返回当前用户点赞状态，回复通过独立接口懒加载。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询碎语评论
+      tags:
+      - 评论
+    post:
+      consumes:
+      - application/json
+      description: 登录用户为指定碎语新增一级评论；目标关闭评论时会拒绝提交。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 评论新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误或评论关闭
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增碎语一级评论
+      tags:
+      - 评论
   /moments/{id}/like:
     get:
       consumes:
@@ -3108,6 +3594,255 @@ paths:
       summary: 置顶碎语
       tags:
       - 碎语
+  /moments/comment-replies/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 回复作者可删除自己的碎语评论回复；管理员可删除任意回复。
+      parameters:
+      - description: 碎语评论回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除回复
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除碎语评论回复
+      tags:
+      - 评论
+  /moments/comments/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 评论作者可删除自己的碎语评论；管理员可删除任意碎语评论，同时删除其下回复。
+      parameters:
+      - description: 碎语评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 无权删除评论
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除碎语评论
+      tags:
+      - 评论
+  /moments/comments/{id}/like:
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 碎语评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换碎语评论点赞
+      tags:
+      - 评论
+  /moments/comments/{id}/replies:
+    get:
+      consumes:
+      - application/json
+      description: 查询指定碎语评论下的回复列表，支持分页懒加载；登录态可返回当前用户点赞状态。
+      parameters:
+      - description: 碎语评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询碎语评论回复
+      tags:
+      - 评论
+    post:
+      consumes:
+      - application/json
+      description: 登录用户回复碎语评论或其回复；parent_reply_id 为 0 时直接回复一级评论。
+      parameters:
+      - description: 碎语评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增碎语评论回复
+      tags:
+      - 评论
+  /moments/comments/{id}/replies/{replyId}/like:
+    post:
+      consumes:
+      - application/json
+      description: 当前用户未点赞时点赞，已点赞时取消点赞。
+      parameters:
+      - description: 碎语评论回复 ID
+        in: path
+        name: replyId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示切换成功，返回最新点赞状态和点赞数，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentLikeResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 切换碎语评论回复点赞
+      tags:
+      - 评论
   /tags:
     get:
       description: 返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。
@@ -3221,14 +3956,6 @@ paths:
               type: object
         "401":
           description: 未登录或 token 已过期
-          schema:
-            $ref: '#/definitions/response.Response'
-        "404":
-          description: 用户不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Response'
       summary: 查询当前登录用户详情

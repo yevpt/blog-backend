@@ -71,6 +71,53 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 	assert.Equal(t, []string{cover}, resolver.objectNames)
 }
 
+func TestArticleService_ListPublic_IncludesUserWithResolvedAvatarURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	resolver := &stubObjectURLResolver{
+		urls: map[string]string{
+			"avatars/vpt.png": "https://cdn.example.com/blog/avatars/vpt.png?sign=1",
+		},
+	}
+	svc := articleservice.NewArticleService(repo, resolver)
+
+	nickname := "VPT"
+	avatar := "avatars/vpt.png"
+	repo.EXPECT().
+		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, (*uint)(nil)).
+		Return(&articlerepo.ArticlePageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 10,
+			Articles: []articlerepo.ArticleAggregate{{
+				Article: model.Article{
+					Base:   model.Base{ID: 1},
+					Title:  "Author",
+					UserID: 7,
+					Status: 1,
+				},
+				User: &model.User{
+					Base:      model.Base{ID: 7},
+					Username:  "vpt",
+					Nickname:  &nickname,
+					AvatarUrl: &avatar,
+				},
+			}},
+		}, nil)
+
+	resp, err := svc.ListPublic(dto.ArticleListReq{}, nil)
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	require.NotNil(t, resp.List[0].User)
+	assert.Equal(t, uint(7), resp.List[0].User.ID)
+	assert.Equal(t, "vpt", resp.List[0].User.Username)
+	assert.Equal(t, &nickname, resp.List[0].User.Nickname)
+	require.NotNil(t, resp.List[0].User.AvatarUrl)
+	assert.Equal(t, resolver.urls[avatar], *resp.List[0].User.AvatarUrl)
+	assert.Equal(t, []string{avatar}, resolver.objectNames)
+}
+
 func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -317,6 +364,45 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	assert.Equal(t, "Tech", resp.Categories[0].Name)
 	assert.Equal(t, "Go", resp.Tags[0].Name)
 	assert.Equal(t, uint16(240), resp.Music[0].Duration)
+}
+
+func TestArticleService_GetPublicDetail_IncludesUserWithResolvedAvatarURL(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	resolver := &stubObjectURLResolver{
+		urls: map[string]string{
+			"avatars/detail.png": "https://cdn.example.com/blog/avatars/detail.png?sign=1",
+		},
+	}
+	svc := articleservice.NewArticleService(repo, resolver)
+
+	avatar := "avatars/detail.png"
+	repo.EXPECT().
+		FindPublicDetail(uint(3), (*uint)(nil)).
+		Return(&articlerepo.ArticleAggregate{
+			Article: model.Article{
+				Base:    model.Base{ID: 3},
+				Title:   "A",
+				Content: "body",
+				UserID:  8,
+				Status:  1,
+			},
+			User: &model.User{
+				Base:      model.Base{ID: 8},
+				Username:  "author",
+				AvatarUrl: &avatar,
+			},
+		}, nil)
+
+	resp, err := svc.GetPublicDetail(3, nil)
+	require.NoError(t, err)
+	require.NotNil(t, resp.User)
+	assert.Equal(t, uint(8), resp.User.ID)
+	assert.Equal(t, "author", resp.User.Username)
+	require.NotNil(t, resp.User.AvatarUrl)
+	assert.Equal(t, resolver.urls[avatar], *resp.User.AvatarUrl)
+	assert.Equal(t, []string{avatar}, resolver.objectNames)
 }
 
 func TestArticleService_GetPublicDetail_ResolvesMarkdownObjectLinksInContent(t *testing.T) {

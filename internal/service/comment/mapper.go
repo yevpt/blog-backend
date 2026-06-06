@@ -30,10 +30,6 @@ func commentPageToDTO(result *commentrepo.PageResult, commentType uint8, resolve
 }
 
 func commentToDTO(aggregate commentrepo.CommentAggregate, commentType uint8, resolver storage.ObjectURLResolver) *dto.CommentItemResp {
-	replies := make([]dto.CommentReplyResp, 0, len(aggregate.Replies))
-	for _, reply := range aggregate.Replies {
-		replies = append(replies, *replyToDTO(reply, resolver))
-	}
 	return &dto.CommentItemResp{
 		ID:         aggregate.Comment.ID,
 		TargetType: targetTypeName(commentType),
@@ -41,7 +37,9 @@ func commentToDTO(aggregate commentrepo.CommentAggregate, commentType uint8, res
 		UserID:     aggregate.Comment.UserID,
 		Content:    aggregate.Comment.Content,
 		User:       userToDTO(aggregate.User, resolver),
-		Replies:    replies,
+		ReplyCount: aggregate.ReplyCount,
+		LikeCount:  aggregate.LikeCount,
+		IsLiked:    aggregate.IsLiked,
 		CreatedAt:  aggregate.Comment.CreatedAt,
 		UpdatedAt:  aggregate.Comment.UpdatedAt,
 	}
@@ -51,7 +49,7 @@ func replyToDTO(aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURL
 	reply := aggregate.Reply
 	return &dto.CommentReplyResp{
 		ID:            reply.ID,
-		TargetType:    targetTypeName(reply.CommentType),
+		TargetType:    "",
 		CommentID:     reply.CommentID,
 		FromUserID:    reply.FromUserID,
 		ToUserID:      reply.ToUserID,
@@ -59,8 +57,31 @@ func replyToDTO(aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURL
 		Content:       reply.Content,
 		FromUser:      userToDTO(aggregate.FromUser, resolver),
 		ToUser:        userToDTO(aggregate.ToUser, resolver),
+		LikeCount:     aggregate.LikeCount,
+		IsLiked:       aggregate.IsLiked,
 		CreatedAt:     reply.CreatedAt,
 		UpdatedAt:     reply.UpdatedAt,
+	}
+}
+
+func replyPageToDTO(result *commentrepo.ReplyPageResult, commentType uint8, resolver storage.ObjectURLResolver) *dto.CommentReplyPageResp {
+	pages := 0
+	if result.PageSize > 0 {
+		pages = int((result.Total + int64(result.PageSize) - 1) / int64(result.PageSize))
+	}
+
+	items := make([]dto.CommentReplyResp, 0, len(result.Replies))
+	for _, aggregate := range result.Replies {
+		item := replyToDTO(aggregate, resolver)
+		item.TargetType = targetTypeName(commentType)
+		items = append(items, *item)
+	}
+	return &dto.CommentReplyPageResp{
+		Total:    result.Total,
+		Pages:    pages,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+		List:     items,
 	}
 }
 

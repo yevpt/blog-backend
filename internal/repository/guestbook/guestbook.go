@@ -23,10 +23,11 @@ var (
 
 // GuestbookAggregate 留言及其用户、点赞信息聚合，供 service 转换为 DTO。
 type GuestbookAggregate struct {
-	Message   model.Guestbook
-	User      *model.User
-	LikeCount int64
-	IsLiked   bool
+	Message    model.Guestbook
+	User       *model.User
+	ReplyCount int64
+	LikeCount  int64
+	IsLiked    bool
 }
 
 // PageResult 留言分页查询结果，repository 不直接返回 dto。

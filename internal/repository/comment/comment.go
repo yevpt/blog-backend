@@ -15,6 +15,18 @@ const (
 	TargetMoment uint8 = 2
 	// TargetGuestbook 表示留言板留言，与 comment_reply.comment_type 保持一致。
 	TargetGuestbook uint8 = 3
+	// ArticleCommentLikeType 表示 user_like 中的文章评论点赞类型。
+	ArticleCommentLikeType uint8 = 2
+	// ArticleCommentReplyLikeType 表示 user_like 中的文章评论回复点赞类型。
+	ArticleCommentReplyLikeType uint8 = 3
+	// MomentCommentLikeType 表示 user_like 中的碎语评论点赞类型。
+	MomentCommentLikeType uint8 = 6
+	// MomentCommentReplyLikeType 表示 user_like 中的碎语评论回复点赞类型。
+	MomentCommentReplyLikeType uint8 = 7
+	// GuestbookLikeType 表示 user_like 中的留言点赞类型。
+	GuestbookLikeType uint8 = 5
+	// GuestbookReplyLikeType 表示 user_like 中的留言回复点赞类型。
+	GuestbookReplyLikeType uint8 = 8
 )
 
 var (
@@ -46,18 +58,34 @@ type CommentRecord struct {
 	UpdatedAt time.Time
 }
 
-// CommentAggregate 一级评论及其用户、回复聚合，供 service 转换为 DTO。
+// CommentAggregate 一级评论及其用户、回复数量、点赞信息聚合，供 service 转换为 DTO。
 type CommentAggregate struct {
-	Comment CommentRecord
-	User    *model.User
-	Replies []ReplyAggregate
+	Comment    CommentRecord
+	User       *model.User
+	ReplyCount int64
+	LikeCount  int64
+	IsLiked    bool
+}
+
+// ReplyRecord 统一的评论回复记录，屏蔽三张回复表差异。
+type ReplyRecord struct {
+	ID            uint
+	CommentID     uint
+	ToUserID      uint
+	FromUserID    uint
+	ParentReplyID uint
+	Content       string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // ReplyAggregate 回复及其双方用户聚合，供 service 转换为 DTO。
 type ReplyAggregate struct {
-	Reply    model.CommentReply
-	FromUser *model.User
-	ToUser   *model.User
+	Reply     ReplyRecord
+	FromUser  *model.User
+	ToUser    *model.User
+	LikeCount int64
+	IsLiked   bool
 }
 
 // PageResult 评论分页查询结果，保持 repository 不返回 dto。
@@ -66,6 +94,20 @@ type PageResult struct {
 	Page     int
 	PageSize int
 	Comments []CommentAggregate
+}
+
+// ReplyPageResult 评论回复分页查询结果。
+type ReplyPageResult struct {
+	Total    int64
+	Page     int
+	PageSize int
+	Replies  []ReplyAggregate
+}
+
+// LikeResult 点赞切换结果。
+type LikeResult struct {
+	IsLiked   bool
+	LikeCount int64
 }
 
 // ReplyData 创建回复所需的数据。
@@ -79,16 +121,22 @@ type ReplyData struct {
 
 // CommentRepository 评论数据访问接口。
 type CommentRepository interface {
-	// List 分页查询一级评论，并附带当前页评论下的回复。
-	List(target Target, page int, pageSize int) (*PageResult, error)
+	// List 分页查询一级评论，并按 viewerID 附带回复数量与点赞信息。
+	List(target Target, viewerID *uint, page int, pageSize int) (*PageResult, error)
 	// Create 创建一级评论，并返回评论聚合。
 	Create(target Target, userID uint, content string) (*CommentAggregate, error)
+	// ListReplies 分页查询某条一级评论下的回复。
+	ListReplies(target Target, commentID uint, viewerID *uint, page int, pageSize int) (*ReplyPageResult, error)
 	// Reply 创建评论回复，并根据 parent_reply_id 推导被回复用户。
 	Reply(data ReplyData) (*ReplyAggregate, error)
+	// ToggleLike 切换一级评论点赞状态。
+	ToggleLike(target Target, commentID uint, userID uint) (*LikeResult, error)
+	// ToggleReplyLike 切换评论回复点赞状态。
+	ToggleReplyLike(target Target, replyID uint, userID uint) (*LikeResult, error)
 	// DeleteComment 软删除一级评论；force 为 true 时跳过归属校验。
 	DeleteComment(target Target, commentID uint, userID uint, force bool) (*CommentRecord, error)
 	// DeleteReply 软删除回复；force 为 true 时跳过归属校验。
-	DeleteReply(replyID uint, userID uint, force bool) (*model.CommentReply, error)
+	DeleteReply(target Target, replyID uint, userID uint, force bool) (*ReplyRecord, error)
 }
 
 type commentRepo struct {

@@ -8,21 +8,21 @@ import (
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 )
 
-func (s *commentService) List(req dto.CommentListReq) (*dto.CommentPageResp, error) {
-	target, err := parseTarget(req.TargetType, req.TargetID)
+func (s *commentService) List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error) {
+	target, err := parseTarget(targetType, targetID)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := s.repo.List(target, normalizeCommentPage(req.Page), normalizeCommentPageSize(req.PageSize))
+	result, err := s.repo.List(target, viewerID, normalizeCommentPage(req.Page), normalizeCommentPageSize(req.PageSize))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
 	return commentPageToDTO(result, target.Type, s.objectURLResolver), nil
 }
 
-func (s *commentService) Create(req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
-	target, err := parseTarget(req.TargetType, req.TargetID)
+func (s *commentService) Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
+	target, err := parseTarget(targetType, targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -38,8 +38,21 @@ func (s *commentService) Create(req dto.CommentCreateReq, userID uint) (*dto.Com
 	return commentToDTO(*aggregate, target.Type, s.objectURLResolver), nil
 }
 
-func (s *commentService) Reply(commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
-	commentType, err := parseTargetType(req.TargetType)
+func (s *commentService) ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error) {
+	target, err := parseTarget(targetType, 1)
+	if err != nil || commentID == 0 {
+		return nil, ErrCommentTargetInvalid
+	}
+
+	result, err := s.repo.ListReplies(commentrepo.Target{Type: target.Type}, commentID, viewerID, normalizeCommentPage(req.Page), normalizeCommentPageSize(req.PageSize))
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	return replyPageToDTO(result, target.Type, s.objectURLResolver), nil
+}
+
+func (s *commentService) Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
+	commentType, err := parseTargetType(targetType)
 	if err != nil || commentID == 0 {
 		return nil, ErrCommentTargetInvalid
 	}
@@ -61,6 +74,30 @@ func (s *commentService) Reply(commentID uint, req dto.CommentReplyCreateReq, us
 	return replyToDTO(*aggregate, s.objectURLResolver), nil
 }
 
+func (s *commentService) ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error) {
+	target, err := parseTarget(targetType, 1)
+	if err != nil || commentID == 0 {
+		return nil, ErrCommentTargetInvalid
+	}
+	result, err := s.repo.ToggleLike(commentrepo.Target{Type: target.Type}, commentID, userID)
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	return &dto.CommentLikeResp{IsLiked: result.IsLiked, LikeCount: result.LikeCount}, nil
+}
+
+func (s *commentService) ToggleReplyLike(targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error) {
+	target, err := parseTarget(targetType, 1)
+	if err != nil || replyID == 0 {
+		return nil, ErrCommentTargetInvalid
+	}
+	result, err := s.repo.ToggleReplyLike(commentrepo.Target{Type: target.Type}, replyID, userID)
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	return &dto.CommentLikeResp{IsLiked: result.IsLiked, LikeCount: result.LikeCount}, nil
+}
+
 func (s *commentService) DeleteComment(targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
 	commentType, err := parseTargetType(targetType)
 	if err != nil || commentID == 0 {
@@ -73,11 +110,12 @@ func (s *commentService) DeleteComment(targetType string, commentID uint, userID
 	return &dto.CommentDeleteResp{ID: comment.ID}, nil
 }
 
-func (s *commentService) DeleteReply(replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
-	if replyID == 0 {
+func (s *commentService) DeleteReply(targetType string, replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
+	commentType, err := parseTargetType(targetType)
+	if err != nil || replyID == 0 {
 		return nil, ErrCommentTargetInvalid
 	}
-	reply, err := s.repo.DeleteReply(replyID, userID, hasAdminRole(roleNames))
+	reply, err := s.repo.DeleteReply(commentrepo.Target{Type: commentType}, replyID, userID, hasAdminRole(roleNames))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}

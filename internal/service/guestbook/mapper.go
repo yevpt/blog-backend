@@ -36,6 +36,7 @@ func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate) *dto.Guestbo
 		FromUserID:  message.FromUserID,
 		Content:     message.Content,
 		User:        guestbookUserToDTO(aggregate.User),
+		ReplyCount:  aggregate.ReplyCount,
 		LikeCount:   aggregate.LikeCount,
 		IsLiked:     aggregate.IsLiked,
 		CreatedAt:   message.CreatedAt,

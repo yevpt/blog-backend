@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/internal/middleware"
+	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -19,4 +20,13 @@ func requiredCommentClaims(c *gin.Context) (uint, []string, bool) {
 		return 0, nil, false
 	}
 	return uint(detail.ID), detail.Roles, true
+}
+
+func optionalCommentUser(c *gin.Context) *uint {
+	claims := jwtpkg.GetClaims(c)
+	if claims == nil || claims.UserId <= 0 {
+		return nil
+	}
+	userID := uint(claims.UserId)
+	return &userID
 }

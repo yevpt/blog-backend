@@ -2,6 +2,12 @@ package comment
 
 import commentservice "github.com/vpt/blog-backend/internal/service/comment"
 
+const (
+	targetTypeArticle   = "article"
+	targetTypeMoment    = "moment"
+	targetTypeGuestbook = "guestbook"
+)
+
 // CommentHandler 评论模块 HTTP 入口，只负责参数绑定、调用 service 和选择响应。
 type CommentHandler struct {
 	svc commentservice.CommentService

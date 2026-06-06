@@ -80,6 +80,22 @@ type ArticleMusicResp struct {
 	Duration uint16 `json:"duration" example:"240"`
 }
 
+// ArticleUserResp 文章作者摘要。
+type ArticleUserResp struct {
+	// ID 用户 ID。
+	ID uint `json:"id" example:"1"`
+	// Username 登录账号。
+	Username string `json:"username" example:"vpt"`
+	// Nickname 用户昵称。
+	Nickname *string `json:"nickname,omitempty" example:"Yevpt"`
+	// AvatarUrl 用户头像 CDN 访问地址。
+	AvatarUrl *string `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
+	// Site 个人站点。
+	Site *string `json:"site,omitempty" example:"https://yevpt.com"`
+	// Mark 身份标签。
+	Mark *string `json:"mark,omitempty" example:"博主"`
+}
+
 // ArticleListItemResp 文章列表项响应，不包含正文。
 type ArticleListItemResp struct {
 	// ID 文章 ID。
@@ -92,6 +108,8 @@ type ArticleListItemResp struct {
 	ShortContent *string `json:"short_content,omitempty"`
 	// UserID 作者用户 ID。
 	UserID uint `json:"user_id" example:"1"`
+	// User 作者摘要。
+	User *ArticleUserResp `json:"user,omitempty"`
 	// Status 文章状态。
 	Status uint8 `json:"status" example:"1"`
 	// CommentStatus 评论状态。

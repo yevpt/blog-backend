@@ -21,9 +21,11 @@ func (r *commentRepo) Create(target Target, userID uint, content string) (*Comme
 		return nil, err
 	}
 	return &CommentAggregate{
-		Comment: *comment,
-		User:    userMap[userID],
-		Replies: []ReplyAggregate{},
+		Comment:    *comment,
+		User:       userMap[userID],
+		ReplyCount: 0,
+		LikeCount:  0,
+		IsLiked:    false,
 	}, nil
 }
 
@@ -58,7 +60,7 @@ func (r *commentRepo) DeleteComment(target Target, commentID uint, userID uint, 
 	}
 
 	err = r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("comment_type = ? AND comment_id = ?", target.Type, commentID).Delete(&model.CommentReply{}).Error; err != nil {
+		if err := deleteRepliesByCommentWithTx(tx, target.Type, commentID); err != nil {
 			return err
 		}
 		return deleteCommentWithTx(tx, target.Type, commentID)
@@ -69,22 +71,18 @@ func (r *commentRepo) DeleteComment(target Target, commentID uint, userID uint, 
 	return comment, nil
 }
 
-func (r *commentRepo) DeleteReply(replyID uint, userID uint, force bool) (*model.CommentReply, error) {
-	var reply model.CommentReply
-	err := r.db.Where("id = ?", replyID).First(&reply).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrReplyNotFound
-	}
+func (r *commentRepo) DeleteReply(target Target, replyID uint, userID uint, force bool) (*ReplyRecord, error) {
+	reply, err := r.findReplyByID(target.Type, replyID)
 	if err != nil {
 		return nil, err
 	}
 	if !force && reply.FromUserID != userID {
 		return nil, ErrNoDeletePermission
 	}
-	if err := r.db.Delete(&reply).Error; err != nil {
+	if err := deleteReplyWithTx(r.db, target.Type, replyID); err != nil {
 		return nil, err
 	}
-	return &reply, nil
+	return reply, nil
 }
 
 func (r *commentRepo) createCommentRecord(target Target, userID uint, content string) (*CommentRecord, error) {
@@ -154,5 +152,31 @@ func deleteCommentWithTx(tx *gorm.DB, commentType uint8, commentID uint) error {
 		return tx.Delete(&model.Guestbook{}, commentID).Error
 	default:
 		return ErrCommentNotFound
+	}
+}
+
+func deleteRepliesByCommentWithTx(tx *gorm.DB, commentType uint8, commentID uint) error {
+	switch commentType {
+	case TargetArticle:
+		return tx.Where("comment_id = ?", commentID).Delete(&model.ArticleCommentReply{}).Error
+	case TargetMoment:
+		return tx.Where("comment_id = ?", commentID).Delete(&model.MomentCommentReply{}).Error
+	case TargetGuestbook:
+		return tx.Where("comment_id = ?", commentID).Delete(&model.GuestbookReply{}).Error
+	default:
+		return ErrReplyNotFound
+	}
+}
+
+func deleteReplyWithTx(tx *gorm.DB, commentType uint8, replyID uint) error {
+	switch commentType {
+	case TargetArticle:
+		return tx.Delete(&model.ArticleCommentReply{}, replyID).Error
+	case TargetMoment:
+		return tx.Delete(&model.MomentCommentReply{}, replyID).Error
+	case TargetGuestbook:
+		return tx.Delete(&model.GuestbookReply{}, replyID).Error
+	default:
+		return ErrReplyNotFound
 	}
 }

@@ -28,6 +28,7 @@ type ArticlePageResult struct {
 // ArticleAggregate 文章详情聚合模型，用于 service 转换为 dto。
 type ArticleAggregate struct {
 	Article      model.Article
+	User         *model.User
 	Categories   []model.Category
 	Tags         []model.Tag
 	Music        []model.Music

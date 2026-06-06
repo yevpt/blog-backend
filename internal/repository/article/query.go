@@ -180,6 +180,10 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 	if err != nil {
 		return nil, err
 	}
+	users, err := r.articleUsers(articleUserIDs(articles))
+	if err != nil {
+		return nil, err
+	}
 	likedMap := map[uint]bool{}
 	if viewerID != nil {
 		likedMap, err = r.articleLikedMap(ids, *viewerID)
@@ -191,6 +195,7 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 	for _, article := range articles {
 		aggregate := ArticleAggregate{
 			Article:      article,
+			User:         users[article.UserID],
 			Categories:   categories[article.ID],
 			Tags:         tags[article.ID],
 			Music:        music[article.ID],
@@ -202,6 +207,37 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 		aggregates = append(aggregates, aggregate)
 	}
 	return aggregates, nil
+}
+
+func articleUserIDs(articles []model.Article) []uint {
+	seen := make(map[uint]struct{}, len(articles))
+	ids := make([]uint, 0, len(articles))
+	for _, article := range articles {
+		if article.UserID == 0 {
+			continue
+		}
+		if _, ok := seen[article.UserID]; ok {
+			continue
+		}
+		seen[article.UserID] = struct{}{}
+		ids = append(ids, article.UserID)
+	}
+	return ids
+}
+
+func (r *articleRepo) articleUsers(userIDs []uint) (map[uint]*model.User, error) {
+	result := make(map[uint]*model.User, len(userIDs))
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+
+	var users []model.User
+	err := r.db.Where("id IN ?", userIDs).Find(&users).Error
+	for i := range users {
+		user := users[i]
+		result[user.ID] = &user
+	}
+	return result, err
 }
 
 func articleIDs(articles []model.Article) []uint {

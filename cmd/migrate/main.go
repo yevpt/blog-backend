@@ -134,6 +134,13 @@ func main() {
 	}
 	log.Printf("  ✓ 完成")
 
+	// 7. 清理迁移过程中遗留的旧表，确保目标库结构与当前代码一致
+	log.Println("→ Step 26: 清理旧表")
+	if err := dropLegacyTables(dst); err != nil {
+		log.Fatalf("  ✗ 清理旧表失败: %v", err)
+	}
+	log.Printf("  ✓ 完成")
+
 	log.Println("\n✓ 全部迁移步骤完成")
 }
 
@@ -166,7 +173,9 @@ func autoMigrate(db *gorm.DB) error {
 		&model.ArticleComment{},
 		&model.MomentComment{},
 		&model.Guestbook{},
-		&model.CommentReply{},
+		&model.ArticleCommentReply{},
+		&model.MomentCommentReply{},
+		&model.GuestbookReply{},
 		&model.Message{},
 		&model.UserMessage{},
 	)
@@ -208,7 +217,7 @@ func targetTableForStep(name string) string {
 		"Step 17": "article_music",
 		"Step 18": "article_recommend",
 		"Step 19": "article_comment",
-		"Step 20": "comment_reply",
+		"Step 20": "article_comment_reply",
 		"Step 21": "user_like",
 		"Step 22": "message",
 		"Step 23": "user_message",
@@ -1372,38 +1381,16 @@ func migrateComments(src *sql.DB, dst *gorm.DB) error {
 }
 
 // ─────────────────────────────────────────────
-// Step 20: comment_reply → comment_reply
+// Step 20: comment_reply → article_comment_reply / moment_comment_reply / guestbook_reply
 // ─────────────────────────────────────────────
 // 关键变更：
-//   新增 comment_type 字段，需要通过源库 comment.type 反查确定
 //   last_id → parent_reply_id（字段改名，语义不变）
 //   to_id → to_user_id，from_id → from_user_id（命名统一）
 //   like_num 丢弃
 
 func migrateCommentReply(src *sql.DB, dst *gorm.DB) error {
-	// 预建 comment_id → comment_type 映射（1=文章 2=说说 3=留言板）
-	typeMap := map[uint]uint8{}
-	mapRows, err := src.Query("SELECT ID, type FROM comment")
+	typeMap, err := legacyCommentTypeMap(src)
 	if err != nil {
-		return fmt.Errorf("构建 comment 类型映射失败: %w", err)
-	}
-	defer mapRows.Close()
-	for mapRows.Next() {
-		var cid uint
-		var ctype string
-		if err := mapRows.Scan(&cid, &ctype); err != nil {
-			return err
-		}
-		switch ctype {
-		case "post":
-			typeMap[cid] = 1
-		case "say":
-			typeMap[cid] = 2
-		case "guestBook":
-			typeMap[cid] = 3
-		}
-	}
-	if err := mapRows.Err(); err != nil {
 		return err
 	}
 
@@ -1436,7 +1423,7 @@ func migrateCommentReply(src *sql.DB, dst *gorm.DB) error {
 		commentType, ok := typeMap[commentID]
 		if !ok {
 			// 源 comment 已被物理删除，默认归为文章评论回复
-			log.Printf("  警告: comment_reply id=%d 的 comment_id=%d 不存在，默认 comment_type=1", id, commentID)
+			log.Printf("  警告: comment_reply id=%d 的 comment_id=%d 不存在，默认归入 article_comment_reply", id, commentID)
 			commentType = 1
 		}
 
@@ -1445,26 +1432,56 @@ func migrateCommentReply(src *sql.DB, dst *gorm.DB) error {
 			parentReplyID = uint(lastID.Int64)
 		}
 
-		cr := model.CommentReply{
-			Base:          model.Base{ID: id},
-			CommentType:   commentType,
-			CommentID:     commentID,
-			ToUserID:      toID,
-			FromUserID:    fromID,
-			ParentReplyID: parentReplyID,
-			Content:       content.String,
-		}
+		base := model.Base{ID: id}
 		if dateCreate.Valid {
-			cr.CreatedAt = dateCreate.Time
+			base.CreatedAt = dateCreate.Time
 		}
 		if dateModifed.Valid {
-			cr.UpdatedAt = dateModifed.Time
+			base.UpdatedAt = dateModifed.Time
 		}
 		if isUse.Valid && isUse.String == "00" {
-			cr.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
+			base.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
 		}
-		if err := dst.Create(&cr).Error; err != nil {
-			return fmt.Errorf("insert comment_reply id=%d: %w", id, err)
+
+		switch commentType {
+		case 1:
+			row := model.ArticleCommentReply{
+				Base:          base,
+				CommentID:     commentID,
+				ToUserID:      toID,
+				FromUserID:    fromID,
+				ParentReplyID: parentReplyID,
+				Content:       content.String,
+			}
+			if err := dst.Create(&row).Error; err != nil {
+				return fmt.Errorf("insert article_comment_reply id=%d: %w", id, err)
+			}
+		case 2:
+			row := model.MomentCommentReply{
+				Base:          base,
+				CommentID:     commentID,
+				ToUserID:      toID,
+				FromUserID:    fromID,
+				ParentReplyID: parentReplyID,
+				Content:       content.String,
+			}
+			if err := dst.Create(&row).Error; err != nil {
+				return fmt.Errorf("insert moment_comment_reply id=%d: %w", id, err)
+			}
+		case 3:
+			row := model.GuestbookReply{
+				Base:          base,
+				CommentID:     commentID,
+				ToUserID:      toID,
+				FromUserID:    fromID,
+				ParentReplyID: parentReplyID,
+				Content:       content.String,
+			}
+			if err := dst.Create(&row).Error; err != nil {
+				return fmt.Errorf("insert guestbook_reply id=%d: %w", id, err)
+			}
+		default:
+			return fmt.Errorf("comment_reply id=%d 的类型 %d 不支持", id, commentType)
 		}
 	}
 	return rows.Err()
@@ -1476,11 +1493,23 @@ func migrateCommentReply(src *sql.DB, dst *gorm.DB) error {
 // 源库结构：post_id（目标 ID）+ user_id + type varchar + is_use
 // 目标结构：user_id + target_id + type tinyint（UNIQUE）
 //
-// type 映射：'01' → 1（文章点赞），'02' → 2（评论点赞），'03' → 3（回复点赞）
+// type 映射：
+//   '01' → 1（文章点赞）
+//   '02' → 按评论类型拆分为 2/6/5（文章评论/碎语评论/留言）
+//   '03' → 按回复类型拆分为 3/7/8（文章评论回复/碎语评论回复/留言回复）
 // is_use='00' → 软删除
 // 去重：相同 (user_id, target_id, type) 只保留最早一条
 
 func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
+	commentTypeMap, err := legacyCommentTypeMap(src)
+	if err != nil {
+		return err
+	}
+	replyTypeMap, err := legacyReplyLikeTypeMap(src, commentTypeMap)
+	if err != nil {
+		return err
+	}
+
 	rows, err := src.Query(`
 		SELECT ID, user_id, post_id, type, is_use, date_create
 		FROM post_like ORDER BY ID`)
@@ -1504,17 +1533,20 @@ func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
 			return err
 		}
 
-		// type varchar → tinyint
 		var typeVal uint8
 		switch likeType.String {
 		case "01":
 			typeVal = 1
 		case "02":
-			typeVal = 2
+			typeVal = commentLikeTypeFromLegacy(commentTypeMap[postID])
 		case "03":
-			typeVal = 3
+			typeVal = replyTypeMap[postID]
 		default:
 			typeVal = 1
+		}
+		if typeVal == 0 {
+			log.Printf("  跳过无法识别的点赞记录 id=%d type=%s target=%d", id, likeType.String, postID)
+			continue
 		}
 
 		// 去重 key
@@ -1526,8 +1558,9 @@ func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
 		seen[key] = true
 
 		ul := model.UserLike{
-			Base:     model.Base{ID: id},
-			UserID:   userID,
+			Base:   model.Base{ID: id},
+			UserID: userID,
+			// 先保留源库里的旧目标 ID，后续由 Step 25 defrag 按类型同步更新为压缩后的新 ID。
 			TargetID: postID,
 			Type:     typeVal,
 		}
@@ -1542,6 +1575,85 @@ func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
 		}
 	}
 	return rows.Err()
+}
+
+func legacyCommentTypeMap(src *sql.DB) (map[uint]uint8, error) {
+	typeMap := map[uint]uint8{}
+	rows, err := src.Query("SELECT ID, type FROM comment")
+	if err != nil {
+		return nil, fmt.Errorf("构建 comment 类型映射失败: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id    uint
+			ctype string
+		)
+		if err := rows.Scan(&id, &ctype); err != nil {
+			return nil, err
+		}
+		switch ctype {
+		case "post":
+			typeMap[id] = 1
+		case "say":
+			typeMap[id] = 2
+		case "guestBook":
+			typeMap[id] = 3
+		}
+	}
+	return typeMap, rows.Err()
+}
+
+func legacyReplyLikeTypeMap(src *sql.DB, commentTypeMap map[uint]uint8) (map[uint]uint8, error) {
+	replyTypeMap := map[uint]uint8{}
+	rows, err := src.Query("SELECT ID, comment_id FROM comment_reply")
+	if err != nil {
+		return nil, fmt.Errorf("构建 comment_reply 类型映射失败: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			replyID   uint
+			commentID uint
+		)
+		if err := rows.Scan(&replyID, &commentID); err != nil {
+			return nil, err
+		}
+		replyTypeMap[replyID] = replyLikeTypeFromLegacy(commentTypeMap[commentID])
+	}
+	return replyTypeMap, rows.Err()
+}
+
+func commentLikeTypeFromLegacy(commentType uint8) uint8 {
+	switch commentType {
+	case 1:
+		return 2
+	case 2:
+		return 6
+	case 3:
+		return 5
+	default:
+		return 0
+	}
+}
+
+func replyLikeTypeFromLegacy(commentType uint8) uint8 {
+	switch commentType {
+	case 1:
+		return 3
+	case 2:
+		return 7
+	case 3:
+		return 8
+	default:
+		return 0
+	}
+}
+
+func dropLegacyTables(dst *gorm.DB) error {
+	return dst.Exec("DROP TABLE IF EXISTS `comment_reply`").Error
 }
 
 // ─────────────────────────────────────────────
@@ -1725,10 +1837,12 @@ func cleanOrphans(dst *gorm.DB) error {
 //   4. 将 AUTO_INCREMENT 重置为 count + 1
 //
 // 处理顺序：先处理被引用的父表，再处理子表
-//   article_comment → 被 comment_reply(type=1) 和 user_like(type=2) 引用
-//   moment_comment  → 被 comment_reply(type=2) 和 user_like(type=2) 引用
-//   guestbook       → 被 comment_reply(type=3) 和 user_like(type=2) 引用
-//   comment_reply   → 被 user_like(type=3) 引用
+//   article_comment → 被 article_comment_reply 和 user_like(type=2) 引用
+//   moment_comment  → 被 moment_comment_reply 和 user_like(type=6) 引用
+//   guestbook       → 被 guestbook_reply 和 user_like(type=5) 引用
+//   article_comment_reply → 被 user_like(type=3) 引用
+//   moment_comment_reply  → 被 user_like(type=7) 引用
+//   guestbook_reply       → 被 user_like(type=8) 引用
 //   user_message    → 无外键引用，独立处理
 
 func defragIDs(dst *gorm.DB) error {
@@ -1737,35 +1851,49 @@ func defragIDs(dst *gorm.DB) error {
 		return err
 	}
 
-	// article_comment → 更新 comment_reply(type=1) + user_like(type=2)
+	// article_comment → 更新 article_comment_reply + user_like(type=2)
 	if err := defragTable(db, "article_comment", []fkRef{
-		{"comment_reply", "comment_id", "comment_type=1"},
+		{"article_comment_reply", "comment_id", ""},
 		{"user_like", "target_id", "type=2"},
 	}); err != nil {
 		return fmt.Errorf("defrag article_comment: %w", err)
 	}
 
-	// moment_comment → 更新 comment_reply(type=2) + user_like(type=2)
+	// moment_comment → 更新 moment_comment_reply + user_like(type=6)
 	if err := defragTable(db, "moment_comment", []fkRef{
-		{"comment_reply", "comment_id", "comment_type=2"},
-		{"user_like", "target_id", "type=2"},
+		{"moment_comment_reply", "comment_id", ""},
+		{"user_like", "target_id", "type=6"},
 	}); err != nil {
 		return fmt.Errorf("defrag moment_comment: %w", err)
 	}
 
-	// guestbook → 更新 comment_reply(type=3) + user_like(type=2)
+	// guestbook → 更新 guestbook_reply + user_like(type=5)
 	if err := defragTable(db, "guestbook", []fkRef{
-		{"comment_reply", "comment_id", "comment_type=3"},
-		{"user_like", "target_id", "type=2"},
+		{"guestbook_reply", "comment_id", ""},
+		{"user_like", "target_id", "type=5"},
 	}); err != nil {
 		return fmt.Errorf("defrag guestbook: %w", err)
 	}
 
-	// comment_reply → 更新 user_like(type=3)
-	if err := defragTable(db, "comment_reply", []fkRef{
+	// article_comment_reply → 更新 user_like(type=3)
+	if err := defragTable(db, "article_comment_reply", []fkRef{
 		{"user_like", "target_id", "type=3"},
 	}); err != nil {
-		return fmt.Errorf("defrag comment_reply: %w", err)
+		return fmt.Errorf("defrag article_comment_reply: %w", err)
+	}
+
+	// moment_comment_reply → 更新 user_like(type=7)
+	if err := defragTable(db, "moment_comment_reply", []fkRef{
+		{"user_like", "target_id", "type=7"},
+	}); err != nil {
+		return fmt.Errorf("defrag moment_comment_reply: %w", err)
+	}
+
+	// guestbook_reply → 更新 user_like(type=8)
+	if err := defragTable(db, "guestbook_reply", []fkRef{
+		{"user_like", "target_id", "type=8"},
+	}); err != nil {
+		return fmt.Errorf("defrag guestbook_reply: %w", err)
 	}
 
 	// user_message → 无外键引用，直接压缩
@@ -1773,8 +1901,8 @@ func defragIDs(dst *gorm.DB) error {
 		return fmt.Errorf("defrag user_message: %w", err)
 	}
 
-	// 清理 user_like 中仍然悬空的评论点赞（评论已被删除，迁移后无对应记录）
-	res, err := db.Exec(`DELETE FROM user_like WHERE type=2
+	// 清理 user_like 中仍然悬空的顶层评论点赞（评论已被删除，迁移后无对应记录）
+	res, err := db.Exec(`DELETE FROM user_like WHERE type IN (2,5,6)
 		AND target_id NOT IN (SELECT id FROM article_comment)
 		AND target_id NOT IN (SELECT id FROM moment_comment)
 		AND target_id NOT IN (SELECT id FROM guestbook)`)
@@ -1782,7 +1910,19 @@ func defragIDs(dst *gorm.DB) error {
 		return fmt.Errorf("清理悬空评论点赞: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("  清理悬空 user_like(type=2): %d 条", n)
+		log.Printf("  清理悬空顶层评论点赞: %d 条", n)
+	}
+
+	// 清理 user_like 中悬空的回复点赞。
+	res, err = db.Exec(`DELETE FROM user_like WHERE type IN (3,7,8)
+		AND target_id NOT IN (SELECT id FROM article_comment_reply)
+		AND target_id NOT IN (SELECT id FROM moment_comment_reply)
+		AND target_id NOT IN (SELECT id FROM guestbook_reply)`)
+	if err != nil {
+		return fmt.Errorf("清理悬空回复点赞: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		log.Printf("  清理悬空回复点赞: %d 条", n)
 	}
 
 	return nil

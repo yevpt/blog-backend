@@ -38,18 +38,18 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health     *handler.HealthHandler
-	test       *handler.TestHandler
-	auth       *authhandler.AuthHandler
-	captcha    *captchahandler.CaptchaHandler
-	article    *articlehandler.ArticleHandler
-	comment    *commenthandler.CommentHandler
-	guestbook  *guestbookhandler.GuestbookHandler
-	moment     *momenthandler.MomentHandler
-	user       *handler.UserHandler
-	category   *handler.CategoryHandler
-	tag        *handler.TagHandler
-	userCache  service.UserCacheService
+	health    *handler.HealthHandler
+	test      *handler.TestHandler
+	auth      *authhandler.AuthHandler
+	captcha   *captchahandler.CaptchaHandler
+	article   *articlehandler.ArticleHandler
+	comment   *commenthandler.CommentHandler
+	guestbook *guestbookhandler.GuestbookHandler
+	moment    *momenthandler.MomentHandler
+	user      *handler.UserHandler
+	category  *handler.CategoryHandler
+	tag       *handler.TagHandler
+	userCache service.UserCacheService
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -215,10 +215,14 @@ func registerPublicRoutes(
 	r.GET("/articles", middleware.OptionalAuth(jwtManager), handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
 	r.POST("/articles/:id/read", handlers.article.Read)
-	r.GET("/comments", handlers.comment.List)
+	r.GET("/articles/:id/comments", middleware.OptionalAuth(jwtManager), handlers.comment.ListArticle)
 	r.GET("/guestbook", middleware.OptionalAuth(jwtManager), handlers.guestbook.List)
+	r.GET("/guestbook/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListGuestbookReplies)
 	r.GET("/moments", middleware.OptionalAuth(jwtManager), handlers.moment.List)
 	r.GET("/moments/:id", middleware.OptionalAuth(jwtManager), handlers.moment.GetDetail)
+	r.GET("/moments/:id/comments", middleware.OptionalAuth(jwtManager), handlers.comment.ListMoment)
+	r.GET("/moments/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListMomentReplies)
+	r.GET("/articles/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListArticleReplies)
 	r.POST("/moments/:id/read", handlers.moment.Read)
 }
 
@@ -229,14 +233,26 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.GET("/users/me", handlers.user.GetDetail)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
-	authed.POST("/comments", handlers.comment.Create)
-	authed.POST("/comments/:id/replies", handlers.comment.Reply)
-	authed.DELETE("/comments/:id", handlers.comment.Delete)
-	authed.DELETE("/comment-replies/:id", handlers.comment.DeleteReply)
+	authed.POST("/articles/:id/comments", handlers.comment.CreateArticle)
+	authed.POST("/articles/comments/:id/replies", handlers.comment.ReplyArticle)
+	authed.POST("/articles/comments/:id/like", handlers.comment.ToggleArticleLike)
+	authed.POST("/articles/comments/:id/replies/:replyId/like", handlers.comment.ToggleArticleReplyLike)
+	authed.DELETE("/articles/comments/:id", handlers.comment.DeleteArticle)
+	authed.DELETE("/articles/comment-replies/:id", handlers.comment.DeleteArticleReply)
 	authed.POST("/guestbook", handlers.guestbook.Create)
 	authed.POST("/guestbook/:id/like", handlers.guestbook.ToggleLike)
+	authed.POST("/guestbook/comments/:id/replies", handlers.comment.ReplyGuestbook)
+	authed.POST("/guestbook/comments/:id/replies/:replyId/like", handlers.comment.ToggleGuestbookReplyLike)
+	authed.DELETE("/guestbook/comments/:id", handlers.comment.DeleteGuestbook)
+	authed.DELETE("/guestbook/comment-replies/:id", handlers.comment.DeleteGuestbookReply)
 	authed.DELETE("/guestbook/:id", handlers.guestbook.Delete)
 	authed.POST("/moments", handlers.moment.Save)
+	authed.POST("/moments/:id/comments", handlers.comment.CreateMoment)
+	authed.POST("/moments/comments/:id/replies", handlers.comment.ReplyMoment)
+	authed.POST("/moments/comments/:id/like", handlers.comment.ToggleMomentLike)
+	authed.POST("/moments/comments/:id/replies/:replyId/like", handlers.comment.ToggleMomentReplyLike)
+	authed.DELETE("/moments/comments/:id", handlers.comment.DeleteMoment)
+	authed.DELETE("/moments/comment-replies/:id", handlers.comment.DeleteMomentReply)
 	authed.DELETE("/moments/:id", handlers.moment.Delete)
 	authed.POST("/moments/:id/top", handlers.moment.SetTop)
 	authed.DELETE("/moments/:id/top", handlers.moment.RemoveTop)

@@ -28,6 +28,9 @@ func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver s
 		if err := resolveListItemCoverURL(&item, objectURLResolver); err != nil {
 			return nil, err
 		}
+		if err := resolveArticleUserAvatarURL(item.User, objectURLResolver); err != nil {
+			return nil, err
+		}
 		items = append(items, item)
 	}
 
@@ -71,6 +74,18 @@ func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver st
 		return err
 	}
 	item.CoverImgUrl = url
+	return nil
+}
+
+func resolveArticleUserAvatarURL(user *dto.ArticleUserResp, objectURLResolver storage.ObjectURLResolver) error {
+	if user == nil {
+		return nil
+	}
+	url, err := resolveURL(user.AvatarUrl, objectURLResolver)
+	if err != nil {
+		return err
+	}
+	user.AvatarUrl = url
 	return nil
 }
 
@@ -153,6 +168,9 @@ func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleC
 	if err := resolveListItemCoverURL(&item, objectURLResolver); err != nil {
 		return nil, err
 	}
+	if err := resolveArticleUserAvatarURL(item.User, objectURLResolver); err != nil {
+		return nil, err
+	}
 	passworded := aggregate.Article.Status == 2
 	content := ""
 	if policy == articleContentAdmin || !passworded {
@@ -222,6 +240,7 @@ func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleLi
 		CoverImgUrl:   article.CoverImgUrl,
 		ShortContent:  article.ShortContent,
 		UserID:        article.UserID,
+		User:          articleUserToDTO(aggregate.User),
 		Status:        article.Status,
 		CommentStatus: article.CommentStatus,
 		ReadCount:     article.ReadCount,
@@ -232,6 +251,20 @@ func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleLi
 		Category:      category,
 		CreatedAt:     article.CreatedAt,
 		UpdatedAt:     article.UpdatedAt,
+	}
+}
+
+func articleUserToDTO(user *model.User) *dto.ArticleUserResp {
+	if user == nil {
+		return nil
+	}
+	return &dto.ArticleUserResp{
+		ID:        user.ID,
+		Username:  user.Username,
+		Nickname:  user.Nickname,
+		AvatarUrl: user.AvatarUrl,
+		Site:      user.Site,
+		Mark:      user.Mark,
 	}
 }
 

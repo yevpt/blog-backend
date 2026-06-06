@@ -83,6 +83,10 @@ func (r *guestbookRepo) attachRelations(messages []model.Guestbook, viewerID *ui
 		return nil, err
 	}
 	ids := messageIDs(messages)
+	replyCounts, err := r.replyCounts(ids)
+	if err != nil {
+		return nil, err
+	}
 	likeCounts, err := r.likeCounts(ids)
 	if err != nil {
 		return nil, err
@@ -95,13 +99,38 @@ func (r *guestbookRepo) attachRelations(messages []model.Guestbook, viewerID *ui
 	aggregates := make([]GuestbookAggregate, 0, len(messages))
 	for _, message := range messages {
 		aggregates = append(aggregates, GuestbookAggregate{
-			Message:   message,
-			User:      userMap[message.FromUserID],
-			LikeCount: likeCounts[message.ID],
-			IsLiked:   likedIDs[message.ID],
+			Message:    message,
+			User:       userMap[message.FromUserID],
+			ReplyCount: replyCounts[message.ID],
+			LikeCount:  likeCounts[message.ID],
+			IsLiked:    likedIDs[message.ID],
 		})
 	}
 	return aggregates, nil
+}
+
+func (r *guestbookRepo) replyCounts(ids []uint) (map[uint]int64, error) {
+	counts := make(map[uint]int64, len(ids))
+	if len(ids) == 0 {
+		return counts, nil
+	}
+
+	var rows []struct {
+		CommentID uint
+		Count     int64
+	}
+	err := r.db.Model(&model.GuestbookReply{}).
+		Select("comment_id, count(*) as count").
+		Where("comment_id IN ?", ids).
+		Group("comment_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		counts[row.CommentID] = row.Count
+	}
+	return counts, nil
 }
 
 func (r *guestbookRepo) likeCounts(ids []uint) (map[uint]int64, error) {
