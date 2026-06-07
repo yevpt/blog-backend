@@ -21,6 +21,7 @@ import (
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	"github.com/vpt/blog-backend/internal/service"
+	"github.com/vpt/blog-backend/internal/service/uv"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	captchaservice "github.com/vpt/blog-backend/internal/service/captcha"
@@ -154,9 +155,11 @@ func newRouteHandlers(
 	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
 	userSvc := service.NewUserService(userCacheSvc)
 
+	uvSvc := uv.NewService(redisClient)
+
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
-	articleSvc := articleservice.NewArticleService(articleRepo, objectURLResolver)
+	articleSvc := articleservice.NewArticleService(articleRepo, objectURLResolver, uvSvc)
 
 	categoryRepo := repository.NewCategoryRepository(db)
 	categorySvc := service.NewCategoryService(categoryRepo)
@@ -171,7 +174,7 @@ func newRouteHandlers(
 	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo)
 
 	momentRepo := momentrepo.NewMomentRepository(db)
-	momentSvc := momentservice.NewMomentService(momentRepo, objectURLResolver)
+	momentSvc := momentservice.NewMomentService(momentRepo, objectURLResolver, uvSvc)
 
 	return routeHandlers{
 		health:    handler.NewHealthHandler(db, redisClient),
@@ -214,7 +217,7 @@ func registerPublicRoutes(
 	r.GET("/articles/ids", handlers.article.ListIDs)
 	r.GET("/articles", middleware.OptionalAuth(jwtManager), handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
-	r.POST("/articles/:id/read", handlers.article.Read)
+	r.POST("/articles/:id/view", middleware.VisitorID(), handlers.article.View)
 	r.GET("/articles/:id/comments", middleware.OptionalAuth(jwtManager), handlers.comment.ListArticle)
 	r.GET("/guestbook", middleware.OptionalAuth(jwtManager), handlers.guestbook.List)
 	r.GET("/guestbook/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListGuestbookReplies)
@@ -223,7 +226,7 @@ func registerPublicRoutes(
 	r.GET("/moments/:id/comments", middleware.OptionalAuth(jwtManager), handlers.comment.ListMoment)
 	r.GET("/moments/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListMomentReplies)
 	r.GET("/articles/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListArticleReplies)
-	r.POST("/moments/:id/read", handlers.moment.Read)
+	r.POST("/moments/:id/view", middleware.VisitorID(), handlers.moment.View)
 }
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
