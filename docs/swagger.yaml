@@ -243,17 +243,6 @@ definitions:
         example: 100
         type: integer
     type: object
-  dto.ArticleReadResp:
-    properties:
-      id:
-        description: ID 文章 ID。
-        example: 1
-        type: integer
-      read_count:
-        description: ReadCount 阅读数量。
-        example: 21
-        type: integer
-    type: object
   dto.ArticleRelationResp:
     properties:
       cover_img_url:
@@ -380,6 +369,17 @@ definitions:
         description: Username 登录账号。
         example: vpt
         type: string
+    type: object
+  dto.ArticleViewResp:
+    properties:
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      view_count:
+        description: ViewCount 阅读数量。
+        example: 21
+        type: integer
     type: object
   dto.CaptchaChallengeResp:
     properties:
@@ -871,6 +871,10 @@ definitions:
         description: OwnerUserID 留言板主人用户 ID。
         example: 1
         type: integer
+      reply_count:
+        description: ReplyCount 回复数量。
+        example: 3
+        type: integer
       updated_at:
         description: UpdatedAt 更新时间。
         type: string
@@ -1124,17 +1128,6 @@ definitions:
         example: 100
         type: integer
     type: object
-  dto.MomentReadResp:
-    properties:
-      id:
-        description: ID 碎语 ID。
-        example: 1
-        type: integer
-      read_count:
-        description: ReadCount 阅读数量。
-        example: 21
-        type: integer
-    type: object
   dto.MomentSaveReq:
     properties:
       comment_status:
@@ -1209,6 +1202,17 @@ definitions:
         description: Username 登录账号。
         example: vpt
         type: string
+    type: object
+  dto.MomentViewResp:
+    properties:
+      id:
+        description: ID 碎语 ID。
+        example: 1
+        type: integer
+      view_count:
+        description: ViewCount 阅读数量。
+        example: 21
+        type: integer
     type: object
   dto.RefreshReq:
     properties:
@@ -2268,11 +2272,11 @@ paths:
       summary: 切换文章点赞
       tags:
       - 文章
-  /articles/{id}/read:
+  /articles/{id}/view:
     post:
       consumes:
       - application/json
-      description: 使用数据库原子更新将文章阅读数增加 1。
+      description: 同一访客同一文章 24 小时内只增加一次阅读数。
       parameters:
       - description: 文章 ID
         in: path
@@ -2283,14 +2287,18 @@ paths:
       - application/json
       responses:
         "200":
-          description: 统一响应；code=0 表示更新成功，code=400 表示参数错误
+          description: 统一响应；code=0 表示更新成功
           schema:
             allOf:
             - $ref: '#/definitions/response.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/dto.ArticleReadResp'
+                  $ref: '#/definitions/dto.ArticleViewResp'
               type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
         "404":
           description: 文章不存在
           schema:
@@ -3477,40 +3485,6 @@ paths:
       summary: 切换碎语点赞
       tags:
       - 碎语
-  /moments/{id}/read:
-    post:
-      consumes:
-      - application/json
-      description: 使用数据库原子更新将碎语阅读数增加 1。
-      parameters:
-      - description: 碎语 ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 统一响应；code=0 表示更新成功，code=400 表示参数错误
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.Response'
-            - properties:
-                data:
-                  $ref: '#/definitions/dto.MomentReadResp'
-              type: object
-        "404":
-          description: 碎语不存在
-          schema:
-            $ref: '#/definitions/response.Response'
-        "500":
-          description: 服务器内部错误
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 增加碎语阅读数
-      tags:
-      - 碎语
   /moments/{id}/top:
     delete:
       consumes:
@@ -3592,6 +3566,44 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 置顶碎语
+      tags:
+      - 碎语
+  /moments/{id}/view:
+    post:
+      consumes:
+      - application/json
+      description: 同一访客同一碎语 24 小时内只增加一次阅读数。
+      parameters:
+      - description: 碎语 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentViewResp'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 碎语不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 增加碎语阅读数
       tags:
       - 碎语
   /moments/comment-replies/{id}:

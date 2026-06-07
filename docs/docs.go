@@ -1703,9 +1703,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/articles/{id}/read": {
+        "/articles/{id}/view": {
             "post": {
-                "description": "使用数据库原子更新将文章阅读数增加 1。",
+                "description": "同一访客同一文章 24 小时内只增加一次阅读数。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1727,7 +1727,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "统一响应；code=0 表示更新成功，code=400 表示参数错误",
+                        "description": "统一响应；code=0 表示更新成功",
                         "schema": {
                             "allOf": [
                                 {
@@ -1737,11 +1737,17 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/dto.ArticleReadResp"
+                                            "$ref": "#/definitions/dto.ArticleViewResp"
                                         }
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "404": {
@@ -3629,62 +3635,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/moments/{id}/read": {
-            "post": {
-                "description": "使用数据库原子更新将碎语阅读数增加 1。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "碎语"
-                ],
-                "summary": "增加碎语阅读数",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "碎语 ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "统一响应；code=0 表示更新成功，code=400 表示参数错误",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.Response"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/dto.MomentReadResp"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "碎语不存在",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/moments/{id}/top": {
             "post": {
                 "description": "碎语作者或管理员可置顶碎语；每个作者最多置顶三条。",
@@ -3800,6 +3750,68 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "无权操作碎语",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "碎语不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/moments/{id}/view": {
+            "post": {
+                "description": "同一访客同一碎语 24 小时内只增加一次阅读数。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "增加碎语阅读数",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentViewResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -4350,21 +4362,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ArticleReadResp": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "description": "ID 文章 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "read_count": {
-                    "description": "ReadCount 阅读数量。",
-                    "type": "integer",
-                    "example": 21
-                }
-            }
-        },
         "dto.ArticleRelationResp": {
             "type": "object",
             "properties": {
@@ -4529,6 +4526,21 @@ const docTemplate = `{
                     "description": "Username 登录账号。",
                     "type": "string",
                     "example": "vpt"
+                }
+            }
+        },
+        "dto.ArticleViewResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "view_count": {
+                    "description": "ViewCount 阅读数量。",
+                    "type": "integer",
+                    "example": 21
                 }
             }
         },
@@ -5191,6 +5203,11 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
+                "reply_count": {
+                    "description": "ReplyCount 回复数量。",
+                    "type": "integer",
+                    "example": 3
+                },
                 "updated_at": {
                     "description": "UpdatedAt 更新时间。",
                     "type": "string"
@@ -5534,21 +5551,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MomentReadResp": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "description": "ID 碎语 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "read_count": {
-                    "description": "ReadCount 阅读数量。",
-                    "type": "integer",
-                    "example": 21
-                }
-            }
-        },
         "dto.MomentSaveReq": {
             "type": "object",
             "required": [
@@ -5645,6 +5647,21 @@ const docTemplate = `{
                     "description": "Username 登录账号。",
                     "type": "string",
                     "example": "vpt"
+                }
+            }
+        },
+        "dto.MomentViewResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 碎语 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "view_count": {
+                    "description": "ViewCount 阅读数量。",
+                    "type": "integer",
+                    "example": 21
                 }
             }
         },
