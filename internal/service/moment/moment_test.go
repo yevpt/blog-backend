@@ -128,7 +128,7 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 		},
 	}
 	resolver := &fakeURLResolver{}
-	svc := momentservice.NewMomentService(repo, resolver)
+	svc := momentservice.NewMomentService(repo, resolver, nil)
 
 	resp, err := svc.List(dto.MomentListReq{Page: 0, PageSize: 99}, &viewerID)
 
@@ -149,7 +149,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 			Moment: model.Moment{Base: model.Base{ID: 9, CreatedAt: now, UpdatedAt: now}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{})
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil)
 
 	resp, err := svc.Save(dto.MomentSaveReq{
 		UserID:        &requestUserID,
@@ -175,7 +175,7 @@ func TestMomentService_Save_AllowsAdminManagedAuthor(t *testing.T) {
 			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 99, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{})
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{UserID: &authorID, Content: "风", Status: 1, CommentStatus: 1}, 7, []string{roles.AdminRole})
 
@@ -185,7 +185,7 @@ func TestMomentService_Save_AllowsAdminManagedAuthor(t *testing.T) {
 }
 
 func TestMomentService_Save_RejectsBlankContent(t *testing.T) {
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, &fakeURLResolver{})
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, &fakeURLResolver{}, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{Content: "  ", Status: 1, CommentStatus: 1}, 7, nil)
 
@@ -194,7 +194,7 @@ func TestMomentService_Save_RejectsBlankContent(t *testing.T) {
 
 func TestMomentService_SetTop_MapsLimitError(t *testing.T) {
 	repo := &fakeMomentRepo{topErr: momentrepo.ErrTopLimitExceeded}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{})
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil)
 
 	_, err := svc.SetTop(9, 7, nil)
 
@@ -203,7 +203,7 @@ func TestMomentService_SetTop_MapsLimitError(t *testing.T) {
 
 func TestMomentService_List_ReturnsUnknownError(t *testing.T) {
 	repo := &fakeMomentRepo{listErr: errors.New("db down")}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{})
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil)
 
 	_, err := svc.List(dto.MomentListReq{}, nil)
 

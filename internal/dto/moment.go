@@ -132,12 +132,12 @@ type MomentLikeResp struct {
 	LikeCount int64 `json:"like_count" example:"3"`
 }
 
-// MomentReadResp 阅读数响应。
-type MomentReadResp struct {
+// MomentViewResp 阅读数响应。
+type MomentViewResp struct {
 	// ID 碎语 ID。
 	ID uint `json:"id" example:"1"`
-	// ReadCount 阅读数量。
-	ReadCount uint `json:"read_count" example:"21"`
+	// ViewCount 阅读数量。
+	ViewCount uint `json:"view_count" example:"21"`
 }
 
 // MomentDeleteResp 碎语删除响应。

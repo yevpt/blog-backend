@@ -75,8 +75,8 @@ func (s *stubMomentService) RemoveTop(uint, uint, []string) (*dto.MomentTopResp,
 	return &dto.MomentTopResp{ID: 9, IsTop: false}, nil
 }
 
-func (s *stubMomentService) Read(uint) (*dto.MomentReadResp, error) {
-	return &dto.MomentReadResp{ID: 9, ReadCount: 1}, nil
+func (s *stubMomentService) View(uint, string) (*dto.MomentViewResp, error) {
+	return &dto.MomentViewResp{ID: 9, ViewCount: 1}, nil
 }
 
 func (s *stubMomentService) IsLiked(uint, uint) (*dto.MomentLikeResp, error) {

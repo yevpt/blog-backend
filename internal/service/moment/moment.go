@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -31,7 +32,7 @@ type MomentService interface {
 	Delete(id uint, operatorID uint, roleNames []string) (*dto.MomentDeleteResp, error)
 	SetTop(id uint, operatorID uint, roleNames []string) (*dto.MomentTopResp, error)
 	RemoveTop(id uint, operatorID uint, roleNames []string) (*dto.MomentTopResp, error)
-	Read(id uint) (*dto.MomentReadResp, error)
+	View(id uint, visitorID string) (*dto.MomentViewResp, error)
 	IsLiked(id uint, userID uint) (*dto.MomentLikeResp, error)
 	ToggleLike(id uint, userID uint) (*dto.MomentItemResp, error)
 }
@@ -39,9 +40,10 @@ type MomentService interface {
 type momentService struct {
 	repo              momentrepo.MomentRepository
 	objectURLResolver storage.ObjectURLResolver
+	uvSvc             uv.UVService
 }
 
 // NewMomentService 创建碎语业务服务实例。
-func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver) MomentService {
-	return &momentService{repo: repo, objectURLResolver: objectURLResolver}
+func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService) MomentService {
+	return &momentService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc}
 }

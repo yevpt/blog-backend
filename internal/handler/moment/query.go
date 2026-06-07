@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
+	"github.com/vpt/blog-backend/internal/middleware"
 )
 
 // List 分页查询公开碎语。
@@ -52,24 +53,25 @@ func (h *MomentHandler) GetDetail(c *gin.Context) {
 	writeMomentResponse(c, resp, err)
 }
 
-// Read 增加碎语阅读数。
+// View 增加碎语阅读数（UV 去重）。
 // @Summary 增加碎语阅读数
-// @Description 使用数据库原子更新将碎语阅读数增加 1。
+// @Description 同一访客同一碎语 24 小时内只增加一次阅读数。
 // @Tags 碎语
 // @Accept json
 // @Produce json
 // @Param id path int true "碎语 ID"
-// @Success 200 {object} response.Response{data=dto.MomentReadResp} "统一响应；code=0 表示更新成功，code=400 表示参数错误"
+// @Success 200 {object} response.Response{data=dto.MomentViewResp} "统一响应；code=0 表示更新成功"
+// @Failure 400 {object} response.Response "参数错误"
 // @Failure 404 {object} response.Response "碎语不存在"
 // @Failure 500 {object} response.Response "服务器内部错误"
-// @Router /moments/{id}/read [post]
-func (h *MomentHandler) Read(c *gin.Context) {
+// @Router /moments/{id}/view [post]
+func (h *MomentHandler) View(c *gin.Context) {
 	id, ok := bindMomentID(c, "id")
 	if !ok {
 		return
 	}
-
-	resp, err := h.svc.Read(id)
+	visitorID := middleware.GetVisitorID(c)
+	resp, err := h.svc.View(id, visitorID)
 	writeMomentResponse(c, resp, err)
 }
 

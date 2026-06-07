@@ -22,7 +22,7 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 50}, (*uint)(nil)).
@@ -43,7 +43,7 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 			"post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg": "https://cdn.example.com/blog/post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg?a=sign&b=1700000000",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver)
+	svc := articleservice.NewArticleService(repo, resolver, nil)
 
 	cover := "post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg"
 	repo.EXPECT().
@@ -80,7 +80,7 @@ func TestArticleService_ListPublic_IncludesUserWithResolvedAvatarURL(t *testing.
 			"avatars/vpt.png": "https://cdn.example.com/blog/avatars/vpt.png?sign=1",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver)
+	svc := articleservice.NewArticleService(repo, resolver, nil)
 
 	nickname := "VPT"
 	avatar := "avatars/vpt.png"
@@ -122,7 +122,7 @@ func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	categoryURL := "tech"
 	repo.EXPECT().
@@ -159,7 +159,7 @@ func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, (*uint)(nil)).
@@ -188,7 +188,7 @@ func TestArticleService_ListPublic_PassesViewerIDForLikedState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	viewerID := uint(9)
 	repo.EXPECT().
@@ -220,7 +220,7 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	_, err := svc.Save(dto.ArticleSaveReq{
 		Title:         "Secret",
@@ -236,7 +236,7 @@ func TestArticleService_SaveKeepsFirstCategoryAndDeduplicatesOtherRelationIDs(t 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	now := time.Now()
 	repo.EXPECT().
@@ -274,7 +274,7 @@ func TestArticleService_GetPublicDetail_HidesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(2), (*uint)(nil)).
@@ -298,7 +298,7 @@ func TestArticleService_GetAdminDetail_IncludesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		FindAdminDetail(uint(2), (*uint)(nil)).
@@ -322,7 +322,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	now := time.Now()
 	categoryURL := "tech"
@@ -375,7 +375,7 @@ func TestArticleService_GetPublicDetail_IncludesUserWithResolvedAvatarURL(t *tes
 			"avatars/detail.png": "https://cdn.example.com/blog/avatars/detail.png?sign=1",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver)
+	svc := articleservice.NewArticleService(repo, resolver, nil)
 
 	avatar := "avatars/detail.png"
 	repo.EXPECT().
@@ -414,7 +414,7 @@ func TestArticleService_GetPublicDetail_ResolvesMarkdownObjectLinksInContent(t *
 			"posts/attachments/manual.pdf": "https://cdn.example.com/blog/posts/attachments/manual.pdf?sign=1",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver)
+	svc := articleservice.NewArticleService(repo, resolver, nil)
 
 	viewerID := uint(10)
 	content := "下载[说明书](posts/attachments/manual.pdf)，外链[官网](https://example.com/docs)保持不变。"
@@ -440,7 +440,7 @@ func TestArticleService_GetPublicDetail_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(404), (*uint)(nil)).
@@ -454,7 +454,7 @@ func TestArticleService_IsLiked_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		IsLiked(uint(8), uint(1)).
@@ -469,7 +469,7 @@ func TestArticleService_ToggleLike_ReturnsLatestLikeState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil)
 
 	repo.EXPECT().
 		ToggleLike(uint(8), uint(3)).

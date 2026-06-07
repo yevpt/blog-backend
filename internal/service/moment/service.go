@@ -1,8 +1,11 @@
 package moment
 
 import (
+	"context"
 	"errors"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
@@ -101,15 +104,37 @@ func (s *momentService) RemoveTop(id uint, operatorID uint, roleNames []string) 
 	return &dto.MomentTopResp{ID: moment.ID, IsTop: moment.IsTop}, nil
 }
 
-func (s *momentService) Read(id uint) (*dto.MomentReadResp, error) {
+func (s *momentService) View(id uint, visitorID string) (*dto.MomentViewResp, error) {
 	if id == 0 {
 		return nil, ErrMomentInvalid
+	}
+	// 访客去重：同一访客 24 小时内只计一次。
+	isNew := true
+	if visitorID != "" {
+		is, err := s.uvSvc.CheckAndMark(context.Background(), "moment:viewed", strconv.FormatUint(uint64(id), 10), visitorID, 24*time.Hour)
+		if err != nil {
+			// Redis 异常时降级，视作新访客。
+			isNew = true
+		} else {
+			isNew = is
+		}
+	}
+	if !isNew {
+		// 重复访客，返回当前阅读数，不增加。
+		aggregate, err := s.repo.FindPublicDetail(id, nil)
+		if err != nil {
+			return nil, mapRepoError(err)
+		}
+		if aggregate == nil {
+			return nil, ErrMomentNotFound
+		}
+		return &dto.MomentViewResp{ID: aggregate.Moment.ID, ViewCount: aggregate.Moment.ReadCount}, nil
 	}
 	moment, err := s.repo.IncrementReadCount(id)
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return &dto.MomentReadResp{ID: moment.ID, ReadCount: moment.ReadCount}, nil
+	return &dto.MomentViewResp{ID: moment.ID, ViewCount: moment.ReadCount}, nil
 }
 
 func (s *momentService) IsLiked(id uint, userID uint) (*dto.MomentLikeResp, error) {

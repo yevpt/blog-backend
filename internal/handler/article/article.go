@@ -7,6 +7,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
+	"github.com/vpt/blog-backend/internal/middleware"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -81,24 +82,25 @@ func (h *ArticleHandler) GetPublicDetail(c *gin.Context) {
 	writeArticleResponse(c, resp, err)
 }
 
-// Read 增加文章阅读数。
+// View 增加文章阅读数（UV 去重）。
 // @Summary 增加文章阅读数
-// @Description 使用数据库原子更新将文章阅读数增加 1。
+// @Description 同一访客同一文章 24 小时内只增加一次阅读数。
 // @Tags 文章
 // @Accept json
 // @Produce json
 // @Param id path int true "文章 ID"
-// @Success 200 {object} response.Response{data=dto.ArticleReadResp} "统一响应；code=0 表示更新成功，code=400 表示参数错误"
+// @Success 200 {object} response.Response{data=dto.ArticleViewResp} "统一响应；code=0 表示更新成功"
+// @Failure 400 {object} response.Response "参数错误"
 // @Failure 404 {object} response.Response "文章不存在"
 // @Failure 500 {object} response.Response "服务器内部错误"
-// @Router /articles/{id}/read [post]
-func (h *ArticleHandler) Read(c *gin.Context) {
+// @Router /articles/{id}/view [post]
+func (h *ArticleHandler) View(c *gin.Context) {
 	id, ok := bindUintPath(c, "id")
 	if !ok {
 		return
 	}
-
-	resp, err := h.svc.Read(id)
+	visitorID := middleware.GetVisitorID(c)
+	resp, err := h.svc.View(id, visitorID)
 	writeArticleResponse(c, resp, err)
 }
 

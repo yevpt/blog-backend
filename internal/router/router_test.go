@@ -45,8 +45,8 @@ func (s *stubArticleServiceForRouter) Delete(id uint) (*dto.ArticleDetailResp, e
 	return &dto.ArticleDetailResp{}, nil
 }
 
-func (s *stubArticleServiceForRouter) Read(id uint) (*dto.ArticleReadResp, error) {
-	return &dto.ArticleReadResp{ID: id, ReadCount: 1}, nil
+func (s *stubArticleServiceForRouter) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
+	return &dto.ArticleViewResp{ID: id, ViewCount: 1}, nil
 }
 
 func (s *stubArticleServiceForRouter) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error) {

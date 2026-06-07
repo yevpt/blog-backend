@@ -1,12 +1,16 @@
 package article
 
 import (
+	"context"
 	"errors"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"gorm.io/gorm"
 )
@@ -25,7 +29,7 @@ type ArticleService interface {
 	GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
 	Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error)
 	Delete(id uint) (*dto.ArticleDetailResp, error)
-	Read(id uint) (*dto.ArticleReadResp, error)
+	View(id uint, visitorID string) (*dto.ArticleViewResp, error)
 	IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error)
 	ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error)
 }
@@ -33,11 +37,12 @@ type ArticleService interface {
 type articleService struct {
 	repo              articlerepo.ArticleRepository
 	objectURLResolver storage.ObjectURLResolver
+	uvSvc             uv.UVService
 }
 
 // NewArticleService 创建文章业务服务实例。
-func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver storage.ObjectURLResolver) ArticleService {
-	return &articleService{repo: repo, objectURLResolver: objectURLResolver}
+func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService) ArticleService {
+	return &articleService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc}
 }
 
 func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -137,7 +142,29 @@ func (s *articleService) Delete(id uint) (*dto.ArticleDetailResp, error) {
 	return deletedArticleToDTO(article), nil
 }
 
-func (s *articleService) Read(id uint) (*dto.ArticleReadResp, error) {
+func (s *articleService) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
+	// 访客去重：同一访客 24 小时内只计一次。
+	isNew := true
+	if visitorID != "" {
+		is, err := s.uvSvc.CheckAndMark(context.Background(), "article:viewed", strconv.FormatUint(uint64(id), 10), visitorID, 24*time.Hour)
+		if err != nil {
+			// Redis 异常时降级，视作新访客。
+			isNew = true
+		} else {
+			isNew = is
+		}
+	}
+	if !isNew {
+		// 重复访客，返回当前阅读数，不增加。
+		aggregate, err := s.repo.FindPublicDetail(id, nil)
+		if err != nil {
+			return nil, err
+		}
+		if aggregate == nil {
+			return nil, ErrArticleNotFound
+		}
+		return &dto.ArticleViewResp{ID: aggregate.Article.ID, ViewCount: aggregate.Article.ReadCount}, nil
+	}
 	article, err := s.repo.IncrementReadCount(id)
 	if err != nil {
 		return nil, err
@@ -145,7 +172,7 @@ func (s *articleService) Read(id uint) (*dto.ArticleReadResp, error) {
 	if article == nil {
 		return nil, ErrArticleNotFound
 	}
-	return &dto.ArticleReadResp{ID: article.ID, ReadCount: article.ReadCount}, nil
+	return &dto.ArticleViewResp{ID: article.ID, ViewCount: article.ReadCount}, nil
 }
 
 func (s *articleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error) {

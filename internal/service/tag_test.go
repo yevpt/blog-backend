@@ -47,7 +47,7 @@ func (s *stubArticleServiceForTag) Delete(id uint) (*dto.ArticleDetailResp, erro
 	return nil, nil
 }
 
-func (s *stubArticleServiceForTag) Read(id uint) (*dto.ArticleReadResp, error) {
+func (s *stubArticleServiceForTag) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
 	return nil, nil
 }
 

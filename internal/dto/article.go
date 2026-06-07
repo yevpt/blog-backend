@@ -186,10 +186,10 @@ type ArticleLikeResp struct {
 	LikeCount int64 `json:"like_count" example:"3"`
 }
 
-// ArticleReadResp 阅读数响应。
-type ArticleReadResp struct {
+// ArticleViewResp 阅读数响应。
+type ArticleViewResp struct {
 	// ID 文章 ID。
 	ID uint `json:"id" example:"1"`
-	// ReadCount 阅读数量。
-	ReadCount uint `json:"read_count" example:"21"`
+	// ViewCount 阅读数量。
+	ViewCount uint `json:"view_count" example:"21"`
 }

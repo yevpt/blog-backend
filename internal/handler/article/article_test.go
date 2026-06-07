@@ -56,8 +56,8 @@ func (s *stubArticleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.A
 func (s *stubArticleService) Delete(id uint) (*dto.ArticleDetailResp, error) {
 	return s.detailResp, s.detailErr
 }
-func (s *stubArticleService) Read(id uint) (*dto.ArticleReadResp, error) {
-	return &dto.ArticleReadResp{ID: id, ReadCount: 2}, nil
+func (s *stubArticleService) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
+	return &dto.ArticleViewResp{ID: id, ViewCount: 2}, nil
 }
 func (s *stubArticleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error) {
 	return &dto.ArticleLikeResp{IsLiked: true, LikeCount: 3}, nil
