@@ -153,7 +153,7 @@ func newRouteHandlers(
 	userRepo := repository.NewUserRepository(db)
 	userCacheSvc := service.NewUserCacheService(userRepo, objectURLResolver, redisClient)
 	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
-	userSvc := service.NewUserService(userCacheSvc)
+	userSvc := service.NewUserService(userCacheSvc, userRepo, objectURLResolver)
 
 	uvSvc := uv.NewService(redisClient)
 
@@ -214,6 +214,8 @@ func registerPublicRoutes(
 	r.GET("/tags", handlers.tag.List)
 	r.GET("/tags/:id", handlers.tag.Get)
 	r.GET("/tags/:id/articles", handlers.tag.ListArticles)
+	r.GET("/users", handlers.user.ListAll)
+	r.GET("/users/recent", handlers.user.ListRecent)
 	r.GET("/articles/ids", handlers.article.ListIDs)
 	r.GET("/articles", middleware.OptionalAuth(jwtManager), handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
@@ -234,6 +236,8 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed := r.Group("/", middleware.Auth(jwtManager, handlers.userCache))
 	authed.GET("/test/authed", handlers.test.Authed)
 	authed.GET("/users/me", handlers.user.GetDetail)
+	authed.PUT("/users/me", handlers.user.Update)
+	authed.POST("/users/me/login-time", handlers.user.RecordLogin)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
 	authed.POST("/articles/:id/comments", handlers.comment.CreateArticle)

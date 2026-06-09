@@ -1416,6 +1416,27 @@ definitions:
       username:
         type: string
     type: object
+  dto.UserListItemResp:
+    properties:
+      avatar_url:
+        example: https://cdn.example.com/avatar.png
+        type: string
+      id:
+        example: 1
+        type: integer
+      last_login_at:
+        type: string
+      mark:
+        example: 博主
+        type: string
+      nickname:
+        example: Yevpt
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
   dto.UserMetaResp:
     properties:
       address:
@@ -1434,6 +1455,25 @@ definitions:
         type: string
       province:
         type: string
+    type: object
+  dto.UserPageResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.UserListItemResp'
+        type: array
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 10
+        type: integer
+      pages:
+        example: 10
+        type: integer
+      total:
+        example: 100
+        type: integer
     type: object
   dto.UserResp:
     properties:
@@ -1484,6 +1524,21 @@ definitions:
       platform:
         type: string
       url:
+        type: string
+    type: object
+  dto.UserUpdateReq:
+    properties:
+      avatar_url:
+        example: https://cdn.example.com/avatar.png
+        maxLength: 255
+        type: string
+      mark:
+        example: 博主
+        maxLength: 200
+        type: string
+      nickname:
+        example: Yevpt
+        maxLength: 150
         type: string
     type: object
   response.Response:
@@ -3949,6 +4004,37 @@ paths:
       summary: 查询标签下文章
       tags:
       - 标签
+  /users:
+    get:
+      consumes:
+      - application/json
+      description: 支持分页，按角色权限排序优先，然后按最后登录时间降序
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserPageResp'
+              type: object
+      summary: 获取全部用户列表
+      tags:
+      - 用户
   /users/me:
     get:
       consumes:
@@ -3971,6 +4057,73 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 查询当前登录用户详情
+      tags:
+      - 用户
+    put:
+      consumes:
+      - application/json
+      description: 更新当前登录用户的昵称、头像、标签等信息
+      parameters:
+      - description: 更新信息
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UserUpdateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 更新当前用户信息
+      tags:
+      - 用户
+  /users/me/login-time:
+    post:
+      consumes:
+      - application/json
+      description: 从 jwt 中获取当前用户信息，更新最后登录时间
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 记录当前用户登录时间
+      tags:
+      - 用户
+  /users/recent:
+    get:
+      consumes:
+      - application/json
+      description: 默认按最后登录时间降序，支持分页
+      parameters:
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserPageResp'
+              type: object
+      summary: 获取最近访问用户列表
       tags:
       - 用户
 swagger: "2.0"

@@ -31,7 +31,15 @@ type UserRepository interface {
 	Create(user *model.User, roleID uint) error
 	// FindRolesByUserID 返回用户所有角色名称列表，供 JWT 签发时填充 claims
 	FindRolesByUserID(userID uint) ([]string, error)
+	// FindRolesByUserIDs 批量查询用户角色列表，返回以 user_id 为 key 的字典
+	FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error)
 	UpdateLastLoginAt(userID uint) error
+	// ListRecent 获取最近访问的用户列表，按最后登录时间降序
+	ListRecent(offset, limit int) ([]model.User, int64, error)
+	// ListAll 获取所有用户列表，按角色排序 (admin > vip > normal)，然后按最后登录时间降序
+	ListAll(offset, limit int) ([]model.User, int64, error)
+	// Update 更新用户信息
+	Update(id uint, updates map[string]interface{}) error
 }
 
 type userRepo struct {
@@ -136,10 +144,87 @@ func (r *userRepo) FindRolesByUserID(userID uint) ([]string, error) {
 	return names, err
 }
 
+func (r *userRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error) {
+	if len(userIDs) == 0 {
+		return make(map[uint][]string), nil
+	}
+	
+	type userRoleResult struct {
+		UserID   uint   `gorm:"column:user_id"`
+		RoleName string `gorm:"column:name"`
+	}
+	var results []userRoleResult
+	
+	err := r.db.Model(&model.UserRole{}).
+		Select("user_role.user_id, role.name").
+		Joins("JOIN role ON role.id = user_role.role_id").
+		Where("user_role.user_id IN ?", userIDs).
+		Find(&results).Error
+		
+	if err != nil {
+		return nil, err
+	}
+	
+	rolesMap := make(map[uint][]string)
+	for _, res := range results {
+		rolesMap[res.UserID] = append(rolesMap[res.UserID], res.RoleName)
+	}
+	return rolesMap, nil
+}
+
 func (r *userRepo) UpdateLastLoginAt(userID uint) error {
 	// 用 NOW() 由数据库生成时间，避免应用服务器与 DB 时区不一致带来的时间偏差
 	return r.db.Model(&model.User{}).Where("id = ?", userID).
 		Update("last_login_at", gorm.Expr("NOW()")).Error
+}
+
+func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
+	var users []model.User
+	var total int64
+	
+	// 只查询 status = 1 的用户
+	query := r.db.Model(&model.User{}).Where("status = ?", 1)
+	
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	
+	err := query.Order("last_login_at DESC").Offset(offset).Limit(limit).Find(&users).Error
+	return users, total, err
+}
+
+func (r *userRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+	var users []model.User
+	var total int64
+	
+	// 只查询 status = 1 的用户
+	query := r.db.Model(&model.User{}).Where("status = ?", 1)
+	
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	
+	// 按角色排序，需要 JOIN user_role 和 role。由于角色权重是业务定义，但在 DB 中可以用 role.id 或者自定义逻辑排序。
+	// roles.go 中定义：AdminRoleId = 1, VipRoleId = 2, NormalRoleId = 3。数字越小权重越高。
+	// 因此可以直接按 role.id ASC 排序。
+	// 注意：一个用户可能有多个角色，取 MIN(role.id) 进行排序。
+	
+	err := r.db.Table("user").
+		Select("user.*").
+		Joins("LEFT JOIN user_role ON user_role.user_id = user.id").
+		Joins("LEFT JOIN role ON role.id = user_role.role_id").
+		Where("user.status = ?", 1).
+		Group("user.id").
+		Order("MIN(role.id) ASC, user.last_login_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&users).Error
+		
+	return users, total, err
+}
+
+func (r *userRepo) Update(id uint, updates map[string]interface{}) error {
+	return r.db.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
 }
 
 func (r *userRepo) findUserMetaByUserID(userID uint) (*model.UserMeta, error) {

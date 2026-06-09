@@ -82,14 +82,14 @@ func TestCommentRepository_ListReplies_UsesArticleReplyTable(t *testing.T) {
 	now := time.Now()
 	viewerID := uint(9)
 
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article`.*status IN \\(\\?,\\?\\)").
-		WithArgs(uint(50), sqlmock.AnyArg(), sqlmock.AnyArg()).
-		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery("SELECT \\* FROM `article_comment`").
 		WithArgs(uint(9), 1).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "article_id", "user_id", "content",
 		}).AddRow(9, now, now, nil, 50, 8, "原评论"))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article`.*status IN \\(\\?,\\?\\)").
+		WithArgs(uint(50), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article_comment_reply`").
 		WithArgs(uint(9)).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
@@ -113,7 +113,7 @@ func TestCommentRepository_ListReplies_UsesArticleReplyTable(t *testing.T) {
 		WithArgs(uint8(commentrepo.ArticleCommentReplyLikeType), viewerID, uint(12)).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id"}).AddRow(12))
 
-	resp, err := repo.ListReplies(commentrepo.Target{Type: commentrepo.TargetArticle, ID: 50}, 9, &viewerID, 1, 5)
+	resp, err := repo.ListReplies(commentrepo.Target{Type: commentrepo.TargetArticle}, 9, &viewerID, 1, 5)
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)

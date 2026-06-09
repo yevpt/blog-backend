@@ -54,3 +54,35 @@ type UserSocialLinkResp struct {
 	Platform string `json:"platform"`
 	URL      string `json:"url"`
 }
+
+// UserListReq 获取用户列表请求
+type UserListReq struct {
+	Page     int `form:"page" binding:"omitempty,min=1" example:"1"`
+	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
+}
+
+// UserListItemResp 用户列表项响应
+type UserListItemResp struct {
+	ID          uint       `json:"id" example:"1"`
+	Nickname    *string    `json:"nickname,omitempty" example:"Yevpt"`
+	AvatarUrl   *string    `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
+	Mark        *string    `json:"mark,omitempty" example:"博主"`
+	Roles       []string   `json:"roles"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+}
+
+// UserPageResp 用户分页响应
+type UserPageResp struct {
+	Total    int64              `json:"total" example:"100"`
+	Pages    int                `json:"pages" example:"10"`
+	Page     int                `json:"page" example:"1"`
+	PageSize int                `json:"page_size" example:"10"`
+	List     []UserListItemResp `json:"list"`
+}
+
+// UserUpdateReq 更新当前用户信息请求
+type UserUpdateReq struct {
+	Nickname  *string `json:"nickname,omitempty" binding:"omitempty,max=150" example:"Yevpt"`
+	AvatarUrl *string `json:"avatar_url,omitempty" binding:"omitempty,max=255" example:"https://cdn.example.com/avatar.png"`
+	Mark      *string `json:"mark,omitempty" binding:"omitempty,max=200" example:"博主"`
+}

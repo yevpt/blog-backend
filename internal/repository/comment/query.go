@@ -47,10 +47,12 @@ func (r *commentRepo) ensureTargetReadable(target Target) error {
 }
 
 func (r *commentRepo) ListReplies(target Target, commentID uint, viewerID *uint, page int, pageSize int) (*ReplyPageResult, error) {
-	if err := r.ensureTargetReadable(target); err != nil {
+	// 接口不传目标 ID，需要先按 commentID 找到评论，再用评论关联的 target_id 校验可见性。
+	comment, err := r.findCommentByID(target.Type, commentID)
+	if err != nil {
 		return nil, err
 	}
-	if _, err := r.findCommentByID(target.Type, commentID); err != nil {
+	if err := r.ensureTargetReadable(Target{Type: target.Type, ID: comment.TargetID}); err != nil {
 		return nil, err
 	}
 
