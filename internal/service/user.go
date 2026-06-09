@@ -105,6 +105,11 @@ func (s *userService) buildUserPageResp(users []model.User, total int64, page, p
 		if roles == nil {
 			roles = []string{} // 兜底为空切片，避免返回 nil
 		}
+		lastLoginAt := u.LastLoginAt
+		if lastLoginAt == nil {
+			t := u.CreatedAt
+			lastLoginAt = &t
+		}
 		
 		list = append(list, dto.UserListItemResp{
 			ID:          u.ID,
@@ -112,7 +117,7 @@ func (s *userService) buildUserPageResp(users []model.User, total int64, page, p
 			AvatarUrl:   resolveUserAvatarURL(s.resolver, u.AvatarUrl),
 			Mark:        u.Mark,
 			Roles:       roles,
-			LastLoginAt: u.LastLoginAt,
+			LastLoginAt: lastLoginAt,
 		})
 	}
 

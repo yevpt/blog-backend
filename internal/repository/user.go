@@ -189,7 +189,7 @@ func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 		return nil, 0, err
 	}
 	
-	err := query.Order("last_login_at DESC").Offset(offset).Limit(limit).Find(&users).Error
+	err := query.Order("COALESCE(last_login_at, created_at) DESC, id DESC").Offset(offset).Limit(limit).Find(&users).Error
 	return users, total, err
 }
 
@@ -210,12 +210,12 @@ func (r *userRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
 	// 注意：一个用户可能有多个角色，取 MIN(role.id) 进行排序。
 	
 	err := r.db.Table("user").
-		Select("user.*").
+		Select("DISTINCT user.*").
 		Joins("LEFT JOIN user_role ON user_role.user_id = user.id").
 		Joins("LEFT JOIN role ON role.id = user_role.role_id").
 		Where("user.status = ?", 1).
 		Group("user.id").
-		Order("MIN(role.id) ASC, user.last_login_at DESC").
+		Order("MIN(role.id) ASC, COALESCE(user.last_login_at, user.created_at) DESC, user.id DESC").
 		Offset(offset).
 		Limit(limit).
 		Find(&users).Error
