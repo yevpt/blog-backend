@@ -43,7 +43,7 @@ func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames [
 		return nil, err
 	}
 
-	force := hasAdminRole(roleNames)
+	force := roles.HasPermission(roleNames, roles.AdminRole)
 	authorID := operatorID
 	if force && req.UserID != nil && *req.UserID > 0 {
 		authorID = *req.UserID
@@ -75,7 +75,7 @@ func (s *momentService) Delete(id uint, operatorID uint, roleNames []string) (*d
 	if id == 0 {
 		return nil, ErrMomentInvalid
 	}
-	moment, err := s.repo.Delete(id, operatorID, hasAdminRole(roleNames))
+	moment, err := s.repo.Delete(id, operatorID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
@@ -86,7 +86,7 @@ func (s *momentService) SetTop(id uint, operatorID uint, roleNames []string) (*d
 	if id == 0 {
 		return nil, ErrMomentInvalid
 	}
-	moment, err := s.repo.SetTop(id, operatorID, hasAdminRole(roleNames))
+	moment, err := s.repo.SetTop(id, operatorID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
@@ -97,7 +97,7 @@ func (s *momentService) RemoveTop(id uint, operatorID uint, roleNames []string) 
 	if id == 0 {
 		return nil, ErrMomentInvalid
 	}
-	moment, err := s.repo.RemoveTop(id, operatorID, hasAdminRole(roleNames))
+	moment, err := s.repo.RemoveTop(id, operatorID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
@@ -182,15 +182,6 @@ func normalizeMomentPageSize(pageSize int) int {
 		return 50
 	}
 	return pageSize
-}
-
-func hasAdminRole(roleNames []string) bool {
-	for _, roleName := range roleNames {
-		if roleName == roles.AdminRole {
-			return true
-		}
-	}
-	return false
 }
 
 func mapRepoError(err error) error {

@@ -1,9 +1,7 @@
 package moment
 
 import (
-	"context"
 	"math"
-	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
@@ -66,7 +64,7 @@ func (s *momentService) mediaToDTO(images []model.Media) []dto.MomentMediaResp {
 			URL:       image.URL,
 			AccessURL: s.resolveImageURL(image.URL),
 			Size:      image.Size,
-			Seq:      image.Seq,
+			Seq:       image.Seq,
 		})
 	}
 	return rows
@@ -80,42 +78,12 @@ func momentUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.
 		ID:        user.ID,
 		Username:  user.Username,
 		Nickname:  user.Nickname,
-		AvatarUrl: resolvePtrURL(resolver, user.AvatarUrl),
+		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
 		Site:      user.Site,
 		Mark:      user.Mark,
 	}
 }
 
 func (s *momentService) resolveImageURL(url string) string {
-	return resolveURL(s.objectURLResolver, url)
-}
-
-func resolveURL(resolver storage.ObjectURLResolver, url string) string {
-	if resolver == nil {
-		return url
-	}
-	if trimmed := strings.TrimSpace(url); trimmed != "" && !isAbsoluteURL(trimmed) {
-		if resolved, err := resolver.ObjectURL(context.Background(), trimmed); err == nil {
-			return resolved
-		}
-	}
-	return url
-}
-
-func resolvePtrURL(resolver storage.ObjectURLResolver, url *string) *string {
-	if url == nil || resolver == nil {
-		return url
-	}
-	trimmed := strings.TrimSpace(*url)
-	if trimmed == "" || isAbsoluteURL(trimmed) {
-		return url
-	}
-	if resolved, err := resolver.ObjectURL(context.Background(), trimmed); err == nil {
-		return &resolved
-	}
-	return url
-}
-
-func isAbsoluteURL(value string) bool {
-	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
+	return storage.ResolveURL(s.objectURLResolver, url)
 }

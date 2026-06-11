@@ -21,13 +21,13 @@ import (
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	"github.com/vpt/blog-backend/internal/service"
-	"github.com/vpt/blog-backend/internal/service/uv"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	captchaservice "github.com/vpt/blog-backend/internal/service/captcha"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
+	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -171,7 +171,7 @@ func newRouteHandlers(
 	commentSvc := commentservice.NewCommentService(commentRepo, objectURLResolver)
 
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
-	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo)
+	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectURLResolver)
 
 	momentRepo := momentrepo.NewMomentRepository(db)
 	momentSvc := momentservice.NewMomentService(momentRepo, objectURLResolver, uvSvc)

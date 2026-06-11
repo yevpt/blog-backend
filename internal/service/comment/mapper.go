@@ -1,9 +1,6 @@
 package comment
 
 import (
-	"context"
-	"strings"
-
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
@@ -93,26 +90,8 @@ func userToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.Commen
 		ID:        user.ID,
 		Username:  user.Username,
 		Nickname:  user.Nickname,
-		AvatarUrl: resolvePtrURL(resolver, user.AvatarUrl),
+		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
 		Site:      user.Site,
 		Mark:      user.Mark,
 	}
-}
-
-func resolvePtrURL(resolver storage.ObjectURLResolver, url *string) *string {
-	if url == nil || resolver == nil {
-		return url
-	}
-	trimmed := strings.TrimSpace(*url)
-	if trimmed == "" || isAbsoluteURL(trimmed) {
-		return url
-	}
-	if resolved, err := resolver.ObjectURL(context.Background(), trimmed); err == nil {
-		return &resolved
-	}
-	return url
-}
-
-func isAbsoluteURL(value string) bool {
-	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
 }

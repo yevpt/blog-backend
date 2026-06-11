@@ -2,7 +2,6 @@ package comment
 
 import (
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
-	"github.com/vpt/blog-backend/pkg/roles"
 )
 
 const (
@@ -44,13 +43,4 @@ func targetTypeName(commentType uint8) string {
 	default:
 		return ""
 	}
-}
-
-func hasAdminRole(roleNames []string) bool {
-	for _, roleName := range roleNames {
-		if roleName == roles.AdminRole {
-			return true
-		}
-	}
-	return false
 }

@@ -56,7 +56,7 @@ func resolveURL(value *string, objectURLResolver storage.ObjectURLResolver) (*st
 
 	// 空值或已经是完整 URL 时不再重复签名。
 	objectName := strings.TrimSpace(*value)
-	if objectName == "" || isAbsoluteURL(objectName) {
+	if objectName == "" || storage.IsAbsoluteURL(objectName) {
 		return value, nil
 	}
 
@@ -156,11 +156,6 @@ func resolveMarkdownLinkTarget(target string, objectURLResolver storage.ObjectUR
 		return "", nil
 	}
 	return *resolved, nil
-}
-
-func isAbsoluteURL(value string) bool {
-	// 已保存为外部 URL 的历史数据直接返回，避免把完整 URL 当作对象 key 处理。
-	return strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://")
 }
 
 func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleContentPolicy, objectURLResolver storage.ObjectURLResolver) (*dto.ArticleDetailResp, error) {

@@ -89,7 +89,7 @@ func TestGuestbookService_List_DefaultsOwnerAndPagination(t *testing.T) {
 			},
 		},
 	}
-	svc := guestbookservice.NewGuestbookService(repo)
+	svc := guestbookservice.NewGuestbookService(repo, nil)
 
 	resp, err := svc.List(dto.GuestbookListReq{Page: 0, PageSize: 99}, &viewerID)
 
@@ -118,7 +118,7 @@ func TestGuestbookService_Create_TrimsContentAndDefaultsOwner(t *testing.T) {
 			IsLiked:   false,
 		},
 	}
-	svc := guestbookservice.NewGuestbookService(repo)
+	svc := guestbookservice.NewGuestbookService(repo, nil)
 
 	resp, err := svc.Create(dto.GuestbookCreateReq{Content: "  你好  "}, 7)
 
@@ -131,7 +131,7 @@ func TestGuestbookService_Create_TrimsContentAndDefaultsOwner(t *testing.T) {
 }
 
 func TestGuestbookService_Create_RejectsBlankContent(t *testing.T) {
-	svc := guestbookservice.NewGuestbookService(&fakeGuestbookRepo{})
+	svc := guestbookservice.NewGuestbookService(&fakeGuestbookRepo{}, nil)
 
 	_, err := svc.Create(dto.GuestbookCreateReq{Content: "  "}, 7)
 
@@ -142,7 +142,7 @@ func TestGuestbookService_Delete_AllowsAdminForceDelete(t *testing.T) {
 	repo := &fakeGuestbookRepo{
 		deleteResp: &model.Guestbook{Base: model.Base{ID: 9}},
 	}
-	svc := guestbookservice.NewGuestbookService(repo)
+	svc := guestbookservice.NewGuestbookService(repo, nil)
 
 	resp, err := svc.Delete(9, 7, []string{roles.AdminRole})
 
@@ -155,7 +155,7 @@ func TestGuestbookService_Delete_AllowsAdminForceDelete(t *testing.T) {
 
 func TestGuestbookService_ToggleLike_MapsNotFound(t *testing.T) {
 	repo := &fakeGuestbookRepo{toggleErr: guestbookrepo.ErrGuestbookNotFound}
-	svc := guestbookservice.NewGuestbookService(repo)
+	svc := guestbookservice.NewGuestbookService(repo, nil)
 
 	_, err := svc.ToggleLike(9, 7)
 
@@ -164,7 +164,7 @@ func TestGuestbookService_ToggleLike_MapsNotFound(t *testing.T) {
 
 func TestGuestbookService_List_MapsUnknownError(t *testing.T) {
 	repo := &fakeGuestbookRepo{listErr: errors.New("db down")}
-	svc := guestbookservice.NewGuestbookService(repo)
+	svc := guestbookservice.NewGuestbookService(repo, nil)
 
 	_, err := svc.List(dto.GuestbookListReq{}, nil)
 

@@ -6,12 +6,13 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
-func guestbookPageToDTO(result *guestbookrepo.PageResult) *dto.GuestbookPageResp {
+func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver) *dto.GuestbookPageResp {
 	items := make([]dto.GuestbookItemResp, 0, len(result.Messages))
 	for _, message := range result.Messages {
-		items = append(items, *guestbookItemToDTO(message))
+		items = append(items, *guestbookItemToDTO(message, resolver))
 	}
 
 	pages := 0
@@ -28,14 +29,14 @@ func guestbookPageToDTO(result *guestbookrepo.PageResult) *dto.GuestbookPageResp
 	}
 }
 
-func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate) *dto.GuestbookItemResp {
+func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver storage.ObjectURLResolver) *dto.GuestbookItemResp {
 	message := aggregate.Message
 	return &dto.GuestbookItemResp{
 		ID:          message.ID,
 		OwnerUserID: message.OwnerUserID,
 		FromUserID:  message.FromUserID,
 		Content:     message.Content,
-		User:        guestbookUserToDTO(aggregate.User),
+		User:        guestbookUserToDTO(aggregate.User, resolver),
 		ReplyCount:  aggregate.ReplyCount,
 		LikeCount:   aggregate.LikeCount,
 		IsLiked:     aggregate.IsLiked,
@@ -44,7 +45,7 @@ func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate) *dto.Guestbo
 	}
 }
 
-func guestbookUserToDTO(user *model.User) *dto.GuestbookUserResp {
+func guestbookUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.GuestbookUserResp {
 	if user == nil {
 		return nil
 	}
@@ -52,7 +53,7 @@ func guestbookUserToDTO(user *model.User) *dto.GuestbookUserResp {
 		ID:        user.ID,
 		Username:  user.Username,
 		Nickname:  user.Nickname,
-		AvatarUrl: user.AvatarUrl,
+		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
 		Site:      user.Site,
 		Mark:      user.Mark,
 	}

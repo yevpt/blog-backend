@@ -6,6 +6,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	"github.com/vpt/blog-backend/pkg/roles"
 )
 
 func (s *commentService) List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error) {
@@ -103,7 +104,7 @@ func (s *commentService) DeleteComment(targetType string, commentID uint, userID
 	if err != nil || commentID == 0 {
 		return nil, ErrCommentTargetInvalid
 	}
-	comment, err := s.repo.DeleteComment(commentrepo.Target{Type: commentType}, commentID, userID, hasAdminRole(roleNames))
+	comment, err := s.repo.DeleteComment(commentrepo.Target{Type: commentType}, commentID, userID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
@@ -115,7 +116,7 @@ func (s *commentService) DeleteReply(targetType string, replyID uint, userID uin
 	if err != nil || replyID == 0 {
 		return nil, ErrCommentTargetInvalid
 	}
-	reply, err := s.repo.DeleteReply(commentrepo.Target{Type: commentType}, replyID, userID, hasAdminRole(roleNames))
+	reply, err := s.repo.DeleteReply(commentrepo.Target{Type: commentType}, replyID, userID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}

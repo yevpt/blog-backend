@@ -14,7 +14,7 @@ func (s *guestbookService) List(req dto.GuestbookListReq, viewerID *uint) (*dto.
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return guestbookPageToDTO(result), nil
+	return guestbookPageToDTO(result, s.objectURLResolver), nil
 }
 
 func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error) {
@@ -27,7 +27,7 @@ func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return guestbookItemToDTO(*aggregate), nil
+	return guestbookItemToDTO(*aggregate, s.objectURLResolver), nil
 }
 
 func (s *guestbookService) ToggleLike(id uint, userID uint) (*dto.GuestbookLikeResp, error) {
@@ -45,7 +45,7 @@ func (s *guestbookService) Delete(id uint, userID uint, roleNames []string) (*dt
 	if id == 0 {
 		return nil, ErrGuestbookInvalid
 	}
-	message, err := s.repo.Delete(id, userID, hasAdminRole(roleNames))
+	message, err := s.repo.Delete(id, userID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
@@ -82,15 +82,6 @@ func cleanContent(content string) (string, error) {
 		return "", ErrGuestbookContentRequired
 	}
 	return trimmed, nil
-}
-
-func hasAdminRole(roleNames []string) bool {
-	for _, roleName := range roleNames {
-		if roleName == roles.AdminRole {
-			return true
-		}
-	}
-	return false
 }
 
 func mapRepoError(err error) error {

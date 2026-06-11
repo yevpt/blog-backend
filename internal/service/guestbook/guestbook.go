@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 const defaultOwnerUserID uint = 1
@@ -31,10 +32,11 @@ type GuestbookService interface {
 }
 
 type guestbookService struct {
-	repo guestbookrepo.GuestbookRepository
+	repo              guestbookrepo.GuestbookRepository
+	objectURLResolver storage.ObjectURLResolver
 }
 
 // NewGuestbookService 创建留言板业务服务实例。
-func NewGuestbookService(repo guestbookrepo.GuestbookRepository) GuestbookService {
-	return &guestbookService{repo: repo}
+func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver) GuestbookService {
+	return &guestbookService{repo: repo, objectURLResolver: objectURLResolver}
 }
