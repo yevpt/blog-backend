@@ -1,0 +1,10 @@
+.git
+.github
+.worktrees
+bin
+tmp
+docs/superpowers
+config/config.local.yaml
+.env
+.env.*
+*.log
