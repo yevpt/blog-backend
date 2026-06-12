@@ -3831,6 +3831,238 @@ const docTemplate = `{
                 }
             }
         },
+        "/oauth/bindings": {
+            "get": {
+                "description": "返回当前登录用户已绑定的第三方平台。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "第三方登录"
+                ],
+                "summary": "查询第三方账号绑定",
+                "responses": {
+                    "200": {
+                        "description": "查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/dto.OAuthBindingResp"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/oauth/bindings/{source}": {
+            "delete": {
+                "description": "软删除当前用户与指定平台的绑定关系；如果会导致无可用登录方式则拒绝。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "第三方登录"
+                ],
+                "summary": "解绑第三方账号",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "平台标识，如 github",
+                        "name": "source",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "解绑成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/oauth/providers": {
+            "get": {
+                "description": "返回当前后端已启用的第三方登录平台。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "第三方登录"
+                ],
+                "summary": "获取第三方登录平台",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/oauth/{source}/authorize": {
+            "get": {
+                "description": "action=login 表示第三方登录；action=bind 表示绑定到当前登录用户，绑定动作必须携带 access token。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "第三方登录"
+                ],
+                "summary": "创建第三方授权地址",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "平台标识，如 github",
+                        "name": "source",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "授权动作：login 或 bind",
+                        "name": "action",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "前端回跳地址",
+                        "name": "redirect_uri",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "授权地址创建成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.OAuthAuthorizeResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "绑定动作未登录",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/oauth/{source}/callback": {
+            "get": {
+                "description": "校验一次性 state，使用 code 换取第三方 token，再完成登录或绑定。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "第三方登录"
+                ],
+                "summary": "处理第三方登录回调",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "平台标识，如 github",
+                        "name": "source",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "第三方授权码",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "后端生成的一次性 state",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "callback 处理成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.OAuthCallbackResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/tags": {
             "get": {
                 "description": "返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。",
@@ -5819,6 +6051,39 @@ const docTemplate = `{
                     "description": "ViewCount 阅读数量。",
                     "type": "integer",
                     "example": 21
+                }
+            }
+        },
+        "dto.OAuthAuthorizeResp": {
+            "type": "object",
+            "properties": {
+                "authorize_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.OAuthBindingResp": {
+            "type": "object",
+            "properties": {
+                "social_user_id": {
+                    "type": "integer"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.OAuthCallbackResp": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "binding": {
+                    "$ref": "#/definitions/dto.OAuthBindingResp"
+                },
+                "login": {
+                    "$ref": "#/definitions/dto.LoginResp"
                 }
             }
         },

@@ -145,6 +145,53 @@ func (mr *MockUserRepositoryMockRecorder) FindRolesByUserID(userID any) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindRolesByUserID", reflect.TypeOf((*MockUserRepository)(nil).FindRolesByUserID), userID)
 }
 
+// FindRolesByUserIDs mocks base method.
+func (m *MockUserRepository) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindRolesByUserIDs", userIDs)
+	ret0, _ := ret[0].(map[uint][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindRolesByUserIDs indicates an expected call of FindRolesByUserIDs.
+func (mr *MockUserRepositoryMockRecorder) FindRolesByUserIDs(userIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindRolesByUserIDs", reflect.TypeOf((*MockUserRepository)(nil).FindRolesByUserIDs), userIDs)
+}
+
+// ListAll mocks base method.
+func (m *MockUserRepository) ListAll(offset, limit int) ([]model.User, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAll", offset, limit)
+	ret0, _ := ret[0].([]model.User)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListAll indicates an expected call of ListAll.
+func (mr *MockUserRepositoryMockRecorder) ListAll(offset, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockUserRepository)(nil).ListAll), offset, limit)
+}
+
+// ListRecent mocks base method.
+func (m *MockUserRepository) ListRecent(offset, limit int) ([]model.User, int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRecent", offset, limit)
+	ret0, _ := ret[0].([]model.User)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// ListRecent indicates an expected call of ListRecent.
+func (mr *MockUserRepositoryMockRecorder) ListRecent(offset, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRecent", reflect.TypeOf((*MockUserRepository)(nil).ListRecent), offset, limit)
+}
+
 // UpdateLastLoginAt mocks base method.
 func (m *MockUserRepository) UpdateLastLoginAt(userID uint) error {
 	m.ctrl.T.Helper()
@@ -157,4 +204,18 @@ func (m *MockUserRepository) UpdateLastLoginAt(userID uint) error {
 func (mr *MockUserRepositoryMockRecorder) UpdateLastLoginAt(userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateLastLoginAt", reflect.TypeOf((*MockUserRepository)(nil).UpdateLastLoginAt), userID)
+}
+
+// Update mocks base method.
+func (m *MockUserRepository) Update(id uint, updates map[string]interface{}) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", id, updates)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockUserRepositoryMockRecorder) Update(id, updates any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUserRepository)(nil).Update), id, updates)
 }

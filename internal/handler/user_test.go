@@ -29,6 +29,22 @@ func (s *stubUserService) GetDetail(userID uint) (*dto.UserDetailResp, error) {
 	return s.resp, s.err
 }
 
+func (s *stubUserService) ListRecent(req *dto.UserListReq) (*dto.UserPageResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) ListAll(req *dto.UserListReq) (*dto.UserPageResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) Update(userID uint, req *dto.UserUpdateReq) error {
+	return nil
+}
+
+func (s *stubUserService) RecordLogin(userID uint) error {
+	return nil
+}
+
 // newUserRouter 构建测试路由，Auth 使用 nil cache（跳过缓存加载），
 // 测试中通过 middleware.SetUserDetail 手动注入用户资料。
 func newUserRouter(svc service.UserService, jwtManager *jwt.Manager, detail *dto.UserDetailResp) *gin.Engine {

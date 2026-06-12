@@ -48,3 +48,21 @@ type TokenResp struct {
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int    `json:"expires_in"`
 }
+
+// OAuthAuthorizeResp 第三方授权地址响应
+type OAuthAuthorizeResp struct {
+	AuthorizeURL string `json:"authorize_url"`
+}
+
+// OAuthBindingResp 第三方账号绑定响应
+type OAuthBindingResp struct {
+	Source       string `json:"source"`
+	SocialUserID uint   `json:"social_user_id"`
+}
+
+// OAuthCallbackResp 第三方 callback 处理响应
+type OAuthCallbackResp struct {
+	Action  string            `json:"action"`
+	Login   *LoginResp        `json:"login,omitempty"`
+	Binding *OAuthBindingResp `json:"binding,omitempty"`
+}
