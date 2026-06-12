@@ -19,6 +19,7 @@ type Config struct {
 	CDN     CDNConfig     `mapstructure:"cdn"`     // CDN 私有读签名配置
 	Migrate MigrateConfig `mapstructure:"migrate"` // 数据迁移工具配置
 	Email   EmailConfig   `mapstructure:"email"`   // 邮件发送配置
+	OAuth   OAuthConfig   `mapstructure:"oauth"`   // 第三方 OAuth 登录配置
 }
 
 // MigrateConfig 数据迁移工具专用配置，仅在 config.local.yaml 中设置，不提交到版本库
@@ -90,6 +91,24 @@ type EmailConfig struct {
 	Password string `mapstructure:"password"` // 邮箱授权码或密码
 }
 
+// OAuthConfig 是第三方登录总配置，按平台名组织 provider。
+type OAuthConfig struct {
+	StateTTLMinutes int                            `mapstructure:"state_ttl_minutes"` // state 和 PKCE verifier 在 Redis 中的有效分钟数
+	Providers       map[string]OAuthProviderConfig `mapstructure:"providers"`         // 平台配置，key 使用 github/gitee/google 等小写标识
+}
+
+// OAuthProviderConfig 是单个第三方平台的 OAuth 配置。
+type OAuthProviderConfig struct {
+	Enabled      bool     `mapstructure:"enabled"`       // 是否启用该平台
+	ClientID     string   `mapstructure:"client_id"`     // OAuth client id，生产环境用环境变量或本地配置覆盖
+	ClientSecret string   `mapstructure:"client_secret"` // OAuth client secret，不提交真实值
+	RedirectURI  string   `mapstructure:"redirect_uri"`  // 后端 callback 地址，需与平台后台精确一致
+	Scopes       []string `mapstructure:"scopes"`        // 授权范围，尽量保持最小权限
+	AuthURL      string   `mapstructure:"auth_url"`      // 授权端点
+	TokenURL     string   `mapstructure:"token_url"`     // 换取 access token 的端点
+	UserURL      string   `mapstructure:"user_url"`      // 获取用户资料的端点
+}
+
 // Load 按优先级叠加加载配置：config.yaml → config.{APP_ENV}.yaml → config.local.yaml → 环境变量（BLOG_ 前缀）
 func Load() (*Config, error) {
 	v := viper.New()
@@ -98,6 +117,8 @@ func Load() (*Config, error) {
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./config")
 	v.AddConfigPath("../config")
+	v.AddConfigPath("../../config")   // 支持从 pkg/xxx/ 目录运行测试
+	v.AddConfigPath("../../../config") // 支持从 internal/xxx/yyy/ 目录运行测试
 
 	// 读取基础配置，失败时阻断启动（必要文件缺失无法继续运行）
 	if err := v.ReadInConfig(); err != nil {
@@ -135,6 +156,8 @@ func mergeConfig(v *viper.Viper, name string) {
 	override.SetConfigType("yaml")
 	override.AddConfigPath("./config")
 	override.AddConfigPath("../config")
+	override.AddConfigPath("../../config")
+	override.AddConfigPath("../../../config")
 
 	// 文件不存在时静默忽略，所有覆盖配置文件均为可选
 	if err := override.ReadInConfig(); err != nil {
