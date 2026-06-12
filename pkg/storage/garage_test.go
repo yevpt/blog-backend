@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"errors"
+	"io"
+	"log"
 	"net/url"
 	"testing"
 	"time"
@@ -10,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/pkg/config"
@@ -22,6 +26,44 @@ type fakePresigner struct {
 	bucket  string        // 记录调用方传入的 bucket
 	key     string        // 记录调用方传入的对象 key
 	expires time.Duration // 记录调用方设置的过期时间
+}
+
+type fakeObjectAPI struct {
+	headErr    error
+	putErr     error
+	headBucket string
+	headKey    string
+	putBucket  string
+	putKey     string
+	putType    string
+	putBody    []byte
+	headCalls  int
+	putCalls   int
+}
+
+func (f *fakeObjectAPI) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	f.headCalls++
+	f.headBucket = aws.ToString(in.Bucket)
+	f.headKey = aws.ToString(in.Key)
+	if f.headErr != nil {
+		return nil, f.headErr
+	}
+	return &s3.HeadObjectOutput{}, nil
+}
+
+func (f *fakeObjectAPI) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
+	f.putCalls++
+	f.putBucket = aws.ToString(in.Bucket)
+	f.putKey = aws.ToString(in.Key)
+	f.putType = aws.ToString(in.ContentType)
+	body, err := io.ReadAll(in.Body)
+	if err == nil {
+		f.putBody = body
+	}
+	if f.putErr != nil {
+		return nil, f.putErr
+	}
+	return &s3.PutObjectOutput{}, nil
 }
 
 func (f *fakePresigner) PresignGetObject(
@@ -159,4 +201,50 @@ func TestClientObjectURL_ReturnsPresignError(t *testing.T) {
 	// 错误应保留业务上下文，方便排查 URL 生成失败原因。
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "生成对象访问 URL 失败")
+}
+
+func TestClientObjectExists_ReturnsTrue(t *testing.T) {
+	api := &fakeObjectAPI{}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	exists, err := client.ObjectExists(context.Background(), "/avatar/user/a.jpg")
+	log.Println(exists)
+	require.NoError(t, err)
+	assert.True(t, exists)
+	assert.Equal(t, "blog", api.headBucket)
+	assert.Equal(t, "avatar/user/a.jpg", api.headKey)
+}
+
+func TestClientObjectExists_ReturnsFalseForNotFound(t *testing.T) {
+	api := &fakeObjectAPI{headErr: &types.NotFound{}}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	exists, err := client.ObjectExists(context.Background(), "avatar/user/missing.jpg")
+
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestClientObjectExists_ReturnsFalseForGenericNotFound(t *testing.T) {
+	api := &fakeObjectAPI{headErr: &smithy.GenericAPIError{Code: "NotFound", Message: "not found"}}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	exists, err := client.ObjectExists(context.Background(), "avatar/user/missing.jpg")
+
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
+
+func TestClientPutObject_UploadsBytes(t *testing.T) {
+	api := &fakeObjectAPI{}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	err := client.PutObject(context.Background(), "avatar/user/a.jpg", []byte("image"), "image/jpeg")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, api.putCalls)
+	assert.Equal(t, "blog", api.putBucket)
+	assert.Equal(t, "avatar/user/a.jpg", api.putKey)
+	assert.Equal(t, "image/jpeg", api.putType)
+	assert.Equal(t, []byte("image"), api.putBody)
 }

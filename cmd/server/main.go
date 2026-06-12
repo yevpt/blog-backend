@@ -39,7 +39,7 @@ func main() {
 	r := bootstrap.InitGin(cfg)
 
 	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
-	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver)
+	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg)
 
 	// 启动服务：监听配置端口，启动失败时终止进程。
 	bootstrap.MustRunHTTP(r, cfg, zapLogger)

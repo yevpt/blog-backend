@@ -68,8 +68,8 @@ func InitMailer(cfg *config.Config) email.MailSender {
 	})
 }
 
-// MustInitStorage 创建对象 URL 解析器，内部处理 Garage/CDN 签名和 Redis 缓存。
-func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.ObjectURLResolver {
+// MustInitStorage 创建对象存储客户端，内部处理 Garage/CDN 签名、上传和 Redis 缓存。
+func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.ObjectStore {
 	objectURLResolver, err := storage.NewCachedGarage(&cfg.Garage, &cfg.CDN, redisClient)
 	if err != nil {
 		log.Fatalf("对象存储初始化失败: %v", err)
