@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
+	"github.com/aws/smithy-go"
 	appconfig "github.com/vpt/blog-backend/pkg/config"
 )
 
@@ -25,9 +28,16 @@ type objectPresigner interface {
 	) (*v4.PresignedHTTPRequest, error)
 }
 
+// objectAPI 抽象对象存在性检查和上传能力，便于业务层复用和单元测试替换。
+type objectAPI interface {
+	HeadObject(ctx context.Context, in *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	PutObject(ctx context.Context, in *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+}
+
 // clientImpl 保存 Garage 客户端运行所需的内部状态。
 type clientImpl struct {
 	s3             *s3.Client      // 底层 S3 客户端
+	objectAPI      objectAPI       // S3 对象读写 API
 	presigner      objectPresigner // S3 GetObject 预签名器
 	bucket         string          // 默认 bucket 名称
 	useCDN         bool            // 是否优先生成 CDN 签名 URL
@@ -90,6 +100,7 @@ func buildClient(awsCfg aws.Config, cfg *appconfig.GarageConfig, cdnCfg *appconf
 	s3Client := newS3Client(awsCfg, cfg.Endpoint)
 	impl := &clientImpl{
 		s3:             s3Client,
+		objectAPI:      s3Client,
 		presigner:      s3.NewPresignClient(s3Client),
 		bucket:         cfg.Bucket,
 		useCDN:         cfg.CDN,
@@ -109,6 +120,66 @@ func buildClient(awsCfg aws.Config, cfg *appconfig.GarageConfig, cdnCfg *appconf
 	impl.cdnSigner = signer
 
 	return &Client{impl: impl}, nil
+}
+
+// objectExists 判断对象 key 是否已经存在。
+func (c *Client) objectExists(ctx context.Context, objectName string) (bool, error) {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return false, errors.New("对象存储客户端未初始化")
+	}
+	objectName = normalizeObjectName(objectName)
+	if objectName == "" {
+		return false, nil
+	}
+
+	_, err := c.impl.objectAPI.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(c.impl.bucket),
+		Key:    aws.String(objectName),
+	})
+	if err == nil {
+		return true, nil
+	}
+
+	if isObjectNotFound(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+// isObjectNotFound 兼容 AWS SDK 和 Garage/S3 endpoint 返回的多种 404 错误形态。
+func isObjectNotFound(err error) bool {
+	var notFound *types.NotFound
+	if errors.As(err, &notFound) {
+		return true
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NotFound", "NoSuchKey", "404":
+			return true
+		}
+	}
+	return false
+}
+
+// putObject 将完整对象内容写入 Garage。
+func (c *Client) putObject(ctx context.Context, objectName string, data []byte, contentType string) error {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return errors.New("对象存储客户端未初始化")
+	}
+	objectName = normalizeObjectName(objectName)
+	if objectName == "" {
+		return errors.New("对象名不能为空")
+	}
+
+	_, err := c.impl.objectAPI.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(c.impl.bucket),
+		Key:         aws.String(objectName),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contentType),
+	})
+	return err
 }
 
 // newS3Client 创建指向 Garage endpoint 的 path-style S3 客户端。

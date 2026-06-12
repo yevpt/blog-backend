@@ -10,6 +10,13 @@ type ObjectURLResolver interface {
 	ObjectURL(ctx context.Context, objectName string) (string, error)
 }
 
+// ObjectStore 提供对象访问 URL、存在性检查和写入能力。
+type ObjectStore interface {
+	ObjectURLResolver
+	ObjectExists(ctx context.Context, objectName string) (bool, error)
+	PutObject(ctx context.Context, objectName string, data []byte, contentType string) error
+}
+
 // IsAbsoluteURL 判断给定的 URL 是否是一个绝对路径（以 http:// 或 https:// 开头）。
 // 超过两处使用，封装为公共方法以复用。
 func IsAbsoluteURL(value string) bool {

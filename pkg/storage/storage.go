@@ -54,6 +54,18 @@ func (c *Client) PresignedObjectURL(ctx context.Context, objectName string) (str
 	return c.presignedObjectURL(ctx, objectName)
 }
 
+// ObjectExists 判断对象 key 是否已经存在，常用于按内容摘要去重上传。
+func (c *Client) ObjectExists(ctx context.Context, objectName string) (bool, error) {
+	// 对外入口只表达存在性语义，S3 HeadObject 细节由内部实现处理。
+	return c.objectExists(ctx, objectName)
+}
+
+// PutObject 将对象内容写入 Garage。
+func (c *Client) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {
+	// 调用方负责传入最终对象 bytes；本方法不创建任何临时文件。
+	return c.putObject(ctx, objectName, data, contentType)
+}
+
 // S3 返回底层 S3 客户端，供需要直接操作对象存储的 service 使用。
 func (c *Client) S3() *s3.Client {
 	// 只暴露已初始化的底层客户端，不允许外部改写 Client 状态。
@@ -81,6 +93,16 @@ func NewCachedObjectURLResolver(client *Client, rdb *redis.Client, ttl time.Dura
 func (r *CachedObjectURLResolver) ObjectURL(ctx context.Context, objectName string) (string, error) {
 	// 对外方法只表达缓存解析语义，具体流程由内部方法处理。
 	return r.objectURL(ctx, objectName)
+}
+
+// ObjectExists 判断对象 key 是否已经存在。
+func (r *CachedObjectURLResolver) ObjectExists(ctx context.Context, objectName string) (bool, error) {
+	return r.impl.client.ObjectExists(ctx, objectName)
+}
+
+// PutObject 将对象内容写入 Garage。
+func (r *CachedObjectURLResolver) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {
+	return r.impl.client.PutObject(ctx, objectName, data, contentType)
 }
 
 // CDNSigner 使用腾讯云 CDN TypeD 兼容算法生成私有读 URL。
