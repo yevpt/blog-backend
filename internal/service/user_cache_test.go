@@ -28,12 +28,22 @@ func (r *stubUserRepo) FindDetailByID(id uint) (*repository.UserDetailAggregate,
 
 // 接口其余方法返回零值，测试中不会被调用
 func (r *stubUserRepo) FindByIdentifier(id string) (*model.User, error) { return nil, nil }
-func (r *stubUserRepo) FindByID(id uint) (*model.User, error)            { return nil, nil }
-func (r *stubUserRepo) Create(u *model.User, roleID uint) error           { return nil }
-func (r *stubUserRepo) ExistsByEmail(email string) (bool, error)          { return false, nil }
-func (r *stubUserRepo) ExistsByNickname(n string) (bool, error)           { return false, nil }
-func (r *stubUserRepo) FindRolesByUserID(id uint) ([]string, error)       { return nil, nil }
-func (r *stubUserRepo) UpdateLastLoginAt(id uint) error                   { return nil }
+func (r *stubUserRepo) FindByID(id uint) (*model.User, error)           { return nil, nil }
+func (r *stubUserRepo) Create(u *model.User, roleID uint) error         { return nil }
+func (r *stubUserRepo) ExistsByEmail(email string) (bool, error)        { return false, nil }
+func (r *stubUserRepo) ExistsByNickname(n string) (bool, error)         { return false, nil }
+func (r *stubUserRepo) FindRolesByUserID(id uint) ([]string, error)     { return nil, nil }
+func (r *stubUserRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
+	return nil, nil
+}
+func (r *stubUserRepo) UpdateLastLoginAt(id uint) error { return nil }
+func (r *stubUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
+	return nil, 0, nil
+}
+func (r *stubUserRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+	return nil, 0, nil
+}
+func (r *stubUserRepo) Update(id uint, updates map[string]interface{}) error { return nil }
 
 func newTestRedis(t *testing.T) *redis.Client {
 	t.Helper()

@@ -14,7 +14,7 @@
 | 鉴权   | JWT（HS256）+ bcrypt 密码 |
 | 缓存   | Redis |
 | 对象存储 | Garage（S3 兼容） |
-| 第三方登录 | Goth + oauth2s |
+| 第三方登录 | golang.org/x/oauth2 + 项目内 Provider Adapter |
 | 行为验证 | GoCaptcha |
 | API 文档 | swaggo/swag → 导入 Apifox |
 
@@ -115,6 +115,25 @@ APP_ENV=prod ./bin/blog-server
 | 普通用户 | ROLE_NORMAL | 默认角色 |
 
 路由注册时通过中间件声明权限，类似 Spring 的 `@PreAuthorize`：
+
+## 第三方登录
+
+OAuth 认证身份只使用 `user`、`social_user`、`social_user_auth` 三张表；`user_social_link` 仅用于用户资料里的社交链接展示，不参与登录或绑定判断。
+
+当前 Phase 1 已接入 GitHub：
+
+```yaml
+oauth:
+  state_ttl_minutes: 10
+  providers:
+    github:
+      enabled: true
+      client_id: "your_github_client_id"
+      client_secret: "your_github_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/github/callback"
+```
+
+本地 GitHub OAuth App 的 callback URL 需与 `redirect_uri` 精确一致。授权流程使用一次性 Redis state，并在支持的平台启用 PKCE；第三方 access token 只在后端保存，不返回前端。
 
 ```go
 // 公开（无需登录）

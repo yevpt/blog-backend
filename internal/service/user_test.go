@@ -33,7 +33,7 @@ func TestUserService_GetDetail_DelegatesToCache(t *testing.T) {
 		Nickname: &nickname,
 		Roles:    []string{"ROLE_NORMAL", "ROLE_VIP"},
 	}
-	svc := service.NewUserService(&stubUserCacheService{profile: expected})
+	svc := service.NewUserService(&stubUserCacheService{profile: expected}, nil, nil)
 
 	resp, err := svc.GetDetail(7)
 	require.NoError(t, err)
@@ -43,7 +43,7 @@ func TestUserService_GetDetail_DelegatesToCache(t *testing.T) {
 }
 
 func TestUserService_GetDetail_PropagatesNotFound(t *testing.T) {
-	svc := service.NewUserService(&stubUserCacheService{err: service.ErrUserNotFound})
+	svc := service.NewUserService(&stubUserCacheService{err: service.ErrUserNotFound}, nil, nil)
 	resp, err := svc.GetDetail(9)
 	assert.Nil(t, resp)
 	assert.ErrorIs(t, err, service.ErrUserNotFound)

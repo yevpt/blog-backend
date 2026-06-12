@@ -1214,6 +1214,27 @@ definitions:
         example: 21
         type: integer
     type: object
+  dto.OAuthAuthorizeResp:
+    properties:
+      authorize_url:
+        type: string
+    type: object
+  dto.OAuthBindingResp:
+    properties:
+      social_user_id:
+        type: integer
+      source:
+        type: string
+    type: object
+  dto.OAuthCallbackResp:
+    properties:
+      action:
+        type: string
+      binding:
+        $ref: '#/definitions/dto.OAuthBindingResp'
+      login:
+        $ref: '#/definitions/dto.LoginResp'
+    type: object
   dto.RefreshReq:
     properties:
       refresh_token:
@@ -3910,6 +3931,151 @@ paths:
       summary: 切换碎语评论回复点赞
       tags:
       - 评论
+  /oauth/{source}/authorize:
+    get:
+      consumes:
+      - application/json
+      description: action=login 表示第三方登录；action=bind 表示绑定到当前登录用户，绑定动作必须携带 access token。
+      parameters:
+      - description: 平台标识，如 github
+        in: path
+        name: source
+        required: true
+        type: string
+      - description: 授权动作：login 或 bind
+        in: query
+        name: action
+        required: true
+        type: string
+      - description: 前端回跳地址
+        in: query
+        name: redirect_uri
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 授权地址创建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.OAuthAuthorizeResp'
+              type: object
+        "401":
+          description: 绑定动作未登录
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 创建第三方授权地址
+      tags:
+      - 第三方登录
+  /oauth/{source}/callback:
+    get:
+      consumes:
+      - application/json
+      description: 校验一次性 state，使用 code 换取第三方 token，再完成登录或绑定。
+      parameters:
+      - description: 平台标识，如 github
+        in: path
+        name: source
+        required: true
+        type: string
+      - description: 第三方授权码
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: 后端生成的一次性 state
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: callback 处理成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.OAuthCallbackResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 处理第三方登录回调
+      tags:
+      - 第三方登录
+  /oauth/bindings:
+    get:
+      consumes:
+      - application/json
+      description: 返回当前登录用户已绑定的第三方平台。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/dto.OAuthBindingResp'
+                  type: array
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询第三方账号绑定
+      tags:
+      - 第三方登录
+  /oauth/bindings/{source}:
+    delete:
+      consumes:
+      - application/json
+      description: 软删除当前用户与指定平台的绑定关系；如果会导致无可用登录方式则拒绝。
+      parameters:
+      - description: 平台标识，如 github
+        in: path
+        name: source
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 解绑成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 解绑第三方账号
+      tags:
+      - 第三方登录
+  /oauth/providers:
+    get:
+      consumes:
+      - application/json
+      description: 返回当前后端已启用的第三方登录平台。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 获取第三方登录平台
+      tags:
+      - 第三方登录
   /tags:
     get:
       description: 返回所有标签及其公开文章数量，按 seq ASC、文章数量 DESC 排序。

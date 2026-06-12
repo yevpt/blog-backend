@@ -14,7 +14,10 @@ import (
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
+	oauthhandler "github.com/vpt/blog-backend/internal/handler/oauth"
 	"github.com/vpt/blog-backend/internal/middleware"
+	oauthflow "github.com/vpt/blog-backend/internal/oauth"
+	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
 	"github.com/vpt/blog-backend/internal/repository"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
@@ -23,17 +26,21 @@ import (
 	"github.com/vpt/blog-backend/internal/service"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
+	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
 	captchaservice "github.com/vpt/blog-backend/internal/service/captcha"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
+	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
 	"github.com/vpt/blog-backend/internal/service/uv"
+	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"time"
 )
 
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
@@ -42,6 +49,7 @@ type routeHandlers struct {
 	health    *handler.HealthHandler
 	test      *handler.TestHandler
 	auth      *authhandler.AuthHandler
+	oauth     *oauthhandler.OAuthHandler
 	captcha   *captchahandler.CaptchaHandler
 	article   *articlehandler.ArticleHandler
 	comment   *commenthandler.CommentHandler
@@ -61,7 +69,8 @@ func Setup(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	mailer email.MailSender,
-	objectURLResolver storage.ObjectURLResolver,
+	objectStore storage.ObjectStore,
+	cfg *config.Config,
 ) {
 	// 配置信任代理，确保反向代理链路下能拿到真实客户端 IP。
 	configureTrustedProxies(r)
@@ -69,11 +78,11 @@ func Setup(
 	// 注册跨域中间件，支持开发环境和生产代理环境的来源策略。
 	r.Use(cors.New(newCORSConfig()))
 
-	// 注册全局基础中间件，统一处理恢复和请求日志。
-	r.Use(middleware.Recovery(log), middleware.Logger(log))
+	// 注册全局基础中间件，统一处理请求追踪、恢复和请求日志。
+	r.Use(middleware.RequestID(), middleware.Recovery(log), middleware.Logger(log))
 
 	// 组装路由所需的 handler，保持 Setup 只关心注册流程。
-	handlers := newRouteHandlers(db, redisClient, jwtManager, mailer, objectURLResolver)
+	handlers := newRouteHandlers(db, redisClient, jwtManager, mailer, objectStore, cfg)
 
 	// 按权限层级注册路由，公开路由在前，受保护路由在后。
 	registerPublicRoutes(r, handlers, jwtManager, redisClient)
@@ -141,7 +150,8 @@ func newRouteHandlers(
 	redisClient *redis.Client,
 	jwtManager *jwt.Manager,
 	mailer email.MailSender,
-	objectURLResolver storage.ObjectURLResolver,
+	objectStore storage.ObjectStore,
+	cfg *config.Config,
 ) routeHandlers {
 	// 组装图形验证码链路，注册发送邮箱验证码前会消费它签发的一次性票据。
 	captchaSvc, err := captchaservice.NewService(redisClient)
@@ -151,15 +161,19 @@ func newRouteHandlers(
 
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := repository.NewUserRepository(db)
-	userCacheSvc := service.NewUserCacheService(userRepo, objectURLResolver, redisClient)
+	userCacheSvc := service.NewUserCacheService(userRepo, objectStore, redisClient)
 	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
-	userSvc := service.NewUserService(userCacheSvc, userRepo, objectURLResolver)
+	userSvc := service.NewUserService(userCacheSvc, userRepo, objectStore)
+	socialAuthRepo := repository.NewSocialAuthRepository(db)
+	oauthManager := newOAuthManager(redisClient, cfg)
+	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
+	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc)
 
 	uvSvc := uv.NewService(redisClient)
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
-	articleSvc := articleservice.NewArticleService(articleRepo, objectURLResolver, uvSvc)
+	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc)
 
 	categoryRepo := repository.NewCategoryRepository(db)
 	categorySvc := service.NewCategoryService(categoryRepo)
@@ -168,18 +182,19 @@ func newRouteHandlers(
 	tagSvc := service.NewTagService(tagRepo, articleSvc)
 
 	commentRepo := commentrepo.NewCommentRepository(db)
-	commentSvc := commentservice.NewCommentService(commentRepo, objectURLResolver)
+	commentSvc := commentservice.NewCommentService(commentRepo, objectStore)
 
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
-	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectURLResolver)
+	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore)
 
 	momentRepo := momentrepo.NewMomentRepository(db)
-	momentSvc := momentservice.NewMomentService(momentRepo, objectURLResolver, uvSvc)
+	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc)
 
 	return routeHandlers{
 		health:    handler.NewHealthHandler(db, redisClient),
 		test:      handler.NewTestHandler(jwtManager),
 		auth:      authhandler.NewAuthHandler(authSvc),
+		oauth:     oauthhandler.NewOAuthHandler(oauthSvc),
 		captcha:   captchahandler.NewCaptchaHandler(captchaSvc),
 		article:   articlehandler.NewArticleHandler(articleSvc),
 		comment:   commenthandler.NewCommentHandler(commentSvc),
@@ -190,6 +205,23 @@ func newRouteHandlers(
 		tag:       handler.NewTagHandler(tagSvc),
 		userCache: userCacheSvc,
 	}
+}
+
+func newOAuthManager(redisClient *redis.Client, cfg *config.Config) *oauthflow.Manager {
+	// state TTL 使用配置值；未配置时 StateStore 内部会回落到 10 分钟。
+	var ttl time.Duration
+	if cfg != nil && cfg.OAuth.StateTTLMinutes > 0 {
+		ttl = time.Duration(cfg.OAuth.StateTTLMinutes) * time.Minute
+	}
+
+	providers := make([]oauthflow.Provider, 0)
+	if cfg != nil {
+		if githubCfg, ok := cfg.OAuth.Providers["github"]; ok && githubCfg.Enabled {
+			providers = append(providers, oauthproviders.NewGitHubProvider(githubCfg))
+		}
+	}
+
+	return oauthflow.NewManager(oauthflow.NewStateStore(redisClient, ttl), providers)
 }
 
 func registerPublicRoutes(
@@ -210,6 +242,9 @@ func registerPublicRoutes(
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
 	r.POST("/auth/refresh", handlers.auth.Refresh)
+	r.GET("/oauth/providers", handlers.oauth.Providers)
+	r.GET("/oauth/:source/authorize", middleware.RateLimitNormal(redisClient), middleware.OptionalAuth(jwtManager), handlers.oauth.Authorize)
+	r.GET("/oauth/:source/callback", middleware.RateLimitNormal(redisClient), handlers.oauth.Callback)
 	r.GET("/categories", handlers.category.ListTabs)
 	r.GET("/tags", handlers.tag.List)
 	r.GET("/tags/:id", handlers.tag.Get)
@@ -238,6 +273,8 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.GET("/users/me", handlers.user.GetDetail)
 	authed.PUT("/users/me", handlers.user.Update)
 	authed.POST("/users/me/login-time", handlers.user.RecordLogin)
+	authed.GET("/oauth/bindings", handlers.oauth.ListBindings)
+	authed.DELETE("/oauth/bindings/:source", handlers.oauth.Unbind)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
 	authed.POST("/articles/:id/comments", handlers.comment.CreateArticle)
