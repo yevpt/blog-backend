@@ -5,5 +5,5 @@ server:
   mode: release
 
 log:
-  level: warn
+  level: info
   format: json
