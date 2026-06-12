@@ -46,3 +46,11 @@ email:
   port: 465
   from: xxxxx@xx.com
   password: ""
+
+oauth:
+  providers:
+    github:
+      enabled: true
+      client_id: "your_github_client_id"
+      client_secret: "your_github_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/github/callback"
