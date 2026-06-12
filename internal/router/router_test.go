@@ -12,6 +12,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
+	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -84,4 +85,23 @@ func TestRegisterPublicRoutes_ArticlesListAllowsOptionalAuth(t *testing.T) {
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestNewOAuthManager_RegistersEnabledSocialProviders(t *testing.T) {
+	cfg := &config.Config{
+		OAuth: config.OAuthConfig{
+			Providers: map[string]config.OAuthProviderConfig{
+				"github": {Enabled: true},
+				"gitee":  {Enabled: true},
+				"qq":     {Enabled: true},
+				"weibo":  {Enabled: true},
+				"baidu":  {Enabled: true},
+				"google": {Enabled: false},
+			},
+		},
+	}
+
+	manager := newOAuthManager(nil, cfg)
+
+	assert.Equal(t, []string{"baidu", "gitee", "github", "qq", "weibo"}, manager.Sources())
 }

@@ -54,3 +54,23 @@ oauth:
       client_id: "your_github_client_id"
       client_secret: "your_github_client_secret"
       redirect_uri: "http://localhost:8080/oauth/github/callback"
+    gitee:
+      enabled: false
+      client_id: "your_gitee_client_id"
+      client_secret: "your_gitee_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/gitee/callback"
+    qq:
+      enabled: false
+      client_id: "your_qq_client_id"
+      client_secret: "your_qq_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/qq/callback"
+    weibo:
+      enabled: false
+      client_id: "your_weibo_client_id"
+      client_secret: "your_weibo_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/weibo/callback"
+    baidu:
+      enabled: false
+      client_id: "your_baidu_client_id"
+      client_secret: "your_baidu_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/baidu/callback"

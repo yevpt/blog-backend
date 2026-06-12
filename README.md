@@ -120,7 +120,7 @@ APP_ENV=prod ./bin/blog-server
 
 OAuth 认证身份只使用 `user`、`social_user`、`social_user_auth` 三张表；`user_social_link` 仅用于用户资料里的社交链接展示，不参与登录或绑定判断。
 
-当前 Phase 1 已接入 GitHub：
+当前已接入 GitHub、Gitee、QQ、微博、百度：
 
 ```yaml
 oauth:
@@ -131,6 +131,26 @@ oauth:
       client_id: "your_github_client_id"
       client_secret: "your_github_client_secret"
       redirect_uri: "http://localhost:8080/oauth/github/callback"
+    gitee:
+      enabled: false
+      client_id: "your_gitee_client_id"
+      client_secret: "your_gitee_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/gitee/callback"
+    qq:
+      enabled: false
+      client_id: "your_qq_client_id"
+      client_secret: "your_qq_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/qq/callback"
+    weibo:
+      enabled: false
+      client_id: "your_weibo_client_id"
+      client_secret: "your_weibo_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/weibo/callback"
+    baidu:
+      enabled: false
+      client_id: "your_baidu_client_id"
+      client_secret: "your_baidu_client_secret"
+      redirect_uri: "http://localhost:8080/oauth/baidu/callback"
 ```
 
 本地 GitHub OAuth App 的 callback URL 需与 `redirect_uri` 精确一致。授权流程使用一次性 Redis state，并在支持的平台启用 PKCE；第三方 access token 只在后端保存，不返回前端。

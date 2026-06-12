@@ -81,6 +81,7 @@ oauth:
       auth_url: "https://github.com/login/oauth/authorize"
       token_url: "https://github.com/login/oauth/access_token"
       user_url: "https://api.github.com/user"
+      openid_url: "https://graph.qq.com/oauth2.0/me"
 `), 0o644))
 
 	// 清空环境配置并切换工作目录，让 Load 只读取临时配置。
@@ -102,6 +103,7 @@ oauth:
 	assert.Equal(t, "https://github.com/login/oauth/authorize", github.AuthURL)
 	assert.Equal(t, "https://github.com/login/oauth/access_token", github.TokenURL)
 	assert.Equal(t, "https://api.github.com/user", github.UserURL)
+	assert.Equal(t, "https://graph.qq.com/oauth2.0/me", github.OpenIDURL)
 }
 
 // TestLoad_ReadsEnvOnlyRuntimeConfig 验证只通过环境变量注入的运行时配置能写入结构体。

@@ -107,6 +107,7 @@ type OAuthProviderConfig struct {
 	AuthURL      string   `mapstructure:"auth_url"`      // 授权端点
 	TokenURL     string   `mapstructure:"token_url"`     // 换取 access token 的端点
 	UserURL      string   `mapstructure:"user_url"`      // 获取用户资料的端点
+	OpenIDURL    string   `mapstructure:"openid_url"`    // 获取 OpenID 的端点，仅 QQ 等两段式平台使用
 }
 
 // Load 按优先级叠加加载配置：config.yaml → config.{APP_ENV}.yaml → config.local.yaml → 环境变量（BLOG_ 前缀）

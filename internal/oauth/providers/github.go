@@ -3,11 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
 	domain "github.com/vpt/blog-backend/internal/oauth"
 	"github.com/vpt/blog-backend/pkg/config"
@@ -25,7 +21,7 @@ const (
 type GitHubProvider struct {
 	cfg    config.OAuthProviderConfig
 	oauth  *gooauth2.Config
-	client *http.Client
+	client httpClient
 }
 
 // NewGitHubProvider 创建 GitHub OAuth provider。
@@ -43,7 +39,7 @@ func NewGitHubProvider(cfg config.OAuthProviderConfig) *GitHubProvider {
 				TokenURL: cfg.TokenURL,
 			},
 		},
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: newProviderHTTPClient(),
 	}
 }
 
@@ -77,7 +73,7 @@ func (p *GitHubProvider) Exchange(ctx context.Context, code string, verifier str
 // FetchProfile 拉取 GitHub 用户资料，并补齐主邮箱。
 func (p *GitHubProvider) FetchProfile(ctx context.Context, token *domain.TokenSet) (*domain.Profile, error) {
 	var user githubUser
-	if err := p.getJSON(ctx, p.cfg.UserURL, token.AccessToken, &user); err != nil {
+	if err := getJSONWithBearer(ctx, p.client, "GitHub", p.cfg.UserURL, token.AccessToken, &user); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +101,7 @@ func (p *GitHubProvider) FetchProfile(ctx context.Context, token *domain.TokenSe
 
 func (p *GitHubProvider) fetchPrimaryEmail(ctx context.Context, accessToken string) (*string, error) {
 	var emails []githubEmail
-	if err := p.getJSON(ctx, p.cfg.UserURL+"/emails", accessToken, &emails); err != nil {
+	if err := getJSONWithBearer(ctx, p.client, "GitHub", p.cfg.UserURL+"/emails", accessToken, &emails); err != nil {
 		return nil, err
 	}
 	for _, email := range emails {
@@ -114,52 +110,6 @@ func (p *GitHubProvider) fetchPrimaryEmail(ctx context.Context, accessToken stri
 		}
 	}
 	return nil, nil
-}
-
-func (p *GitHubProvider) getJSON(ctx context.Context, endpoint string, accessToken string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("User-Agent", "blog-backend-oauth")
-
-	resp, err := p.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("GitHub userinfo 请求失败: status=%d body=%s", resp.StatusCode, string(body))
-	}
-	return json.Unmarshal(body, out)
-}
-
-func tokenSetFromOAuth2(token *gooauth2.Token) *domain.TokenSet {
-	var refreshToken *string
-	if token.RefreshToken != "" {
-		refreshToken = &token.RefreshToken
-	}
-	var expiry *time.Time
-	if !token.Expiry.IsZero() {
-		expiry = &token.Expiry
-	}
-	var idToken *string
-	if rawIDToken, ok := token.Extra("id_token").(string); ok && rawIDToken != "" {
-		idToken = &rawIDToken
-	}
-	return &domain.TokenSet{
-		AccessToken:  token.AccessToken,
-		RefreshToken: refreshToken,
-		IDToken:      idToken,
-		Expiry:       expiry,
-	}
 }
 
 func applyGitHubDefaults(cfg *config.OAuthProviderConfig) {
@@ -175,14 +125,6 @@ func applyGitHubDefaults(cfg *config.OAuthProviderConfig) {
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{"read:user", "user:email"}
 	}
-}
-
-func strPtr(value string) *string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-	return &trimmed
 }
 
 type githubUser struct {

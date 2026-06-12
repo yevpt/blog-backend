@@ -58,3 +58,44 @@ oauth:
       auth_url: "https://github.com/login/oauth/authorize"
       token_url: "https://github.com/login/oauth/access_token"
       user_url: "https://api.github.com/user"
+    gitee:
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      redirect_uri: ""
+      scopes:
+        - "user_info"
+        - "emails"
+      auth_url: "https://gitee.com/oauth/authorize"
+      token_url: "https://gitee.com/oauth/token"
+      user_url: "https://gitee.com/api/v5/user"
+    qq:
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      redirect_uri: ""
+      scopes:
+        - "get_user_info"
+      auth_url: "https://graph.qq.com/oauth2.0/authorize"
+      token_url: "https://graph.qq.com/oauth2.0/token"
+      openid_url: "https://graph.qq.com/oauth2.0/me"
+      user_url: "https://graph.qq.com/user/get_user_info"
+    weibo:
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      redirect_uri: ""
+      scopes: []
+      auth_url: "https://api.weibo.com/oauth2/authorize"
+      token_url: "https://api.weibo.com/oauth2/access_token"
+      user_url: "https://api.weibo.com/2/users/show.json"
+    baidu:
+      enabled: false
+      client_id: ""
+      client_secret: ""
+      redirect_uri: ""
+      scopes:
+        - "basic"
+      auth_url: "https://openapi.baidu.com/oauth/2.0/authorize"
+      token_url: "https://openapi.baidu.com/oauth/2.0/token"
+      user_url: "https://openapi.baidu.com/rest/2.0/passport/users/getInfo"

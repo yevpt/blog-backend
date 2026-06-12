@@ -62,6 +62,7 @@ type TokenSet struct {
 	RefreshToken *string
 	IDToken      *string
 	Expiry       *time.Time
+	Extra        map[string]string
 }
 
 // AuthCodeOptions 是生成授权 URL 时传给 provider 的安全上下文。

@@ -219,6 +219,18 @@ func newOAuthManager(redisClient *redis.Client, cfg *config.Config) *oauthflow.M
 		if githubCfg, ok := cfg.OAuth.Providers["github"]; ok && githubCfg.Enabled {
 			providers = append(providers, oauthproviders.NewGitHubProvider(githubCfg))
 		}
+		if giteeCfg, ok := cfg.OAuth.Providers["gitee"]; ok && giteeCfg.Enabled {
+			providers = append(providers, oauthproviders.NewGiteeProvider(giteeCfg))
+		}
+		if qqCfg, ok := cfg.OAuth.Providers["qq"]; ok && qqCfg.Enabled {
+			providers = append(providers, oauthproviders.NewQQProvider(qqCfg))
+		}
+		if weiboCfg, ok := cfg.OAuth.Providers["weibo"]; ok && weiboCfg.Enabled {
+			providers = append(providers, oauthproviders.NewWeiboProvider(weiboCfg))
+		}
+		if baiduCfg, ok := cfg.OAuth.Providers["baidu"]; ok && baiduCfg.Enabled {
+			providers = append(providers, oauthproviders.NewBaiduProvider(baiduCfg))
+		}
 	}
 
 	return oauthflow.NewManager(oauthflow.NewStateStore(redisClient, ttl), providers)
