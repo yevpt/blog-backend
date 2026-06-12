@@ -117,7 +117,7 @@ func Load() (*Config, error) {
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./config")
 	v.AddConfigPath("../config")
-	v.AddConfigPath("../../config")   // 支持从 pkg/xxx/ 目录运行测试
+	v.AddConfigPath("../../config")    // 支持从 pkg/xxx/ 目录运行测试
 	v.AddConfigPath("../../../config") // 支持从 internal/xxx/yyy/ 目录运行测试
 
 	// 读取基础配置，失败时阻断启动（必要文件缺失无法继续运行）
@@ -137,6 +137,7 @@ func Load() (*Config, error) {
 	// 环境变量优先级最高，点号层级用下划线替代，例如 BLOG_DB_PASSWORD → db.password
 	v.SetEnvPrefix("BLOG")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	bindRuntimeEnv(v)
 	v.AutomaticEnv()
 
 	// 将最终合并后的配置反序列化到结构体
@@ -146,6 +147,49 @@ func Load() (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func bindRuntimeEnv(v *viper.Viper) {
+	// 只存在于生产环境变量中的 key 需要显式绑定，否则 Unmarshal 无法发现这些字段。
+	keys := []string{
+		"server.port",
+		"server.mode",
+		"log.level",
+		"log.format",
+		"jwt.secret",
+		"jwt.expire_hours",
+		"jwt.refresh_expire_hours",
+		"db.host",
+		"db.port",
+		"db.name",
+		"db.user",
+		"db.password",
+		"db.max_open_conns",
+		"db.max_idle_conns",
+		"db.max_lifetime_minutes",
+		"redis.addr",
+		"redis.password",
+		"redis.db",
+		"garage.endpoint",
+		"garage.bucket",
+		"garage.region",
+		"garage.accessKeyID",
+		"garage.secretAccessKey",
+		"garage.cdn",
+		"cdn.host",
+		"cdn.secret",
+		"cdn.signQueryName",
+		"cdn.timestampQueryName",
+		"email.host",
+		"email.port",
+		"email.from",
+		"email.password",
+		"oauth.state_ttl_minutes",
+	}
+
+	for _, key := range keys {
+		_ = v.BindEnv(key)
+	}
 }
 
 // mergeConfig 将可选配置文件的所有键值叠加到主配置，文件不存在时静默忽略

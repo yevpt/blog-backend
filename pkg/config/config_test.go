@@ -103,3 +103,59 @@ oauth:
 	assert.Equal(t, "https://github.com/login/oauth/access_token", github.TokenURL)
 	assert.Equal(t, "https://api.github.com/user", github.UserURL)
 }
+
+// TestLoad_ReadsEnvOnlyRuntimeConfig 验证只通过环境变量注入的运行时配置能写入结构体。
+func TestLoad_ReadsEnvOnlyRuntimeConfig(t *testing.T) {
+	// 记录当前工作目录，测试结束后恢复，避免影响其他测试。
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(cwd))
+	})
+
+	// 创建接近生产镜像内的基础配置：敏感连接信息不写入 YAML，只通过环境变量注入。
+	configDir := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+server:
+  port: 8080
+db:
+  max_open_conns: 10
+  max_idle_conns: 5
+  max_lifetime_minutes: 30
+redis:
+  db: 0
+garage:
+  cdn: false
+`), 0o644))
+
+	// 通过环境变量模拟 Docker Compose 注入的生产连接信息。
+	t.Setenv("APP_ENV", "")
+	t.Setenv("BLOG_DB_HOST", "192.168.2.3")
+	t.Setenv("BLOG_DB_PORT", "9003")
+	t.Setenv("BLOG_DB_NAME", "blog_dev")
+	t.Setenv("BLOG_DB_USER", "blog_dev")
+	t.Setenv("BLOG_DB_PASSWORD", "db-secret")
+	t.Setenv("BLOG_REDIS_ADDR", "192.168.2.3:9004")
+	t.Setenv("BLOG_REDIS_PASSWORD", "redis-secret")
+	t.Setenv("BLOG_GARAGE_ENDPOINT", "http://garage.example.com")
+	t.Setenv("BLOG_GARAGE_ACCESSKEYID", "garage-access")
+	t.Setenv("BLOG_GARAGE_SECRETACCESSKEY", "garage-secret")
+	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
+
+	// 加载配置。
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	// 校验环境变量中的连接信息没有丢失，避免生成 tcp :0 这类空 DSN。
+	assert.Equal(t, "192.168.2.3", cfg.DB.Host)
+	assert.Equal(t, 9003, cfg.DB.Port)
+	assert.Equal(t, "blog_dev", cfg.DB.Name)
+	assert.Equal(t, "blog_dev", cfg.DB.User)
+	assert.Equal(t, "db-secret", cfg.DB.Password)
+	assert.Equal(t, "192.168.2.3:9004", cfg.Redis.Addr)
+	assert.Equal(t, "redis-secret", cfg.Redis.Password)
+	assert.Equal(t, "http://garage.example.com", cfg.Garage.Endpoint)
+	assert.Equal(t, "garage-access", cfg.Garage.AccessKeyID)
+	assert.Equal(t, "garage-secret", cfg.Garage.SecretAccessKey)
+}
