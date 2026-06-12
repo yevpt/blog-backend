@@ -11,6 +11,8 @@ import (
 func Recovery(log *zap.Logger) gin.HandlerFunc {
 	return gin.RecoveryWithWriter(nil, func(c *gin.Context, err interface{}) {
 		log.Error("panic 恢复",
+			zap.String("type", "panic"),
+			zap.String("request_id", GetRequestID(c)),
 			zap.Any("error", err),
 			zap.String("path", c.Request.URL.Path),
 		)
