@@ -46,19 +46,20 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health    *handler.HealthHandler
-	test      *handler.TestHandler
-	auth      *authhandler.AuthHandler
-	oauth     *oauthhandler.OAuthHandler
-	captcha   *captchahandler.CaptchaHandler
-	article   *articlehandler.ArticleHandler
-	comment   *commenthandler.CommentHandler
-	guestbook *guestbookhandler.GuestbookHandler
-	moment    *momenthandler.MomentHandler
-	user      *handler.UserHandler
-	category  *handler.CategoryHandler
-	tag       *handler.TagHandler
-	userCache service.UserCacheService
+	health     *handler.HealthHandler
+	test       *handler.TestHandler
+	auth       *authhandler.AuthHandler
+	oauth      *oauthhandler.OAuthHandler
+	captcha    *captchahandler.CaptchaHandler
+	article    *articlehandler.ArticleHandler
+	comment    *commenthandler.CommentHandler
+	guestbook  *guestbookhandler.GuestbookHandler
+	moment     *momenthandler.MomentHandler
+	user       *handler.UserHandler
+	category   *handler.CategoryHandler
+	tag        *handler.TagHandler
+	friendLink *handler.FriendLinkHandler
+	userCache  service.UserCacheService
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -181,6 +182,9 @@ func newRouteHandlers(
 	tagRepo := repository.NewTagRepository(db)
 	tagSvc := service.NewTagService(tagRepo, articleSvc)
 
+	friendLinkRepo := repository.NewFriendLinkRepository(db)
+	friendLinkSvc := service.NewFriendLinkService(friendLinkRepo, objectStore)
+
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore)
 
@@ -191,19 +195,20 @@ func newRouteHandlers(
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc)
 
 	return routeHandlers{
-		health:    handler.NewHealthHandler(db, redisClient),
-		test:      handler.NewTestHandler(jwtManager),
-		auth:      authhandler.NewAuthHandler(authSvc),
-		oauth:     oauthhandler.NewOAuthHandler(oauthSvc),
-		captcha:   captchahandler.NewCaptchaHandler(captchaSvc),
-		article:   articlehandler.NewArticleHandler(articleSvc),
-		comment:   commenthandler.NewCommentHandler(commentSvc),
-		guestbook: guestbookhandler.NewGuestbookHandler(guestbookSvc),
-		moment:    momenthandler.NewMomentHandler(momentSvc),
-		user:      handler.NewUserHandler(userSvc),
-		category:  handler.NewCategoryHandler(categorySvc),
-		tag:       handler.NewTagHandler(tagSvc),
-		userCache: userCacheSvc,
+		health:     handler.NewHealthHandler(db, redisClient),
+		test:       handler.NewTestHandler(jwtManager),
+		auth:       authhandler.NewAuthHandler(authSvc),
+		oauth:      oauthhandler.NewOAuthHandler(oauthSvc),
+		captcha:    captchahandler.NewCaptchaHandler(captchaSvc),
+		article:    articlehandler.NewArticleHandler(articleSvc),
+		comment:    commenthandler.NewCommentHandler(commentSvc),
+		guestbook:  guestbookhandler.NewGuestbookHandler(guestbookSvc),
+		moment:     momenthandler.NewMomentHandler(momentSvc),
+		user:       handler.NewUserHandler(userSvc),
+		category:   handler.NewCategoryHandler(categorySvc),
+		tag:        handler.NewTagHandler(tagSvc),
+		friendLink: handler.NewFriendLinkHandler(friendLinkSvc),
+		userCache:  userCacheSvc,
 	}
 }
 
@@ -261,6 +266,8 @@ func registerPublicRoutes(
 	r.GET("/tags", handlers.tag.List)
 	r.GET("/tags/:id", handlers.tag.Get)
 	r.GET("/tags/:id/articles", handlers.tag.ListArticles)
+	r.GET("/friend-links", handlers.friendLink.ListPublic)
+	r.GET("/friend-links/:id", handlers.friendLink.GetPublic)
 	r.GET("/users", handlers.user.ListAll)
 	r.GET("/users/recent", handlers.user.ListRecent)
 	r.GET("/articles/ids", handlers.article.ListIDs)
@@ -338,4 +345,8 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.DELETE("/tags/:id", handlers.tag.Delete)
 	admin.POST("/tags/:id/articles", handlers.tag.AddArticles)
 	admin.DELETE("/tags/:id/articles", handlers.tag.RemoveArticles)
+	admin.GET("/friend-links", handlers.friendLink.ListAdmin)
+	admin.POST("/friend-links", handlers.friendLink.Create)
+	admin.PUT("/friend-links/:id", handlers.friendLink.Update)
+	admin.DELETE("/friend-links/:id", handlers.friendLink.Delete)
 }

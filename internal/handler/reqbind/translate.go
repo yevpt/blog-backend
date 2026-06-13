@@ -17,6 +17,7 @@ var (
 	validatorLabelsOnce sync.Once
 	fieldLabels         = map[string]string{
 		"article_ids":     "文章 ID 列表",
+		"avatar_url":      "头像地址",
 		"category_id":     "分类 ID",
 		"category_ids":    "分类 ID 列表",
 		"captcha_token":   "验证码票据",

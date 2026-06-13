@@ -820,6 +820,149 @@ definitions:
         example: vpt
         type: string
     type: object
+  dto.FriendLinkCreateReq:
+    properties:
+      avatar_url:
+        description: AvatarUrl 网站头像或 Logo 地址，可以是外链或对象存储 key。
+        example: friend-links/vpt.png
+        type: string
+      description:
+        description: Description 网站描述。
+        example: 个人博客
+        type: string
+      email:
+        description: Email 站长邮箱。
+        example: hello@example.com
+        type: string
+      name:
+        description: Name 网站名称。
+        example: VPT
+        type: string
+      phone:
+        description: Phone 联系电话。
+        example: "13800138000"
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
+        example: 0
+        type: integer
+      site:
+        description: Site 网站 URL。
+        example: https://example.com
+        type: string
+      status:
+        description: Status 状态：0 隐藏，1 显示；未传默认显示。
+        example: 1
+        type: integer
+    required:
+    - name
+    - seq
+    - site
+    type: object
+  dto.FriendLinkItemResp:
+    properties:
+      avatar_url:
+        description: AvatarUrl 网站头像或 Logo 的可访问 URL。
+        example: https://cdn.example.com/blog/friend-links/vpt.png
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      description:
+        description: Description 网站描述。
+        example: 个人博客
+        type: string
+      email:
+        description: Email 站长邮箱。
+        example: hello@example.com
+        type: string
+      id:
+        description: ID 友情链接 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 网站名称。
+        example: VPT
+        type: string
+      phone:
+        description: Phone 联系电话。
+        example: "13800138000"
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      site:
+        description: Site 网站 URL。
+        example: https://example.com
+        type: string
+      status:
+        description: Status 状态：0 隐藏，1 显示。
+        example: 1
+        type: integer
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+    type: object
+  dto.FriendLinkPageResp:
+    properties:
+      list:
+        description: List 友情链接列表。
+        items:
+          $ref: '#/definitions/dto.FriendLinkItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 2
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 20
+        type: integer
+    type: object
+  dto.FriendLinkUpdateReq:
+    properties:
+      avatar_url:
+        description: AvatarUrl 网站头像或 Logo 地址；传空字符串表示清空。
+        example: friend-links/vpt.png
+        type: string
+      description:
+        description: Description 网站描述；传空字符串表示清空。
+        example: 个人博客
+        type: string
+      email:
+        description: Email 站长邮箱；传空字符串表示清空。
+        example: hello@example.com
+        type: string
+      name:
+        description: Name 网站名称。
+        example: VPT
+        type: string
+      phone:
+        description: Phone 联系电话；传空字符串表示清空。
+        example: "13800138000"
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      site:
+        description: Site 网站 URL。
+        example: https://example.com
+        type: string
+      status:
+        description: Status 状态：0 隐藏，1 显示。
+        example: 1
+        type: integer
+    type: object
   dto.GuestbookCreateReq:
     properties:
       content:
@@ -1884,6 +2027,174 @@ paths:
       summary: 添加文章到分类
       tags:
       - 分类
+  /admin/friend-links:
+    get:
+      description: 管理员分页查询未删除的友情链接，可按 status 过滤。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 状态：0 隐藏，1 显示
+        in: query
+        name: status
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FriendLinkPageResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询管理端友情链接列表
+      tags:
+      - 友情链接
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增友情链接；avatar_url 可传外链或对象存储 key。
+      parameters:
+      - description: 友情链接新增请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.FriendLinkCreateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示新增成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FriendLinkItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增友情链接
+      tags:
+      - 友情链接
+  /admin/friend-links/{id}:
+    delete:
+      description: 管理员软删除友情链接。
+      parameters:
+      - description: 友情链接 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FriendLinkItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 友情链接不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除友情链接
+      tags:
+      - 友情链接
+    put:
+      consumes:
+      - application/json
+      description: 管理员修改友情链接；未传字段保持原值，可选字符串传空字符串表示清空。
+      parameters:
+      - description: 友情链接 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 友情链接修改请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.FriendLinkUpdateReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示修改成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FriendLinkItemResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 友情链接不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 修改友情链接
+      tags:
+      - 友情链接
   /admin/tags:
     post:
       consumes:
@@ -2857,6 +3168,69 @@ paths:
       summary: 查询分类 Tab 列表
       tags:
       - 分类
+  /friend-links:
+    get:
+      description: 分页返回显示中的友情链接，按 seq ASC、id DESC 排序；avatar_url 返回前会解析为可访问 URL。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FriendLinkPageResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开友情链接列表
+      tags:
+      - 友情链接
+  /friend-links/{id}:
+    get:
+      description: 查询显示中的友情链接详情；隐藏或不存在的数据都会返回 404。
+      parameters:
+      - description: 友情链接 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.FriendLinkItemResp'
+              type: object
+        "404":
+          description: 友情链接不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开友情链接详情
+      tags:
+      - 友情链接
   /guestbook:
     get:
       consumes:

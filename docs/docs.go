@@ -509,6 +509,278 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/friend-links": {
+            "get": {
+                "description": "管理员分页查询未删除的友情链接，可按 status 过滤。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "友情链接"
+                ],
+                "summary": "查询管理端友情链接列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "状态：0 隐藏，1 显示",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FriendLinkPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "管理员新增友情链接；avatar_url 可传外链或对象存储 key。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "友情链接"
+                ],
+                "summary": "新增友情链接",
+                "parameters": [
+                    {
+                        "description": "友情链接新增请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.FriendLinkCreateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示新增成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FriendLinkItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/friend-links/{id}": {
+            "put": {
+                "description": "管理员修改友情链接；未传字段保持原值，可选字符串传空字符串表示清空。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "友情链接"
+                ],
+                "summary": "修改友情链接",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "友情链接 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "友情链接修改请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.FriendLinkUpdateReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示修改成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FriendLinkItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "友情链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员软删除友情链接。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "友情链接"
+                ],
+                "summary": "删除友情链接",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "友情链接 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FriendLinkItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "友情链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/tags": {
             "post": {
                 "description": "管理员新增标签。",
@@ -2081,6 +2353,111 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/friend-links": {
+            "get": {
+                "description": "分页返回显示中的友情链接，按 seq ASC、id DESC 排序；avatar_url 返回前会解析为可访问 URL。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "友情链接"
+                ],
+                "summary": "查询公开友情链接列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FriendLinkPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/friend-links/{id}": {
+            "get": {
+                "description": "查询显示中的友情链接详情；隐藏或不存在的数据都会返回 404。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "友情链接"
+                ],
+                "summary": "查询公开友情链接详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "友情链接 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.FriendLinkItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "友情链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "500": {
@@ -5522,6 +5899,191 @@ const docTemplate = `{
                     "description": "Username 登录账号。",
                     "type": "string",
                     "example": "vpt"
+                }
+            }
+        },
+        "dto.FriendLinkCreateReq": {
+            "type": "object",
+            "required": [
+                "name",
+                "seq",
+                "site"
+            ],
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 网站头像或 Logo 地址，可以是外链或对象存储 key。",
+                    "type": "string",
+                    "example": "friend-links/vpt.png"
+                },
+                "description": {
+                    "description": "Description 网站描述。",
+                    "type": "string",
+                    "example": "个人博客"
+                },
+                "email": {
+                    "description": "Email 站长邮箱。",
+                    "type": "string",
+                    "example": "hello@example.com"
+                },
+                "name": {
+                    "description": "Name 网站名称。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "phone": {
+                    "description": "Phone 联系电话。",
+                    "type": "string",
+                    "example": "13800138000"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "site": {
+                    "description": "Site 网站 URL。",
+                    "type": "string",
+                    "example": "https://example.com"
+                },
+                "status": {
+                    "description": "Status 状态：0 隐藏，1 显示；未传默认显示。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.FriendLinkItemResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 网站头像或 Logo 的可访问 URL。",
+                    "type": "string",
+                    "example": "https://cdn.example.com/blog/friend-links/vpt.png"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "description": {
+                    "description": "Description 网站描述。",
+                    "type": "string",
+                    "example": "个人博客"
+                },
+                "email": {
+                    "description": "Email 站长邮箱。",
+                    "type": "string",
+                    "example": "hello@example.com"
+                },
+                "id": {
+                    "description": "ID 友情链接 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 网站名称。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "phone": {
+                    "description": "Phone 联系电话。",
+                    "type": "string",
+                    "example": "13800138000"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "site": {
+                    "description": "Site 网站 URL。",
+                    "type": "string",
+                    "example": "https://example.com"
+                },
+                "status": {
+                    "description": "Status 状态：0 隐藏，1 显示。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.FriendLinkPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 友情链接列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.FriendLinkItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 20
+                }
+            }
+        },
+        "dto.FriendLinkUpdateReq": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 网站头像或 Logo 地址；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "friend-links/vpt.png"
+                },
+                "description": {
+                    "description": "Description 网站描述；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "个人博客"
+                },
+                "email": {
+                    "description": "Email 站长邮箱；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "hello@example.com"
+                },
+                "name": {
+                    "description": "Name 网站名称。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "phone": {
+                    "description": "Phone 联系电话；传空字符串表示清空。",
+                    "type": "string",
+                    "example": "13800138000"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "site": {
+                    "description": "Site 网站 URL。",
+                    "type": "string",
+                    "example": "https://example.com"
+                },
+                "status": {
+                    "description": "Status 状态：0 隐藏，1 显示。",
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },
