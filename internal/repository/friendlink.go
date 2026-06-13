@@ -7,7 +7,10 @@ import (
 	"gorm.io/gorm"
 )
 
-const friendLinkVisibleStatus uint8 = 1
+const (
+	friendLinkVisibleStatus      uint8 = 1
+	friendLinkDisconnectedStatus uint8 = 2
+)
 
 // FriendLinkUpdateData 友情链接更新数据；布尔字段表示对应属性是否参与更新。
 type FriendLinkUpdateData struct {
@@ -51,8 +54,8 @@ func NewFriendLinkRepository(db *gorm.DB) FriendLinkRepository {
 }
 
 func (r *friendLinkRepo) ListPublic(offset, limit int) ([]model.FriendLink, int64, error) {
-	// 公开列表只查询显示中的数据。
-	query := r.db.Model(&model.FriendLink{}).Where("status = ?", friendLinkVisibleStatus)
+	// 公开列表查询显示中及失联的数据。
+	query := r.db.Model(&model.FriendLink{}).Where("status IN ?", []uint8{friendLinkVisibleStatus, friendLinkDisconnectedStatus})
 	return listFriendLinks(query, offset, limit)
 }
 

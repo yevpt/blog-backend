@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	friendLinkStatusHidden    uint8 = 0
-	friendLinkStatusVisible   uint8 = 1
-	friendLinkDefaultPage           = 1
+	friendLinkStatusHidden       uint8 = 0
+	friendLinkStatusVisible      uint8 = 1
+	friendLinkStatusDisconnected uint8 = 2
+	friendLinkDefaultPage              = 1
 	friendLinkDefaultPageSize       = 10
 	friendLinkMaxPageSize           = 50
 )
@@ -223,7 +224,9 @@ func validateFriendLinkStatusPtr(status *uint8) error {
 }
 
 func validateFriendLinkStatus(status uint8) error {
-	if status != friendLinkStatusHidden && status != friendLinkStatusVisible {
+	if status != friendLinkStatusHidden &&
+		status != friendLinkStatusVisible &&
+		status != friendLinkStatusDisconnected {
 		return ErrFriendLinkStatusInvalid
 	}
 	return nil

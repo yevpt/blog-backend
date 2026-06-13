@@ -8,7 +8,7 @@ type FriendLinkListReq struct {
 	Page int `form:"page" example:"1"`
 	// PageSize 每页数量，最大 50。
 	PageSize int `form:"page_size" example:"10"`
-	// Status 状态过滤，仅管理列表使用：0 隐藏，1 显示。
+	// Status 状态过滤，仅管理列表使用：0 隐藏，1 显示，2 失联。
 	Status *uint8 `form:"status" example:"1"`
 }
 
@@ -28,7 +28,7 @@ type FriendLinkCreateReq struct {
 	AvatarUrl *string `json:"avatar_url,omitempty" example:"friend-links/vpt.png"`
 	// Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
 	Seq *uint `json:"seq" binding:"required" example:"0"`
-	// Status 状态：0 隐藏，1 显示；未传默认显示。
+	// Status 状态：0 隐藏，1 显示，2 失联；未传默认显示。
 	Status *uint8 `json:"status,omitempty" example:"1"`
 }
 
@@ -48,7 +48,7 @@ type FriendLinkUpdateReq struct {
 	AvatarUrl *string `json:"avatar_url,omitempty" example:"friend-links/vpt.png"`
 	// Seq 排序值，越小越靠前。
 	Seq *uint `json:"seq,omitempty" example:"0"`
-	// Status 状态：0 隐藏，1 显示。
+	// Status 状态：0 隐藏，1 显示，2 失联。
 	Status *uint8 `json:"status,omitempty" example:"1"`
 }
 
@@ -70,7 +70,7 @@ type FriendLinkItemResp struct {
 	AvatarUrl *string `json:"avatar_url,omitempty" example:"https://cdn.example.com/blog/friend-links/vpt.png"`
 	// Seq 排序值，越小越靠前。
 	Seq uint `json:"seq" example:"0"`
-	// Status 状态：0 隐藏，1 显示。
+	// Status 状态：0 隐藏，1 显示，2 失联。
 	Status uint8 `json:"status" example:"1"`
 	// CreatedAt 创建时间。
 	CreatedAt time.Time `json:"created_at"`
