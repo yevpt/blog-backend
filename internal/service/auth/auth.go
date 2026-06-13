@@ -225,8 +225,8 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 		return nil, err
 	}
 
-	// 异步写入，不让非关键操作拖慢登录响应
-	go func() { s.repo.UpdateLastLoginAt(user.ID) }()
+	// 登录成功后先刷新最后登录时间，保证紧接着查询用户列表时排序使用最新时间
+	_ = s.repo.UpdateLastLoginAt(user.ID)
 
 	// 让缓存失效，下次 /users/me 请求时自动从 DB 重建
 	if s.cache != nil {

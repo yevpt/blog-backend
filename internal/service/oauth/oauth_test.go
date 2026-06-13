@@ -39,6 +39,7 @@ type fakeSocialRepo struct {
 	binding         *repository.SocialBinding
 	bindingCount    int64
 	createdUser     *model.User
+	createdRoleID   uint
 	createdSocial   *model.SocialUser
 	boundExistingID uint
 	boundSocial     *model.SocialUser
@@ -58,6 +59,7 @@ func (r *fakeSocialRepo) CreateUserWithSocialAuth(user *model.User, roleID uint,
 	user.ID = 7
 	socialUser.ID = 11
 	r.createdUser = user
+	r.createdRoleID = roleID
 	r.createdSocial = socialUser
 	return nil
 }
@@ -176,6 +178,7 @@ func TestOAuthService_CallbackLoginCreatesUserAndBinding(t *testing.T) {
 	assert.Equal(t, avatar, avatarSaver.gotURL)
 	assert.Equal(t, "avatar/user/md5.jpg", *social.createdUser.AvatarUrl)
 	assert.Equal(t, &blog, social.createdUser.Site)
+	assert.Equal(t, roles.NormalRoleId, social.createdRoleID)
 	assert.Equal(t, "github", social.createdSocial.Source)
 	assert.Equal(t, "remote-123", social.createdSocial.UUID)
 	assert.Equal(t, "access-token", social.createdSocial.AccessToken)

@@ -7,11 +7,12 @@ const (
 	NormalRole = "ROLE_NORMAL" // 普通用户，默认角色
 )
 
-// 角色 ID 常量，与数据库 roles 表中的 id 字段对应
+// 角色 ID 常量，与当前角色种子数据中的 id 字段对应。
+// 权限高低不要依赖 id 大小，必须使用 Weight。
 const (
-	AdminRoleId  = 1
-	VipRoleId    = 2
-	NormalRoleId = 3
+	AdminRoleId  uint = 1
+	NormalRoleId uint = 2
+	VipRoleId    uint = 3
 )
 
 // roleWeight 权重越小权限越高（Admin=1 可访问所有级别，Normal=3 不能访问 VIP=2 接口）

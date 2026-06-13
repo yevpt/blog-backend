@@ -10,6 +10,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/pkg/roles"
 )
 
 func TestSocialAuthRepository_FindSocialUser_Found(t *testing.T) {
@@ -80,7 +81,7 @@ func TestSocialAuthRepository_CreateUserWithSocialAuth(t *testing.T) {
 		IsActive:    true,
 	}
 
-	err := repo.CreateUserWithSocialAuth(user, 3, socialUser)
+	err := repo.CreateUserWithSocialAuth(user, roles.NormalRoleId, socialUser)
 
 	require.NoError(t, err)
 	assert.Equal(t, uint(7), user.ID)

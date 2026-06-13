@@ -1713,13 +1713,15 @@ func migrateMessage(src *sql.DB, dst *gorm.DB) error {
 // Step 23: user_messages → user_message
 // ─────────────────────────────────────────────
 // 注意：源库存在大量攻击残留的孤儿记录（message_id 对应的 message 不存在），
-// 这些孤儿记录在 Step 24 cleanOrphans 中统一删除。
+// 此处直接通过 JOIN message 过滤，避免先插入海量无效数据再清理导致连接超时。
 // read_status varchar '01'=已读，'00'=未读 → is_read bool
 
 func migrateUserMessage(src *sql.DB, dst *gorm.DB) error {
 	rows, err := src.Query(`
-		SELECT ID, user_id, message_id, read_status, date_create
-		FROM user_messages ORDER BY ID`)
+		SELECT um.ID, um.user_id, um.message_id, um.read_status, um.date_create
+		FROM user_messages um
+		JOIN message m ON m.ID = um.message_id
+		ORDER BY um.ID`)
 	if err != nil {
 		return err
 	}
@@ -1979,10 +1981,10 @@ func defragTable(db *sql.DB, table string, refs []fkRef) error {
 		}
 		// 同步更新所有引用此 id 的外键列
 		for _, ref := range refs {
-			query := fmt.Sprintf(
-				"UPDATE `%s` SET `%s`=? WHERE `%s`=? AND %s",
-				ref.table, ref.col, ref.col, ref.where,
-			)
+			query := fmt.Sprintf("UPDATE `%s` SET `%s`=? WHERE `%s`=?", ref.table, ref.col, ref.col)
+			if ref.where != "" {
+				query += " AND " + ref.where
+			}
 			if _, err := db.Exec(query, p.newID, p.oldID); err != nil {
 				return fmt.Errorf("UPDATE %s.%s %d→%d: %w", ref.table, ref.col, p.oldID, p.newID, err)
 			}

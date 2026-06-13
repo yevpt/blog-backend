@@ -198,3 +198,30 @@ func TestUserRepository_Create_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestUserRepository_ListAll_OrdersByRoleNameWeight(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := repository.NewUserRepository(db)
+
+	mock.ExpectQuery(`SELECT count\(\*\) FROM \x60user\x60 WHERE status = \? AND \x60user\x60\.\x60deleted_at\x60 IS NULL`).
+		WithArgs(1).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at",
+		"username", "password", "nickname", "email", "phone",
+		"site", "avatar_url", "mark", "status", "last_login_at",
+	}).AddRow(735, nil, nil, nil, "vip@example.com", "hashed", nil, nil, nil, nil, nil, nil, 1, nil)
+
+	mock.ExpectQuery(`ORDER BY MIN\(CASE role\.name WHEN 'ROLE_ADMIN' THEN 1 WHEN 'ROLE_VIP' THEN 2 WHEN 'ROLE_NORMAL' THEN 3 ELSE 999 END\) ASC, COALESCE\(user\.last_login_at, user\.created_at\) DESC, user\.id DESC`).
+		WithArgs(1, 10).
+		WillReturnRows(rows)
+
+	users, total, err := repo.ListAll(0, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), total)
+	require.Len(t, users, 1)
+	assert.Equal(t, uint(735), users[0].ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

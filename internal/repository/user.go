@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/vpt/blog-backend/internal/model"
+	"github.com/vpt/blog-backend/pkg/roles"
 )
 
 // UserDetailAggregate 用户详情聚合，供 service 层转换为 DTO。
@@ -148,23 +149,23 @@ func (r *userRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error)
 	if len(userIDs) == 0 {
 		return make(map[uint][]string), nil
 	}
-	
+
 	type userRoleResult struct {
 		UserID   uint   `gorm:"column:user_id"`
 		RoleName string `gorm:"column:name"`
 	}
 	var results []userRoleResult
-	
+
 	err := r.db.Model(&model.UserRole{}).
 		Select("user_role.user_id, role.name").
 		Joins("JOIN role ON role.id = user_role.role_id").
 		Where("user_role.user_id IN ?", userIDs).
 		Find(&results).Error
-		
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	rolesMap := make(map[uint][]string)
 	for _, res := range results {
 		rolesMap[res.UserID] = append(rolesMap[res.UserID], res.RoleName)
@@ -181,14 +182,14 @@ func (r *userRepo) UpdateLastLoginAt(userID uint) error {
 func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
-	
+
 	// 只查询 status = 1 的用户
 	query := r.db.Model(&model.User{}).Where("status = ?", 1)
-	
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	
+
 	err := query.Order("COALESCE(last_login_at, created_at) DESC, id DESC").Offset(offset).Limit(limit).Find(&users).Error
 	return users, total, err
 }
@@ -196,31 +197,34 @@ func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 func (r *userRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
-	
+
 	// 只查询 status = 1 的用户
 	query := r.db.Model(&model.User{}).Where("status = ?", 1)
-	
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	
-	// 按角色排序，需要 JOIN user_role 和 role。由于角色权重是业务定义，但在 DB 中可以用 role.id 或者自定义逻辑排序。
-	// roles.go 中定义：AdminRoleId = 1, VipRoleId = 2, NormalRoleId = 3。数字越小权重越高。
-	// 因此可以直接按 role.id ASC 排序。
-	// 注意：一个用户可能有多个角色，取 MIN(role.id) 进行排序。
-	
+
+	// 按角色名称映射业务权重排序，避免数据库自增 id 顺序和权限权重不一致。
+	// 一个用户可能有多个角色，取最小权重代表该用户最高权限。
+	roleWeightExpr := listUserRoleWeightExpr()
+
 	err := r.db.Table("user").
 		Select("DISTINCT user.*").
 		Joins("LEFT JOIN user_role ON user_role.user_id = user.id").
 		Joins("LEFT JOIN role ON role.id = user_role.role_id").
 		Where("user.status = ?", 1).
 		Group("user.id").
-		Order("MIN(role.id) ASC, COALESCE(user.last_login_at, user.created_at) DESC, user.id DESC").
+		Order(roleWeightExpr + " ASC, COALESCE(user.last_login_at, user.created_at) DESC, user.id DESC").
 		Offset(offset).
 		Limit(limit).
 		Find(&users).Error
-		
+
 	return users, total, err
+}
+
+func listUserRoleWeightExpr() string {
+	return "MIN(CASE role.name WHEN '" + roles.AdminRole + "' THEN 1 WHEN '" + roles.VipRole + "' THEN 2 WHEN '" + roles.NormalRole + "' THEN 3 ELSE 999 END)"
 }
 
 func (r *userRepo) Update(id uint, updates map[string]interface{}) error {

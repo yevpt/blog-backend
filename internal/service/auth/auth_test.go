@@ -17,6 +17,7 @@ import (
 	"github.com/vpt/blog-backend/internal/repository/mock"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
+	"github.com/vpt/blog-backend/pkg/roles"
 )
 
 // mockMailSender 测试用邮件发送 mock
@@ -110,7 +111,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 
 	repo.EXPECT().ExistsByEmail("new@example.com").Return(false, nil)
 	repo.EXPECT().ExistsByNickname(gomock.Any()).Return(false, nil).AnyTimes()
-	repo.EXPECT().Create(gomock.Any(), uint(3)).Return(nil)
+	repo.EXPECT().Create(gomock.Any(), roles.NormalRoleId).Return(nil)
 
 	nickname := "mynick"
 	resp, err := svc.Register(&dto.RegisterReq{
@@ -148,15 +149,17 @@ func TestAuthService_Login_Success(t *testing.T) {
 
 	email := "user@example.com"
 	nickname := "Alice"
-	repo.EXPECT().FindByIdentifier("user@example.com").Return(&model.User{
-		Username: email,
-		Password: hashedPwd,
-		Email:    &email,
-		Nickname: &nickname,
-		Status:   1,
-	}, nil)
-	repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil)
-	repo.EXPECT().UpdateLastLoginAt(uint(0)).Return(nil).AnyTimes()
+	gomock.InOrder(
+		repo.EXPECT().FindByIdentifier("user@example.com").Return(&model.User{
+			Username: email,
+			Password: hashedPwd,
+			Email:    &email,
+			Nickname: &nickname,
+			Status:   1,
+		}, nil),
+		repo.EXPECT().UpdateLastLoginAt(uint(0)).Return(nil),
+		repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
+	)
 
 	resp, err := svc.Login(&dto.LoginReq{
 		Identifier: "user@example.com",
