@@ -30,7 +30,7 @@ type FriendLinkUpdateData struct {
 
 // FriendLinkRepository 友情链接数据访问接口。
 type FriendLinkRepository interface {
-	// ListPublic 查询显示中的友情链接，按 seq ASC、id DESC 排序。
+	// ListPublic 查询显示中及失联的友情链接，按 seq ASC、id DESC 排序。
 	ListPublic(offset, limit int) ([]model.FriendLink, int64, error)
 	// GetPublic 查询显示中的友情链接详情。
 	GetPublic(id uint) (*model.FriendLink, error)
@@ -62,7 +62,7 @@ func (r *friendLinkRepo) ListPublic(offset, limit int) ([]model.FriendLink, int6
 func (r *friendLinkRepo) GetPublic(id uint) (*model.FriendLink, error) {
 	// 公开详情同样限制 status，避免隐藏数据被直接访问。
 	var link model.FriendLink
-	err := r.db.Where("status = ?", friendLinkVisibleStatus).First(&link, id).Error
+	err := r.db.Where("status IN ?", []uint8{friendLinkVisibleStatus, friendLinkDisconnectedStatus}).First(&link, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
