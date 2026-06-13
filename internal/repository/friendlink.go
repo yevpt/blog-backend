@@ -55,14 +55,14 @@ func NewFriendLinkRepository(db *gorm.DB) FriendLinkRepository {
 
 func (r *friendLinkRepo) ListPublic(offset, limit int) ([]model.FriendLink, int64, error) {
 	// 公开列表查询显示中及失联的数据。
-	query := r.db.Model(&model.FriendLink{}).Where("status IN ?", []uint8{friendLinkVisibleStatus, friendLinkDisconnectedStatus})
+	query := r.db.Model(&model.FriendLink{}).Where("status IN ?", []int{int(friendLinkVisibleStatus), int(friendLinkDisconnectedStatus)})
 	return listFriendLinks(query, offset, limit)
 }
 
 func (r *friendLinkRepo) GetPublic(id uint) (*model.FriendLink, error) {
 	// 公开详情同样限制 status，避免隐藏数据被直接访问。
 	var link model.FriendLink
-	err := r.db.Where("status IN ?", []uint8{friendLinkVisibleStatus, friendLinkDisconnectedStatus}).First(&link, id).Error
+	err := r.db.Where("status IN ?", []int{int(friendLinkVisibleStatus), int(friendLinkDisconnectedStatus)}).First(&link, id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
