@@ -2,7 +2,12 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math"
+	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
@@ -10,12 +15,24 @@ import (
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
+var (
+	ErrUsernameExists = errors.New("用户名已被占用")
+	ErrWrongPassword  = errors.New("原密码错误")
+)
+
 // UserService 用户资料业务接口。
 type UserService interface {
 	GetDetail(userID uint) (*dto.UserDetailResp, error)
+	GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error)
 	ListRecent(req *dto.UserListReq) (*dto.UserPageResp, error)
 	ListAll(req *dto.UserListReq) (*dto.UserPageResp, error)
 	Update(userID uint, req *dto.UserUpdateReq) error
+	UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error)
+	UpdateMeta(userID uint, req *dto.UpdateMetaReq) (*dto.UserDetailResp, error)
+	UpdateSocialLink(userID uint, platform string, url *string) (*dto.UserDetailResp, error)
+	UpdateUsername(userID uint, username string) error
+	UpdatePassword(userID uint, oldPwd, newPwd string) error
+	UpdateEmailDisplay(userID uint, display string) error
 	RecordLogin(userID uint) error
 }
 
@@ -163,4 +180,169 @@ func (s *userService) RecordLogin(userID uint) error {
 		_ = s.cache.Invalidate(context.Background(), int64(userID))
 	}
 	return err
+}
+
+func (s *userService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error) {
+	agg, err := s.repo.FindDetailByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	if agg == nil {
+		return nil, nil
+	}
+	return buildPublicProfile(s.resolver, agg), nil
+}
+
+func (s *userService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error) {
+	userUpdates := make(map[string]interface{})
+	if req.Nickname != nil {
+		userUpdates["nickname"] = *req.Nickname
+	}
+	if req.Mark != nil {
+		userUpdates["mark"] = *req.Mark
+	}
+	if req.Site != nil {
+		if *req.Site == "" {
+			userUpdates["site"] = nil
+		} else {
+			userUpdates["site"] = *req.Site
+		}
+	}
+	if len(userUpdates) > 0 {
+		if err := s.repo.Update(userID, userUpdates); err != nil {
+			return nil, err
+		}
+	}
+	if req.Description != nil {
+		if err := s.repo.UpsertMeta(userID, map[string]interface{}{"description": *req.Description}); err != nil {
+			return nil, err
+		}
+	}
+	_ = s.cache.Invalidate(context.Background(), int64(userID))
+	return s.cache.Get(context.Background(), int64(userID))
+}
+
+func (s *userService) UpdateMeta(userID uint, req *dto.UpdateMetaReq) (*dto.UserDetailResp, error) {
+	metaUpdates := make(map[string]interface{})
+	userUpdates := make(map[string]interface{})
+
+	if req.Gender != nil {
+		if *req.Gender == "" {
+			metaUpdates["gender"] = nil
+		} else {
+			v, err := parseGender(*req.Gender)
+			if err != nil {
+				return nil, err
+			}
+			metaUpdates["gender"] = v
+		}
+	}
+	if req.Birthday != nil {
+		if *req.Birthday == "" {
+			metaUpdates["birthday"] = nil
+		} else {
+			t, err := time.Parse("2006-01-02", *req.Birthday)
+			if err != nil {
+				return nil, fmt.Errorf("生日格式错误，应为 YYYY-MM-DD")
+			}
+			metaUpdates["birthday"] = t
+		}
+	}
+	if req.Phone != nil {
+		if *req.Phone == "" {
+			userUpdates["phone"] = nil
+		} else {
+			userUpdates["phone"] = *req.Phone
+		}
+	}
+
+	if len(metaUpdates) > 0 {
+		if err := s.repo.UpsertMeta(userID, metaUpdates); err != nil {
+			return nil, err
+		}
+	}
+	if len(userUpdates) > 0 {
+		if err := s.repo.Update(userID, userUpdates); err != nil {
+			return nil, err
+		}
+	}
+	_ = s.cache.Invalidate(context.Background(), int64(userID))
+	return s.cache.Get(context.Background(), int64(userID))
+}
+
+func parseGender(s string) (uint8, error) {
+	switch s {
+	case "0":
+		return 0, nil
+	case "1":
+		return 1, nil
+	default:
+		return 0, fmt.Errorf("性别值无效，应为 0 或 1")
+	}
+}
+
+func (s *userService) UpdateSocialLink(userID uint, platform string, url *string) (*dto.UserDetailResp, error) {
+	if url == nil || *url == "" {
+		if err := s.repo.DeleteSocialLink(userID, platform); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := s.repo.UpsertSocialLink(userID, platform, *url); err != nil {
+			return nil, err
+		}
+	}
+	_ = s.cache.Invalidate(context.Background(), int64(userID))
+	return s.cache.Get(context.Background(), int64(userID))
+}
+
+func (s *userService) UpdateUsername(userID uint, username string) error {
+	exists, err := s.repo.ExistsByUsername(username, userID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return ErrUsernameExists
+	}
+	if err := s.repo.Update(userID, map[string]interface{}{"username": username}); err != nil {
+		return err
+	}
+	_ = s.cache.Invalidate(context.Background(), int64(userID))
+	return nil
+}
+
+func (s *userService) UpdatePassword(userID uint, oldPwd, newPwd string) error {
+	user, err := s.repo.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return ErrUserNotFound
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPwd)); err != nil {
+		return ErrWrongPassword
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPwd), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.repo.UpdatePassword(userID, string(hash))
+}
+
+func (s *userService) UpdateEmailDisplay(userID uint, display string) error {
+	var mailShow uint8
+	switch display {
+	case "main":
+		mailShow = 1
+	case "sub":
+		mailShow = 0
+	case "none":
+		mailShow = 2
+	default:
+		return fmt.Errorf("无效的展示类型")
+	}
+	if err := s.repo.UpsertUserSetting(userID, map[string]interface{}{"mail_show": mailShow}); err != nil {
+		return err
+	}
+	_ = s.cache.Invalidate(context.Background(), int64(userID))
+	return nil
 }

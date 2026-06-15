@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"errors"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/middleware"
@@ -106,6 +109,206 @@ func (h *UserHandler) Update(c *gin.Context) {
 		return
 	}
 	if err := h.svc.Update(detail.ID, &req); err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, nil)
+}
+
+// GetPublicProfile 按 ID 返回某用户的公开详情。
+// @Summary 获取用户公开详情
+// @Tags 用户
+// @Produce json
+// @Param id path int true "用户 ID"
+// @Success 200 {object} response.Response{data=dto.UserPublicProfileResp} "成功"
+// @Failure 404 {object} response.Response "用户不存在"
+// @Router /users/{id} [get]
+func (h *UserHandler) GetPublicProfile(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil || id == 0 {
+		response.Fail(c, response.CodeBadRequest, "无效的用户 ID")
+		return
+	}
+	profile, err := h.svc.GetPublicProfile(uint(id))
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	if profile == nil {
+		response.NotFound(c)
+		return
+	}
+	response.Success(c, profile)
+}
+
+// UpdateProfile 更新当前用户昵称、身份标签、个人简介。
+// @Summary 更新用户基本资料
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.UpdateProfileReq true "更新资料"
+// @Success 200 {object} response.Response{data=dto.UserDetailResp} "成功"
+// @Router /users/me/profile [patch]
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	var req dto.UpdateProfileReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	resp, err := h.svc.UpdateProfile(detail.ID, &req)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
+// UpdateMeta 更新当前用户扩展信息（性别、生日、手机号）。
+// @Summary 更新用户扩展信息
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.UpdateMetaReq true "扩展信息"
+// @Success 200 {object} response.Response{data=dto.UserDetailResp} "成功"
+// @Router /users/me/meta [patch]
+func (h *UserHandler) UpdateMeta(c *gin.Context) {
+	var req dto.UpdateMetaReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	resp, err := h.svc.UpdateMeta(detail.ID, &req)
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+	response.Success(c, resp)
+}
+
+// UpdateSocialLink 更新或删除当前用户指定平台的社交链接。
+// @Summary 更新社交链接
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param platform path string true "平台标识"
+// @Param req body dto.UpdateSocialLinkReq true "链接信息"
+// @Success 200 {object} response.Response{data=dto.UserDetailResp} "成功"
+// @Router /users/me/social/{platform} [patch]
+func (h *UserHandler) UpdateSocialLink(c *gin.Context) {
+	platform := c.Param("platform")
+	if platform == "" {
+		response.Fail(c, response.CodeBadRequest, "平台参数缺失")
+		return
+	}
+	var req dto.UpdateSocialLinkReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	resp, err := h.svc.UpdateSocialLink(detail.ID, platform, req.URL)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
+// UpdateUsername 修改当前用户的登录用户名。
+// @Summary 修改用户名
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.UpdateUsernameReq true "新用户名"
+// @Success 200 {object} response.Response "成功"
+// @Router /users/me/username [patch]
+func (h *UserHandler) UpdateUsername(c *gin.Context) {
+	var req dto.UpdateUsernameReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.UpdateUsername(detail.ID, req.Username); err != nil {
+		if errors.Is(err, service.ErrUsernameExists) {
+			response.Fail(c, response.CodeBadRequest, err.Error())
+			return
+		}
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, nil)
+}
+
+// UpdatePassword 修改当前用户密码。
+// @Summary 修改密码
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.UpdatePasswordReq true "密码信息"
+// @Success 200 {object} response.Response "成功"
+// @Router /users/me/password [patch]
+func (h *UserHandler) UpdatePassword(c *gin.Context) {
+	var req dto.UpdatePasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.UpdatePassword(detail.ID, req.OldPassword, req.NewPassword); err != nil {
+		if errors.Is(err, service.ErrWrongPassword) {
+			response.Fail(c, response.CodeBadRequest, err.Error())
+			return
+		}
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, nil)
+}
+
+// UpdateEmailDisplay 设置对外展示邮箱（主邮箱/副邮箱/不展示）。
+// @Summary 设置展示邮箱
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.EmailDisplayReq true "展示设置"
+// @Success 200 {object} response.Response "成功"
+// @Router /users/me/email/display [patch]
+func (h *UserHandler) UpdateEmailDisplay(c *gin.Context) {
+	var req dto.EmailDisplayReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.UpdateEmailDisplay(detail.ID, req.Display); err != nil {
 		response.ServerError(c)
 		return
 	}

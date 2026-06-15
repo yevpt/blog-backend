@@ -41,6 +41,18 @@ type UserRepository interface {
 	ListAll(offset, limit int) ([]model.User, int64, error)
 	// Update 更新用户信息
 	Update(id uint, updates map[string]interface{}) error
+	// ExistsByUsername 检查用户名是否已被占用（排除自身）
+	ExistsByUsername(username string, excludeID uint) (bool, error)
+	// UpdatePassword 直接写入已哈希的密码
+	UpdatePassword(userID uint, hashedPassword string) error
+	// UpsertMeta 创建或更新用户扩展资料（按 userID 主键 upsert）
+	UpsertMeta(userID uint, updates map[string]interface{}) error
+	// UpsertSocialLink 创建或更新指定平台的社交链接
+	UpsertSocialLink(userID uint, platform, url string) error
+	// DeleteSocialLink 删除指定平台的社交链接
+	DeleteSocialLink(userID uint, platform string) error
+	// UpsertUserSetting 创建或更新用户偏好设置
+	UpsertUserSetting(userID uint, updates map[string]interface{}) error
 }
 
 type userRepo struct {
@@ -229,6 +241,54 @@ func listUserRoleWeightExpr() string {
 
 func (r *userRepo) Update(id uint, updates map[string]interface{}) error {
 	return r.db.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *userRepo) ExistsByUsername(username string, excludeID uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&model.User{}).
+		Where("username = ? AND id != ?", username, excludeID).
+		Count(&count).Error
+	return count > 0, err
+}
+
+func (r *userRepo) UpdatePassword(userID uint, hashedPassword string) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).
+		Update("password", hashedPassword).Error
+}
+
+func (r *userRepo) UpsertMeta(userID uint, updates map[string]interface{}) error {
+	// 先查是否存在，存在则 Update，否则 Create（含 userID 主键）
+	var meta model.UserMeta
+	err := r.db.Where("user_id = ?", userID).First(&meta).Error
+	if err != nil {
+		// 不存在，插入
+		updates["user_id"] = userID
+		return r.db.Model(&model.UserMeta{}).Create(updates).Error
+	}
+	return r.db.Model(&model.UserMeta{}).Where("user_id = ?", userID).Updates(updates).Error
+}
+
+func (r *userRepo) UpsertSocialLink(userID uint, platform, url string) error {
+	// 用 ON DUPLICATE KEY UPDATE 语义：先尝试插入，已存在则更新
+	link := model.UserSocialLink{UserID: userID, Platform: platform, URL: url}
+	return r.db.Where(model.UserSocialLink{UserID: userID, Platform: platform}).
+		Assign(model.UserSocialLink{URL: url}).
+		FirstOrCreate(&link).Error
+}
+
+func (r *userRepo) DeleteSocialLink(userID uint, platform string) error {
+	return r.db.Where("user_id = ? AND platform = ?", userID, platform).
+		Delete(&model.UserSocialLink{}).Error
+}
+
+func (r *userRepo) UpsertUserSetting(userID uint, updates map[string]interface{}) error {
+	var setting model.UserSetting
+	err := r.db.Where("user_id = ?", userID).First(&setting).Error
+	if err != nil {
+		updates["user_id"] = userID
+		return r.db.Model(&model.UserSetting{}).Create(updates).Error
+	}
+	return r.db.Model(&model.UserSetting{}).Where("user_id = ?", userID).Updates(updates).Error
 }
 
 func (r *userRepo) findUserMetaByUserID(userID uint) (*model.UserMeta, error) {

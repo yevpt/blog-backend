@@ -86,3 +86,57 @@ type UserUpdateReq struct {
 	AvatarUrl *string `json:"avatar_url,omitempty" binding:"omitempty,max=255" example:"https://cdn.example.com/avatar.png"`
 	Mark      *string `json:"mark,omitempty" binding:"omitempty,max=200" example:"博主"`
 }
+
+// UserPublicProfileResp GET /users/:id 某用户的公开详情
+type UserPublicProfileResp struct {
+	ID           uint                 `json:"id"`
+	Nickname     string               `json:"nickname"`
+	AvatarUrl    *string              `json:"avatar_url"`
+	Mark         *string              `json:"mark"`
+	Description  *string              `json:"description"`
+	LastLoginAt  *time.Time           `json:"last_login_at"`
+	RegisterAt   time.Time            `json:"register_at"`
+	Roles        []string             `json:"roles"`
+	DisplayEmail *string              `json:"display_email"`
+	Site         *string              `json:"site"`
+	SocialLinks  []UserSocialLinkResp `json:"social_links"`
+	Gender       *string              `json:"gender"`
+	Birthday     *string              `json:"birthday"`
+}
+
+// UpdateProfileReq PATCH /users/me/profile
+type UpdateProfileReq struct {
+	Nickname    *string `json:"nickname" binding:"omitempty,max=150"`
+	Mark        *string `json:"mark" binding:"omitempty,max=200"`
+	Description *string `json:"description" binding:"omitempty,max=1000"`
+	Site        *string `json:"site" binding:"omitempty,max=500"`
+}
+
+// UpdateMetaReq PATCH /users/me/meta
+// nil = 不更新；空字符串 "" = 清除该字段
+type UpdateMetaReq struct {
+	Gender   *string `json:"gender"`
+	Birthday *string `json:"birthday"`
+	Phone    *string `json:"phone"`
+}
+
+// UpdateSocialLinkReq PATCH /users/me/social/:platform
+type UpdateSocialLinkReq struct {
+	URL *string `json:"url"` // null 或 "" = 删除该平台链接
+}
+
+// UpdateUsernameReq PATCH /users/me/username
+type UpdateUsernameReq struct {
+	Username string `json:"username" binding:"required,min=3,max=155"`
+}
+
+// UpdatePasswordReq PATCH /users/me/password
+type UpdatePasswordReq struct {
+	OldPassword string `json:"old_password" binding:"required,min=6"`
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}
+
+// EmailDisplayReq PATCH /users/me/email/display
+type EmailDisplayReq struct {
+	Display string `json:"display" binding:"required,oneof=main sub none"`
+}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
@@ -84,6 +85,51 @@ func userSocialLinksToDTO(links []model.UserSocialLink) []dto.UserSocialLinkResp
 			URL:      link.URL,
 		})
 	}
+	return resp
+}
+
+// buildPublicProfile 将 DB 聚合模型转换为公开详情 DTO，隐藏私密字段。
+func buildPublicProfile(resolver storage.ObjectURLResolver, agg *repository.UserDetailAggregate) *dto.UserPublicProfileResp {
+	user := agg.User
+	nickname := user.Username
+	if user.Nickname != nil && *user.Nickname != "" {
+		nickname = *user.Nickname
+	}
+
+	resp := &dto.UserPublicProfileResp{
+		ID:          user.ID,
+		Nickname:    nickname,
+		AvatarUrl:   resolveUserAvatarURL(resolver, user.AvatarUrl),
+		Mark:        user.Mark,
+		Site:        user.Site,
+		LastLoginAt: user.LastLoginAt,
+		RegisterAt:  user.CreatedAt,
+		Roles:       append([]string(nil), agg.Roles...),
+		SocialLinks: userSocialLinksToDTO(agg.SocialLinks),
+	}
+
+	if agg.Meta != nil {
+		resp.Description = agg.Meta.Description
+		if agg.Meta.Gender != nil {
+			g := fmt.Sprintf("%d", *agg.Meta.Gender)
+			resp.Gender = &g
+		}
+		if agg.Meta.Birthday != nil {
+			b := agg.Meta.Birthday.Format("2006-01-02")
+			resp.Birthday = &b
+		}
+	}
+
+	// 根据邮箱展示设置决定对外显示哪个邮箱
+	if agg.Setting != nil {
+		switch agg.Setting.MailShow {
+		case 1:
+			resp.DisplayEmail = user.Email
+		// case 0: sub email（暂无字段，留空）
+		// case 2: none（不展示）
+		}
+	}
+
 	return resp
 }
 
