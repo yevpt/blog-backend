@@ -11,6 +11,7 @@ import (
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
 	captchahandler "github.com/vpt/blog-backend/internal/handler/captcha"
+	categoryhandler "github.com/vpt/blog-backend/internal/handler/category"
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
 	friendlinkhandler "github.com/vpt/blog-backend/internal/handler/friendlink"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
@@ -21,6 +22,7 @@ import (
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
 	"github.com/vpt/blog-backend/internal/repository"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
@@ -30,6 +32,7 @@ import (
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
 	captchaservice "github.com/vpt/blog-backend/internal/service/captcha"
+	categoryservice "github.com/vpt/blog-backend/internal/service/category"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
@@ -59,7 +62,7 @@ type routeHandlers struct {
 	guestbook  *guestbookhandler.GuestbookHandler
 	moment     *momenthandler.MomentHandler
 	user       *handler.UserHandler
-	category   *handler.CategoryHandler
+	category   *categoryhandler.CategoryHandler
 	tag        *handler.TagHandler
 	friendLink *friendlinkhandler.FriendLinkHandler
 	userCache  service.UserCacheService
@@ -179,8 +182,8 @@ func newRouteHandlers(
 	articleRepo := articlerepo.NewArticleRepository(db)
 	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc)
 
-	categoryRepo := repository.NewCategoryRepository(db)
-	categorySvc := service.NewCategoryService(categoryRepo)
+	categoryRepo := categoryrepo.NewCategoryRepository(db)
+	categorySvc := categoryservice.NewCategoryService(categoryRepo)
 
 	tagRepo := repository.NewTagRepository(db)
 	tagSvc := service.NewTagService(tagRepo, articleSvc)
@@ -208,7 +211,7 @@ func newRouteHandlers(
 		guestbook:  guestbookhandler.NewGuestbookHandler(guestbookSvc),
 		moment:     momenthandler.NewMomentHandler(momentSvc),
 		user:       handler.NewUserHandler(userSvc),
-		category:   handler.NewCategoryHandler(categorySvc),
+		category:   categoryhandler.NewCategoryHandler(categorySvc),
 		tag:        handler.NewTagHandler(tagSvc),
 		friendLink: friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
 		userCache:  userCacheSvc,

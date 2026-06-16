@@ -1,4 +1,4 @@
-package repository
+package category
 
 // ListWithArticleCount 查询所有未删除分类及其公开文章数量。
 func (r *categoryRepo) ListWithArticleCount() ([]CategoryWithCount, error) {

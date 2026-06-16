@@ -1,4 +1,4 @@
-package handler_test
+package category_test
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/handler"
-	"github.com/vpt/blog-backend/internal/service"
+	"github.com/vpt/blog-backend/internal/handler/category"
+	categoryservice "github.com/vpt/blog-backend/internal/service/category"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -52,10 +52,10 @@ func (s *stubCategoryService) RemoveArticles(id uint, req dto.CategoryArticlesRe
 	return &dto.CategoryArticlesResp{CategoryID: id}, nil
 }
 
-func newCategoryRouter(svc service.CategoryService) *gin.Engine {
+func newCategoryRouter(svc categoryservice.CategoryService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewCategoryHandler(svc)
+	h := category.NewCategoryHandler(svc)
 	r.POST("/admin/categories", h.Create)
 	r.POST("/admin/categories/:id/articles", h.AddArticles)
 	return r
@@ -88,7 +88,7 @@ func TestCategoryHandler_Create_Success(t *testing.T) {
 }
 
 func TestCategoryHandler_AddArticles_BadRequest(t *testing.T) {
-	stub := &stubCategoryService{addErr: service.ErrCategoryArticleRequired}
+	stub := &stubCategoryService{addErr: categoryservice.ErrCategoryArticleRequired}
 	r := newCategoryRouter(stub)
 
 	w := httptest.NewRecorder()

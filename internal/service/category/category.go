@@ -1,4 +1,4 @@
-package service
+package category
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
 	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
 )
@@ -33,11 +33,11 @@ type CategoryService interface {
 }
 
 type categoryService struct {
-	repo repository.CategoryRepository
+	repo categoryrepo.CategoryRepository
 }
 
 // NewCategoryService 创建分类业务服务实例。
-func NewCategoryService(repo repository.CategoryRepository) CategoryService {
+func NewCategoryService(repo categoryrepo.CategoryRepository) CategoryService {
 	return &categoryService{repo: repo}
 }
 
@@ -166,8 +166,8 @@ func newCategoryFromCreateReq(req dto.CategoryCreateReq) (model.Category, error)
 	}, nil
 }
 
-func newCategoryUpdateData(req dto.CategoryUpdateReq) (repository.CategoryUpdateData, error) {
-	var data repository.CategoryUpdateData
+func newCategoryUpdateData(req dto.CategoryUpdateReq) (categoryrepo.CategoryUpdateData, error) {
+	var data categoryrepo.CategoryUpdateData
 	data.ParentID = req.ParentID
 	data.UpdateParentID = req.ParentID != nil
 	if req.Name != nil {
@@ -213,13 +213,13 @@ func mapCategoryRepoError(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrCategoryNotFound
 	}
-	if errors.Is(err, repository.ErrCategoryArticleMissing) {
+	if errors.Is(err, categoryrepo.ErrCategoryArticleMissing) {
 		return ErrCategoryArticleMissing
 	}
 	return err
 }
 
-func categoryWithCountToDTO(row *repository.CategoryWithCount) *dto.CategoryItemResp {
+func categoryWithCountToDTO(row *categoryrepo.CategoryWithCount) *dto.CategoryItemResp {
 	if row == nil {
 		return nil
 	}

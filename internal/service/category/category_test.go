@@ -1,4 +1,4 @@
-package service_test
+package category_test
 
 import (
 	"errors"
@@ -10,21 +10,21 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
-	"github.com/vpt/blog-backend/internal/repository/mock"
-	"github.com/vpt/blog-backend/internal/service"
+	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
+	"github.com/vpt/blog-backend/internal/repository/category/mock"
+	"github.com/vpt/blog-backend/internal/service/category"
 )
 
 func TestCategoryService_ListTabs_MapsFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
 	url := "tech"
 	repo.EXPECT().
 		ListWithArticleCount().
-		Return([]repository.CategoryWithCount{
+		Return([]categoryrepo.CategoryWithCount{
 			{
 				Category:     model.Category{Base: model.Base{ID: 1}, Name: "编程", URL: &url, Seq: 0},
 				ArticleCount: 5,
@@ -54,9 +54,9 @@ func TestCategoryService_ListTabs_EmptyResult(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
-	repo.EXPECT().ListWithArticleCount().Return([]repository.CategoryWithCount{}, nil)
+	repo.EXPECT().ListWithArticleCount().Return([]categoryrepo.CategoryWithCount{}, nil)
 
 	resp, err := svc.ListTabs()
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestCategoryService_ListTabs_PropagatesRepoError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
 	dbErr := errors.New("db error")
 	repo.EXPECT().ListWithArticleCount().Return(nil, dbErr)
@@ -80,7 +80,7 @@ func TestCategoryService_Create_TrimsAndRequiresFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
 	seq := uint(2)
 	icon := "icon-key"
@@ -88,13 +88,13 @@ func TestCategoryService_Create_TrimsAndRequiresFields(t *testing.T) {
 	cover := "cover-key"
 	repo.EXPECT().
 		Create(gomock.Any()).
-		DoAndReturn(func(category model.Category) (*repository.CategoryWithCount, error) {
+		DoAndReturn(func(category model.Category) (*categoryrepo.CategoryWithCount, error) {
 			assert.Equal(t, "编程", category.Name)
 			assert.Equal(t, seq, category.Seq)
 			assert.Equal(t, &icon, category.Icon)
 			assert.Equal(t, &desc, category.Description)
 			assert.Equal(t, &cover, category.CoverImgUrl)
-			return &repository.CategoryWithCount{Category: model.Category{Base: model.Base{ID: 3}, Name: category.Name, Seq: category.Seq}}, nil
+			return &categoryrepo.CategoryWithCount{Category: model.Category{Base: model.Base{ID: 3}, Name: category.Name, Seq: category.Seq}}, nil
 		})
 
 	resp, err := svc.Create(dto.CategoryCreateReq{
@@ -113,7 +113,7 @@ func TestCategoryService_Create_BlankNameReturnsBadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
 	seq := uint(0)
 	_, err := svc.Create(dto.CategoryCreateReq{
@@ -123,14 +123,14 @@ func TestCategoryService_Create_BlankNameReturnsBadRequest(t *testing.T) {
 		Description: "desc",
 		CoverImgUrl: "cover",
 	})
-	require.ErrorIs(t, err, service.ErrCategoryNameRequired)
+	require.ErrorIs(t, err, category.ErrCategoryNameRequired)
 }
 
 func TestCategoryService_AddArticles_NormalizesIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
 	repo.EXPECT().
 		AddArticles(uint(5), []uint{8, 9}).
@@ -147,8 +147,8 @@ func TestCategoryService_AddArticles_RequiresIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockCategoryRepository(ctrl)
-	svc := service.NewCategoryService(repo)
+	svc := category.NewCategoryService(repo)
 
 	_, err := svc.AddArticles(5, dto.CategoryArticlesReq{ArticleIDs: []uint{0, 0}})
-	require.ErrorIs(t, err, service.ErrCategoryArticleRequired)
+	require.ErrorIs(t, err, category.ErrCategoryArticleRequired)
 }

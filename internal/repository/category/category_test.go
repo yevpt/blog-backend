@@ -1,4 +1,4 @@
-package repository_test
+package category_test
 
 import (
 	"database/sql"
@@ -8,7 +8,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/internal/repository/category"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func newCategoryMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 func TestCategoryRepository_Delete_ClearsRelationsAndSoftDeletesCategory(t *testing.T) {
 	db, mock, sqlDB := newCategoryMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewCategoryRepository(db)
+	repo := category.NewCategoryRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -59,7 +59,7 @@ func TestCategoryRepository_Delete_ClearsRelationsAndSoftDeletesCategory(t *test
 func TestCategoryRepository_AddArticles_ReplacesOldCategoryRelations(t *testing.T) {
 	db, mock, sqlDB := newCategoryMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewCategoryRepository(db)
+	repo := category.NewCategoryRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -89,7 +89,7 @@ func TestCategoryRepository_AddArticles_ReplacesOldCategoryRelations(t *testing.
 func TestCategoryRepository_AddArticles_MissingArticleRollsBack(t *testing.T) {
 	db, mock, sqlDB := newCategoryMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewCategoryRepository(db)
+	repo := category.NewCategoryRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -105,7 +105,7 @@ func TestCategoryRepository_AddArticles_MissingArticleRollsBack(t *testing.T) {
 	mock.ExpectRollback()
 
 	affected, err := repo.AddArticles(5, []uint{8, 99})
-	require.ErrorIs(t, err, repository.ErrCategoryArticleMissing)
+	require.ErrorIs(t, err, category.ErrCategoryArticleMissing)
 	assert.Equal(t, int64(0), affected)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -113,7 +113,7 @@ func TestCategoryRepository_AddArticles_MissingArticleRollsBack(t *testing.T) {
 func TestCategoryRepository_RemoveArticles_DeletesOnlyCategoryRelations(t *testing.T) {
 	db, mock, sqlDB := newCategoryMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewCategoryRepository(db)
+	repo := category.NewCategoryRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
