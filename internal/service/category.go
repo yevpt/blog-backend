@@ -7,6 +7,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
 )
 
@@ -157,7 +158,7 @@ func newCategoryFromCreateReq(req dto.CategoryCreateReq) (model.Category, error)
 	return model.Category{
 		ParentID:    req.ParentID,
 		Name:        name,
-		URL:         cleanOptionalString(req.URL),
+		URL:         strutil.CleanOptional(req.URL),
 		Icon:        &icon,
 		Description: &description,
 		CoverImgUrl: &cover,

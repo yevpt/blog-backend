@@ -228,7 +228,7 @@ func optionalUserID(c *gin.Context) *uint {
 	return &id
 }
 
-func writeArticleResponse(c *gin.Context, data interface{}, err error) {
+func writeArticleResponse(c *gin.Context, data any, err error) {
 	if err == nil {
 		response.Success(c, data)
 		return

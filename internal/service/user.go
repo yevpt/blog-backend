@@ -153,7 +153,7 @@ func (s *userService) buildUserPageResp(users []model.User, total int64, page, p
 }
 
 func (s *userService) Update(userID uint, req *dto.UserUpdateReq) error {
-	updates := make(map[string]interface{})
+	updates := make(map[string]any)
 	if req.Nickname != nil {
 		updates["nickname"] = *req.Nickname
 	}
@@ -194,7 +194,7 @@ func (s *userService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp,
 }
 
 func (s *userService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error) {
-	userUpdates := make(map[string]interface{})
+	userUpdates := make(map[string]any)
 	if req.Nickname != nil {
 		userUpdates["nickname"] = *req.Nickname
 	}
@@ -214,7 +214,7 @@ func (s *userService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dt
 		}
 	}
 	if req.Description != nil {
-		if err := s.repo.UpsertMeta(userID, map[string]interface{}{"description": *req.Description}); err != nil {
+		if err := s.repo.UpsertMeta(userID, map[string]any{"description": *req.Description}); err != nil {
 			return nil, err
 		}
 	}
@@ -223,8 +223,8 @@ func (s *userService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dt
 }
 
 func (s *userService) UpdateMeta(userID uint, req *dto.UpdateMetaReq) (*dto.UserDetailResp, error) {
-	metaUpdates := make(map[string]interface{})
-	userUpdates := make(map[string]interface{})
+	metaUpdates := make(map[string]any)
+	userUpdates := make(map[string]any)
 
 	if req.Gender != nil {
 		if *req.Gender == "" {
@@ -303,7 +303,7 @@ func (s *userService) UpdateUsername(userID uint, username string) error {
 	if exists {
 		return ErrUsernameExists
 	}
-	if err := s.repo.Update(userID, map[string]interface{}{"username": username}); err != nil {
+	if err := s.repo.Update(userID, map[string]any{"username": username}); err != nil {
 		return err
 	}
 	_ = s.cache.Invalidate(context.Background(), int64(userID))
@@ -340,7 +340,7 @@ func (s *userService) UpdateEmailDisplay(userID uint, display string) error {
 	default:
 		return fmt.Errorf("无效的展示类型")
 	}
-	if err := s.repo.UpsertUserSetting(userID, map[string]interface{}{"mail_show": mailShow}); err != nil {
+	if err := s.repo.UpsertUserSetting(userID, map[string]any{"mail_show": mailShow}); err != nil {
 		return err
 	}
 	_ = s.cache.Invalidate(context.Background(), int64(userID))

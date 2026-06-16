@@ -63,7 +63,7 @@ func (m *Manager) generate(userId int64, tokenType string, hours int) (string, e
 }
 
 func (m *Manager) Parse(tokenStr string) (*Claims, error) {
-	token, err := jwtlib.ParseWithClaims(tokenStr, &Claims{}, func(token *jwtlib.Token) (interface{}, error) {
+	token, err := jwtlib.ParseWithClaims(tokenStr, &Claims{}, func(token *jwtlib.Token) (any, error) {
 		if _, ok := token.Method.(*jwtlib.SigningMethodHMAC); !ok {
 			return nil, ErrTokenInvalid
 		}

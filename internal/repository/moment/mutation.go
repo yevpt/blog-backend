@@ -258,8 +258,8 @@ func createMomentLikeMessage(tx *gorm.DB, moment model.Moment, fromUserID uint) 
 	}).Error
 }
 
-func momentUpdateFields(moment model.Moment) map[string]interface{} {
-	return map[string]interface{}{
+func momentUpdateFields(moment model.Moment) map[string]any {
+	return map[string]any{
 		"user_id":        moment.UserID,
 		"content":        moment.Content,
 		"status":         moment.Status,

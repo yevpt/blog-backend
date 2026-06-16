@@ -11,7 +11,7 @@ import (
 type Response struct {
 	Code    int         `json:"code"` // 0 表示成功，非 0 为业务错误码
 	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"` // 失败时省略，不输出 null
+	Data    any `json:"data,omitempty"` // 失败时省略，不输出 null
 }
 
 // 业务错误码，与 HTTP 状态码对齐，便于客户端统一处理
@@ -26,7 +26,7 @@ const (
 )
 
 // Success 返回成功响应，HTTP 200
-func Success(c *gin.Context, data interface{}) {
+func Success(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, Response{
 		Code:    CodeOK,
 		Message: "ok",

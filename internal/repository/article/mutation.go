@@ -158,8 +158,8 @@ func createArticleLikeMessage(tx *gorm.DB, article model.Article, fromUserID uin
 	}).Error
 }
 
-func articleUpdateFields(article model.Article) map[string]interface{} {
-	return map[string]interface{}{
+func articleUpdateFields(article model.Article) map[string]any {
+	return map[string]any{
 		"title":          article.Title,
 		"cover_img_url":  article.CoverImgUrl,
 		"short_content":  article.ShortContent,
@@ -220,7 +220,7 @@ func replaceArticleRecommend(tx *gorm.DB, articleID uint, recommend bool, seq ui
 	row := model.ArticleRecommend{ArticleID: articleID, Seq: seq}
 	return tx.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "article_id"}},
-		DoUpdates: clause.Assignments(map[string]interface{}{
+		DoUpdates: clause.Assignments(map[string]any{
 			"seq":        seq,
 			"deleted_at": nil,
 			"updated_at": gorm.Expr("NOW()"),

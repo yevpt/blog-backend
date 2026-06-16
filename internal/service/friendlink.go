@@ -9,6 +9,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository"
 	"github.com/vpt/blog-backend/pkg/storage"
+	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
 )
 
@@ -162,11 +163,11 @@ func newFriendLinkFromCreateReq(req dto.FriendLinkCreateReq) (model.FriendLink, 
 
 	return model.FriendLink{
 		Name:        name,
-		Description: cleanOptionalString(req.Description),
-		Email:       cleanOptionalString(req.Email),
-		Phone:       cleanOptionalString(req.Phone),
+		Description: strutil.CleanOptional(req.Description),
+		Email:       strutil.CleanOptional(req.Email),
+		Phone:       strutil.CleanOptional(req.Phone),
 		Site:        site,
-		AvatarUrl:   cleanOptionalString(req.AvatarUrl),
+		AvatarUrl:   strutil.CleanOptional(req.AvatarUrl),
 		Seq:         *req.Seq,
 		Status:      status,
 	}, nil

@@ -40,19 +40,19 @@ type UserRepository interface {
 	// ListAll 获取所有用户列表，按角色排序 (admin > vip > normal)，然后按最后登录时间降序
 	ListAll(offset, limit int) ([]model.User, int64, error)
 	// Update 更新用户信息
-	Update(id uint, updates map[string]interface{}) error
+	Update(id uint, updates map[string]any) error
 	// ExistsByUsername 检查用户名是否已被占用（排除自身）
 	ExistsByUsername(username string, excludeID uint) (bool, error)
 	// UpdatePassword 直接写入已哈希的密码
 	UpdatePassword(userID uint, hashedPassword string) error
 	// UpsertMeta 创建或更新用户扩展资料（按 userID 主键 upsert）
-	UpsertMeta(userID uint, updates map[string]interface{}) error
+	UpsertMeta(userID uint, updates map[string]any) error
 	// UpsertSocialLink 创建或更新指定平台的社交链接
 	UpsertSocialLink(userID uint, platform, url string) error
 	// DeleteSocialLink 删除指定平台的社交链接
 	DeleteSocialLink(userID uint, platform string) error
 	// UpsertUserSetting 创建或更新用户偏好设置
-	UpsertUserSetting(userID uint, updates map[string]interface{}) error
+	UpsertUserSetting(userID uint, updates map[string]any) error
 }
 
 type userRepo struct {
@@ -239,7 +239,7 @@ func listUserRoleWeightExpr() string {
 	return "MIN(CASE role.name WHEN '" + roles.AdminRole + "' THEN 1 WHEN '" + roles.VipRole + "' THEN 2 WHEN '" + roles.NormalRole + "' THEN 3 ELSE 999 END)"
 }
 
-func (r *userRepo) Update(id uint, updates map[string]interface{}) error {
+func (r *userRepo) Update(id uint, updates map[string]any) error {
 	return r.db.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error
 }
 
@@ -256,7 +256,7 @@ func (r *userRepo) UpdatePassword(userID uint, hashedPassword string) error {
 		Update("password", hashedPassword).Error
 }
 
-func (r *userRepo) UpsertMeta(userID uint, updates map[string]interface{}) error {
+func (r *userRepo) UpsertMeta(userID uint, updates map[string]any) error {
 	// 先查是否存在，存在则 Update，否则 Create（含 userID 主键）
 	var meta model.UserMeta
 	err := r.db.Where("user_id = ?", userID).First(&meta).Error
@@ -281,7 +281,7 @@ func (r *userRepo) DeleteSocialLink(userID uint, platform string) error {
 		Delete(&model.UserSocialLink{}).Error
 }
 
-func (r *userRepo) UpsertUserSetting(userID uint, updates map[string]interface{}) error {
+func (r *userRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	var setting model.UserSetting
 	err := r.db.Where("user_id = ?", userID).First(&setting).Error
 	if err != nil {

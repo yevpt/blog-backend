@@ -8,6 +8,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
+	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
 )
 
@@ -162,10 +163,10 @@ func newTagFromCreateReq(req dto.TagCreateReq) (model.Tag, error) {
 	}
 	return model.Tag{
 		Name:        name,
-		URL:         cleanOptionalString(req.URL),
-		Icon:        cleanOptionalString(req.Icon),
-		Description: cleanOptionalString(req.Description),
-		CoverImgUrl: cleanOptionalString(req.CoverImgUrl),
+		URL:         strutil.CleanOptional(req.URL),
+		Icon:        strutil.CleanOptional(req.Icon),
+		Description: strutil.CleanOptional(req.Description),
+		CoverImgUrl: strutil.CleanOptional(req.CoverImgUrl),
 		Seq:         *req.Seq,
 	}, nil
 }
