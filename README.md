@@ -39,8 +39,8 @@ cp config/config.local.yaml.example config/config.local.yaml
 # 2. 安装依赖
 /Users/vpt/.g/go/bin/go mod tidy
 
-# 3. 启用 git hooks（commit message 校验）—— 克隆后执行一次
-make hooks
+# 3. 初始化（启用 git hooks + 同步 AI skill 链接）—— 克隆后执行一次
+make setup
 
 # 4. 热重载启动（推荐）
 # 先安装 air：go install github.com/air-verse/air@latest
@@ -194,7 +194,9 @@ make swag       # 生成 swagger 文档
 make test       # 运行测试
 make tidy       # 整理依赖
 make clean      # 清理构建产物
-make hooks      # 启用 git hooks（commit message 校验）
+make setup      # 克隆后初始化：启用 git hooks + 同步 skill 链接
+make hooks      # 仅启用 git hooks（commit message 校验）
+make skills     # 仅同步 .agents/skills → .claude/skills 符号链接
 ```
 
-> 注意：`make hooks` 通过 `git config core.hooksPath .githooks` 启用，属于**仓库本地配置、不随提交同步**，因此**每次克隆后需执行一次**。commit message 规范见 `.agents/skills/git-commit/SKILL.md`。
+> 注意：`make hooks` 通过 `git config core.hooksPath .githooks` 启用，属于**仓库本地配置、不随提交同步**，因此**每次克隆后需执行一次** `make setup`。commit message 规范见 `.agents/skills/git-commit/SKILL.md`。

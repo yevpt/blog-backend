@@ -15,8 +15,9 @@ config/config.local.yaml
 .vscode/
 *.swp
 
-# AI 工具本地目录（skill 真身在 .agents/，此处仅本地符号链接）
-.claude/
+# AI 工具本地目录：忽略本地状态，但保留 skills 符号链接（指向已提交的 .agents/）
+.claude/*
+!.claude/skills
 
 # macOS 系统文件
 .DS_Store

@@ -4,13 +4,20 @@ BINARY := bin/blog-server
 MAIN := ./cmd/server
 SWAG_DIRS := $(MAIN),./internal/handler,./internal/dto,./pkg/response
 
-.PHONY: run build swag test lint tidy clean hooks
+.PHONY: run build swag test lint tidy clean hooks skills setup
 
-# 启用 git hooks（commit message 校验）；克隆后执行一次
+# 克隆后执行一次：启用 git hooks + 同步 AI skill 符号链接
+setup: hooks skills
+
+# 启用 git hooks（commit message 校验）
 hooks:
 	git config core.hooksPath .githooks
 	@chmod +x .githooks/* 2>/dev/null || true
 	@echo "git hooks 已启用（core.hooksPath=.githooks）"
+
+# 同步 .agents/skills/ → .claude/skills/ 符号链接（新增 skill 后执行）
+skills:
+	@sh scripts/sync-skills.sh
 
 # 本地开发启动（需安装 air：go install github.com/air-verse/air@latest）
 dev:
