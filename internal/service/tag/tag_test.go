@@ -1,4 +1,4 @@
-package service_test
+package tag_test
 
 import (
 	"errors"
@@ -10,10 +10,10 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
-	"github.com/vpt/blog-backend/internal/repository/mock"
-	"github.com/vpt/blog-backend/internal/service"
+	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
+	"github.com/vpt/blog-backend/internal/repository/tag/mock"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
+	"github.com/vpt/blog-backend/internal/service/tag"
 )
 
 type stubArticleServiceForTag struct {
@@ -65,12 +65,12 @@ func TestTagService_List_MapsFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
-	svc := service.NewTagService(repo, nil)
+	svc := tag.NewTagService(repo, nil)
 
 	url := "go"
 	repo.EXPECT().
 		ListWithArticleCount().
-		Return([]repository.TagWithCount{
+		Return([]tagrepo.TagWithCount{
 			{
 				Tag:          model.Tag{Base: model.Base{ID: 1}, Name: "Go", URL: &url, Seq: 0},
 				ArticleCount: 5,
@@ -90,17 +90,17 @@ func TestTagService_Create_TrimsAndRequiresFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
-	svc := service.NewTagService(repo, nil)
+	svc := tag.NewTagService(repo, nil)
 
 	seq := uint(2)
 	icon := "icon-key"
 	repo.EXPECT().
 		Create(gomock.Any()).
-		DoAndReturn(func(tag model.Tag) (*repository.TagWithCount, error) {
+		DoAndReturn(func(tag model.Tag) (*tagrepo.TagWithCount, error) {
 			assert.Equal(t, "Go", tag.Name)
 			assert.Equal(t, seq, tag.Seq)
 			assert.Equal(t, &icon, tag.Icon)
-			return &repository.TagWithCount{Tag: model.Tag{Base: model.Base{ID: 3}, Name: tag.Name, Seq: tag.Seq}}, nil
+			return &tagrepo.TagWithCount{Tag: model.Tag{Base: model.Base{ID: 3}, Name: tag.Name, Seq: tag.Seq}}, nil
 		})
 
 	resp, err := svc.Create(dto.TagCreateReq{Name: "  Go  ", Seq: &seq, Icon: &icon})
@@ -113,18 +113,18 @@ func TestTagService_Create_BlankNameReturnsBadRequest(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
-	svc := service.NewTagService(repo, nil)
+	svc := tag.NewTagService(repo, nil)
 
 	seq := uint(0)
 	_, err := svc.Create(dto.TagCreateReq{Name: " ", Seq: &seq})
-	require.ErrorIs(t, err, service.ErrTagNameRequired)
+	require.ErrorIs(t, err, tag.ErrTagNameRequired)
 }
 
 func TestTagService_AddArticles_NormalizesIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
-	svc := service.NewTagService(repo, nil)
+	svc := tag.NewTagService(repo, nil)
 
 	repo.EXPECT().
 		AddArticles(uint(5), []uint{8, 9}).
@@ -141,10 +141,10 @@ func TestTagService_AddArticles_RequiresIDs(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
-	svc := service.NewTagService(repo, nil)
+	svc := tag.NewTagService(repo, nil)
 
 	_, err := svc.AddArticles(5, dto.TagArticlesReq{ArticleIDs: []uint{0, 0}})
-	require.ErrorIs(t, err, service.ErrTagArticleRequired)
+	require.ErrorIs(t, err, tag.ErrTagArticleRequired)
 }
 
 func TestTagService_ListArticles_RequiresExistingTagAndDelegatesToArticleService(t *testing.T) {
@@ -152,11 +152,11 @@ func TestTagService_ListArticles_RequiresExistingTagAndDelegatesToArticleService
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
 	articleSvc := &stubArticleServiceForTag{res: &dto.ArticlePageResp{Page: 2, PageSize: 5}}
-	svc := service.NewTagService(repo, articleSvc)
+	svc := tag.NewTagService(repo, articleSvc)
 
 	repo.EXPECT().
 		FindWithArticleCount(uint(5)).
-		Return(&repository.TagWithCount{Tag: model.Tag{Base: model.Base{ID: 5}, Name: "Go"}}, nil)
+		Return(&tagrepo.TagWithCount{Tag: model.Tag{Base: model.Base{ID: 5}, Name: "Go"}}, nil)
 
 	resp, err := svc.ListArticles(5, dto.ArticleListReq{Page: 2, PageSize: 5})
 	require.NoError(t, err)
@@ -172,21 +172,21 @@ func TestTagService_ListArticles_MissingTagReturnsNotFound(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
 	articleSvc := &stubArticleServiceForTag{}
-	svc := service.NewTagService(repo, articleSvc)
+	svc := tag.NewTagService(repo, articleSvc)
 
 	repo.EXPECT().
 		FindWithArticleCount(uint(5)).
 		Return(nil, nil)
 
 	_, err := svc.ListArticles(5, dto.ArticleListReq{})
-	require.ErrorIs(t, err, service.ErrTagNotFound)
+	require.ErrorIs(t, err, tag.ErrTagNotFound)
 }
 
 func TestTagService_List_PropagatesRepoError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockTagRepository(ctrl)
-	svc := service.NewTagService(repo, nil)
+	svc := tag.NewTagService(repo, nil)
 
 	dbErr := errors.New("db error")
 	repo.EXPECT().ListWithArticleCount().Return(nil, dbErr)

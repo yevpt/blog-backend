@@ -1,4 +1,4 @@
-package repository
+package tag
 
 // ListWithArticleCount 查询所有未删除标签及其公开文章数量。
 func (r *tagRepo) ListWithArticleCount() ([]TagWithCount, error) {

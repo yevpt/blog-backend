@@ -1,4 +1,4 @@
-package service
+package tag
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
@@ -33,12 +33,12 @@ type TagService interface {
 }
 
 type tagService struct {
-	repo       repository.TagRepository
+	repo       tagrepo.TagRepository
 	articleSvc articleservice.ArticleService
 }
 
 // NewTagService 创建标签业务服务实例。
-func NewTagService(repo repository.TagRepository, articleSvc articleservice.ArticleService) TagService {
+func NewTagService(repo tagrepo.TagRepository, articleSvc articleservice.ArticleService) TagService {
 	return &tagService{repo: repo, articleSvc: articleSvc}
 }
 
@@ -171,8 +171,8 @@ func newTagFromCreateReq(req dto.TagCreateReq) (model.Tag, error) {
 	}, nil
 }
 
-func newTagUpdateData(req dto.TagUpdateReq) (repository.TagUpdateData, error) {
-	var data repository.TagUpdateData
+func newTagUpdateData(req dto.TagUpdateReq) (tagrepo.TagUpdateData, error) {
+	var data tagrepo.TagUpdateData
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
 		if name == "" {
@@ -216,13 +216,13 @@ func mapTagRepoError(err error) error {
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ErrTagNotFound
 	}
-	if errors.Is(err, repository.ErrTagArticleMissing) {
+	if errors.Is(err, tagrepo.ErrTagArticleMissing) {
 		return ErrTagArticleMissing
 	}
 	return err
 }
 
-func tagWithCountToDTO(row *repository.TagWithCount) *dto.TagItemResp {
+func tagWithCountToDTO(row *tagrepo.TagWithCount) *dto.TagItemResp {
 	if row == nil {
 		return nil
 	}

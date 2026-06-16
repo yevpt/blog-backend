@@ -17,6 +17,7 @@ import (
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
 	oauthhandler "github.com/vpt/blog-backend/internal/handler/oauth"
+	taghandler "github.com/vpt/blog-backend/internal/handler/tag"
 	"github.com/vpt/blog-backend/internal/middleware"
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
@@ -27,6 +28,7 @@ import (
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	"github.com/vpt/blog-backend/internal/service"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
@@ -38,6 +40,7 @@ import (
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
+	tagservice "github.com/vpt/blog-backend/internal/service/tag"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/email"
@@ -63,7 +66,7 @@ type routeHandlers struct {
 	moment     *momenthandler.MomentHandler
 	user       *handler.UserHandler
 	category   *categoryhandler.CategoryHandler
-	tag        *handler.TagHandler
+	tag        *taghandler.TagHandler
 	friendLink *friendlinkhandler.FriendLinkHandler
 	userCache  service.UserCacheService
 }
@@ -185,8 +188,8 @@ func newRouteHandlers(
 	categoryRepo := categoryrepo.NewCategoryRepository(db)
 	categorySvc := categoryservice.NewCategoryService(categoryRepo)
 
-	tagRepo := repository.NewTagRepository(db)
-	tagSvc := service.NewTagService(tagRepo, articleSvc)
+	tagRepo := tagrepo.NewTagRepository(db)
+	tagSvc := tagservice.NewTagService(tagRepo, articleSvc)
 
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
@@ -212,7 +215,7 @@ func newRouteHandlers(
 		moment:     momenthandler.NewMomentHandler(momentSvc),
 		user:       handler.NewUserHandler(userSvc),
 		category:   categoryhandler.NewCategoryHandler(categorySvc),
-		tag:        handler.NewTagHandler(tagSvc),
+		tag:        taghandler.NewTagHandler(tagSvc),
 		friendLink: friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
 		userCache:  userCacheSvc,
 	}

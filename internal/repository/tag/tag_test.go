@@ -1,4 +1,4 @@
-package repository_test
+package tag_test
 
 import (
 	"database/sql"
@@ -8,7 +8,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/internal/repository/tag"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -31,7 +31,7 @@ func newTagMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 func TestTagRepository_Delete_ClearsRelationsAndSoftDeletesTag(t *testing.T) {
 	db, mock, sqlDB := newTagMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewTagRepository(db)
+	repo := tag.NewTagRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -59,7 +59,7 @@ func TestTagRepository_Delete_ClearsRelationsAndSoftDeletesTag(t *testing.T) {
 func TestTagRepository_AddArticles_SkipsExistingRelations(t *testing.T) {
 	db, mock, sqlDB := newTagMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewTagRepository(db)
+	repo := tag.NewTagRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -86,7 +86,7 @@ func TestTagRepository_AddArticles_SkipsExistingRelations(t *testing.T) {
 func TestTagRepository_AddArticles_MissingArticleRollsBack(t *testing.T) {
 	db, mock, sqlDB := newTagMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewTagRepository(db)
+	repo := tag.NewTagRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -102,7 +102,7 @@ func TestTagRepository_AddArticles_MissingArticleRollsBack(t *testing.T) {
 	mock.ExpectRollback()
 
 	affected, err := repo.AddArticles(5, []uint{8, 99})
-	require.ErrorIs(t, err, repository.ErrTagArticleMissing)
+	require.ErrorIs(t, err, tag.ErrTagArticleMissing)
 	assert.Equal(t, int64(0), affected)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -110,7 +110,7 @@ func TestTagRepository_AddArticles_MissingArticleRollsBack(t *testing.T) {
 func TestTagRepository_RemoveArticles_DeletesOnlyTagRelations(t *testing.T) {
 	db, mock, sqlDB := newTagMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewTagRepository(db)
+	repo := tag.NewTagRepository(db)
 
 	now := time.Now()
 	mock.ExpectBegin()

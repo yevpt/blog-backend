@@ -1,4 +1,4 @@
-package handler_test
+package tag_test
 
 import (
 	"bytes"
@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/handler"
-	"github.com/vpt/blog-backend/internal/service"
+	"github.com/vpt/blog-backend/internal/handler/tag"
+	tagservice "github.com/vpt/blog-backend/internal/service/tag"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -60,10 +60,10 @@ func (s *stubTagService) RemoveArticles(id uint, req dto.TagArticlesReq) (*dto.T
 	return &dto.TagArticlesResp{TagID: id}, nil
 }
 
-func newTagRouter(svc service.TagService) *gin.Engine {
+func newTagRouter(svc tagservice.TagService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewTagHandler(svc)
+	h := tag.NewTagHandler(svc)
 	r.POST("/admin/tags", h.Create)
 	r.POST("/admin/tags/:id/articles", h.AddArticles)
 	return r
@@ -90,7 +90,7 @@ func TestTagHandler_Create_Success(t *testing.T) {
 }
 
 func TestTagHandler_AddArticles_BadRequest(t *testing.T) {
-	stub := &stubTagService{addErr: service.ErrTagArticleRequired}
+	stub := &stubTagService{addErr: tagservice.ErrTagArticleRequired}
 	r := newTagRouter(stub)
 
 	w := httptest.NewRecorder()

@@ -1,4 +1,4 @@
-package handler
+package tag
 
 import (
 	"errors"
@@ -6,16 +6,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
-	"github.com/vpt/blog-backend/internal/service"
+	tagservice "github.com/vpt/blog-backend/internal/service/tag"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 // TagHandler 标签模块 HTTP 入口。
 type TagHandler struct {
-	svc service.TagService
+	svc tagservice.TagService
 }
 
-func NewTagHandler(svc service.TagService) *TagHandler {
+func NewTagHandler(svc tagservice.TagService) *TagHandler {
 	return &TagHandler{svc: svc}
 }
 
@@ -212,7 +212,7 @@ func writeTagResponse(c *gin.Context, data any, err error) {
 		response.Success(c, data)
 		return
 	}
-	if errors.Is(err, service.ErrTagNotFound) || errors.Is(err, service.ErrTagArticleMissing) {
+	if errors.Is(err, tagservice.ErrTagNotFound) || errors.Is(err, tagservice.ErrTagArticleMissing) {
 		response.NotFound(c)
 		return
 	}
@@ -224,7 +224,7 @@ func writeTagResponse(c *gin.Context, data any, err error) {
 }
 
 func isTagBadRequest(err error) bool {
-	return errors.Is(err, service.ErrTagNameRequired) ||
-		errors.Is(err, service.ErrTagSeqRequired) ||
-		errors.Is(err, service.ErrTagArticleRequired)
+	return errors.Is(err, tagservice.ErrTagNameRequired) ||
+		errors.Is(err, tagservice.ErrTagSeqRequired) ||
+		errors.Is(err, tagservice.ErrTagArticleRequired)
 }
