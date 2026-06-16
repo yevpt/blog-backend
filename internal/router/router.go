@@ -28,6 +28,7 @@ import (
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	"github.com/vpt/blog-backend/internal/service"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
@@ -174,7 +175,7 @@ func newRouteHandlers(
 	userCacheSvc := service.NewUserCacheService(userRepo, objectStore, redisClient)
 	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
 	userSvc := service.NewUserService(userCacheSvc, userRepo, objectStore)
-	socialAuthRepo := repository.NewSocialAuthRepository(db)
+	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
 	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
 	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc)

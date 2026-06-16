@@ -1,22 +1,40 @@
-package repository_test
+package socialauth_test
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/internal/repository/socialauth"
 	"github.com/vpt/blog-backend/pkg/roles"
 )
+
+func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
+	t.Helper()
+
+	sqlDB, mock, err := sqlmock.New()
+	require.NoError(t, err)
+
+	gormDB, err := gorm.Open(mysql.New(mysql.Config{
+		Conn:                      sqlDB,
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{})
+	require.NoError(t, err)
+
+	return gormDB, mock, sqlDB
+}
 
 func TestSocialAuthRepository_FindSocialUser_Found(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewSocialAuthRepository(db)
+	repo := socialauth.NewSocialAuthRepository(db)
 
 	now := time.Now()
 	rows := sqlmock.NewRows([]string{
@@ -39,7 +57,7 @@ func TestSocialAuthRepository_FindSocialUser_Found(t *testing.T) {
 func TestSocialAuthRepository_FindSocialUser_NotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewSocialAuthRepository(db)
+	repo := socialauth.NewSocialAuthRepository(db)
 
 	mock.ExpectQuery(`SELECT \* FROM \x60social_user\x60`).
 		WithArgs("github", "missing", 1).
@@ -54,7 +72,7 @@ func TestSocialAuthRepository_FindSocialUser_NotFound(t *testing.T) {
 func TestSocialAuthRepository_CreateUserWithSocialAuth(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewSocialAuthRepository(db)
+	repo := socialauth.NewSocialAuthRepository(db)
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`INSERT INTO \x60user\x60`).
@@ -92,7 +110,7 @@ func TestSocialAuthRepository_CreateUserWithSocialAuth(t *testing.T) {
 func TestSocialAuthRepository_FindBindingByUserAndSource(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewSocialAuthRepository(db)
+	repo := socialauth.NewSocialAuthRepository(db)
 
 	rows := sqlmock.NewRows([]string{"social_user_auth_id", "social_user_id", "source"}).
 		AddRow(21, 11, "github")
@@ -112,7 +130,7 @@ func TestSocialAuthRepository_FindBindingByUserAndSource(t *testing.T) {
 func TestSocialAuthRepository_Unbind(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewSocialAuthRepository(db)
+	repo := socialauth.NewSocialAuthRepository(db)
 
 	rows := sqlmock.NewRows([]string{"social_user_auth_id", "social_user_id", "source"}).
 		AddRow(21, 11, "github")

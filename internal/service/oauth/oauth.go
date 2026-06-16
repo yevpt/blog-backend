@@ -14,6 +14,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	domain "github.com/vpt/blog-backend/internal/oauth"
 	"github.com/vpt/blog-backend/internal/repository"
+	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	userservice "github.com/vpt/blog-backend/internal/service"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -51,7 +52,7 @@ type AvatarSaver interface {
 
 type service struct {
 	flow       FlowManager
-	socialRepo repository.SocialAuthRepository
+	socialRepo socialauthrepo.SocialAuthRepository
 	userRepo   repository.UserRepository
 	jwt        *jwtpkg.Manager
 	cache      userservice.UserCacheService
@@ -60,7 +61,7 @@ type service struct {
 
 func NewOAuthService(
 	flow FlowManager,
-	socialRepo repository.SocialAuthRepository,
+	socialRepo socialauthrepo.SocialAuthRepository,
 	userRepo repository.UserRepository,
 	jwt *jwtpkg.Manager,
 	cache userservice.UserCacheService,

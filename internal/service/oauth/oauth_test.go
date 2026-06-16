@@ -11,6 +11,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	domain "github.com/vpt/blog-backend/internal/oauth"
 	"github.com/vpt/blog-backend/internal/repository"
+	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	serviceoauth "github.com/vpt/blog-backend/internal/service/oauth"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -36,7 +37,7 @@ func (m *fakeFlowManager) Callback(ctx context.Context, source string, code stri
 type fakeSocialRepo struct {
 	socialUser      *model.SocialUser
 	boundUser       *model.User
-	binding         *repository.SocialBinding
+	binding         *socialauthrepo.SocialBinding
 	bindingCount    int64
 	createdUser     *model.User
 	createdRoleID   uint
@@ -70,11 +71,11 @@ func (r *fakeSocialRepo) BindExistingUser(userID uint, socialUser *model.SocialU
 	return nil
 }
 
-func (r *fakeSocialRepo) FindBindingByUserAndSource(userID uint, source string) (*repository.SocialBinding, error) {
+func (r *fakeSocialRepo) FindBindingByUserAndSource(userID uint, source string) (*socialauthrepo.SocialBinding, error) {
 	return r.binding, nil
 }
 
-func (r *fakeSocialRepo) ListBindings(userID uint) ([]repository.SocialBinding, error) {
+func (r *fakeSocialRepo) ListBindings(userID uint) ([]socialauthrepo.SocialBinding, error) {
 	return nil, nil
 }
 
