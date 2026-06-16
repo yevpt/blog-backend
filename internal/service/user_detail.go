@@ -75,9 +75,6 @@ func userSettingToDTO(setting *model.UserSetting) *dto.UserSettingResp {
 }
 
 func userSocialLinksToDTO(links []model.UserSocialLink) []dto.UserSocialLinkResp {
-	if len(links) == 0 {
-		return nil
-	}
 	resp := make([]dto.UserSocialLinkResp, 0, len(links))
 	for _, link := range links {
 		resp = append(resp, dto.UserSocialLinkResp{
