@@ -1,4 +1,4 @@
-package handler
+package user
 
 import (
 	"errors"
@@ -7,17 +7,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/middleware"
-	"github.com/vpt/blog-backend/internal/service"
+	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 // UserHandler 用户资料 HTTP 入口，只负责读取登录态和写统一响应。
 type UserHandler struct {
-	svc service.UserService
+	svc userservice.UserService
 }
 
 // NewUserHandler 创建用户资料处理器。
-func NewUserHandler(svc service.UserService) *UserHandler {
+func NewUserHandler(svc userservice.UserService) *UserHandler {
 	return &UserHandler{svc: svc}
 }
 
@@ -249,7 +249,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 		return
 	}
 	if err := h.svc.UpdateUsername(detail.ID, req.Username); err != nil {
-		if errors.Is(err, service.ErrUsernameExists) {
+		if errors.Is(err, userservice.ErrUsernameExists) {
 			response.Fail(c, response.CodeBadRequest, err.Error())
 			return
 		}
@@ -279,7 +279,7 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 	if err := h.svc.UpdatePassword(detail.ID, req.OldPassword, req.NewPassword); err != nil {
-		if errors.Is(err, service.ErrWrongPassword) {
+		if errors.Is(err, userservice.ErrWrongPassword) {
 			response.Fail(c, response.CodeBadRequest, err.Error())
 			return
 		}

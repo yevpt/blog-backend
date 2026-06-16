@@ -1,4 +1,4 @@
-package service
+package user
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -16,7 +16,7 @@ import (
 var ErrUserNotFound = errors.New("用户不存在")
 
 // assembleUserDetail 将 DB 聚合模型转换为对外响应 DTO，供 UserCacheService 调用。
-func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *repository.UserDetailAggregate) *dto.UserDetailResp {
+func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *userrepo.UserDetailAggregate) *dto.UserDetailResp {
 	user := aggregate.User
 	resp := &dto.UserDetailResp{
 		ID:          user.ID,
@@ -86,7 +86,7 @@ func userSocialLinksToDTO(links []model.UserSocialLink) []dto.UserSocialLinkResp
 }
 
 // buildPublicProfile 将 DB 聚合模型转换为公开详情 DTO，隐藏私密字段。
-func buildPublicProfile(resolver storage.ObjectURLResolver, agg *repository.UserDetailAggregate) *dto.UserPublicProfileResp {
+func buildPublicProfile(resolver storage.ObjectURLResolver, agg *userrepo.UserDetailAggregate) *dto.UserPublicProfileResp {
 	user := agg.User
 	nickname := user.Username
 	if user.Nickname != nil && *user.Nickname != "" {

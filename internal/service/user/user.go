@@ -1,4 +1,4 @@
-package service
+package user
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -38,12 +38,12 @@ type UserService interface {
 
 type userService struct {
 	cache    UserCacheService
-	repo     repository.UserRepository
+	repo     userrepo.UserRepository
 	resolver storage.ObjectURLResolver
 }
 
 // NewUserService 创建用户资料服务。
-func NewUserService(cache UserCacheService, repo repository.UserRepository, resolver storage.ObjectURLResolver) UserService {
+func NewUserService(cache UserCacheService, repo userrepo.UserRepository, resolver storage.ObjectURLResolver) UserService {
 	return &userService{
 		cache:    cache,
 		repo:     repo,

@@ -14,8 +14,8 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
-	"github.com/vpt/blog-backend/internal/service"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/email"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -55,12 +55,12 @@ type AuthService interface {
 }
 
 type authService struct {
-	repo            repository.UserRepository
+	repo            userrepo.UserRepository
 	jwt             *jwtpkg.Manager
 	rdb             *redis.Client
 	mailer          email.MailSender
 	captchaConsumer CaptchaTokenConsumer
-	cache           service.UserCacheService
+	cache           userservice.UserCacheService
 }
 
 // CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
@@ -69,12 +69,12 @@ type CaptchaTokenConsumer interface {
 }
 
 func NewAuthService(
-	repo repository.UserRepository,
+	repo userrepo.UserRepository,
 	jwt *jwtpkg.Manager,
 	rdb *redis.Client,
 	mailer email.MailSender,
 	captchaConsumer CaptchaTokenConsumer,
-	cache service.UserCacheService,
+	cache userservice.UserCacheService,
 ) AuthService {
 	return &authService{
 		repo:            repo,

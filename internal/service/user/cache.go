@@ -1,4 +1,4 @@
-package service
+package user
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/repository"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -26,13 +26,13 @@ type UserCacheService interface {
 }
 
 type userCacheService struct {
-	repo     repository.UserRepository
+	repo     userrepo.UserRepository
 	resolver storage.ObjectURLResolver
 	rdb      *redis.Client
 }
 
 func NewUserCacheService(
-	repo repository.UserRepository,
+	repo userrepo.UserRepository,
 	resolver storage.ObjectURLResolver,
 	rdb *redis.Client,
 ) UserCacheService {

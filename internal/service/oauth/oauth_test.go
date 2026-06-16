@@ -10,8 +10,8 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	domain "github.com/vpt/blog-backend/internal/oauth"
-	"github.com/vpt/blog-backend/internal/repository"
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	serviceoauth "github.com/vpt/blog-backend/internal/service/oauth"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -97,7 +97,7 @@ type fakeUserRepo struct {
 
 func (r *fakeUserRepo) FindByIdentifier(identifier string) (*model.User, error) { return r.user, nil }
 func (r *fakeUserRepo) FindByID(id uint) (*model.User, error)                   { return r.user, nil }
-func (r *fakeUserRepo) FindDetailByID(id uint) (*repository.UserDetailAggregate, error) {
+func (r *fakeUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
 func (r *fakeUserRepo) ExistsByEmail(email string) (bool, error)       { return r.emailExists, nil }

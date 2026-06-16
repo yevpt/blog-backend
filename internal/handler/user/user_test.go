@@ -1,4 +1,4 @@
-package handler_test
+package user_test
 
 import (
 	"encoding/json"
@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/handler"
+	user "github.com/vpt/blog-backend/internal/handler/user"
 	"github.com/vpt/blog-backend/internal/middleware"
-	"github.com/vpt/blog-backend/internal/service"
+	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -47,10 +47,10 @@ func (s *stubUserService) RecordLogin(userID uint) error {
 
 // newUserRouter 构建测试路由，Auth 使用 nil cache（跳过缓存加载），
 // 测试中通过 middleware.SetUserDetail 手动注入用户资料。
-func newUserRouter(svc service.UserService, jwtManager *jwt.Manager, detail *dto.UserDetailResp) *gin.Engine {
+func newUserRouter(svc userservice.UserService, jwtManager *jwt.Manager, detail *dto.UserDetailResp) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewUserHandler(svc)
+	h := user.NewUserHandler(svc)
 	authed := r.Group("/", middleware.Auth(jwtManager, nil))
 	if detail != nil {
 		// 在 Auth 之后通过中间件注入 UserDetail，模拟 userCache 已加载的状态

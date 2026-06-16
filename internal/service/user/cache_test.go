@@ -1,4 +1,4 @@
-package service_test
+package user_test
 
 import (
 	"context"
@@ -12,17 +12,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
-	"github.com/vpt/blog-backend/internal/service"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	user "github.com/vpt/blog-backend/internal/service/user"
 )
 
 // stubUserRepo 最小实现 UserRepository，仅 FindDetailByID 返回预设值
 type stubUserRepo struct {
-	aggregate *repository.UserDetailAggregate
+	aggregate *userrepo.UserDetailAggregate
 	err       error
 }
 
-func (r *stubUserRepo) FindDetailByID(id uint) (*repository.UserDetailAggregate, error) {
+func (r *stubUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return r.aggregate, r.err
 }
 
@@ -59,12 +59,12 @@ func TestUserCacheService_Get_CacheMiss_ThenHit(t *testing.T) {
 
 	nickname := "alice"
 	stub := &stubUserRepo{
-		aggregate: &repository.UserDetailAggregate{
+		aggregate: &userrepo.UserDetailAggregate{
 			User:  model.User{Base: model.Base{ID: 1}, Username: "alice", Nickname: &nickname, Status: 1},
 			Roles: []string{"ROLE_NORMAL"},
 		},
 	}
-	svc := service.NewUserCacheService(stub, nil, rdb)
+	svc := user.NewUserCacheService(stub, nil, rdb)
 
 	// 第一次：cache miss，从 DB 读取
 	profile, err := svc.Get(ctx, 1)
@@ -86,16 +86,16 @@ func TestUserCacheService_Get_CacheMiss_ThenHit(t *testing.T) {
 
 func TestUserCacheService_Get_UserNotFound(t *testing.T) {
 	rdb := newTestRedis(t)
-	svc := service.NewUserCacheService(&stubUserRepo{aggregate: nil}, nil, rdb)
+	svc := user.NewUserCacheService(&stubUserRepo{aggregate: nil}, nil, rdb)
 
 	_, err := svc.Get(context.Background(), 99)
-	assert.ErrorIs(t, err, service.ErrUserNotFound)
+	assert.ErrorIs(t, err, user.ErrUserNotFound)
 }
 
 func TestUserCacheService_Set_And_Invalidate(t *testing.T) {
 	rdb := newTestRedis(t)
 	ctx := context.Background()
-	svc := service.NewUserCacheService(&stubUserRepo{}, nil, rdb)
+	svc := user.NewUserCacheService(&stubUserRepo{}, nil, rdb)
 
 	profile := &dto.UserDetailResp{ID: 5, Username: "bob", Roles: []string{"ROLE_VIP"}}
 	require.NoError(t, svc.Set(ctx, 5, profile))
@@ -108,7 +108,7 @@ func TestUserCacheService_Set_And_Invalidate(t *testing.T) {
 	// Invalidate 后 Get 走 DB（stub 返回 nil → ErrUserNotFound）
 	require.NoError(t, svc.Invalidate(ctx, 5))
 	_, err = svc.Get(ctx, 5)
-	assert.ErrorIs(t, err, service.ErrUserNotFound)
+	assert.ErrorIs(t, err, user.ErrUserNotFound)
 }
 
 func TestUserCacheService_Get_CorruptJSON_Rebuilds(t *testing.T) {
@@ -119,12 +119,12 @@ func TestUserCacheService_Get_CorruptJSON_Rebuilds(t *testing.T) {
 
 	nickname := "carol"
 	stub := &stubUserRepo{
-		aggregate: &repository.UserDetailAggregate{
+		aggregate: &userrepo.UserDetailAggregate{
 			User:  model.User{Base: model.Base{ID: 3}, Username: "carol", Nickname: &nickname, Status: 1},
 			Roles: []string{"ROLE_NORMAL"},
 		},
 	}
-	svc := service.NewUserCacheService(stub, nil, rdb)
+	svc := user.NewUserCacheService(stub, nil, rdb)
 
 	profile, err := svc.Get(ctx, 3)
 	require.NoError(t, err)
@@ -143,9 +143,9 @@ func TestUserCacheService_Get_RedisError_ReturnsError(t *testing.T) {
 	// 关闭 miniredis 模拟 Redis 故障
 	mr.Close()
 
-	svc := service.NewUserCacheService(&stubUserRepo{}, nil, rdb)
+	svc := user.NewUserCacheService(&stubUserRepo{}, nil, rdb)
 	_, err = svc.Get(context.Background(), 1)
 	assert.Error(t, err)
 	// 确认不是 ErrUserNotFound（DB 没被调用）
-	assert.NotErrorIs(t, err, service.ErrUserNotFound)
+	assert.NotErrorIs(t, err, user.ErrUserNotFound)
 }

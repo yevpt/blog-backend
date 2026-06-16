@@ -1,4 +1,4 @@
-package repository_test
+package user_test
 
 import (
 	"database/sql"
@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	user "github.com/vpt/blog-backend/internal/repository/user"
 )
 
 func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
@@ -31,7 +31,7 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 func TestUserRepository_FindByIdentifier_Found(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	email := "test@example.com"
 	rows := sqlmock.NewRows([]string{
@@ -53,7 +53,7 @@ func TestUserRepository_FindByIdentifier_Found(t *testing.T) {
 func TestUserRepository_FindByIdentifier_NotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
 		WithArgs("noone", "noone", "noone", 1).
@@ -67,7 +67,7 @@ func TestUserRepository_FindByIdentifier_NotFound(t *testing.T) {
 func TestUserRepository_ExistsByEmail_True(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	rows := sqlmock.NewRows([]string{"count"}).AddRow(1)
 	mock.ExpectQuery(`SELECT count\(\*\) FROM \x60user\x60`).
@@ -82,7 +82,7 @@ func TestUserRepository_ExistsByEmail_True(t *testing.T) {
 func TestUserRepository_FindRolesByUserID(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	rows := sqlmock.NewRows([]string{"name"}).AddRow("ROLE_NORMAL")
 	mock.ExpectQuery(`SELECT .+ FROM \x60user_role\x60`).
@@ -97,7 +97,7 @@ func TestUserRepository_FindRolesByUserID(t *testing.T) {
 func TestUserRepository_FindDetailByID_Found(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	email := "alice@example.com"
 	nickname := "Alice"
@@ -162,7 +162,7 @@ func TestUserRepository_FindDetailByID_Found(t *testing.T) {
 func TestUserRepository_FindDetailByID_NotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
 		WithArgs(uint(99), 1).
@@ -176,7 +176,7 @@ func TestUserRepository_FindDetailByID_NotFound(t *testing.T) {
 func TestUserRepository_Create_Success(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	mock.ExpectBegin()
 	mock.ExpectExec(`INSERT INTO \x60user\x60`).
@@ -202,7 +202,7 @@ func TestUserRepository_Create_Success(t *testing.T) {
 func TestUserRepository_ListAll_OrdersByRoleNameWeight(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewUserRepository(db)
+	repo := user.NewUserRepository(db)
 
 	mock.ExpectQuery(`SELECT count\(\*\) FROM \x60user\x60 WHERE status = \? AND \x60user\x60\.\x60deleted_at\x60 IS NULL`).
 		WithArgs(1).

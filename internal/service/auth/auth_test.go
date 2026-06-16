@@ -14,7 +14,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository/mock"
+	"github.com/vpt/blog-backend/internal/repository/user/mock"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"

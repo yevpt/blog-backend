@@ -18,10 +18,10 @@ import (
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
 	oauthhandler "github.com/vpt/blog-backend/internal/handler/oauth"
 	taghandler "github.com/vpt/blog-backend/internal/handler/tag"
+	userhandler "github.com/vpt/blog-backend/internal/handler/user"
 	"github.com/vpt/blog-backend/internal/middleware"
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
-	"github.com/vpt/blog-backend/internal/repository"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
@@ -30,7 +30,7 @@ import (
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
-	"github.com/vpt/blog-backend/internal/service"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
@@ -42,6 +42,7 @@ import (
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
 	tagservice "github.com/vpt/blog-backend/internal/service/tag"
+	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/email"
@@ -65,11 +66,11 @@ type routeHandlers struct {
 	comment    *commenthandler.CommentHandler
 	guestbook  *guestbookhandler.GuestbookHandler
 	moment     *momenthandler.MomentHandler
-	user       *handler.UserHandler
+	user       *userhandler.UserHandler
 	category   *categoryhandler.CategoryHandler
 	tag        *taghandler.TagHandler
 	friendLink *friendlinkhandler.FriendLinkHandler
-	userCache  service.UserCacheService
+	userCache  userservice.UserCacheService
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -171,10 +172,10 @@ func newRouteHandlers(
 	}
 
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
-	userRepo := repository.NewUserRepository(db)
-	userCacheSvc := service.NewUserCacheService(userRepo, objectStore, redisClient)
+	userRepo := userrepo.NewUserRepository(db)
+	userCacheSvc := userservice.NewUserCacheService(userRepo, objectStore, redisClient)
 	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
-	userSvc := service.NewUserService(userCacheSvc, userRepo, objectStore)
+	userSvc := userservice.NewUserService(userCacheSvc, userRepo, objectStore)
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
 	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
@@ -214,7 +215,7 @@ func newRouteHandlers(
 		comment:    commenthandler.NewCommentHandler(commentSvc),
 		guestbook:  guestbookhandler.NewGuestbookHandler(guestbookSvc),
 		moment:     momenthandler.NewMomentHandler(momentSvc),
-		user:       handler.NewUserHandler(userSvc),
+		user:       userhandler.NewUserHandler(userSvc),
 		category:   categoryhandler.NewCategoryHandler(categorySvc),
 		tag:        taghandler.NewTagHandler(tagSvc),
 		friendLink: friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
