@@ -41,11 +41,11 @@ func TestFriendLinkRepository_ListPublic_FiltersVisibleAndOrders(t *testing.T) {
 	defer sqlDB.Close()
 	repo := friendlink.NewFriendLinkRepository(db)
 
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL").
-		WithArgs(uint8(1)).
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE status IN \\(\\?,\\?\\) AND `friend_link`.`deleted_at` IS NULL").
+		WithArgs(1, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL ORDER BY seq ASC,id DESC LIMIT \\?").
-		WithArgs(uint8(1), 10).
+	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE status IN \\(\\?,\\?\\) AND `friend_link`.`deleted_at` IS NULL ORDER BY seq ASC,id DESC LIMIT \\?").
+		WithArgs(1, 2, 10).
 		WillReturnRows(friendLinkRows(1))
 
 	links, total, err := repo.ListPublic(0, 10)

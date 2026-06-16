@@ -45,6 +45,34 @@ func (s *stubUserService) RecordLogin(userID uint) error {
 	return nil
 }
 
+func (s *stubUserService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) UpdateMeta(userID uint, req *dto.UpdateMetaReq) (*dto.UserDetailResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) UpdateSocialLink(userID uint, platform string, url *string) (*dto.UserDetailResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) UpdateUsername(userID uint, username string) error {
+	return nil
+}
+
+func (s *stubUserService) UpdatePassword(userID uint, oldPwd, newPwd string) error {
+	return nil
+}
+
+func (s *stubUserService) UpdateEmailDisplay(userID uint, display string) error {
+	return nil
+}
+
 // newUserRouter 构建测试路由，Auth 使用 nil cache（跳过缓存加载），
 // 测试中通过 middleware.SetUserDetail 手动注入用户资料。
 func newUserRouter(svc userservice.UserService, jwtManager *jwt.Manager, detail *dto.UserDetailResp) *gin.Engine {

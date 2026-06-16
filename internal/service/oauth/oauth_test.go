@@ -117,6 +117,16 @@ func (r *fakeUserRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
 func (r *fakeUserRepo) Update(id uint, updates map[string]interface{}) error { return nil }
+func (r *fakeUserRepo) DeleteSocialLink(userID uint, platform string) error  { return nil }
+func (r *fakeUserRepo) ExistsByUsername(username string, excludeID uint) (bool, error) {
+	return false, nil
+}
+func (r *fakeUserRepo) UpdatePassword(userID uint, hashedPassword string) error      { return nil }
+func (r *fakeUserRepo) UpsertMeta(userID uint, updates map[string]interface{}) error { return nil }
+func (r *fakeUserRepo) UpsertSocialLink(userID uint, platform, url string) error     { return nil }
+func (r *fakeUserRepo) UpsertUserSetting(userID uint, updates map[string]interface{}) error {
+	return nil
+}
 
 type fakeAvatarSaver struct {
 	objectName string

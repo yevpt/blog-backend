@@ -85,12 +85,12 @@ func main() {
 	}
 
 	if len(errs) > 0 {
-		fmt.Fprintln(os.Stderr, "\n✗ Commit message 不符合规范：\n")
+		fmt.Fprintln(os.Stderr, "\n✗ Commit message 不符合规范：")
 		for _, e := range errs {
 			fmt.Fprintln(os.Stderr, "  - "+e)
 		}
 		fmt.Fprintln(os.Stderr, "\n  示例：feat(auth): 新增邮箱验证码登录")
-		fmt.Fprintln(os.Stderr, "  规范详见 .agents/skills/git-commit/SKILL.md\n")
+		fmt.Fprintln(os.Stderr, "  规范详见 .agents/skills/git-commit/SKILL.md")
 		os.Exit(1)
 	}
 }

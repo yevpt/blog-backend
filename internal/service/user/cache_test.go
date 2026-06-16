@@ -44,6 +44,16 @@ func (r *stubUserRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
 func (r *stubUserRepo) Update(id uint, updates map[string]interface{}) error { return nil }
+func (r *stubUserRepo) DeleteSocialLink(userID uint, platform string) error  { return nil }
+func (r *stubUserRepo) ExistsByUsername(username string, excludeID uint) (bool, error) {
+	return false, nil
+}
+func (r *stubUserRepo) UpdatePassword(userID uint, hashedPassword string) error      { return nil }
+func (r *stubUserRepo) UpsertMeta(userID uint, updates map[string]interface{}) error { return nil }
+func (r *stubUserRepo) UpsertSocialLink(userID uint, platform, url string) error     { return nil }
+func (r *stubUserRepo) UpsertUserSetting(userID uint, updates map[string]interface{}) error {
+	return nil
+}
 
 func newTestRedis(t *testing.T) *redis.Client {
 	t.Helper()
