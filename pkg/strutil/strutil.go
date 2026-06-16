@@ -15,3 +15,16 @@ func CleanOptional(value *string) *string {
 	}
 	return &trimmed
 }
+
+// CleanOptionalUpdate 规整「可选更新」字符串：返回 trim 后的值，以及该字段是否参与更新。
+// nil 表示未传字段（不参与更新）；trim 后为空表示传入空串以清空字段。
+func CleanOptionalUpdate(value *string) (*string, bool) {
+	if value == nil {
+		return nil, false
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil, true
+	}
+	return &trimmed, true
+}

@@ -1,4 +1,4 @@
-package repository_test
+package friendlink_test
 
 import (
 	"database/sql"
@@ -8,7 +8,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vpt/blog-backend/internal/repository"
+	"github.com/vpt/blog-backend/internal/repository/friendlink"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -39,7 +39,7 @@ func friendLinkRows(id uint) *sqlmock.Rows {
 func TestFriendLinkRepository_ListPublic_FiltersVisibleAndOrders(t *testing.T) {
 	db, mock, sqlDB := newFriendLinkMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewFriendLinkRepository(db)
+	repo := friendlink.NewFriendLinkRepository(db)
 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL").
 		WithArgs(uint8(1)).
@@ -59,7 +59,7 @@ func TestFriendLinkRepository_ListPublic_FiltersVisibleAndOrders(t *testing.T) {
 func TestFriendLinkRepository_ListAdmin_FiltersStatusWhenProvided(t *testing.T) {
 	db, mock, sqlDB := newFriendLinkMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewFriendLinkRepository(db)
+	repo := friendlink.NewFriendLinkRepository(db)
 
 	status := uint8(0)
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL").
@@ -79,7 +79,7 @@ func TestFriendLinkRepository_ListAdmin_FiltersStatusWhenProvided(t *testing.T) 
 func TestFriendLinkRepository_Update_ReturnsNilWhenMissing(t *testing.T) {
 	db, mock, sqlDB := newFriendLinkMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewFriendLinkRepository(db)
+	repo := friendlink.NewFriendLinkRepository(db)
 
 	name := "新友站"
 	mock.ExpectBegin()
@@ -88,7 +88,7 @@ func TestFriendLinkRepository_Update_ReturnsNilWhenMissing(t *testing.T) {
 		WillReturnError(gorm.ErrRecordNotFound)
 	mock.ExpectRollback()
 
-	link, err := repo.Update(9, repository.FriendLinkUpdateData{Name: &name})
+	link, err := repo.Update(9, friendlink.FriendLinkUpdateData{Name: &name})
 	require.NoError(t, err)
 	assert.Nil(t, link)
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -97,7 +97,7 @@ func TestFriendLinkRepository_Update_ReturnsNilWhenMissing(t *testing.T) {
 func TestFriendLinkRepository_Delete_SoftDeletes(t *testing.T) {
 	db, mock, sqlDB := newFriendLinkMockDB(t)
 	defer sqlDB.Close()
-	repo := repository.NewFriendLinkRepository(db)
+	repo := friendlink.NewFriendLinkRepository(db)
 
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE `friend_link`.`id` = \\? AND `friend_link`.`deleted_at` IS NULL ORDER BY `friend_link`.`id` LIMIT \\?").

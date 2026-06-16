@@ -1,4 +1,4 @@
-package handler
+package friendlink
 
 import (
 	"errors"
@@ -6,17 +6,17 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
-	"github.com/vpt/blog-backend/internal/service"
+	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 // FriendLinkHandler 友情链接模块 HTTP 入口。
 type FriendLinkHandler struct {
-	svc service.FriendLinkService
+	svc friendlinkservice.FriendLinkService
 }
 
 // NewFriendLinkHandler 创建友情链接 HTTP handler。
-func NewFriendLinkHandler(svc service.FriendLinkService) *FriendLinkHandler {
+func NewFriendLinkHandler(svc friendlinkservice.FriendLinkService) *FriendLinkHandler {
 	return &FriendLinkHandler{svc: svc}
 }
 
@@ -158,7 +158,7 @@ func writeFriendLinkResponse(c *gin.Context, data any, err error) {
 		response.Success(c, data)
 		return
 	}
-	if errors.Is(err, service.ErrFriendLinkNotFound) {
+	if errors.Is(err, friendlinkservice.ErrFriendLinkNotFound) {
 		response.NotFound(c)
 		return
 	}
@@ -170,8 +170,8 @@ func writeFriendLinkResponse(c *gin.Context, data any, err error) {
 }
 
 func isFriendLinkBadRequest(err error) bool {
-	return errors.Is(err, service.ErrFriendLinkNameRequired) ||
-		errors.Is(err, service.ErrFriendLinkSiteRequired) ||
-		errors.Is(err, service.ErrFriendLinkSeqRequired) ||
-		errors.Is(err, service.ErrFriendLinkStatusInvalid)
+	return errors.Is(err, friendlinkservice.ErrFriendLinkNameRequired) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkSiteRequired) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkSeqRequired) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkStatusInvalid)
 }

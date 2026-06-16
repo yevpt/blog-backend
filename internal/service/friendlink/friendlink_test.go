@@ -1,4 +1,4 @@
-package service_test
+package friendlink_test
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
-	"github.com/vpt/blog-backend/internal/service"
+	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
+	"github.com/vpt/blog-backend/internal/service/friendlink"
 )
 
 type fakeFriendLinkRepository struct {
@@ -25,7 +25,7 @@ type fakeFriendLinkRepository struct {
 	createResp *model.FriendLink
 
 	updateID   uint
-	updateData repository.FriendLinkUpdateData
+	updateData friendlinkrepo.FriendLinkUpdateData
 	updateResp *model.FriendLink
 }
 
@@ -52,7 +52,7 @@ func (r *fakeFriendLinkRepository) Create(link model.FriendLink) (*model.FriendL
 	return &link, nil
 }
 
-func (r *fakeFriendLinkRepository) Update(id uint, data repository.FriendLinkUpdateData) (*model.FriendLink, error) {
+func (r *fakeFriendLinkRepository) Update(id uint, data friendlinkrepo.FriendLinkUpdateData) (*model.FriendLink, error) {
 	r.updateID = id
 	r.updateData = data
 	return r.updateResp, nil
@@ -90,7 +90,7 @@ func TestFriendLinkService_ListPublic_ResolvesAvatarURL(t *testing.T) {
 	resolver := &fakeFriendLinkResolver{urls: map[string]string{
 		avatar: "https://cdn.example.com/blog/friend/avatar.png?sign=1",
 	}}
-	svc := service.NewFriendLinkService(repo, resolver)
+	svc := friendlink.NewFriendLinkService(repo, resolver)
 
 	resp, err := svc.ListPublic(dto.FriendLinkListReq{Page: 0, PageSize: 99})
 	require.NoError(t, err)
@@ -104,17 +104,17 @@ func TestFriendLinkService_ListPublic_ResolvesAvatarURL(t *testing.T) {
 
 func TestFriendLinkService_GetPublic_HiddenLinkReturnsNotFound(t *testing.T) {
 	repo := &fakeFriendLinkRepository{}
-	svc := service.NewFriendLinkService(repo, nil)
+	svc := friendlink.NewFriendLinkService(repo, nil)
 
 	_, err := svc.GetPublic(3)
-	require.ErrorIs(t, err, service.ErrFriendLinkNotFound)
+	require.ErrorIs(t, err, friendlink.ErrFriendLinkNotFound)
 }
 
 func TestFriendLinkService_Create_DefaultsStatusAndTrimsFields(t *testing.T) {
 	seq := uint(4)
 	avatar := " friend/logo.png "
 	repo := &fakeFriendLinkRepository{}
-	svc := service.NewFriendLinkService(repo, nil)
+	svc := friendlink.NewFriendLinkService(repo, nil)
 
 	resp, err := svc.Create(dto.FriendLinkCreateReq{
 		Name:      "  友站  ",
@@ -142,7 +142,7 @@ func TestFriendLinkService_Update_AllowsClearingOptionalFields(t *testing.T) {
 			Status: 1,
 		},
 	}
-	svc := service.NewFriendLinkService(repo, nil)
+	svc := friendlink.NewFriendLinkService(repo, nil)
 
 	resp, err := svc.Update(7, dto.FriendLinkUpdateReq{
 		Name:        &name,
@@ -161,10 +161,10 @@ func TestFriendLinkService_Update_AllowsClearingOptionalFields(t *testing.T) {
 }
 
 func TestFriendLinkService_Update_RejectsInvalidStatus(t *testing.T) {
-	status := uint8(2)
+	status := uint8(3)
 	repo := &fakeFriendLinkRepository{}
-	svc := service.NewFriendLinkService(repo, nil)
+	svc := friendlink.NewFriendLinkService(repo, nil)
 
 	_, err := svc.Update(7, dto.FriendLinkUpdateReq{Status: &status})
-	require.ErrorIs(t, err, service.ErrFriendLinkStatusInvalid)
+	require.ErrorIs(t, err, friendlink.ErrFriendLinkStatusInvalid)
 }

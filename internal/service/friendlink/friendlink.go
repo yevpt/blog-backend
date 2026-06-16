@@ -1,4 +1,4 @@
-package service
+package friendlink
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
-	"github.com/vpt/blog-backend/internal/repository"
+	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
@@ -41,12 +41,12 @@ type FriendLinkService interface {
 }
 
 type friendLinkService struct {
-	repo     repository.FriendLinkRepository
+	repo     friendlinkrepo.FriendLinkRepository
 	resolver storage.ObjectURLResolver
 }
 
 // NewFriendLinkService 创建友情链接业务服务实例。
-func NewFriendLinkService(repo repository.FriendLinkRepository, resolver storage.ObjectURLResolver) FriendLinkService {
+func NewFriendLinkService(repo friendlinkrepo.FriendLinkRepository, resolver storage.ObjectURLResolver) FriendLinkService {
 	return &friendLinkService{repo: repo, resolver: resolver}
 }
 
@@ -173,8 +173,8 @@ func newFriendLinkFromCreateReq(req dto.FriendLinkCreateReq) (model.FriendLink, 
 	}, nil
 }
 
-func newFriendLinkUpdateData(req dto.FriendLinkUpdateReq) (repository.FriendLinkUpdateData, error) {
-	var data repository.FriendLinkUpdateData
+func newFriendLinkUpdateData(req dto.FriendLinkUpdateReq) (friendlinkrepo.FriendLinkUpdateData, error) {
+	var data friendlinkrepo.FriendLinkUpdateData
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
 		if name == "" {
@@ -182,9 +182,9 @@ func newFriendLinkUpdateData(req dto.FriendLinkUpdateReq) (repository.FriendLink
 		}
 		data.Name = &name
 	}
-	data.Description, data.UpdateDescription = cleanOptionalUpdateString(req.Description)
-	data.Email, data.UpdateEmail = cleanOptionalUpdateString(req.Email)
-	data.Phone, data.UpdatePhone = cleanOptionalUpdateString(req.Phone)
+	data.Description, data.UpdateDescription = strutil.CleanOptionalUpdate(req.Description)
+	data.Email, data.UpdateEmail = strutil.CleanOptionalUpdate(req.Email)
+	data.Phone, data.UpdatePhone = strutil.CleanOptionalUpdate(req.Phone)
 	if req.Site != nil {
 		site := strings.TrimSpace(*req.Site)
 		if site == "" {
@@ -192,7 +192,7 @@ func newFriendLinkUpdateData(req dto.FriendLinkUpdateReq) (repository.FriendLink
 		}
 		data.Site = &site
 	}
-	data.AvatarUrl, data.UpdateAvatarUrl = cleanOptionalUpdateString(req.AvatarUrl)
+	data.AvatarUrl, data.UpdateAvatarUrl = strutil.CleanOptionalUpdate(req.AvatarUrl)
 	data.Seq = req.Seq
 	if req.Status != nil {
 		if err := validateFriendLinkStatus(*req.Status); err != nil {

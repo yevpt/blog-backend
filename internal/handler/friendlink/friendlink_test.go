@@ -1,4 +1,4 @@
-package handler_test
+package friendlink_test
 
 import (
 	"bytes"
@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
-	"github.com/vpt/blog-backend/internal/handler"
-	"github.com/vpt/blog-backend/internal/service"
+	"github.com/vpt/blog-backend/internal/handler/friendlink"
+	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -55,10 +55,10 @@ func (s *stubFriendLinkService) Delete(id uint) (*dto.FriendLinkItemResp, error)
 	return &dto.FriendLinkItemResp{ID: id}, nil
 }
 
-func newFriendLinkRouter(svc service.FriendLinkService) *gin.Engine {
+func newFriendLinkRouter(svc friendlinkservice.FriendLinkService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := handler.NewFriendLinkHandler(svc)
+	h := friendlink.NewFriendLinkHandler(svc)
 	r.GET("/friend-links", h.ListPublic)
 	r.GET("/friend-links/:id", h.GetPublic)
 	r.POST("/admin/friend-links", h.Create)
@@ -95,7 +95,7 @@ func TestFriendLinkHandler_Create_InvalidJSONReturnsBadRequest(t *testing.T) {
 }
 
 func TestFriendLinkHandler_GetPublic_NotFoundReturns404(t *testing.T) {
-	stub := &stubFriendLinkService{getErr: service.ErrFriendLinkNotFound}
+	stub := &stubFriendLinkService{getErr: friendlinkservice.ErrFriendLinkNotFound}
 	r := newFriendLinkRouter(stub)
 
 	w := httptest.NewRecorder()

@@ -177,10 +177,10 @@ func newCategoryUpdateData(req dto.CategoryUpdateReq) (repository.CategoryUpdate
 		}
 		data.Name = &name
 	}
-	data.URL, data.UpdateURL = cleanOptionalUpdateString(req.URL)
-	data.Icon, data.UpdateIcon = cleanOptionalUpdateString(req.Icon)
-	data.Description, data.UpdateDescription = cleanOptionalUpdateString(req.Description)
-	data.CoverImgUrl, data.UpdateCoverImgUrl = cleanOptionalUpdateString(req.CoverImgUrl)
+	data.URL, data.UpdateURL = strutil.CleanOptionalUpdate(req.URL)
+	data.Icon, data.UpdateIcon = strutil.CleanOptionalUpdate(req.Icon)
+	data.Description, data.UpdateDescription = strutil.CleanOptionalUpdate(req.Description)
+	data.CoverImgUrl, data.UpdateCoverImgUrl = strutil.CleanOptionalUpdate(req.CoverImgUrl)
 	data.Seq = req.Seq
 	return data, nil
 }
