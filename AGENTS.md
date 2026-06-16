@@ -1,6 +1,6 @@
 # Blog Backend — AI 编码规范
 
-Go 1.25+ 个人博客后端 API，模块 `github.com/vpt/blog-backend`。本文件、`CLAUDE.md`、`.cursorrules` 必须保持一致。
+Go 1.25+ 个人博客后端 API，模块 `github.com/vpt/blog-backend`。
 
 ## 技术栈
 

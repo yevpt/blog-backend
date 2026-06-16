@@ -28,4 +28,7 @@ docs/swagger.yaml
 docs/docs.go
 
 # air 临时文件
+
+# 编译产物
+tools/commitmsg/commitmsg
 tmp/

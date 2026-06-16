@@ -22,7 +22,7 @@ var allowedTypes = map[string]bool{
 var (
 	headerRe   = regexp.MustCompile(`^([a-z]+)(?:\(([a-z0-9-]+)\))?: (.+)$`)
 	hanRe      = regexp.MustCompile(`\p{Han}`)
-	aiSignRe   = regexp.MustCompile(`(?i)generated with|🤖|claude code|noreply@anthropic|by \[?(claude|codex|cursor|copilot)`)
+	aiSignRe   = regexp.MustCompile(`(?i)generated (with|by)\b|🤖|noreply@\S+|by \[?\w+`)
 	coAuthorRe = regexp.MustCompile(`(?im)^Co-authored-by:`)
 )
 
