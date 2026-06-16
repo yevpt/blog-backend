@@ -4720,6 +4720,39 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/me/email/display": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "设置展示邮箱",
+                "parameters": [
+                    {
+                        "description": "展示设置",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.EmailDisplayReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me/login-time": {
             "post": {
                 "description": "从 jwt 中获取当前用户信息，更新最后登录时间",
@@ -4733,6 +4766,214 @@ const docTemplate = `{
                     "用户"
                 ],
                 "summary": "记录当前用户登录时间",
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/meta": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "更新用户扩展信息",
+                "parameters": [
+                    {
+                        "description": "扩展信息",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateMetaReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/password": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "修改密码",
+                "parameters": [
+                    {
+                        "description": "密码信息",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdatePasswordReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/profile": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "更新用户基本资料",
+                "parameters": [
+                    {
+                        "description": "更新资料",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateProfileReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/social/{platform}": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "更新社交链接",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "平台标识",
+                        "name": "platform",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "链接信息",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateSocialLinkReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/username": {
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "修改用户名",
+                "parameters": [
+                    {
+                        "description": "新用户名",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateUsernameReq"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "成功",
@@ -4789,6 +5030,52 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "获取用户公开详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserPublicProfileResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -5902,6 +6189,22 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.EmailDisplayReq": {
+            "type": "object",
+            "required": [
+                "display"
+            ],
+            "properties": {
+                "display": {
+                    "type": "string",
+                    "enum": [
+                        "main",
+                        "sub",
+                        "none"
+                    ]
+                }
+            }
+        },
         "dto.FriendLinkCreateReq": {
             "type": "object",
             "required": [
@@ -5946,7 +6249,7 @@ const docTemplate = `{
                     "example": "https://example.com"
                 },
                 "status": {
-                    "description": "Status 状态：0 隐藏，1 显示；未传默认显示。",
+                    "description": "Status 状态：0 隐藏，1 显示，2 失联；未传默认显示。",
                     "type": "integer",
                     "example": 1
                 }
@@ -6000,7 +6303,7 @@ const docTemplate = `{
                     "example": "https://example.com"
                 },
                 "status": {
-                    "description": "Status 状态：0 隐藏，1 显示。",
+                    "description": "Status 状态：0 隐藏，1 显示，2 失联。",
                     "type": "integer",
                     "example": 1
                 },
@@ -6081,7 +6384,7 @@ const docTemplate = `{
                     "example": "https://example.com"
                 },
                 "status": {
-                    "description": "Status 状态：0 隐藏，1 显示。",
+                    "description": "Status 状态：0 隐藏，1 显示，2 失联。",
                     "type": "integer",
                     "example": 1
                 }
@@ -6880,6 +7183,80 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.UpdateMetaReq": {
+            "type": "object",
+            "properties": {
+                "birthday": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UpdatePasswordReq": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
+            "properties": {
+                "new_password": {
+                    "type": "string",
+                    "minLength": 6
+                },
+                "old_password": {
+                    "type": "string",
+                    "minLength": 6
+                }
+            }
+        },
+        "dto.UpdateProfileReq": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                },
+                "mark": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "nickname": {
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "site": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "dto.UpdateSocialLinkReq": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "description": "null 或 \"\" = 删除该平台链接",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.UpdateUsernameReq": {
+            "type": "object",
+            "required": [
+                "username"
+            ],
+            "properties": {
+                "username": {
+                    "type": "string",
+                    "maxLength": 155,
+                    "minLength": 3
+                }
+            }
+        },
         "dto.UserDetailResp": {
             "type": "object",
             "properties": {
@@ -7016,6 +7393,56 @@ const docTemplate = `{
                 "total": {
                     "type": "integer",
                     "example": 100
+                }
+            }
+        },
+        "dto.UserPublicProfileResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "birthday": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_email": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "mark": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "register_at": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "site": {
+                    "type": "string"
+                },
+                "social_links": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UserSocialLinkResp"
+                    }
                 }
             }
         },

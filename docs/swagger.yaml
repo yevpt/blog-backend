@@ -820,6 +820,17 @@ definitions:
         example: vpt
         type: string
     type: object
+  dto.EmailDisplayReq:
+    properties:
+      display:
+        enum:
+        - main
+        - sub
+        - none
+        type: string
+    required:
+    - display
+    type: object
   dto.FriendLinkCreateReq:
     properties:
       avatar_url:
@@ -851,7 +862,7 @@ definitions:
         example: https://example.com
         type: string
       status:
-        description: Status 状态：0 隐藏，1 显示；未传默认显示。
+        description: Status 状态：0 隐藏，1 显示，2 失联；未传默认显示。
         example: 1
         type: integer
     required:
@@ -897,7 +908,7 @@ definitions:
         example: https://example.com
         type: string
       status:
-        description: Status 状态：0 隐藏，1 显示。
+        description: Status 状态：0 隐藏，1 显示，2 失联。
         example: 1
         type: integer
       updated_at:
@@ -959,7 +970,7 @@ definitions:
         example: https://example.com
         type: string
       status:
-        description: Status 状态：0 隐藏，1 显示。
+        description: Status 状态：0 隐藏，1 显示，2 失联。
         example: 1
         type: integer
     type: object
@@ -1545,6 +1556,57 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.UpdateMetaReq:
+    properties:
+      birthday:
+        type: string
+      gender:
+        type: string
+      phone:
+        type: string
+    type: object
+  dto.UpdatePasswordReq:
+    properties:
+      new_password:
+        minLength: 6
+        type: string
+      old_password:
+        minLength: 6
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  dto.UpdateProfileReq:
+    properties:
+      description:
+        maxLength: 1000
+        type: string
+      mark:
+        maxLength: 200
+        type: string
+      nickname:
+        maxLength: 150
+        type: string
+      site:
+        maxLength: 500
+        type: string
+    type: object
+  dto.UpdateSocialLinkReq:
+    properties:
+      url:
+        description: null 或 "" = 删除该平台链接
+        type: string
+    type: object
+  dto.UpdateUsernameReq:
+    properties:
+      username:
+        maxLength: 155
+        minLength: 3
+        type: string
+    required:
+    - username
+    type: object
   dto.UserDetailResp:
     properties:
       avatar_url:
@@ -1638,6 +1700,39 @@ definitions:
       total:
         example: 100
         type: integer
+    type: object
+  dto.UserPublicProfileResp:
+    properties:
+      avatar_url:
+        type: string
+      birthday:
+        type: string
+      description:
+        type: string
+      display_email:
+        type: string
+      gender:
+        type: string
+      id:
+        type: integer
+      last_login_at:
+        type: string
+      mark:
+        type: string
+      nickname:
+        type: string
+      register_at:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      site:
+        type: string
+      social_links:
+        items:
+          $ref: '#/definitions/dto.UserSocialLinkResp'
+        type: array
     type: object
   dto.UserResp:
     properties:
@@ -4575,6 +4670,33 @@ paths:
       summary: 获取全部用户列表
       tags:
       - 用户
+  /users/{id}:
+    get:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserPublicProfileResp'
+              type: object
+        "404":
+          description: 用户不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 获取用户公开详情
+      tags:
+      - 用户
   /users/me:
     get:
       consumes:
@@ -4620,6 +4742,27 @@ paths:
       summary: 更新当前用户信息
       tags:
       - 用户
+  /users/me/email/display:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 展示设置
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.EmailDisplayReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 设置展示邮箱
+      tags:
+      - 用户
   /users/me/login-time:
     post:
       consumes:
@@ -4633,6 +4776,131 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 记录当前用户登录时间
+      tags:
+      - 用户
+  /users/me/meta:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 扩展信息
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateMetaReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserDetailResp'
+              type: object
+      summary: 更新用户扩展信息
+      tags:
+      - 用户
+  /users/me/password:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 密码信息
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdatePasswordReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 修改密码
+      tags:
+      - 用户
+  /users/me/profile:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 更新资料
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProfileReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserDetailResp'
+              type: object
+      summary: 更新用户基本资料
+      tags:
+      - 用户
+  /users/me/social/{platform}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 平台标识
+        in: path
+        name: platform
+        required: true
+        type: string
+      - description: 链接信息
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateSocialLinkReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserDetailResp'
+              type: object
+      summary: 更新社交链接
+      tags:
+      - 用户
+  /users/me/username:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 新用户名
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateUsernameReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 修改用户名
       tags:
       - 用户
   /users/recent:
