@@ -6,6 +6,11 @@ Go 1.25+ 个人博客后端 API，模块 `github.com/vpt/blog-backend`。本文�
 
 Gin、GORM/MySQL、zap、viper、jwt/v5、bcrypt、go-redis、AWS SDK S3（Garage）、swaggo/swag。
 
+## Git 提交
+
+- 提交前阅读 `.agents/skills/git-commit/SKILL.md`，按其格式写 message。
+- `commit-msg` 钩子（`tools/commitmsg`）会强制校验，不合规直接拒绝。克隆后执行一次 `make hooks` 启用。
+
 ## 目录职责
 
 ```text

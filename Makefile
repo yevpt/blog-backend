@@ -4,7 +4,13 @@ BINARY := bin/blog-server
 MAIN := ./cmd/server
 SWAG_DIRS := $(MAIN),./internal/handler,./internal/dto,./pkg/response
 
-.PHONY: run build swag test lint tidy clean
+.PHONY: run build swag test lint tidy clean hooks
+
+# 启用 git hooks（commit message 校验）；克隆后执行一次
+hooks:
+	git config core.hooksPath .githooks
+	@chmod +x .githooks/* 2>/dev/null || true
+	@echo "git hooks 已启用（core.hooksPath=.githooks）"
 
 # 本地开发启动（需安装 air：go install github.com/air-verse/air@latest）
 dev:

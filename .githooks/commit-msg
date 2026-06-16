@@ -1,0 +1,7 @@
+#!/bin/sh
+# commit message 格式校验。通过 `make hooks`（git config core.hooksPath .githooks）启用。
+# 临时跳过：SKIP_GIT_HOOKS=1 git commit ...
+[ "$SKIP_GIT_HOOKS" = "1" ] && exit 0
+
+GO="$(command -v go || echo /Users/vpt/.g/go/bin/go)"
+exec "$GO" run ./tools/commitmsg "$1"
