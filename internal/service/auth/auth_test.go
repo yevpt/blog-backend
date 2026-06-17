@@ -206,6 +206,61 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, authservice.ErrUserNotFound)
 }
 
+func TestAuthService_AdminLogin_Success(t *testing.T) {
+	svc, repo, _, mr, _, _ := setupService(t)
+	defer mr.Close()
+
+	rawPwd := "password123"
+	hashedBytes, _ := bcrypt.GenerateFromPassword([]byte(rawPwd), bcrypt.MinCost)
+	nickname := "Root"
+
+	gomock.InOrder(
+		repo.EXPECT().FindByUsername("root").Return(&model.User{
+			Base:     model.Base{ID: 7},
+			Username: "root",
+			Password: string(hashedBytes),
+			Nickname: &nickname,
+			Status:   1,
+		}, nil),
+		repo.EXPECT().FindRolesByUserID(uint(7)).Return([]string{roles.AdminRole}, nil),
+		repo.EXPECT().UpdateLastLoginAt(uint(7)).Return(nil),
+	)
+
+	resp, err := svc.AdminLogin(&dto.AdminLoginReq{
+		Username: "root",
+		Password: rawPwd,
+	}, "127.0.0.1")
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.AccessToken)
+	assert.NotEmpty(t, resp.RefreshToken)
+	assert.Equal(t, "root", resp.User.Username)
+	assert.Equal(t, []string{roles.AdminRole}, resp.User.Roles)
+}
+
+func TestAuthService_AdminLogin_RejectsNonAdmin(t *testing.T) {
+	svc, repo, _, mr, _, _ := setupService(t)
+	defer mr.Close()
+
+	rawPwd := "password123"
+	hashedBytes, _ := bcrypt.GenerateFromPassword([]byte(rawPwd), bcrypt.MinCost)
+
+	gomock.InOrder(
+		repo.EXPECT().FindByUsername("alice").Return(&model.User{
+			Base:     model.Base{ID: 9},
+			Username: "alice",
+			Password: string(hashedBytes),
+			Status:   1,
+		}, nil),
+		repo.EXPECT().FindRolesByUserID(uint(9)).Return([]string{roles.NormalRole}, nil),
+	)
+
+	_, err := svc.AdminLogin(&dto.AdminLoginReq{
+		Username: "alice",
+		Password: rawPwd,
+	}, "127.0.0.1")
+	assert.ErrorIs(t, err, authservice.ErrAdminRequired)
+}
+
 func TestAuthService_Refresh_Success(t *testing.T) {
 	svc, _, _, mr, _, _ := setupService(t)
 	defer mr.Close()

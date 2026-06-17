@@ -64,6 +64,29 @@ func TestUserRepository_FindByIdentifier_NotFound(t *testing.T) {
 	assert.Nil(t, user)
 }
 
+func TestUserRepository_FindByUsername_OnlyMatchesUsername(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at",
+		"username", "password", "nickname", "email", "phone",
+		"site", "avatar_url", "mark", "status", "last_login_at",
+	}).AddRow(8, nil, nil, nil, "admin", "hashed", nil, "admin@example.com", nil, nil, nil, nil, 1, nil)
+
+	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
+		WithArgs("admin", 1).
+		WillReturnRows(rows)
+
+	user, err := repo.FindByUsername("admin")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, uint(8), user.ID)
+	assert.Equal(t, "admin", user.Username)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserRepository_ExistsByEmail_True(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()

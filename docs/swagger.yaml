@@ -1,5 +1,15 @@
 basePath: /
 definitions:
+  dto.AdminLoginReq:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
   dto.ArticleDetailResp:
     properties:
       categories:
@@ -1901,6 +1911,45 @@ paths:
       summary: 删除文章
       tags:
       - 文章管理
+  /admin/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 管理页入口登录，仅支持用户名和密码；成功后返回 access token、refresh token 和用户信息，非管理员拒绝登录。
+      parameters:
+      - description: 管理后台登录请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminLoginReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登录成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.LoginResp'
+              type: object
+        "401":
+          description: 账号不存在或密码错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 账号已被禁用或非管理员
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 管理后台登录
+      tags:
+      - 认证
   /admin/categories:
     post:
       consumes:

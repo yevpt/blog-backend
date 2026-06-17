@@ -153,6 +153,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/auth/login": {
+            "post": {
+                "description": "管理页入口登录，仅支持用户名和密码；成功后返回 access token、refresh token 和用户信息，非管理员拒绝登录。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "管理后台登录",
+                "parameters": [
+                    {
+                        "description": "管理后台登录请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminLoginReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "登录成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.LoginResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "账号不存在或密码错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "账号已被禁用或非管理员",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/categories": {
             "post": {
                 "description": "管理员新增分类；父分类字段仅预留，当前不处理父子层级。",
@@ -5083,6 +5147,21 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.AdminLoginReq": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ArticleDetailResp": {
             "type": "object",
             "properties": {

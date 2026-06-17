@@ -22,6 +22,8 @@ type UserDetailAggregate struct {
 type UserRepository interface {
 	// FindByIdentifier 支持 username / email / phone 三合一查询；未找到时返回 nil, nil
 	FindByIdentifier(identifier string) (*model.User, error)
+	// FindByUsername 仅按 username 查询；未找到时返回 nil, nil
+	FindByUsername(username string) (*model.User, error)
 	// FindByID 按主键查询；未找到时返回 nil, nil
 	FindByID(id uint) (*model.User, error)
 	// FindDetailByID 查询用户详情聚合，包含角色、扩展资料、偏好设置和社交链接。
@@ -69,6 +71,16 @@ func (r *userRepo) FindByIdentifier(identifier string) (*model.User, error) {
 	err := r.db.Where("username = ? OR email = ? OR phone = ?", identifier, identifier, identifier).
 		First(&user).Error
 	// GORM 查不到记录时返回 ErrRecordNotFound，转换为 nil, nil 让调用方用 if user == nil 判断
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &user, err
+}
+
+func (r *userRepo) FindByUsername(username string) (*model.User, error) {
+	var user model.User
+	// 管理后台入口只允许用户名登录，避免邮箱或手机号绕过入口语义。
+	err := r.db.Where("username = ?", username).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

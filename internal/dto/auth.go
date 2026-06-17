@@ -20,6 +20,12 @@ type LoginReq struct {
 	Password   string `json:"password" binding:"required"`
 }
 
+// AdminLoginReq 管理后台登录请求，仅允许使用用户名和密码。
+type AdminLoginReq struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // RefreshReq 刷新 token 请求
 type RefreshReq struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`

@@ -269,6 +269,7 @@ func registerPublicRoutes(
 	r.POST("/auth/send-code", middleware.RateLimitStrict(redisClient), handlers.auth.SendCode)
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
+	r.POST("/admin/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.AdminLogin)
 	r.POST("/auth/refresh", handlers.auth.Refresh)
 	r.GET("/oauth/providers", handlers.oauth.Providers)
 	r.GET("/oauth/:source/authorize", middleware.RateLimitNormal(redisClient), middleware.OptionalAuth(jwtManager), handlers.oauth.Authorize)

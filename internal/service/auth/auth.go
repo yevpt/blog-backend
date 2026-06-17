@@ -28,6 +28,7 @@ var (
 	ErrWrongPassword     = errors.New("密码错误")
 	ErrInvalidCredential = errors.New("账号或密码错误")
 	ErrUserDisabled      = errors.New("账号已被禁用")
+	ErrAdminRequired     = errors.New("仅管理员可登录管理后台")
 	ErrInvalidToken      = errors.New("token 无效或已过期")
 	// ErrTooManyRequests 短期发送频率超限，区别于日频次耗尽的 ErrDailyLimitExceeded
 	ErrTooManyRequests = errors.New("发送过于频繁，请稍后再试")
@@ -50,6 +51,8 @@ type AuthService interface {
 	Register(req *dto.RegisterReq) (*dto.UserResp, error)
 	// Login 三合一登录（username / email / phone），用户不存在时仍执行 bcrypt 防止时序攻击
 	Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error)
+	// AdminLogin 管理后台登录，仅允许 username + password，且用户必须持有管理员角色
+	AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error)
 	// Refresh 用 refresh token 同时换发新的 access + refresh token（token rotation）
 	Refresh(refreshToken string) (*dto.TokenResp, error)
 }
@@ -242,6 +245,64 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 	}
 
 	// 组装登录响应，含双 token 和用户基本信息
+	return &dto.LoginResp{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    7200,
+		User: dto.UserResp{
+			ID:       user.ID,
+			Username: user.Username,
+			Email:    user.Email,
+			Nickname: user.Nickname,
+			Roles:    userRoles,
+		},
+	}, nil
+}
+
+func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
+	// 管理后台入口只按 username 查询，不接受邮箱或手机号作为登录标识。
+	user, err := s.repo.FindByUsername(req.Username)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		bcrypt.CompareHashAndPassword(dummyHashForTimingProtection, []byte(req.Password))
+		return nil, ErrUserNotFound
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		return nil, ErrWrongPassword
+	}
+	if user.Status != 1 {
+		return nil, ErrUserDisabled
+	}
+
+	// 先读取角色并校验管理员权限，非管理员不签发管理后台登录 token。
+	userRoles, err := s.repo.FindRolesByUserID(user.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !roles.HasPermission(userRoles, roles.AdminRole) {
+		return nil, ErrAdminRequired
+	}
+
+	userId := int64(user.ID)
+	accessToken, err := s.jwt.GenerateAccess(userId)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := s.jwt.GenerateRefresh(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.UpdateLastLoginAt(user.ID)
+	if s.cache != nil {
+		go func() {
+			_ = s.cache.Invalidate(context.Background(), userId)
+		}()
+	}
+
 	return &dto.LoginResp{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,

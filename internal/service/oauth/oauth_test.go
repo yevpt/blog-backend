@@ -96,6 +96,7 @@ type fakeUserRepo struct {
 }
 
 func (r *fakeUserRepo) FindByIdentifier(identifier string) (*model.User, error) { return r.user, nil }
+func (r *fakeUserRepo) FindByUsername(username string) (*model.User, error)     { return r.user, nil }
 func (r *fakeUserRepo) FindByID(id uint) (*model.User, error)                   { return r.user, nil }
 func (r *fakeUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
@@ -116,15 +117,15 @@ func (r *fakeUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error
 func (r *fakeUserRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
-func (r *fakeUserRepo) Update(id uint, updates map[string]interface{}) error { return nil }
-func (r *fakeUserRepo) DeleteSocialLink(userID uint, platform string) error  { return nil }
+func (r *fakeUserRepo) Update(id uint, updates map[string]any) error        { return nil }
+func (r *fakeUserRepo) DeleteSocialLink(userID uint, platform string) error { return nil }
 func (r *fakeUserRepo) ExistsByUsername(username string, excludeID uint) (bool, error) {
 	return false, nil
 }
-func (r *fakeUserRepo) UpdatePassword(userID uint, hashedPassword string) error      { return nil }
-func (r *fakeUserRepo) UpsertMeta(userID uint, updates map[string]interface{}) error { return nil }
-func (r *fakeUserRepo) UpsertSocialLink(userID uint, platform, url string) error     { return nil }
-func (r *fakeUserRepo) UpsertUserSetting(userID uint, updates map[string]interface{}) error {
+func (r *fakeUserRepo) UpdatePassword(userID uint, hashedPassword string) error  { return nil }
+func (r *fakeUserRepo) UpsertMeta(userID uint, updates map[string]any) error     { return nil }
+func (r *fakeUserRepo) UpsertSocialLink(userID uint, platform, url string) error { return nil }
+func (r *fakeUserRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
 

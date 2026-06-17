@@ -19,13 +19,16 @@ import (
 
 // stubAuthService 测试用 stub
 type stubAuthService struct {
-	sendCodeErr  error
-	registerResp *dto.UserResp
-	registerErr  error
-	loginResp    *dto.LoginResp
-	loginErr     error
-	refreshResp  *dto.TokenResp
-	refreshErr   error
+	sendCodeErr    error
+	registerResp   *dto.UserResp
+	registerErr    error
+	loginResp      *dto.LoginResp
+	loginErr       error
+	adminLoginReq  *dto.AdminLoginReq
+	adminLoginResp *dto.LoginResp
+	adminLoginErr  error
+	refreshResp    *dto.TokenResp
+	refreshErr     error
 }
 
 func (s *stubAuthService) SendCode(email, ip string, captchaToken string) error {
@@ -36,6 +39,10 @@ func (s *stubAuthService) Register(req *dto.RegisterReq) (*dto.UserResp, error) 
 }
 func (s *stubAuthService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
 	return s.loginResp, s.loginErr
+}
+func (s *stubAuthService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
+	s.adminLoginReq = req
+	return s.adminLoginResp, s.adminLoginErr
 }
 func (s *stubAuthService) Refresh(rt string) (*dto.TokenResp, error) {
 	return s.refreshResp, s.refreshErr
@@ -48,6 +55,7 @@ func newTestRouter(svc authservice.AuthService) *gin.Engine {
 	r.POST("/auth/send-code", h.SendCode)
 	r.POST("/auth/register", h.Register)
 	r.POST("/auth/login", h.Login)
+	r.POST("/admin/auth/login", h.AdminLogin)
 	r.POST("/auth/refresh", h.Refresh)
 	return r
 }
@@ -268,6 +276,47 @@ func TestAuthHandler_Login_InternalError(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	assert.Equal(t, response.CodeServerError, resp.Code)
 	assert.Equal(t, "服务器内部错误", resp.Message)
+}
+
+func TestAuthHandler_AdminLogin_SuccessUsesUsernamePassword(t *testing.T) {
+	stub := &stubAuthService{
+		adminLoginResp: &dto.LoginResp{
+			AccessToken:  "access.token.here",
+			RefreshToken: "refresh.token.here",
+			ExpiresIn:    7200,
+		},
+	}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"username": "root", "password": "password123",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "root", stub.adminLoginReq.Username)
+}
+
+func TestAuthHandler_AdminLogin_RejectsNonAdmin(t *testing.T) {
+	stub := &stubAuthService{adminLoginErr: authservice.ErrAdminRequired}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"username": "alice", "password": "password123",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/auth/login", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeForbidden, resp.Code)
+	assert.Equal(t, "仅管理员可登录管理后台", resp.Message)
 }
 
 func TestAuthHandler_Refresh_InvalidToken(t *testing.T) {

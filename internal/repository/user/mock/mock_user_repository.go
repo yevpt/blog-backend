@@ -144,6 +144,21 @@ func (mr *MockUserRepositoryMockRecorder) FindByIdentifier(identifier any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByIdentifier", reflect.TypeOf((*MockUserRepository)(nil).FindByIdentifier), identifier)
 }
 
+// FindByUsername mocks base method.
+func (m *MockUserRepository) FindByUsername(username string) (*model.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindByUsername", username)
+	ret0, _ := ret[0].(*model.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindByUsername indicates an expected call of FindByUsername.
+func (mr *MockUserRepositoryMockRecorder) FindByUsername(username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByUsername", reflect.TypeOf((*MockUserRepository)(nil).FindByUsername), username)
+}
+
 // FindDetailByID mocks base method.
 func (m *MockUserRepository) FindDetailByID(id uint) (*user.UserDetailAggregate, error) {
 	m.ctrl.T.Helper()

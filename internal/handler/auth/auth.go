@@ -124,6 +124,47 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// AdminLogin 管理后台登录，仅允许用户名和密码，且账号必须持有管理员角色。
+// @Summary 管理后台登录
+// @Description 管理页入口登录，仅支持用户名和密码；成功后返回 access token、refresh token 和用户信息，非管理员拒绝登录。
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body dto.AdminLoginReq true "管理后台登录请求"
+// @Success 200 {object} response.Response{data=dto.LoginResp} "登录成功"
+// @Failure 401 {object} response.Response "账号不存在或密码错误"
+// @Failure 403 {object} response.Response "账号已被禁用或非管理员"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /admin/auth/login [post]
+func (h *AuthHandler) AdminLogin(c *gin.Context) {
+	var req dto.AdminLoginReq
+	if !reqbind.JSON(c, &req) {
+		return
+	}
+
+	resp, err := h.svc.AdminLogin(&req, c.ClientIP())
+	if err != nil {
+		switch {
+		case errors.Is(err, authservice.ErrUserNotFound):
+			response.AuthFailed(c, authservice.ErrUserNotFound.Error())
+			return
+		case errors.Is(err, authservice.ErrWrongPassword):
+			response.AuthFailed(c, authservice.ErrWrongPassword.Error())
+			return
+		case errors.Is(err, authservice.ErrUserDisabled):
+			response.ForbiddenWithMessage(c, authservice.ErrUserDisabled.Error())
+			return
+		case errors.Is(err, authservice.ErrAdminRequired):
+			response.ForbiddenWithMessage(c, authservice.ErrAdminRequired.Error())
+			return
+		}
+		response.ServerError(c)
+		return
+	}
+
+	response.Success(c, resp)
+}
+
 // Refresh 用 refresh token 换发新的 access + refresh token（token rotation），旧 refresh 自动失效。
 // @Summary 刷新令牌
 // @Description 使用 refresh token 换发新的 access token 和 refresh token；旧 refresh token 会在业务层失效。
