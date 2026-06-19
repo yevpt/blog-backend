@@ -48,6 +48,33 @@ func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver s
 	}, nil
 }
 
+func adminArticlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver storage.ObjectURLResolver) (*dto.AdminArticlePageResp, error) {
+	items := make([]dto.AdminArticleListItemResp, 0, len(result.Articles))
+	for _, aggregate := range result.Articles {
+		item := adminArticleListItemToDTO(&aggregate)
+		if err := resolveListItemCoverURL(&item.ArticleListItemResp, objectURLResolver); err != nil {
+			return nil, err
+		}
+		if err := resolveArticleUserAvatarURL(item.User, objectURLResolver); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	pages := 0
+	if result.Total > 0 && result.PageSize > 0 {
+		pages = int(math.Ceil(float64(result.Total) / float64(result.PageSize)))
+	}
+
+	return &dto.AdminArticlePageResp{
+		Total:    result.Total,
+		Pages:    pages,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+		List:     items,
+	}, nil
+}
+
 func resolveURL(value *string, objectURLResolver storage.ObjectURLResolver) (*string, error) {
 	// 未注入对象存储解析器时保留原值，方便纯业务测试和局部调用。
 	if objectURLResolver == nil || value == nil {
@@ -249,6 +276,17 @@ func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleLi
 	}
 }
 
+func adminArticleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.AdminArticleListItemResp {
+	item := dto.AdminArticleListItemResp{
+		ArticleListItemResp: articleListItemToDTO(aggregate),
+	}
+	if aggregate.Article.DeletedAt.Valid {
+		deletedAt := aggregate.Article.DeletedAt.Time
+		item.DeletedAt = &deletedAt
+	}
+	return item
+}
+
 func articleUserToDTO(user *model.User) *dto.ArticleUserResp {
 	if user == nil {
 		return nil
@@ -334,6 +372,35 @@ func normalizeArticlePageSize(pageSize int) int {
 		return 50
 	}
 	return pageSize
+}
+
+func normalizeArticleSearch(search *string) *string {
+	if search == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*search)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func normalizeArticleSortBy(sortBy *string) string {
+	if sortBy == nil {
+		return ""
+	}
+	return strings.TrimSpace(*sortBy)
+}
+
+func normalizeArticleSortOrder(sortOrder *string) string {
+	if sortOrder == nil {
+		return "desc"
+	}
+	order := strings.TrimSpace(*sortOrder)
+	if order == "" {
+		return "desc"
+	}
+	return order
 }
 
 func uniqueUintIDs(ids []uint) []uint {

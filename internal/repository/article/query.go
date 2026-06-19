@@ -42,6 +42,40 @@ func (r *articleRepo) ListPublic(filter ArticleListFilter, viewerID *uint) (*Art
 	}, nil
 }
 
+func (r *articleRepo) ListAdmin(filter ArticleListFilter) (*ArticlePageResult, error) {
+	page, pageSize := normalizeArticlePage(filter.Page, filter.PageSize)
+
+	var total int64
+	if err := r.adminArticleQuery(filter).
+		Distinct("article.id").
+		Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	var articles []model.Article
+	offset := (page - 1) * pageSize
+	listQuery := r.applyAdminArticleOrder(r.adminArticleQuery(filter), filter)
+	if err := listQuery.
+		Select("article.*").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&articles).Error; err != nil {
+		return nil, err
+	}
+
+	aggregates, err := r.attachArticleCollections(articles, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ArticlePageResult{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Articles: aggregates,
+	}, nil
+}
+
 func (r *articleRepo) ListPublicIDs() ([]uint, error) {
 	var ids []uint
 	err := r.db.Model(&model.Article{}).
@@ -113,7 +147,25 @@ func (r *articleRepo) publicArticleQuery(filter ArticleListFilter) *gorm.DB {
 			Joins("JOIN tag ON tag.id = article_tag.tag_id AND tag.deleted_at IS NULL").
 			Where("article_tag.tag_id = ?", *filter.TagID)
 	}
-	return query
+	return applyArticleSearch(query, filter.Search)
+}
+
+func (r *articleRepo) adminArticleQuery(filter ArticleListFilter) *gorm.DB {
+	query := r.db.Unscoped().Model(&model.Article{})
+	if filter.Recommend != nil && *filter.Recommend {
+		query = query.Joins("JOIN article_recommend ON article_recommend.article_id = article.id AND article_recommend.deleted_at IS NULL")
+	}
+	if filter.CategoryID != nil {
+		query = query.Joins("JOIN article_category ON article_category.article_id = article.id").
+			Joins("JOIN category ON category.id = article_category.category_id AND category.deleted_at IS NULL").
+			Where("article_category.category_id = ?", *filter.CategoryID)
+	}
+	if filter.TagID != nil {
+		query = query.Joins("JOIN article_tag ON article_tag.article_id = article.id").
+			Joins("JOIN tag ON tag.id = article_tag.tag_id AND tag.deleted_at IS NULL").
+			Where("article_tag.tag_id = ?", *filter.TagID)
+	}
+	return applyArticleSearch(query, filter.Search)
 }
 
 func (r *articleRepo) applyArticleOrder(query *gorm.DB, filter ArticleListFilter) *gorm.DB {
@@ -123,6 +175,47 @@ func (r *articleRepo) applyArticleOrder(query *gorm.DB, filter ArticleListFilter
 			Order("article.id DESC")
 	}
 	return query.Order("article.created_at DESC").Order("article.id DESC")
+}
+
+func (r *articleRepo) applyAdminArticleOrder(query *gorm.DB, filter ArticleListFilter) *gorm.DB {
+	direction := articleSortDirection(filter.SortOrder)
+	switch filter.SortBy {
+	case "created_at":
+		return query.Order("article.created_at " + direction).Order("article.id DESC")
+	case "updated_at":
+		return query.Order("article.updated_at " + direction).Order("article.id DESC")
+	case "category":
+		return query.
+			Joins("LEFT JOIN article_category sort_article_category ON sort_article_category.article_id = article.id").
+			Joins("LEFT JOIN category sort_category ON sort_category.id = sort_article_category.category_id AND sort_category.deleted_at IS NULL").
+			Order("sort_category.name " + direction).
+			Order("sort_category.id " + direction).
+			Order("article.id DESC")
+	case "status":
+		return query.Order("article.status " + direction).Order("article.id DESC")
+	case "recommended":
+		return query.
+			Joins("LEFT JOIN article_recommend sort_article_recommend ON sort_article_recommend.article_id = article.id AND sort_article_recommend.deleted_at IS NULL").
+			Order("sort_article_recommend.article_id IS NOT NULL " + direction).
+			Order("article.id DESC")
+	default:
+		return r.applyArticleOrder(query, filter)
+	}
+}
+
+func articleSortDirection(sortOrder string) string {
+	if sortOrder == "asc" {
+		return "ASC"
+	}
+	return "DESC"
+}
+
+func applyArticleSearch(query *gorm.DB, search *string) *gorm.DB {
+	if search == nil {
+		return query
+	}
+	keyword := "%" + *search + "%"
+	return query.Where("(article.title LIKE ? OR article.short_content LIKE ?)", keyword, keyword)
 }
 
 func (r *articleRepo) findArticleDetail(id uint, viewerID *uint, publicOnly bool) (*ArticleAggregate, error) {

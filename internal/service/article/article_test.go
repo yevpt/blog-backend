@@ -34,6 +34,57 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	assert.Equal(t, 50, resp.PageSize)
 }
 
+func TestArticleService_ListAdmin_IncludesDeletedAtAndAllStatuses(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil, nil)
+
+	deletedAt := time.Now()
+	search := "Go"
+	sortBy := "status"
+	sortOrder := "asc"
+	repo.EXPECT().
+		ListAdmin(articlerepo.ArticleListFilter{Page: 1, PageSize: 50, Search: &search, SortBy: sortBy, SortOrder: sortOrder}).
+		Return(&articlerepo.ArticlePageResult{
+			Total:    2,
+			Page:     1,
+			PageSize: 50,
+			Articles: []articlerepo.ArticleAggregate{{
+				Article: model.Article{
+					Base:   model.Base{ID: 1},
+					Title:  "Hidden",
+					UserID: 7,
+					Status: 0,
+				},
+			}, {
+				Article: model.Article{
+					Base: model.Base{
+						ID:        2,
+						DeletedAt: gorm.DeletedAt{Time: deletedAt, Valid: true},
+					},
+					Title:  "Deleted",
+					UserID: 7,
+					Status: 1,
+				},
+			}},
+		}, nil)
+
+	resp, err := svc.ListAdmin(dto.AdminArticleListReq{
+		ArticleListReq: dto.ArticleListReq{Page: -1, PageSize: 99, Search: &search},
+		SortBy:         &sortBy,
+		SortOrder:      &sortOrder,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), resp.Total)
+	assert.Equal(t, 1, resp.Page)
+	assert.Equal(t, 50, resp.PageSize)
+	require.Len(t, resp.List, 2)
+	assert.Equal(t, uint8(0), resp.List[0].Status)
+	require.NotNil(t, resp.List[1].DeletedAt)
+	assert.Equal(t, deletedAt, *resp.List[1].DeletedAt)
+}
+
 func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -498,4 +549,99 @@ type stubObjectURLResolver struct {
 func (r *stubObjectURLResolver) ObjectURL(_ context.Context, objectName string) (string, error) {
 	r.objectNames = append(r.objectNames, objectName)
 	return r.urls[objectName], nil
+}
+
+func TestArticleService_PermanentDeleteMovesArticleAssetsBeforeDeleting(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	store := &stubArticleObjectStore{}
+	svc := articleservice.NewArticleService(repo, store, nil)
+
+	deletedAt := time.Now()
+	cover := "articles/9/cover/cover.jpg"
+	content := `![a](articles/9/images/a.png) <img src="https://garage.example.com/blog/articles/9/images/b.webp?sign=1"> ![other](articles/10/images/keep.png)`
+	repo.EXPECT().
+		FindDeletedByID(uint(9)).
+		Return(&model.Article{
+			Base:        model.Base{ID: 9, DeletedAt: gorm.DeletedAt{Time: deletedAt, Valid: true}},
+			CoverImgUrl: &cover,
+			Content:     content,
+			UserID:      7,
+		}, nil)
+	repo.EXPECT().
+		PermanentDelete(uint(9), uint(7)).
+		Return(&model.Article{Base: model.Base{ID: 9}}, nil)
+
+	resp, err := svc.PermanentDelete(9, 7)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, uint(9), resp.ID)
+	assert.Equal(t, []objectMove{{
+		source: "articles/9/cover/cover.jpg",
+		target: "deleted/articles/9/cover/cover.jpg",
+	}, {
+		source: "articles/9/images/a.png",
+		target: "deleted/articles/9/images/a.png",
+	}, {
+		source: "articles/9/images/b.webp",
+		target: "deleted/articles/9/images/b.webp",
+	}}, store.moves)
+}
+
+func TestArticleService_PermanentDeleteRequiresAuthor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, &stubArticleObjectStore{}, nil)
+
+	repo.EXPECT().
+		FindDeletedByID(uint(9)).
+		Return(&model.Article{
+			Base:   model.Base{ID: 9, DeletedAt: gorm.DeletedAt{Time: time.Now(), Valid: true}},
+			UserID: 7,
+		}, nil)
+
+	_, err := svc.PermanentDelete(9, 8)
+
+	require.ErrorIs(t, err, articleservice.ErrArticleNoDeletePermission)
+}
+
+func TestArticleService_PermanentDeleteRequiresSoftDeletedArticle(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, &stubArticleObjectStore{}, nil)
+
+	repo.EXPECT().
+		FindDeletedByID(uint(9)).
+		Return(&model.Article{Base: model.Base{ID: 9}, UserID: 7}, nil)
+
+	_, err := svc.PermanentDelete(9, 7)
+
+	require.ErrorIs(t, err, articleservice.ErrArticleNotSoftDeleted)
+}
+
+type objectMove struct {
+	source string
+	target string
+}
+
+type stubArticleObjectStore struct {
+	stubObjectURLResolver
+	moves []objectMove
+}
+
+func (s *stubArticleObjectStore) ObjectExists(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (s *stubArticleObjectStore) PutObject(context.Context, string, []byte, string) error {
+	return nil
+}
+
+func (s *stubArticleObjectStore) MoveObject(_ context.Context, sourceName string, targetName string) error {
+	s.moves = append(s.moves, objectMove{source: sourceName, target: targetName})
+	return nil
 }

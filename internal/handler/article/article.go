@@ -47,6 +47,7 @@ func (h *ArticleHandler) ListIDs(c *gin.Context) {
 // @Param recommend query bool false "是否只查询推荐文章"
 // @Param category_id query int false "分类 ID"
 // @Param tag_id query int false "标签 ID"
+// @Param search query string false "搜索关键词，匹配标题和摘要"
 // @Success 200 {object} response.Response{data=dto.ArticlePageResp} "统一响应；code=0 表示查询成功，已登录时列表项包含 is_liked，code=400 表示参数错误"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /articles [get]
@@ -57,6 +58,35 @@ func (h *ArticleHandler) ListPublic(c *gin.Context) {
 	}
 
 	resp, err := h.svc.ListPublic(req, optionalUserID(c))
+	writeArticleResponse(c, resp, err)
+}
+
+// ListAdmin 分页查询管理端文章。
+// @Summary 分页查询管理端文章
+// @Description 管理员按页码分页查询所有文章，包含隐藏、公开、加密和已软删除文章；软删除文章返回 deleted_at。
+// @Tags 文章管理
+// @Accept json
+// @Produce json
+// @Param page query int false "页码，从 1 开始"
+// @Param page_size query int false "每页数量，默认 10，最大 50"
+// @Param recommend query bool false "是否只查询推荐文章"
+// @Param category_id query int false "分类 ID"
+// @Param tag_id query int false "标签 ID"
+// @Param search query string false "搜索关键词，匹配标题和摘要"
+// @Param sort_by query string false "排序字段：created_at、updated_at、category、status、recommended"
+// @Param sort_order query string false "排序方向：asc 或 desc，默认 desc"
+// @Success 200 {object} response.Response{data=dto.AdminArticlePageResp} "统一响应；code=0 表示查询成功，code=400 表示参数错误"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "权限不足"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /admin/articles [get]
+func (h *ArticleHandler) ListAdmin(c *gin.Context) {
+	var req dto.AdminArticleListReq
+	if !reqbind.Query(c, &req) {
+		return
+	}
+
+	resp, err := h.svc.ListAdmin(req)
 	writeArticleResponse(c, resp, err)
 }
 
@@ -206,6 +236,33 @@ func (h *ArticleHandler) Delete(c *gin.Context) {
 	writeArticleResponse(c, resp, err)
 }
 
+// PermanentDelete 真实删除已软删除文章。
+// @Summary 真实删除已软删除文章
+// @Description 管理员且为文章作者时，迁移文章资源到 deleted 前缀，并真实删除文章及其关联数据。
+// @Tags 文章管理
+// @Accept json
+// @Produce json
+// @Param id path int true "文章 ID"
+// @Success 200 {object} response.Response{data=dto.ArticleDeleteResp} "统一响应；code=0 表示删除成功，code=400 表示文章尚未软删除"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "权限不足或不是文章作者"
+// @Failure 404 {object} response.Response "文章不存在"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /admin/articles/{id}/permanent [delete]
+func (h *ArticleHandler) PermanentDelete(c *gin.Context) {
+	id, ok := bindUintPath(c, "id")
+	if !ok {
+		return
+	}
+	userID, ok := requiredUserID(c)
+	if !ok {
+		return
+	}
+
+	resp, err := h.svc.PermanentDelete(id, userID)
+	writeArticleResponse(c, resp, err)
+}
+
 func bindUintPath(c *gin.Context, name string) (uint, bool) {
 	return reqbind.PathUint(c, name, "文章 ID")
 }
@@ -237,7 +294,15 @@ func writeArticleResponse(c *gin.Context, data any, err error) {
 		response.NotFound(c)
 		return
 	}
+	if errors.Is(err, articleservice.ErrArticleNoDeletePermission) {
+		response.Forbidden(c)
+		return
+	}
 	if errors.Is(err, articleservice.ErrArticlePasswordRequired) || errors.Is(err, articleservice.ErrArticleCategoryRequired) {
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+	if errors.Is(err, articleservice.ErrArticleNotSoftDeleted) {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}

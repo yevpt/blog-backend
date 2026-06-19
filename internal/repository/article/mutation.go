@@ -63,6 +63,70 @@ func (r *articleRepo) SoftDelete(id uint) (*model.Article, error) {
 	return &article, err
 }
 
+func (r *articleRepo) FindDeletedByID(id uint) (*model.Article, error) {
+	var article model.Article
+	err := r.db.Unscoped().Where("id = ?", id).First(&article).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &article, nil
+}
+
+func (r *articleRepo) PermanentDelete(id uint, operatorID uint) (*model.Article, error) {
+	var article model.Article
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Unscoped().
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", id).
+			First(&article).Error; err != nil {
+			return err
+		}
+		if article.UserID != operatorID {
+			return ErrNoDeletePermission
+		}
+		if !article.DeletedAt.Valid {
+			return ErrArticleNotSoftDeleted
+		}
+
+		commentIDs, err := articleCommentIDs(tx, id)
+		if err != nil {
+			return err
+		}
+		replyIDs, err := articleReplyIDs(tx, commentIDs)
+		if err != nil {
+			return err
+		}
+		if err := hardDeleteArticleMessages(tx, id, commentIDs); err != nil {
+			return err
+		}
+		if err := hardDeleteArticleLikes(tx, id, commentIDs, replyIDs); err != nil {
+			return err
+		}
+		if err := hardDeleteArticleRelations(tx, id); err != nil {
+			return err
+		}
+		if len(commentIDs) > 0 {
+			if err := tx.Unscoped().Where("comment_id IN ?", commentIDs).Delete(&model.ArticleCommentReply{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Unscoped().Where("article_id = ?", id).Delete(&model.ArticleComment{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&article).Error
+	})
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &article, nil
+}
+
 func (r *articleRepo) IncrementReadCount(id uint) (*model.Article, error) {
 	var article model.Article
 	err := r.db.Transaction(func(tx *gorm.DB) error {
@@ -82,6 +146,81 @@ func (r *articleRepo) IncrementReadCount(id uint) (*model.Article, error) {
 		return nil, nil
 	}
 	return &article, err
+}
+
+func articleCommentIDs(tx *gorm.DB, articleID uint) ([]uint, error) {
+	var ids []uint
+	err := tx.Unscoped().
+		Model(&model.ArticleComment{}).
+		Where("article_id = ?", articleID).
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
+func articleReplyIDs(tx *gorm.DB, commentIDs []uint) ([]uint, error) {
+	if len(commentIDs) == 0 {
+		return nil, nil
+	}
+	var ids []uint
+	err := tx.Unscoped().
+		Model(&model.ArticleCommentReply{}).
+		Where("comment_id IN ?", commentIDs).
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
+func hardDeleteArticleMessages(tx *gorm.DB, articleID uint, commentIDs []uint) error {
+	var messageIDs []uint
+	query := tx.Unscoped().Model(&model.Message{}).Where("article_id = ?", articleID)
+	if len(commentIDs) > 0 {
+		query = query.Or("comment_id IN ?", commentIDs)
+	}
+	if err := query.Pluck("id", &messageIDs).Error; err != nil {
+		return err
+	}
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	if err := tx.Unscoped().Where("message_id IN ?", messageIDs).Delete(&model.UserMessage{}).Error; err != nil {
+		return err
+	}
+	return tx.Unscoped().Where("id IN ?", messageIDs).Delete(&model.Message{}).Error
+}
+
+func hardDeleteArticleLikes(tx *gorm.DB, articleID uint, commentIDs []uint, replyIDs []uint) error {
+	if err := tx.Unscoped().
+		Where("target_id = ? AND type = ?", articleID, ArticleLikeType).
+		Delete(&model.UserLike{}).Error; err != nil {
+		return err
+	}
+	if len(commentIDs) > 0 {
+		if err := tx.Unscoped().
+			Where("target_id IN ? AND type = ?", commentIDs, uint8(2)).
+			Delete(&model.UserLike{}).Error; err != nil {
+			return err
+		}
+	}
+	if len(replyIDs) > 0 {
+		if err := tx.Unscoped().
+			Where("target_id IN ? AND type = ?", replyIDs, uint8(3)).
+			Delete(&model.UserLike{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hardDeleteArticleRelations(tx *gorm.DB, articleID uint) error {
+	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleCategory{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleTag{}).Error; err != nil {
+		return err
+	}
+	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleMusic{}).Error; err != nil {
+		return err
+	}
+	return tx.Unscoped().Where("article_id = ?", articleID).Delete(&model.ArticleRecommend{}).Error
 }
 
 func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate, bool, error) {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -32,6 +34,8 @@ type objectPresigner interface {
 type objectAPI interface {
 	HeadObject(ctx context.Context, in *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
 	PutObject(ctx context.Context, in *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	CopyObject(ctx context.Context, in *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error)
+	DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 }
 
 // clientImpl 保存 Garage 客户端运行所需的内部状态。
@@ -180,6 +184,41 @@ func (c *Client) putObject(ctx context.Context, objectName string, data []byte, 
 		ContentType: aws.String(contentType),
 	})
 	return err
+}
+
+func (c *Client) moveObject(ctx context.Context, sourceName string, targetName string) error {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return errors.New("对象存储客户端未初始化")
+	}
+	sourceName = normalizeObjectName(sourceName)
+	targetName = normalizeObjectName(targetName)
+	if sourceName == "" || targetName == "" {
+		return errors.New("对象名不能为空")
+	}
+	if sourceName == targetName {
+		return nil
+	}
+
+	if _, err := c.impl.objectAPI.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(c.impl.bucket),
+		Key:        aws.String(targetName),
+		CopySource: aws.String(copySource(c.impl.bucket, sourceName)),
+	}); err != nil {
+		return err
+	}
+	_, err := c.impl.objectAPI.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(c.impl.bucket),
+		Key:    aws.String(sourceName),
+	})
+	return err
+}
+
+func copySource(bucket string, key string) string {
+	parts := strings.Split(normalizeObjectName(key), "/")
+	for i := range parts {
+		parts[i] = url.PathEscape(parts[i])
+	}
+	return strings.Trim(bucket, "/") + "/" + strings.Join(parts, "/")
 }
 
 // newS3Client 创建指向 Garage endpoint 的 path-style S3 客户端。

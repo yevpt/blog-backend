@@ -75,6 +75,162 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestArticleRepository_ListAdmin_IncludesSoftDeletedArticles(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	now := time.Now()
+	deletedAt := now.Add(time.Hour)
+	articleRows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+		"short_content", "content", "user_id", "status", "comment_status",
+		"password", "read_count",
+	}).
+		AddRow(1, now, now, nil, "Hidden", nil, nil, "body", 7, 0, 1, nil, 1).
+		AddRow(2, now, now, deletedAt, "Deleted", nil, nil, "body", 7, 1, 1, nil, 2)
+
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+	mock.ExpectQuery("SELECT article\\.\\* FROM `article` ORDER BY article\\.created_at DESC,article\\.id DESC LIMIT \\?").
+		WithArgs(10).
+		WillReturnRows(articleRows)
+	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
+		WithArgs(uint8(1), uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}))
+	mock.ExpectQuery("SELECT article_id, count\\(\\*\\) as count FROM `article_comment`").
+		WithArgs(uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"article_id", "count"}))
+	mock.ExpectQuery("SELECT \\* FROM `article_recommend`").
+		WithArgs(uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "article_id", "seq",
+		}))
+	mock.ExpectQuery("SELECT article_category.article_id, category.\\* FROM `article_category` JOIN category ON category.id = article_category.category_id AND category.deleted_at IS NULL").
+		WithArgs(uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"article_id", "id", "created_at", "updated_at", "deleted_at", "parent_id",
+			"name", "url", "icon", "description", "cover_img_url", "seq",
+		}))
+	mock.ExpectQuery("SELECT article_tag.article_id, tag.\\* FROM `article_tag` JOIN tag ON tag.id = article_tag.tag_id AND tag.deleted_at IS NULL").
+		WithArgs(uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"article_id", "id", "created_at", "updated_at", "deleted_at",
+			"name", "url", "icon", "description", "cover_img_url", "seq",
+		}))
+	mock.ExpectQuery("SELECT article_music.article_id, music.\\* FROM `article_music` JOIN music ON music.id = article_music.music_id AND music.deleted_at IS NULL").
+		WithArgs(uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
+			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"lyric", "duration", "seq",
+		}))
+	expectArticleUsers(mock, 7)
+
+	result, err := repo.ListAdmin(article.ArticleListFilter{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), result.Total)
+	require.Len(t, result.Articles, 2)
+	assert.Equal(t, uint8(0), result.Articles[0].Article.Status)
+	assert.True(t, result.Articles[1].Article.DeletedAt.Valid)
+	assert.Equal(t, deletedAt, result.Articles[1].Article.DeletedAt.Time)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_ListAdmin_SearchesTitleAndShortContent(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	search := "Go"
+	likeSearch := "%Go%"
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article` WHERE \\(article.title LIKE \\? OR article.short_content LIKE \\?\\)$").
+		WithArgs(likeSearch, likeSearch).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery("SELECT article\\.\\* FROM `article` WHERE \\(article.title LIKE \\? OR article.short_content LIKE \\?\\) ORDER BY article\\.created_at DESC,article\\.id DESC LIMIT \\?").
+		WithArgs(likeSearch, likeSearch, 10).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}))
+
+	result, err := repo.ListAdmin(article.ArticleListFilter{Page: 1, PageSize: 10, Search: &search})
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), result.Total)
+	assert.Empty(t, result.Articles)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_ListAdmin_SortsBySupportedFields(t *testing.T) {
+	cases := []struct {
+		name         string
+		sortBy       string
+		sortOrder    string
+		countPattern string
+		listPattern  string
+	}{
+		{
+			name:         "created_at",
+			sortBy:       "created_at",
+			sortOrder:    "asc",
+			countPattern: "SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$",
+			listPattern:  "SELECT article\\.\\* FROM `article` ORDER BY article\\.created_at ASC,article\\.id DESC LIMIT \\?",
+		},
+		{
+			name:         "updated_at",
+			sortBy:       "updated_at",
+			sortOrder:    "desc",
+			countPattern: "SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$",
+			listPattern:  "SELECT article\\.\\* FROM `article` ORDER BY article\\.updated_at DESC,article\\.id DESC LIMIT \\?",
+		},
+		{
+			name:         "category",
+			sortBy:       "category",
+			sortOrder:    "asc",
+			countPattern: "SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$",
+			listPattern:  "SELECT article\\.\\* FROM `article` LEFT JOIN article_category sort_article_category ON sort_article_category.article_id = article.id LEFT JOIN category sort_category ON sort_category.id = sort_article_category.category_id AND sort_category.deleted_at IS NULL ORDER BY sort_category.name ASC,sort_category.id ASC,article.id DESC LIMIT \\?",
+		},
+		{
+			name:         "status",
+			sortBy:       "status",
+			sortOrder:    "asc",
+			countPattern: "SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$",
+			listPattern:  "SELECT article\\.\\* FROM `article` ORDER BY article\\.status ASC,article\\.id DESC LIMIT \\?",
+		},
+		{
+			name:         "recommended",
+			sortBy:       "recommended",
+			sortOrder:    "desc",
+			countPattern: "SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$",
+			listPattern:  "SELECT article\\.\\* FROM `article` LEFT JOIN article_recommend sort_article_recommend ON sort_article_recommend.article_id = article.id AND sort_article_recommend.deleted_at IS NULL ORDER BY sort_article_recommend.article_id IS NOT NULL DESC,article.id DESC LIMIT \\?",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, sqlDB := newMockDB(t)
+			defer sqlDB.Close()
+			repo := article.NewArticleRepository(db)
+
+			mock.ExpectQuery(tc.countPattern).
+				WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+			mock.ExpectQuery(tc.listPattern).
+				WithArgs(10).
+				WillReturnRows(sqlmock.NewRows([]string{
+					"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+					"short_content", "content", "user_id", "status", "comment_status",
+					"password", "read_count",
+				}))
+
+			result, err := repo.ListAdmin(article.ArticleListFilter{Page: 1, PageSize: 10, SortBy: tc.sortBy, SortOrder: tc.sortOrder})
+			require.NoError(t, err)
+			assert.Empty(t, result.Articles)
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
 func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
@@ -429,6 +585,76 @@ func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *t
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.Equal(t, uint(7), result.Article.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestArticleRepository_PermanentDelete_HardDeletesArticleRelations(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	now := time.Now()
+	deletedAt := now.Add(time.Minute)
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(9, now, now, deletedAt, "A", nil, nil, "body", 7, 1, 1, nil, 0))
+	mock.ExpectQuery("SELECT `id` FROM `article_comment`").
+		WithArgs(uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(21).AddRow(22))
+	mock.ExpectQuery("SELECT `id` FROM `article_comment_reply`").
+		WithArgs(uint(21), uint(22)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(31))
+	mock.ExpectQuery("SELECT `id` FROM `message`").
+		WithArgs(uint(9), uint(21), uint(22)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(41).AddRow(42))
+	mock.ExpectExec("DELETE FROM `user_message` WHERE message_id IN \\(\\?,\\?\\)").
+		WithArgs(uint(41), uint(42)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("DELETE FROM `message` WHERE id IN \\(\\?,\\?\\)").
+		WithArgs(uint(41), uint(42)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE target_id = \\? AND type = \\?").
+		WithArgs(uint(9), uint8(1)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE target_id IN \\(\\?,\\?\\) AND type = \\?").
+		WithArgs(uint(21), uint(22), uint8(2)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE target_id IN \\(\\?\\) AND type = \\?").
+		WithArgs(uint(31), uint8(3)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_category` WHERE article_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_tag` WHERE article_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_music` WHERE article_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_recommend` WHERE article_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_comment_reply` WHERE comment_id IN \\(\\?,\\?\\)").
+		WithArgs(uint(21), uint(22)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_comment` WHERE article_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("DELETE FROM `article` WHERE `article`.`id` = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	deleted, err := repo.PermanentDelete(9, 7)
+
+	require.NoError(t, err)
+	require.NotNil(t, deleted)
+	assert.Equal(t, uint(9), deleted.ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

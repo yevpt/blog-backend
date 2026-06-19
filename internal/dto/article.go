@@ -14,6 +14,17 @@ type ArticleListReq struct {
 	CategoryID *uint `form:"category_id" example:"1"`
 	// TagID 标签 ID 过滤条件。
 	TagID *uint `form:"tag_id" example:"1"`
+	// Search 搜索关键词，匹配标题和摘要。
+	Search *string `form:"search" example:"Go"`
+}
+
+// AdminArticleListReq 管理端文章分页查询参数。
+type AdminArticleListReq struct {
+	ArticleListReq
+	// SortBy 排序字段：created_at、updated_at、category、status、recommended。
+	SortBy *string `form:"sort_by" binding:"omitempty,oneof=created_at updated_at category status recommended" example:"created_at"`
+	// SortOrder 排序方向：asc 或 desc。
+	SortOrder *string `form:"sort_order" binding:"omitempty,oneof=asc desc" example:"desc"`
 }
 
 // ArticleSaveReq 新增或更新文章请求。
@@ -172,6 +183,27 @@ type ArticlePageResp struct {
 	List []ArticleListItemResp `json:"list"`
 }
 
+// AdminArticleListItemResp 管理端文章列表项响应，包含软删除时间。
+type AdminArticleListItemResp struct {
+	ArticleListItemResp
+	// DeletedAt 软删除时间；未删除时为空。
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
+// AdminArticlePageResp 管理端文章分页响应。
+type AdminArticlePageResp struct {
+	// Total 总记录数。
+	Total int64 `json:"total" example:"100"`
+	// Pages 总页数。
+	Pages int `json:"pages" example:"10"`
+	// Page 当前页码。
+	Page int `json:"page" example:"1"`
+	// PageSize 每页数量。
+	PageSize int `json:"page_size" example:"10"`
+	// List 文章列表。
+	List []AdminArticleListItemResp `json:"list"`
+}
+
 // ArticleIDsResp 文章 ID 列表响应。
 type ArticleIDsResp struct {
 	// IDs 文章 ID 列表。
@@ -192,4 +224,10 @@ type ArticleViewResp struct {
 	ID uint `json:"id" example:"1"`
 	// ViewCount 阅读数量。
 	ViewCount uint `json:"view_count" example:"21"`
+}
+
+// ArticleDeleteResp 文章删除响应。
+type ArticleDeleteResp struct {
+	// ID 文章 ID。
+	ID uint `json:"id" example:"1"`
 }

@@ -31,6 +31,10 @@ func (s *stubArticleServiceForTag) ListPublic(req dto.ArticleListReq, viewerID *
 	return s.res, s.err
 }
 
+func (s *stubArticleServiceForTag) ListAdmin(req dto.AdminArticleListReq) (*dto.AdminArticlePageResp, error) {
+	return nil, nil
+}
+
 func (s *stubArticleServiceForTag) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
 	return nil, nil
 }
@@ -44,6 +48,10 @@ func (s *stubArticleServiceForTag) Save(req dto.ArticleSaveReq, authorID uint) (
 }
 
 func (s *stubArticleServiceForTag) Delete(id uint) (*dto.ArticleDetailResp, error) {
+	return nil, nil
+}
+
+func (s *stubArticleServiceForTag) PermanentDelete(id uint, operatorID uint) (*dto.ArticleDeleteResp, error) {
 	return nil, nil
 }
 

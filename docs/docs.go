@@ -16,6 +16,107 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/admin/articles": {
+            "get": {
+                "description": "管理员按页码分页查询所有文章，包含隐藏、公开、加密和已软删除文章；软删除文章返回 deleted_at。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "分页查询管理端文章",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "是否只查询推荐文章",
+                        "name": "recommend",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "分类 ID",
+                        "name": "category_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "标签 ID",
+                        "name": "tag_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索关键词，匹配标题和摘要",
+                        "name": "search",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序字段：created_at、updated_at、category、status、recommended",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序方向：asc 或 desc，默认 desc",
+                        "name": "sort_order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminArticlePageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
             "post": {
                 "description": "管理员新增或更新文章，并同步分类、标签、音乐和推荐关系。",
                 "consumes": [
@@ -134,6 +235,74 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/articles/{id}/permanent": {
+            "delete": {
+                "description": "管理员且为文章作者时，迁移文章资源到 deleted 前缀，并真实删除文章及其关联数据。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "真实删除已软删除文章",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功，code=400 表示文章尚未软删除",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ArticleDeleteResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足或不是文章作者",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -1243,6 +1412,12 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "标签 ID",
                         "name": "tag_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索关键词，匹配标题和摘要",
+                        "name": "search",
                         "in": "query"
                     }
                 ],
@@ -5147,6 +5322,129 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.AdminArticleListItemResp": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "description": "Category 文章所属分类（每篇文章归属一个分类）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ArticleRelationResp"
+                        }
+                    ]
+                },
+                "comment_count": {
+                    "description": "CommentCount 评论数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "comment_status": {
+                    "description": "CommentStatus 评论状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "description": "DeletedAt 软删除时间；未删除时为空。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞；未登录时恒为 false。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_recommended": {
+                    "description": "IsRecommended 是否为推荐文章。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "short_content": {
+                    "description": "ShortContent 文章摘要。",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status 文章状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "title": {
+                    "description": "Title 文章标题。",
+                    "type": "string",
+                    "example": "文章标题"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User 作者摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ArticleUserResp"
+                        }
+                    ]
+                },
+                "user_id": {
+                    "description": "UserID 作者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.AdminArticlePageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 文章列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminArticleListItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
         "dto.AdminLoginReq": {
             "type": "object",
             "required": [
@@ -5159,6 +5457,16 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ArticleDeleteResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },

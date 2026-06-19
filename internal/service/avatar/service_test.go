@@ -44,6 +44,10 @@ func (s *fakeObjectStore) PutObject(ctx context.Context, objectName string, data
 	return s.putErr
 }
 
+func (s *fakeObjectStore) MoveObject(ctx context.Context, sourceName string, targetName string) error {
+	return nil
+}
+
 func TestService_SaveRemoteAvatar_CompressesAndUploads(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")

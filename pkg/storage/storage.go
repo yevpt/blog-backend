@@ -66,6 +66,12 @@ func (c *Client) PutObject(ctx context.Context, objectName string, data []byte, 
 	return c.putObject(ctx, objectName, data, contentType)
 }
 
+// MoveObject 将对象移动到新的 key。
+func (c *Client) MoveObject(ctx context.Context, sourceName string, targetName string) error {
+	// Garage/S3 没有原子重命名，内部使用同 bucket 复制后删除源对象。
+	return c.moveObject(ctx, sourceName, targetName)
+}
+
 // S3 返回底层 S3 客户端，供需要直接操作对象存储的 service 使用。
 func (c *Client) S3() *s3.Client {
 	// 只暴露已初始化的底层客户端，不允许外部改写 Client 状态。
@@ -103,6 +109,11 @@ func (r *CachedObjectURLResolver) ObjectExists(ctx context.Context, objectName s
 // PutObject 将对象内容写入 Garage。
 func (r *CachedObjectURLResolver) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {
 	return r.impl.client.PutObject(ctx, objectName, data, contentType)
+}
+
+// MoveObject 将对象移动到新的 key。
+func (r *CachedObjectURLResolver) MoveObject(ctx context.Context, sourceName string, targetName string) error {
+	return r.impl.client.MoveObject(ctx, sourceName, targetName)
 }
 
 // CDNSigner 使用腾讯云 CDN TypeD 兼容算法生成私有读 URL。

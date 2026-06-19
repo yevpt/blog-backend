@@ -16,19 +16,23 @@ import (
 )
 
 var (
-	ErrArticleNotFound         = errors.New("文章不存在")
-	ErrArticlePasswordRequired = errors.New("加密文章必须填写阅读密码")
-	ErrArticleCategoryRequired = errors.New("文章至少需要一个分类")
+	ErrArticleNotFound           = errors.New("文章不存在")
+	ErrArticlePasswordRequired   = errors.New("加密文章必须填写阅读密码")
+	ErrArticleCategoryRequired   = errors.New("文章至少需要一个分类")
+	ErrArticleNoDeletePermission = errors.New("无权删除文章")
+	ErrArticleNotSoftDeleted     = errors.New("文章尚未软删除")
 )
 
 // ArticleService 文章业务接口，负责文章查询、保存、点赞和阅读计数。
 type ArticleService interface {
 	ListIDs() (*dto.ArticleIDsResp, error)
 	ListPublic(req dto.ArticleListReq, viewerID *uint) (*dto.ArticlePageResp, error)
+	ListAdmin(req dto.AdminArticleListReq) (*dto.AdminArticlePageResp, error)
 	GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
 	GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
 	Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error)
 	Delete(id uint) (*dto.ArticleDetailResp, error)
+	PermanentDelete(id uint, operatorID uint) (*dto.ArticleDeleteResp, error)
 	View(id uint, visitorID string) (*dto.ArticleViewResp, error)
 	IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error)
 	ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error)
@@ -60,12 +64,31 @@ func (s *articleService) ListPublic(req dto.ArticleListReq, viewerID *uint) (*dt
 		Recommend:  req.Recommend,
 		CategoryID: req.CategoryID,
 		TagID:      req.TagID,
+		Search:     normalizeArticleSearch(req.Search),
 	}
 	result, err := s.repo.ListPublic(filter, viewerID)
 	if err != nil {
 		return nil, err
 	}
 	return articlePageToDTO(result, s.objectURLResolver)
+}
+
+func (s *articleService) ListAdmin(req dto.AdminArticleListReq) (*dto.AdminArticlePageResp, error) {
+	filter := articlerepo.ArticleListFilter{
+		Page:       normalizeArticlePage(req.Page),
+		PageSize:   normalizeArticlePageSize(req.PageSize),
+		Recommend:  req.Recommend,
+		CategoryID: req.CategoryID,
+		TagID:      req.TagID,
+		Search:     normalizeArticleSearch(req.Search),
+		SortBy:     normalizeArticleSortBy(req.SortBy),
+		SortOrder:  normalizeArticleSortOrder(req.SortOrder),
+	}
+	result, err := s.repo.ListAdmin(filter)
+	if err != nil {
+		return nil, err
+	}
+	return adminArticlePageToDTO(result, s.objectURLResolver)
 }
 
 func (s *articleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
@@ -142,6 +165,34 @@ func (s *articleService) Delete(id uint) (*dto.ArticleDetailResp, error) {
 	return deletedArticleToDTO(article), nil
 }
 
+func (s *articleService) PermanentDelete(id uint, operatorID uint) (*dto.ArticleDeleteResp, error) {
+	article, err := s.repo.FindDeletedByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if article == nil {
+		return nil, ErrArticleNotFound
+	}
+	if article.UserID != operatorID {
+		return nil, ErrArticleNoDeletePermission
+	}
+	if !article.DeletedAt.Valid {
+		return nil, ErrArticleNotSoftDeleted
+	}
+	if err := s.moveDeletedArticleAssets(context.Background(), article); err != nil {
+		return nil, err
+	}
+
+	deleted, err := s.repo.PermanentDelete(id, operatorID)
+	if err != nil {
+		return nil, mapArticleDeleteError(err)
+	}
+	if deleted == nil {
+		return nil, ErrArticleNotFound
+	}
+	return &dto.ArticleDeleteResp{ID: deleted.ID}, nil
+}
+
 func (s *articleService) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
 	// 访客去重：同一访客 24 小时内只计一次。
 	isNew := true
@@ -195,4 +246,14 @@ func (s *articleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp,
 		return nil, ErrArticleNotFound
 	}
 	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: aggregate.LikeCount}, nil
+}
+
+func mapArticleDeleteError(err error) error {
+	if errors.Is(err, articlerepo.ErrNoDeletePermission) {
+		return ErrArticleNoDeletePermission
+	}
+	if errors.Is(err, articlerepo.ErrArticleNotSoftDeleted) {
+		return ErrArticleNotSoftDeleted
+	}
+	return err
 }

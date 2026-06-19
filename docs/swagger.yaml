@@ -1,5 +1,95 @@
 basePath: /
 definitions:
+  dto.AdminArticleListItemResp:
+    properties:
+      category:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleRelationResp'
+        description: Category 文章所属分类（每篇文章归属一个分类）。
+      comment_count:
+        description: CommentCount 评论数量。
+        example: 2
+        type: integer
+      comment_status:
+        description: CommentStatus 评论状态。
+        example: 1
+        type: integer
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      deleted_at:
+        description: DeletedAt 软删除时间；未删除时为空。
+        type: string
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞；未登录时恒为 false。
+        example: false
+        type: boolean
+      is_recommended:
+        description: IsRecommended 是否为推荐文章。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 20
+        type: integer
+      short_content:
+        description: ShortContent 文章摘要。
+        type: string
+      status:
+        description: Status 文章状态。
+        example: 1
+        type: integer
+      title:
+        description: Title 文章标题。
+        example: 文章标题
+        type: string
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleUserResp'
+        description: User 作者摘要。
+      user_id:
+        description: UserID 作者用户 ID。
+        example: 1
+        type: integer
+    type: object
+  dto.AdminArticlePageResp:
+    properties:
+      list:
+        description: List 文章列表。
+        items:
+          $ref: '#/definitions/dto.AdminArticleListItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
   dto.AdminLoginReq:
     properties:
       password:
@@ -9,6 +99,13 @@ definitions:
     required:
     - password
     - username
+    type: object
+  dto.ArticleDeleteResp:
+    properties:
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
     type: object
   dto.ArticleDetailResp:
     properties:
@@ -1827,6 +1924,70 @@ info:
   version: "1.0"
 paths:
   /admin/articles:
+    get:
+      consumes:
+      - application/json
+      description: 管理员按页码分页查询所有文章，包含隐藏、公开、加密和已软删除文章；软删除文章返回 deleted_at。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 是否只查询推荐文章
+        in: query
+        name: recommend
+        type: boolean
+      - description: 分类 ID
+        in: query
+        name: category_id
+        type: integer
+      - description: 标签 ID
+        in: query
+        name: tag_id
+        type: integer
+      - description: 搜索关键词，匹配标题和摘要
+        in: query
+        name: search
+        type: string
+      - description: 排序字段：created_at、updated_at、category、status、recommended
+        in: query
+        name: sort_by
+        type: string
+      - description: 排序方向：asc 或 desc，默认 desc
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminArticlePageResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询管理端文章
+      tags:
+      - 文章管理
     post:
       consumes:
       - application/json
@@ -1909,6 +2070,48 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 删除文章
+      tags:
+      - 文章管理
+  /admin/articles/{id}/permanent:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员且为文章作者时，迁移文章资源到 deleted 前缀，并真实删除文章及其关联数据。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功，code=400 表示文章尚未软删除
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ArticleDeleteResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足或不是文章作者
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 真实删除已软删除文章
       tags:
       - 文章管理
   /admin/auth/login:
@@ -2586,6 +2789,10 @@ paths:
         in: query
         name: tag_id
         type: integer
+      - description: 搜索关键词，匹配标题和摘要
+        in: query
+        name: search
+        type: string
       produces:
       - application/json
       responses:

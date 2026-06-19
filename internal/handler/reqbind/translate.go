@@ -39,6 +39,8 @@ var (
 		"refresh_token":   "刷新令牌",
 		"role_id":         "角色 ID",
 		"seq":             "排序值",
+		"sort_by":         "排序字段",
+		"sort_order":      "排序方向",
 		"status":          "状态",
 		"tag_id":          "标签 ID",
 		"target_id":       "评论目标 ID",

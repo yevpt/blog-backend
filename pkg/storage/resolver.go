@@ -10,9 +10,15 @@ type ObjectURLResolver interface {
 	ObjectURL(ctx context.Context, objectName string) (string, error)
 }
 
+// ObjectMover 提供同 bucket 内对象移动能力。
+type ObjectMover interface {
+	MoveObject(ctx context.Context, sourceName string, targetName string) error
+}
+
 // ObjectStore 提供对象访问 URL、存在性检查和写入能力。
 type ObjectStore interface {
 	ObjectURLResolver
+	ObjectMover
 	ObjectExists(ctx context.Context, objectName string) (bool, error)
 	PutObject(ctx context.Context, objectName string, data []byte, contentType string) error
 }

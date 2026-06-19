@@ -353,8 +353,10 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	// 管理员路由统一挂在 /admin 前缀下。
 	admin := r.Group("/admin", middleware.Auth(jwtManager, handlers.userCache), middleware.RequireRole(roles.AdminRole))
 	admin.GET("/test", handlers.test.Admin)
+	admin.GET("/articles", handlers.article.ListAdmin)
 	admin.POST("/articles", handlers.article.Save)
 	admin.DELETE("/articles/:id", handlers.article.Delete)
+	admin.DELETE("/articles/:id/permanent", handlers.article.PermanentDelete)
 	admin.POST("/categories", handlers.category.Create)
 	admin.PUT("/categories/:id", handlers.category.Update)
 	admin.DELETE("/categories/:id", handlers.category.Delete)

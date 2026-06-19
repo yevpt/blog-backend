@@ -20,18 +20,24 @@ import (
 )
 
 type stubArticleService struct {
-	listReq    dto.ArticleListReq
-	listViewer *uint
-	listResp   *dto.ArticlePageResp
-	listErr    error
-	detailResp *dto.ArticleDetailResp
-	detailErr  error
-	saveReq    dto.ArticleSaveReq
-	saveUserID uint
-	saveResp   *dto.ArticleDetailResp
-	saveErr    error
-	likeResp   *dto.ArticleLikeResp
-	likeErr    error
+	listReq       dto.ArticleListReq
+	listViewer    *uint
+	listResp      *dto.ArticlePageResp
+	listErr       error
+	adminListReq  dto.AdminArticleListReq
+	adminListResp *dto.AdminArticlePageResp
+	adminListErr  error
+	detailResp    *dto.ArticleDetailResp
+	detailErr     error
+	deleteResp    *dto.ArticleDeleteResp
+	deleteErr     error
+	deleteUserID  uint
+	saveReq       dto.ArticleSaveReq
+	saveUserID    uint
+	saveResp      *dto.ArticleDetailResp
+	saveErr       error
+	likeResp      *dto.ArticleLikeResp
+	likeErr       error
 }
 
 func (s *stubArticleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -41,6 +47,10 @@ func (s *stubArticleService) ListPublic(req dto.ArticleListReq, viewerID *uint) 
 	s.listReq = req
 	s.listViewer = viewerID
 	return s.listResp, s.listErr
+}
+func (s *stubArticleService) ListAdmin(req dto.AdminArticleListReq) (*dto.AdminArticlePageResp, error) {
+	s.adminListReq = req
+	return s.adminListResp, s.adminListErr
 }
 func (s *stubArticleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
 	return s.detailResp, s.detailErr
@@ -55,6 +65,10 @@ func (s *stubArticleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.A
 }
 func (s *stubArticleService) Delete(id uint) (*dto.ArticleDetailResp, error) {
 	return s.detailResp, s.detailErr
+}
+func (s *stubArticleService) PermanentDelete(id uint, operatorID uint) (*dto.ArticleDeleteResp, error) {
+	s.deleteUserID = operatorID
+	return s.deleteResp, s.deleteErr
 }
 func (s *stubArticleService) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
 	return &dto.ArticleViewResp{ID: id, ViewCount: 2}, nil
@@ -75,6 +89,7 @@ func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
 		h.ListPublic(c)
 	})
+	r.GET("/admin/articles", h.ListAdmin)
 	r.GET("/articles/:id", h.GetPublicDetail)
 	r.POST("/articles/:id/like", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
@@ -84,7 +99,43 @@ func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		h.Save(c)
 	})
+	r.DELETE("/admin/articles/:id/permanent", func(c *gin.Context) {
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		h.PermanentDelete(c)
+	})
 	return r
+}
+
+func TestArticleHandler_ListAdmin_Success(t *testing.T) {
+	stub := &stubArticleService{
+		adminListResp: &dto.AdminArticlePageResp{
+			Page:     1,
+			PageSize: 10,
+			List: []dto.AdminArticleListItemResp{{
+				ArticleListItemResp: dto.ArticleListItemResp{ID: 9, Title: "Deleted"},
+			}},
+		},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/articles?page=1&page_size=10&recommend=false&search=Go&sort_by=category&sort_order=asc", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 1, stub.adminListReq.Page)
+	assert.Equal(t, 10, stub.adminListReq.PageSize)
+	require.NotNil(t, stub.adminListReq.Recommend)
+	assert.False(t, *stub.adminListReq.Recommend)
+	require.NotNil(t, stub.adminListReq.Search)
+	assert.Equal(t, "Go", *stub.adminListReq.Search)
+	require.NotNil(t, stub.adminListReq.SortBy)
+	assert.Equal(t, "category", *stub.adminListReq.SortBy)
+	require.NotNil(t, stub.adminListReq.SortOrder)
+	assert.Equal(t, "asc", *stub.adminListReq.SortOrder)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
 }
 
 func TestArticleHandler_ListPublic_Success(t *testing.T) {
@@ -221,4 +272,18 @@ func TestArticleHandler_ToggleLike_ReturnsLatestLikeState(t *testing.T) {
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestArticleHandler_PermanentDelete_UsesClaimsUserID(t *testing.T) {
+	stub := &stubArticleService{
+		deleteResp: &dto.ArticleDeleteResp{ID: 9},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("DELETE", "/admin/articles/9/permanent", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(7), stub.deleteUserID)
 }

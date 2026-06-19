@@ -29,16 +29,25 @@ type fakePresigner struct {
 }
 
 type fakeObjectAPI struct {
-	headErr    error
-	putErr     error
-	headBucket string
-	headKey    string
-	putBucket  string
-	putKey     string
-	putType    string
-	putBody    []byte
-	headCalls  int
-	putCalls   int
+	headErr      error
+	putErr       error
+	copyErr      error
+	deleteErr    error
+	headBucket   string
+	headKey      string
+	putBucket    string
+	putKey       string
+	putType      string
+	putBody      []byte
+	copyBucket   string
+	copyKey      string
+	copySource   string
+	deleteBucket string
+	deleteKey    string
+	headCalls    int
+	putCalls     int
+	copyCalls    int
+	deleteCalls  int
 }
 
 func (f *fakeObjectAPI) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
@@ -64,6 +73,27 @@ func (f *fakeObjectAPI) PutObject(_ context.Context, in *s3.PutObjectInput, _ ..
 		return nil, f.putErr
 	}
 	return &s3.PutObjectOutput{}, nil
+}
+
+func (f *fakeObjectAPI) CopyObject(_ context.Context, in *s3.CopyObjectInput, _ ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
+	f.copyCalls++
+	f.copyBucket = aws.ToString(in.Bucket)
+	f.copyKey = aws.ToString(in.Key)
+	f.copySource = aws.ToString(in.CopySource)
+	if f.copyErr != nil {
+		return nil, f.copyErr
+	}
+	return &s3.CopyObjectOutput{}, nil
+}
+
+func (f *fakeObjectAPI) DeleteObject(_ context.Context, in *s3.DeleteObjectInput, _ ...func(*s3.Options)) (*s3.DeleteObjectOutput, error) {
+	f.deleteCalls++
+	f.deleteBucket = aws.ToString(in.Bucket)
+	f.deleteKey = aws.ToString(in.Key)
+	if f.deleteErr != nil {
+		return nil, f.deleteErr
+	}
+	return &s3.DeleteObjectOutput{}, nil
 }
 
 func (f *fakePresigner) PresignGetObject(
@@ -247,4 +277,20 @@ func TestClientPutObject_UploadsBytes(t *testing.T) {
 	assert.Equal(t, "avatar/user/a.jpg", api.putKey)
 	assert.Equal(t, "image/jpeg", api.putType)
 	assert.Equal(t, []byte("image"), api.putBody)
+}
+
+func TestClientMoveObject_CopiesThenDeletesSource(t *testing.T) {
+	api := &fakeObjectAPI{}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	err := client.MoveObject(context.Background(), "/articles/9/images/a b.png", "deleted/articles/9/images/a b.png")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, api.copyCalls)
+	assert.Equal(t, 1, api.deleteCalls)
+	assert.Equal(t, "blog", api.copyBucket)
+	assert.Equal(t, "deleted/articles/9/images/a b.png", api.copyKey)
+	assert.Equal(t, "blog/articles/9/images/a%20b.png", api.copySource)
+	assert.Equal(t, "blog", api.deleteBucket)
+	assert.Equal(t, "articles/9/images/a b.png", api.deleteKey)
 }

@@ -30,6 +30,10 @@ func (s *stubArticleServiceForRouter) ListPublic(req dto.ArticleListReq, viewerI
 	return &dto.ArticlePageResp{Page: 1, PageSize: 10, List: []dto.ArticleListItemResp{}}, nil
 }
 
+func (s *stubArticleServiceForRouter) ListAdmin(req dto.AdminArticleListReq) (*dto.AdminArticlePageResp, error) {
+	return &dto.AdminArticlePageResp{Page: 1, PageSize: 10, List: []dto.AdminArticleListItemResp{}}, nil
+}
+
 func (s *stubArticleServiceForRouter) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
 	return &dto.ArticleDetailResp{}, nil
 }
@@ -44,6 +48,10 @@ func (s *stubArticleServiceForRouter) Save(req dto.ArticleSaveReq, authorID uint
 
 func (s *stubArticleServiceForRouter) Delete(id uint) (*dto.ArticleDetailResp, error) {
 	return &dto.ArticleDetailResp{}, nil
+}
+
+func (s *stubArticleServiceForRouter) PermanentDelete(id uint, operatorID uint) (*dto.ArticleDeleteResp, error) {
+	return &dto.ArticleDeleteResp{ID: id}, nil
 }
 
 func (s *stubArticleServiceForRouter) View(id uint, visitorID string) (*dto.ArticleViewResp, error) {
