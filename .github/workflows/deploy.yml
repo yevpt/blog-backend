@@ -101,9 +101,9 @@ jobs:
           REMOTE_PORT="${REMOTE_PORT:-22}"
           DEPLOY_DIR="${DEPLOY_DIR:-/opt/blog-backend}"
           ssh -i ~/.ssh/deploy_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
-            "mkdir -p '$DEPLOY_DIR/docker' '$DEPLOY_DIR/config'"
-          scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" docker/docker-compose.yml \
-            "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/docker/docker-compose.yml"
+            "mkdir -p '$DEPLOY_DIR/config'"
+          scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" docker-compose.yml \
+            "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/docker-compose.yml"
           scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" config/config.yaml config/config.prod.yaml \
             "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/config/"
 
@@ -120,17 +120,18 @@ jobs:
              REGISTRY_PASSWORD='${{ secrets.TENCENT_REGISTRY_PASSWORD }}' \
              bash -s" <<'REMOTE'
           set -euo pipefail
-          cd "$DEPLOY_DIR/docker"
+          cd "$DEPLOY_DIR"
 
-          if [ ! -f ../.env ]; then
+          if [ ! -f .env ]; then
             echo "缺少 $DEPLOY_DIR/.env，请先在服务器创建生产环境变量文件。"
             exit 1
           fi
 
-          printf 'BLOG_SERVER_IMAGE=%s\n' "$IMAGE_REF" > .deploy.env
+          # 镜像地址按 commit SHA 内联注入，compose 自动读取同目录 .env 中的密钥
+          export BLOG_SERVER_IMAGE="$IMAGE_REF"
           printf '%s\n' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
-          docker compose --env-file ../.env --env-file .deploy.env pull blog-server
-          docker compose --env-file ../.env --env-file .deploy.env up -d --remove-orphans blog-server
-          docker compose --env-file ../.env --env-file .deploy.env ps blog-server
+          docker compose pull blog-server
+          docker compose up -d --remove-orphans blog-server
+          docker compose ps blog-server
           docker image prune -f
           REMOTE

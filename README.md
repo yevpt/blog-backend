@@ -52,15 +52,29 @@ make run
 
 ### 生产部署
 
+镜像由 GitHub Actions 构建并推送到腾讯云镜像仓库，服务器只负责拉取运行。
+MySQL / Redis 由宝塔管理，容器内只跑 `blog-server`。
+
+服务器部署目录（`DEPLOY_DIR`，如 `/root/docker/blog-backend`）为扁平结构：
+
+```
+config/             # config.yaml + config.prod.yaml（CI 自动同步）
+docker-compose.yml  # CI 自动同步
+.env                # 密钥，首次手动创建（见 .env.example）
+```
+
+首次部署只需在服务器创建 `.env`：
+
 ```bash
-# 1. 填写敏感变量
-cp .env.example .env
+# 在 DEPLOY_DIR 下
+cp .env.example .env   # 然后填写真实密钥
+```
 
-# 2. 启动所有服务（MySQL + Redis + blog-server）
-docker-compose up -d
+之后推送到 `main` 由 CI 自动部署（按 commit SHA 拉取精确镜像）。
+需要手动起停时，进入 DEPLOY_DIR 一行搞定：
 
-# 日常更新
-git pull && docker-compose build blog-server && docker-compose up -d --no-deps blog-server
+```bash
+docker compose up -d   # 同目录 .env 自动加载，镜像默认回退到 :latest
 ```
 
 ## 项目结构

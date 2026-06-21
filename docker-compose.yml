@@ -1,6 +1,7 @@
 # 博客后端 API 服务
 # MySQL 和 Redis 由宝塔管理，此处只跑 blog-server
-# 使用前：cp .env.example .env 并填写连接信息
+# 部署目录扁平结构：docker-compose.yml / config/ / .env 同级
+# 首次使用：cp .env.example .env 并填写密钥，之后 docker compose up -d 即可
 
 services:
   blog-server:
@@ -10,24 +11,28 @@ services:
     environment:
       APP_ENV: prod
       # 宝塔管理的 MySQL 连接信息
-      BLOG_DB_HOST: ${DB_HOST}
+      BLOG_DB_HOST: ${DB_HOST:-localhost}
       BLOG_DB_PORT: ${DB_PORT:-3306}
       BLOG_DB_NAME: ${DB_NAME:-blog_prod}
       BLOG_DB_USER: ${DB_USER:-blog}
-      BLOG_DB_PASSWORD: ${DB_PASSWORD}
+      BLOG_DB_PASSWORD: ${DB_PASSWORD:-}
       # 宝塔管理的 Redis 连接信息
-      BLOG_REDIS_ADDR: ${REDIS_HOST}:${REDIS_PORT:-6379}
+      BLOG_REDIS_ADDR: ${REDIS_HOST:-localhost}:${REDIS_PORT:-6379}
       BLOG_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # 其他配置
-      BLOG_JWT_SECRET: ${JWT_SECRET}
+      BLOG_JWT_SECRET: ${JWT_SECRET:-}
       BLOG_GARAGE_ENDPOINT: ${STORAGE_ENDPOINT:-}
       BLOG_GARAGE_BUCKET: ${STORAGE_BUCKET:-}
       BLOG_GARAGE_REGION: ${STORAGE_REGION:-}
       BLOG_GARAGE_ACCESSKEYID: ${STORAGE_ACCESS_KEY:-}
       BLOG_GARAGE_SECRETACCESSKEY: ${STORAGE_SECRET_KEY:-}
       BLOG_GARAGE_CDN: ${STORAGE_CDN:-false}
+      BLOG_CDN_HOST: ${CDN_HOST:-}
+      BLOG_CDN_SECRET: ${CDN_SECRET:-}
+      BLOG_CDN_SIGN_QUERY_NAME: ${CDN_SIGN_QUERY_NAME:-a}
+      BLOG_CDN_TIMESTAMP_QUERY_NAME: ${CDN_TIMESTAMP_QUERY_NAME:-b}
     volumes:
-      - ../config:/app/config:ro
+      - ./config:/app/config:ro
     ports:
       - "${SERVER_PORT:-8080}:8080"
     logging:
