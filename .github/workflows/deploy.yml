@@ -131,7 +131,13 @@ jobs:
           export BLOG_SERVER_IMAGE="$IMAGE_REF"
           printf '%s\n' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
           docker compose pull blog-server
-          docker compose up -d --remove-orphans blog-server
+          # 正常 up；若因历史遗留容器（旧 compose 项目名）占用固定 container_name 而冲突，
+          # 强制移除同名散落容器后重试一次，避免人工 SSH 清理
+          if ! docker compose up -d --remove-orphans blog-server; then
+            echo "up 失败，移除同名遗留容器后重试…"
+            docker rm -f blog-server 2>/dev/null || true
+            docker compose up -d --remove-orphans blog-server
+          fi
           docker compose ps blog-server
           docker image prune -f
           REMOTE

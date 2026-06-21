@@ -3,6 +3,8 @@
 # 部署目录扁平结构：docker-compose.yml / config/ / .env 同级
 # 首次使用：cp .env.example .env 并填写密钥，之后 docker compose up -d 即可
 
+name: blog-backend
+
 services:
   blog-server:
     image: ${BLOG_SERVER_IMAGE:-krccr.ccs.tencentyun.com/yevpt/blog-backend:latest}
