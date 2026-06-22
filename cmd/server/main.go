@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+
 	"github.com/vpt/blog-backend/internal/bootstrap"
 	"github.com/vpt/blog-backend/internal/router"
 )
@@ -40,6 +42,9 @@ func main() {
 
 	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
 	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg)
+
+	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
+	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, zapLogger)
 
 	// 启动服务：监听配置端口，启动失败时终止进程。
 	bootstrap.MustRunHTTP(r, cfg, zapLogger)

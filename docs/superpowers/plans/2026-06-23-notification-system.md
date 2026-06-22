@@ -668,7 +668,7 @@ git commit -m "feat(notification): 新增邮件摘要发送器"
 - Modify: `cmd/server/main.go`
 - Test: `internal/worker/notification/*_test.go`
 
-- [ ] **Step 1: Write worker tests**
+- [x] **Step 1: Write worker tests**
 
 Cover:
 
@@ -680,7 +680,7 @@ Run: `go test ./internal/worker/notification -count=1`
 
 Expected: FAIL until worker exists.
 
-- [ ] **Step 2: Implement worker runner**
+- [x] **Step 2: Implement worker runner**
 
 Loops:
 
@@ -691,11 +691,11 @@ sender every send_interval_seconds
 lease recovery is implicit by lease queries
 ```
 
-- [ ] **Step 3: Wire server startup**
+- [x] **Step 3: Wire server startup**
 
 Start workers after router dependencies are built. Use context cancellation where available.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -706,7 +706,7 @@ go test ./cmd/server -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/worker/notification internal/bootstrap/bootstrap.go cmd/server/main.go

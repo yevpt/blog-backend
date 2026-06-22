@@ -1,11 +1,18 @@
 package bootstrap
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
+	notificationworker "github.com/vpt/blog-backend/internal/worker/notification"
 	"github.com/vpt/blog-backend/pkg/cache"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/database"
@@ -75,6 +82,57 @@ func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.Obje
 		log.Fatalf("对象存储初始化失败: %v", err)
 	}
 	return objectURLResolver
+}
+
+// StartNotificationWorker 组装并在后台启动通知 worker（dispatcher/planner/sender）。
+// 未启用时（email.worker_enabled=false）静默跳过；worker 依赖 MySQL 租约，进程退出后可恢复。
+func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, zapLogger *zap.Logger) {
+	if !cfg.Email.WorkerEnabled {
+		zapLogger.Info("通知 worker 未启用，跳过启动")
+		return
+	}
+
+	// 组装数据访问与读侧适配器。
+	repo := notificationrepo.NewRepository(db)
+	directory := notificationrepo.NewDirectory(db)
+
+	// 组装三条处理链：事件分发、邮件聚合、邮件发送。
+	dispatcher := notificationservice.NewDispatcher(
+		repo,
+		notificationservice.NewRecipientResolver(directory),
+		notificationservice.NewPreferenceResolver(repo),
+		directory,
+	)
+	quota := notificationservice.NewQuotaService(repo, notificationservice.QuotaConfig{
+		SiteDailySafeLimit: cfg.Email.SiteDailySafeLimit,
+		MaxPerMinute:       cfg.Email.MaxPerMinute,
+		MaxPerHour:         cfg.Email.MaxPerHour,
+	})
+	planner := notificationservice.NewEmailPlanner(repo, quota, directory)
+	sender := notificationservice.NewEmailSender(repo, quota, directory, mailer, cfg.Email.Provider)
+
+	// 组装 worker 运行配置：发送间隔来自配置，分发/聚合用稳健的固定间隔。
+	worker := notificationworker.NewWorker(notificationworker.Config{
+		Enabled:          cfg.Email.WorkerEnabled,
+		PlannerEnabled:   cfg.Email.PlannerEnabled,
+		WorkerID:         notificationWorkerID(),
+		BatchSize:        cfg.Email.WorkerBatchSize,
+		DispatchInterval: 5 * time.Second,
+		PlanInterval:     30 * time.Second,
+		SendInterval:     time.Duration(cfg.Email.SendIntervalSeconds) * time.Second,
+	}, dispatcher.DispatchOnce, planner.PlanOnce, sender.SendOnce, zapLogger)
+
+	zapLogger.Info("通知 worker 启动")
+	go worker.Run(ctx)
+}
+
+// notificationWorkerID 生成 worker 标识，用于任务租约 locked_by，便于多实例区分。
+func notificationWorkerID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown"
+	}
+	return host + "-" + strconv.Itoa(os.Getpid())
 }
 
 // InitGin 设置 Gin 运行模式并创建空引擎，具体中间件由 router.Setup 注册。
