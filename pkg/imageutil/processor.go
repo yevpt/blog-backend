@@ -12,6 +12,7 @@ import (
 
 	xdraw "golang.org/x/image/draw"
 
+	_ "golang.org/x/image/webp"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
