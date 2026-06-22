@@ -69,7 +69,7 @@
 - Modify: `cmd/migrate/main.go`
 - Test: `pkg/config/config_test.go`
 
-- [ ] **Step 1: Add config tests**
+- [x] **Step 1: Add config tests**
 
 Cover these fields in `pkg/config/config_test.go`:
 
@@ -90,7 +90,7 @@ Run: `go test ./pkg/config -count=1`
 
 Expected: FAIL until config fields are added.
 
-- [ ] **Step 2: Add notification models**
+- [x] **Step 2: Add notification models**
 
 Add models matching the design spec:
 
@@ -109,7 +109,7 @@ EmailSendLog
 
 Use explicit `TableName()` methods. Keep JSON tags present but remember models must not be returned directly in handlers or Swagger.
 
-- [ ] **Step 3: Add config fields and defaults**
+- [x] **Step 3: Add config fields and defaults**
 
 Extend `EmailConfig` with worker and safety fields. Add env binding keys for every new field.
 
@@ -129,11 +129,11 @@ email:
   lease_seconds: 300
 ```
 
-- [ ] **Step 4: AutoMigrate models**
+- [x] **Step 4: AutoMigrate models**
 
 Register the new models in `cmd/migrate/main.go` `autoMigrate`.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -145,7 +145,7 @@ go test ./internal/model/... -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/model/notification.go pkg/config/config.go config/config.yaml config/config.local.yaml.example cmd/migrate/main.go pkg/config/config_test.go

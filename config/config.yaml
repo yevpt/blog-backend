@@ -43,6 +43,26 @@ cdn:
   signQueryName: "a"
   timestampQueryName: "b"
 
+email:
+  # 邮件供应商标识，仅用于日志与发送记录归类
+  provider: aliyun_enterprise
+  # 供应商标称每日上限，仅作保护参考，不作为实际发送目标
+  provider_daily_hard_limit: 2000
+  # 站点每日真实安全上限，低于供应商上限以规避风控
+  site_daily_safe_limit: 300
+  # 发送频率上限：每分钟与每小时
+  max_per_minute: 5
+  max_per_hour: 80
+  # 单封邮件之间的最小间隔秒数
+  send_interval_seconds: 12
+  # 是否启动通知后台 worker（dispatcher/sender）与邮件聚合 planner
+  worker_enabled: true
+  planner_enabled: true
+  # worker 单次领取任务数量
+  worker_batch_size: 20
+  # worker 任务租约秒数，超期后任务可被其他实例重新领取
+  lease_seconds: 300
+
 oauth:
   # state 同时承载 CSRF 防护和 PKCE verifier 关联，过期后 callback 会被拒绝
   state_ttl_minutes: 10

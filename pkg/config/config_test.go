@@ -106,6 +106,90 @@ oauth:
 	assert.Equal(t, "https://graph.qq.com/oauth2.0/me", github.OpenIDURL)
 }
 
+// TestLoad_ReadsEmailWorkerConfig 验证邮件 worker 与安全限额配置能解析到结构体。
+func TestLoad_ReadsEmailWorkerConfig(t *testing.T) {
+	// 记录当前工作目录，测试结束后恢复，避免影响其他测试。
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(cwd))
+	})
+
+	// 在临时目录写入含完整 email 配置的最小配置文件。
+	configDir := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+email:
+  provider: aliyun_enterprise
+  host: smtp.qiye.aliyun.com
+  port: 465
+  from: noreply@example.com
+  password: "yaml-pass"
+  provider_daily_hard_limit: 2000
+  site_daily_safe_limit: 300
+  max_per_minute: 5
+  max_per_hour: 80
+  send_interval_seconds: 12
+  worker_enabled: true
+  planner_enabled: true
+  worker_batch_size: 20
+  lease_seconds: 300
+`), 0o644))
+
+	// 清空环境配置并切换工作目录，让 Load 只读取临时配置。
+	t.Setenv("APP_ENV", "")
+	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
+
+	// 加载配置。
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	// 校验所有新增的 worker 与安全限额字段被正确映射。
+	assert.Equal(t, "aliyun_enterprise", cfg.Email.Provider)
+	assert.Equal(t, 2000, cfg.Email.ProviderDailyHardLimit)
+	assert.Equal(t, 300, cfg.Email.SiteDailySafeLimit)
+	assert.Equal(t, 5, cfg.Email.MaxPerMinute)
+	assert.Equal(t, 80, cfg.Email.MaxPerHour)
+	assert.Equal(t, 12, cfg.Email.SendIntervalSeconds)
+	assert.True(t, cfg.Email.WorkerEnabled)
+	assert.True(t, cfg.Email.PlannerEnabled)
+	assert.Equal(t, 20, cfg.Email.WorkerBatchSize)
+	assert.Equal(t, 300, cfg.Email.LeaseSeconds)
+}
+
+// TestLoad_ReadsEmailWorkerEnvOverride 验证 worker 开关可通过环境变量覆盖。
+func TestLoad_ReadsEmailWorkerEnvOverride(t *testing.T) {
+	// 记录当前工作目录，测试结束后恢复，避免影响其他测试。
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(cwd))
+	})
+
+	// 基础配置默认开启 worker，准备用环境变量关闭。
+	configDir := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+email:
+  worker_enabled: true
+  planner_enabled: true
+`), 0o644))
+
+	// 通过环境变量关闭 worker 与 planner，模拟生产差异化部署。
+	t.Setenv("APP_ENV", "")
+	t.Setenv("BLOG_EMAIL_WORKER_ENABLED", "false")
+	t.Setenv("BLOG_EMAIL_PLANNER_ENABLED", "false")
+	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
+
+	// 加载配置。
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	// 校验环境变量覆盖了 YAML 中的默认开关。
+	assert.False(t, cfg.Email.WorkerEnabled)
+	assert.False(t, cfg.Email.PlannerEnabled)
+}
+
 // TestLoad_ReadsEnvOnlyRuntimeConfig 验证只通过环境变量注入的运行时配置能写入结构体。
 func TestLoad_ReadsEnvOnlyRuntimeConfig(t *testing.T) {
 	// 记录当前工作目录，测试结束后恢复，避免影响其他测试。

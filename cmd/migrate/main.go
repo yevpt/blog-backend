@@ -204,6 +204,16 @@ func autoMigrate(db *gorm.DB) error {
 		&model.GuestbookReply{},
 		&model.Message{},
 		&model.UserMessage{},
+		&model.NotificationEvent{},
+		&model.NotificationInbox{},
+		&model.NotificationPreference{},
+		&model.NotificationEmailTask{},
+		&model.NotificationEmailBatch{},
+		&model.NotificationEmailBatchItem{},
+		&model.EmailQuotaPolicy{},
+		&model.EmailRoleQuotaPolicy{},
+		&model.EmailQuotaUsage{},
+		&model.EmailSendLog{},
 	); err != nil {
 		return err
 	}

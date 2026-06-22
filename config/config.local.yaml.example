@@ -42,6 +42,8 @@ migrate:
   src_dsn: "databaseName:pwd_@tcp(ip:port)/blog?charset=utf8mb4&parseTime=True&loc=Local"
 
 email:
+  # 供应商标识与安全限额默认值见 config.yaml，本地仅覆盖连接凭证
+  provider: aliyun_enterprise
   host: smtp.xxx.com
   port: 465
   from: xxxxx@xx.com

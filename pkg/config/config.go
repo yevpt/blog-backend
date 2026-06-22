@@ -89,6 +89,17 @@ type EmailConfig struct {
 	Port     int    `mapstructure:"port"`     // SMTP 端口
 	From     string `mapstructure:"from"`     // 发件人邮箱
 	Password string `mapstructure:"password"` // 邮箱授权码或密码
+
+	Provider               string `mapstructure:"provider"`                  // 邮件供应商标识，如 aliyun_enterprise
+	ProviderDailyHardLimit int    `mapstructure:"provider_daily_hard_limit"` // 供应商标称每日上限，仅作保护参考
+	SiteDailySafeLimit     int    `mapstructure:"site_daily_safe_limit"`     // 站点每日真实安全上限，低于供应商上限
+	MaxPerMinute           int    `mapstructure:"max_per_minute"`            // 每分钟发送上限
+	MaxPerHour             int    `mapstructure:"max_per_hour"`              // 每小时发送上限
+	SendIntervalSeconds    int    `mapstructure:"send_interval_seconds"`     // 单封邮件之间的最小间隔秒数
+	WorkerEnabled          bool   `mapstructure:"worker_enabled"`            // 是否启动 dispatcher/sender 等后台 worker
+	PlannerEnabled         bool   `mapstructure:"planner_enabled"`           // 是否启动邮件聚合 planner
+	WorkerBatchSize        int    `mapstructure:"worker_batch_size"`         // worker 单次领取任务数量
+	LeaseSeconds           int    `mapstructure:"lease_seconds"`             // worker 任务租约秒数，超期可被其他实例重新领取
 }
 
 // OAuthConfig 是第三方登录总配置，按平台名组织 provider。
@@ -185,6 +196,16 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"email.port",
 		"email.from",
 		"email.password",
+		"email.provider",
+		"email.provider_daily_hard_limit",
+		"email.site_daily_safe_limit",
+		"email.max_per_minute",
+		"email.max_per_hour",
+		"email.send_interval_seconds",
+		"email.worker_enabled",
+		"email.planner_enabled",
+		"email.worker_batch_size",
+		"email.lease_seconds",
 		"oauth.state_ttl_minutes",
 	}
 
