@@ -439,6 +439,11 @@ type garageArticleStore struct {
 	db *gorm.DB
 }
 
+type articleGarageRow struct {
+	Current garagearticles.ArticleRow
+	Legacy  *garagearticles.ArticleRow
+}
+
 type momentMediaGarageRow struct {
 	ID                uint
 	CurrentUploaderID uint
@@ -478,7 +483,7 @@ func newGarageCopier(cfg *config.Config) (*garageCopier, error) {
 }
 
 func migrateGarageObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier *garageCopier, bucket string) error {
-	articleStats, err := migrateGarageArticleObjects(ctx, &garageArticleStore{db: db}, copier, bucket)
+	articleStats, err := migrateGarageArticleObjects(ctx, src, &garageArticleStore{db: db}, copier, bucket)
 	if err != nil {
 		return err
 	}
@@ -502,15 +507,15 @@ func migrateGarageObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier 
 	return nil
 }
 
-func migrateGarageArticleObjects(ctx context.Context, store *garageArticleStore, copier *garageCopier, bucket string) (garageRunStats, error) {
-	articles, err := store.listArticles()
+func migrateGarageArticleObjects(ctx context.Context, src *sql.DB, store *garageArticleStore, copier *garageCopier, bucket string) (garageRunStats, error) {
+	articles, err := store.listArticleGarageRows(src)
 	if err != nil {
 		return garageRunStats{}, err
 	}
 
 	stats := garageRunStats{}
 	for _, article := range articles {
-		plan := garagearticles.BuildArticlePlan(article, garagearticles.PlanOptions{Bucket: bucket})
+		plan := buildArticleGaragePlan(article, bucket)
 		if !plan.HasChanges() && len(plan.Failures) == 0 {
 			stats.skipped++
 			continue
@@ -552,6 +557,20 @@ func migrateGarageArticleObjects(ctx context.Context, store *garageArticleStore,
 		stats.updated++
 	}
 	return stats, nil
+}
+
+func buildArticleGaragePlan(row articleGarageRow, bucket string) garagearticles.ArticlePlan {
+	opts := garagearticles.PlanOptions{Bucket: bucket}
+	currentPlan := garagearticles.BuildArticlePlan(row.Current, opts)
+	if currentPlan.HasChanges() || len(currentPlan.Failures) > 0 || row.Legacy == nil {
+		return currentPlan
+	}
+
+	legacyPlan := garagearticles.BuildArticlePlan(*row.Legacy, opts)
+	legacyPlan.UpdatedCoverImgURL = nil
+	legacyPlan.UpdatedContent = row.Current.Content
+	legacyPlan.ContentChanged = false
+	return legacyPlan
 }
 
 func migrateGarageMomentMediaObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier *garageCopier, bucket string) (garageRunStats, error) {
@@ -728,6 +747,26 @@ func findMomentUserID(db *gorm.DB, momentID uint) (uint, error) {
 	return moment.UserID, nil
 }
 
+func (s *garageArticleStore) listArticleGarageRows(src *sql.DB) ([]articleGarageRow, error) {
+	articles, err := s.listArticles()
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]articleGarageRow, 0, len(articles))
+	for _, article := range articles {
+		legacy, err := findLegacyArticle(src, article.ID)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, articleGarageRow{
+			Current: article,
+			Legacy:  legacy,
+		})
+	}
+	return rows, nil
+}
+
 func (s *garageArticleStore) listArticles() ([]garagearticles.ArticleRow, error) {
 	var articles []model.Article
 	if err := s.db.Model(&model.Article{}).
@@ -746,6 +785,34 @@ func (s *garageArticleStore) listArticles() ([]garagearticles.ArticleRow, error)
 		})
 	}
 	return rows, nil
+}
+
+func findLegacyArticle(src *sql.DB, articleID uint) (*garagearticles.ArticleRow, error) {
+	var (
+		content      sql.NullString
+		coverDesktop sql.NullString
+		coverMobile  sql.NullString
+	)
+	err := src.QueryRow(`
+		SELECT content, background_img_url, background_img_url_phone
+		FROM post
+		WHERE ID = ?`, articleID).Scan(&content, &coverDesktop, &coverMobile)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询源 post id=%d 失败: %w", articleID, err)
+	}
+
+	cover := nullStr(coverMobile)
+	if cover == nil {
+		cover = nullStr(coverDesktop)
+	}
+	return &garagearticles.ArticleRow{
+		ID:          articleID,
+		CoverImgURL: cover,
+		Content:     content.String,
+	}, nil
 }
 
 func (s *garageArticleStore) updateArticle(plan garagearticles.ArticlePlan) error {

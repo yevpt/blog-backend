@@ -6,6 +6,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpt/blog-backend/internal/migration/garagearticles"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -109,4 +110,32 @@ func TestUpdateMomentMediaURL_DoesNotTouchUpdatedAt(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestBuildArticleGaragePlan_CopiesLegacyAssetsWhenCurrentAlreadyMigrated(t *testing.T) {
+	currentCover := "articles/12/cover/cover.jpg"
+	legacyCover := "post/covers/cover.jpg"
+	current := articleGarageRow{
+		Current: garagearticles.ArticleRow{
+			ID:          12,
+			CoverImgURL: &currentCover,
+			Content:     "![a](articles/12/images/a.png)",
+		},
+		Legacy: &garagearticles.ArticleRow{
+			ID:          12,
+			CoverImgURL: &legacyCover,
+			Content:     "![a](post/images/a.png)",
+		},
+	}
+
+	plan := buildArticleGaragePlan(current, "blog")
+
+	require.True(t, plan.HasChanges())
+	assert.Nil(t, plan.UpdatedCoverImgURL)
+	assert.False(t, plan.ContentChanged)
+	require.Len(t, plan.Assets, 2)
+	assert.Equal(t, "post/covers/cover.jpg", plan.Assets[0].SourceKey)
+	assert.Equal(t, "articles/12/cover/cover.jpg", plan.Assets[0].TargetKey)
+	assert.Equal(t, "post/images/a.png", plan.Assets[1].SourceKey)
+	assert.Equal(t, "articles/12/images/a.png", plan.Assets[1].TargetKey)
 }
