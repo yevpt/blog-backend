@@ -164,7 +164,7 @@ git commit -m "feat(notification): 新增通知模型和邮件配置"
 - Create: `internal/repository/notification/quota.go`
 - Test: `internal/repository/notification/*_test.go`
 
-- [ ] **Step 1: Define repository interfaces**
+- [x] **Step 1: Define repository interfaces**
 
 Define methods for:
 
@@ -190,7 +190,7 @@ GetQuotaPolicies
 GetRoleQuotaPolicies
 ```
 
-- [ ] **Step 2: Write repository tests first**
+- [x] **Step 2: Write repository tests first**
 
 Cover:
 
@@ -204,7 +204,7 @@ Run: `go test ./internal/repository/notification -count=1`
 
 Expected: FAIL until repository implementation exists.
 
-- [ ] **Step 3: Implement repository**
+- [x] **Step 3: Implement repository**
 
 Use GORM transactions for multi-row state changes.
 
@@ -215,13 +215,13 @@ UPDATE ... SET lease_until=?, locked_by=?
 WHERE id=? AND (lease_until IS NULL OR lease_until < NOW())
 ```
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `go test ./internal/repository/notification -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/repository/notification
