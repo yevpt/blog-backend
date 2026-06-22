@@ -1,18 +1,32 @@
 package moment
 
 import (
+	"errors"
+	"io"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
+	"github.com/vpt/blog-backend/pkg/response"
 )
+
+const maxMomentImageUploadBytes = 1024 * 1024
 
 // Save 新增或更新碎语。
 // @Summary 新增或更新碎语
-// @Description 登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者，并同步图片列表。
+// @Description 登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者。image_urls 传已上传图片 URL/key，images 传新图片文件，图片会整体替换。
 // @Tags 碎语
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
-// @Param request body dto.MomentSaveReq true "碎语保存请求"
+// @Param id formData int false "碎语 ID；为空表示新增"
+// @Param user_id formData int false "作者用户 ID；仅管理员可代管"
+// @Param content formData string true "碎语正文"
+// @Param status formData int true "状态：0 隐藏，1 公开"
+// @Param comment_status formData int true "评论状态：0 关闭，1 开启"
+// @Param image_urls formData []string false "已上传图片对象 key 或 URL，可重复传入"
+// @Param image_order formData []string false "图片顺序引用，可重复传入；url:N 指向第 N 个 image_urls，file:N 指向第 N 个 images"
+// @Param images formData file false "新图片文件，可重复传入"
 // @Success 200 {object} response.Response{data=dto.MomentItemResp} "统一响应；code=0 表示保存成功，code=400 表示参数错误或业务错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 403 {object} response.Response "无权操作碎语"
@@ -25,13 +39,64 @@ func (h *MomentHandler) Save(c *gin.Context) {
 		return
 	}
 
-	var req dto.MomentSaveReq
-	if !reqbind.JSON(c, &req) {
+	req, ok := bindMomentSaveReq(c)
+	if !ok {
 		return
 	}
 
-	resp, err := h.svc.Save(req, userID, roleNames)
+	resp, err := h.svc.Save(*req, userID, roleNames)
 	writeMomentResponse(c, resp, err)
+}
+
+func bindMomentSaveReq(c *gin.Context) (*dto.MomentSaveReq, bool) {
+	var req dto.MomentSaveReq
+	if !reqbind.Form(c, &req) {
+		return nil, false
+	}
+
+	files, err := readMomentImageFiles(c)
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return nil, false
+	}
+	req.ImageFiles = files
+	return &req, true
+}
+
+func readMomentImageFiles(c *gin.Context) ([]dto.MomentImageFileReq, error) {
+	form, err := c.MultipartForm()
+	if err != nil {
+		return nil, err
+	}
+	headers := form.File["images"]
+	files := make([]dto.MomentImageFileReq, 0, len(headers))
+	for _, header := range headers {
+		file, err := header.Open()
+		if err != nil {
+			return nil, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(file, maxMomentImageUploadBytes+1))
+		closeErr := file.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+		if len(data) > maxMomentImageUploadBytes {
+			return nil, errors.New("图片不能超过 1MB")
+		}
+		contentType := header.Header.Get("Content-Type")
+		if contentType == "" || contentType == "application/octet-stream" {
+			contentType = http.DetectContentType(data)
+		}
+		files = append(files, dto.MomentImageFileReq{
+			Name:        header.Filename,
+			ContentType: contentType,
+			Data:        data,
+		})
+	}
+	return files, nil
 }
 
 // Delete 删除碎语。

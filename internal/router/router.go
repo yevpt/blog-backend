@@ -98,7 +98,7 @@ func Setup(
 
 	// 按权限层级注册路由，公开路由在前，受保护路由在后。
 	registerPublicRoutes(r, handlers, jwtManager, redisClient)
-	registerAuthedRoutes(r, handlers, jwtManager)
+	registerAuthedRoutes(r, handlers, jwtManager, redisClient)
 	registerVIPRoutes(r, handlers, jwtManager)
 	registerAdminRoutes(r, handlers, jwtManager)
 }
@@ -298,7 +298,7 @@ func registerPublicRoutes(
 	r.POST("/moments/:id/view", middleware.VisitorID(), handlers.moment.View)
 }
 
-func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
+func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager, redisClient *redis.Client) {
 	// 登录路由要求任意已认证用户。
 	authed := r.Group("/", middleware.Auth(jwtManager, handlers.userCache))
 	authed.GET("/test/authed", handlers.test.Authed)
@@ -329,7 +329,7 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.DELETE("/guestbook/comments/:id", handlers.comment.DeleteGuestbook)
 	authed.DELETE("/guestbook/comment-replies/:id", handlers.comment.DeleteGuestbookReply)
 	authed.DELETE("/guestbook/:id", handlers.guestbook.Delete)
-	authed.POST("/moments", handlers.moment.Save)
+	authed.POST("/moments", middleware.RateLimitMomentUpload(redisClient), handlers.moment.Save)
 	authed.POST("/moments/:id/comments", handlers.comment.CreateMoment)
 	authed.POST("/moments/comments/:id/replies", handlers.comment.ReplyMoment)
 	authed.POST("/moments/comments/:id/like", handlers.comment.ToggleMomentLike)

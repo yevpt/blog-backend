@@ -14,34 +14,34 @@ type MomentListReq struct {
 	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
 }
 
-// MomentMediaReq 碎语图片保存请求。
-type MomentMediaReq struct {
+// MomentImageFileReq 表示 multipart 中已经读取出的图片文件。
+type MomentImageFileReq struct {
 	// Name 图片原始文件名。
-	Name string `json:"name" example:"cat.jpg"`
-	// FileType 图片文件类型或扩展名。
-	FileType string `json:"file_type" example:"jpg"`
-	// URL 图片对象 key 或可访问 URL。
-	URL string `json:"url" binding:"required,max=1000" example:"moments/cat.jpg"`
-	// Size 图片大小，单位字节。
-	Size uint `json:"size" example:"1024"`
-	// Seq 图片排序值，越小越靠前。
-	Seq uint `json:"seq" example:"1"`
+	Name string `json:"-" swaggerignore:"true"`
+	// ContentType 图片 MIME 类型。
+	ContentType string `json:"-" swaggerignore:"true"`
+	// Data 图片内容。
+	Data []byte `json:"-" swaggerignore:"true"`
 }
 
 // MomentSaveReq 新增或更新碎语请求。
 type MomentSaveReq struct {
 	// ID 碎语 ID，为空或 0 表示新增。
-	ID *uint `json:"id" example:"1"`
+	ID *uint `form:"id" json:"id" example:"1"`
 	// UserID 作者用户 ID；管理员可传入代管作者，普通用户会被强制设置为当前登录用户。
-	UserID *uint `json:"user_id" example:"1"`
+	UserID *uint `form:"user_id" json:"user_id" example:"1"`
 	// Content 碎语正文，去除首尾空白后不能为空，最多 800 字符。
-	Content string `json:"content" binding:"required,max=800" example:"今天的风很温柔"`
+	Content string `form:"content" json:"content" binding:"required,max=800" example:"今天的风很温柔"`
 	// Status 状态：0 隐藏，1 公开。
-	Status uint8 `json:"status" binding:"oneof=0 1" example:"1"`
+	Status uint8 `form:"status" json:"status" binding:"oneof=0 1" example:"1"`
 	// CommentStatus 评论状态：0 关闭，1 开启。
-	CommentStatus uint8 `json:"comment_status" binding:"oneof=0 1" example:"1"`
-	// Images 图片列表，会整体替换该碎语原有图片。
-	Images []MomentMediaReq `json:"images"`
+	CommentStatus uint8 `form:"comment_status" json:"comment_status" binding:"oneof=0 1" example:"1"`
+	// ImageURLs 已上传图片的对象 key 或访问 URL，会校验对象存在后保留。
+	ImageURLs []string `form:"image_urls" json:"image_urls" example:"moments/cat.jpg"`
+	// ImageOrder 图片顺序引用；url:N 指向第 N 个 image_urls，file:N 指向第 N 个 images 文件。
+	ImageOrder []string `form:"image_order" json:"image_order" example:"url:0,file:0"`
+	// ImageFiles multipart 中的新图片文件。
+	ImageFiles []MomentImageFileReq `json:"-" swaggerignore:"true"`
 }
 
 // MomentUserResp 碎语作者摘要。

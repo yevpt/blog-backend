@@ -3,6 +3,7 @@ package moment_test
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -131,17 +132,60 @@ func TestMomentHandler_List_AllowsOptionalAuth(t *testing.T) {
 func TestMomentHandler_Save_UsesClaimsUserAndRoles(t *testing.T) {
 	stub := &stubMomentService{saveResp: &dto.MomentItemResp{ID: 9, UserID: 7, Content: "风"}}
 	r := newMomentRouter(stub)
-	body, _ := json.Marshal(dto.MomentSaveReq{Content: "风", Status: 1, CommentStatus: 1})
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	require.NoError(t, writer.WriteField("content", "风"))
+	require.NoError(t, writer.WriteField("status", "1"))
+	require.NoError(t, writer.WriteField("comment_status", "1"))
+	require.NoError(t, writer.WriteField("image_urls", "https://cdn.example.com/blog/moments/old.jpg?sign=1"))
+	require.NoError(t, writer.WriteField("image_order", "file:0"))
+	require.NoError(t, writer.WriteField("image_order", "url:0"))
+	file, err := writer.CreateFormFile("images", "cat.jpg")
+	require.NoError(t, err)
+	_, err = file.Write([]byte("cat image"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/moments", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, uint(7), stub.saveUserID)
 	assert.Equal(t, []string{roles.AdminRole}, stub.saveRoles)
 	assert.Equal(t, "风", stub.saveReq.Content)
+	assert.Equal(t, []string{"https://cdn.example.com/blog/moments/old.jpg?sign=1"}, stub.saveReq.ImageURLs)
+	assert.Equal(t, []string{"file:0", "url:0"}, stub.saveReq.ImageOrder)
+	require.Len(t, stub.saveReq.ImageFiles, 1)
+	assert.Equal(t, "cat.jpg", stub.saveReq.ImageFiles[0].Name)
+	assert.Equal(t, []byte("cat image"), stub.saveReq.ImageFiles[0].Data)
+}
+
+func TestMomentHandler_Save_RejectsImageOverOneMBBeforeService(t *testing.T) {
+	stub := &stubMomentService{saveResp: &dto.MomentItemResp{ID: 9}}
+	r := newMomentRouter(stub)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	require.NoError(t, writer.WriteField("content", "风"))
+	require.NoError(t, writer.WriteField("status", "1"))
+	require.NoError(t, writer.WriteField("comment_status", "1"))
+	file, err := writer.CreateFormFile("images", "big.jpg")
+	require.NoError(t, err)
+	_, err = file.Write(bytes.Repeat([]byte{1}, 1024*1024+1))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Zero(t, stub.saveUserID)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
 }
 
 func TestMomentHandler_ToggleLike_BindsIDAndUser(t *testing.T) {

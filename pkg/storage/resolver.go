@@ -21,6 +21,7 @@ type ObjectStore interface {
 	ObjectMover
 	ObjectExists(ctx context.Context, objectName string) (bool, error)
 	PutObject(ctx context.Context, objectName string, data []byte, contentType string) error
+	DeleteObject(ctx context.Context, objectName string) error
 }
 
 // IsAbsoluteURL 判断给定的 URL 是否是一个绝对路径（以 http:// 或 https:// 开头）。

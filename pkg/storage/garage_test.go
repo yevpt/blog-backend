@@ -279,6 +279,18 @@ func TestClientPutObject_UploadsBytes(t *testing.T) {
 	assert.Equal(t, []byte("image"), api.putBody)
 }
 
+func TestClientDeleteObject_RemovesObject(t *testing.T) {
+	api := &fakeObjectAPI{}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	err := client.DeleteObject(context.Background(), "/moments/a.jpg")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, api.deleteCalls)
+	assert.Equal(t, "blog", api.deleteBucket)
+	assert.Equal(t, "moments/a.jpg", api.deleteKey)
+}
+
 func TestClientMoveObject_CopiesThenDeletesSource(t *testing.T) {
 	api := &fakeObjectAPI{}
 	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}

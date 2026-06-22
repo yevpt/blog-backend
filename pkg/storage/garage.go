@@ -186,6 +186,22 @@ func (c *Client) putObject(ctx context.Context, objectName string, data []byte, 
 	return err
 }
 
+func (c *Client) deleteObject(ctx context.Context, objectName string) error {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return errors.New("对象存储客户端未初始化")
+	}
+	objectName = normalizeObjectName(objectName)
+	if objectName == "" {
+		return errors.New("对象名不能为空")
+	}
+
+	_, err := c.impl.objectAPI.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(c.impl.bucket),
+		Key:    aws.String(objectName),
+	})
+	return err
+}
+
 func (c *Client) moveObject(ctx context.Context, sourceName string, targetName string) error {
 	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
 		return errors.New("对象存储客户端未初始化")

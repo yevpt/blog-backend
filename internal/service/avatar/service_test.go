@@ -48,6 +48,10 @@ func (s *fakeObjectStore) MoveObject(ctx context.Context, sourceName string, tar
 	return nil
 }
 
+func (s *fakeObjectStore) DeleteObject(ctx context.Context, objectName string) error {
+	return nil
+}
+
 func TestService_SaveRemoteAvatar_CompressesAndUploads(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")

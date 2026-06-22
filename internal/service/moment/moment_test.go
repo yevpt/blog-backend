@@ -1,8 +1,14 @@
 package moment_test
 
 import (
+	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"testing"
 	"time"
 
@@ -24,6 +30,7 @@ type fakeMomentRepo struct {
 	saveData momentrepo.SaveData
 	saveResp *momentrepo.MomentAggregate
 	saveErr  error
+	removed  []string
 
 	deleteID       uint
 	deleteOperator uint
@@ -62,6 +69,22 @@ func (f *fakeMomentRepo) FindPublicDetail(uint, *uint) (*momentrepo.MomentAggreg
 }
 
 func (f *fakeMomentRepo) Save(data momentrepo.SaveData) (*momentrepo.MomentAggregate, error) {
+	if data.Moment.ID == 0 {
+		data.Moment.ID = uint(9)
+		if f.saveResp != nil && f.saveResp.Moment.ID > 0 {
+			data.Moment.ID = f.saveResp.Moment.ID
+		}
+	}
+	if data.PrepareImages != nil {
+		images, err := data.PrepareImages(data.Moment)
+		if err != nil {
+			return nil, err
+		}
+		data.Images = images
+	}
+	if data.RemovedURLs != nil {
+		*data.RemovedURLs = append(*data.RemovedURLs, f.removed...)
+	}
 	f.saveData = data
 	return f.saveResp, f.saveErr
 }
@@ -113,6 +136,49 @@ func (r *fakeURLResolver) ObjectURL(_ context.Context, objectName string) (strin
 	return "https://cdn.example.com/" + objectName, nil
 }
 
+type fakeMomentObjectStore struct {
+	fakeURLResolver
+	exists       map[string]bool
+	existsErr    error
+	putKeys      []string
+	putErrOnKey  string
+	putErrOnCall int
+	deleteKeys   []string
+	deleteErr    error
+	uploadedData map[string][]byte
+}
+
+func (s *fakeMomentObjectStore) ObjectExists(_ context.Context, objectName string) (bool, error) {
+	if s.existsErr != nil {
+		return false, s.existsErr
+	}
+	return s.exists[objectName], nil
+}
+
+func (s *fakeMomentObjectStore) PutObject(_ context.Context, objectName string, data []byte, _ string) error {
+	s.putKeys = append(s.putKeys, objectName)
+	if s.putErrOnCall > 0 && len(s.putKeys) == s.putErrOnCall {
+		return errors.New("put failed")
+	}
+	if s.putErrOnKey == objectName {
+		return errors.New("put failed")
+	}
+	if s.uploadedData == nil {
+		s.uploadedData = map[string][]byte{}
+	}
+	s.uploadedData[objectName] = append([]byte(nil), data...)
+	return nil
+}
+
+func (s *fakeMomentObjectStore) DeleteObject(_ context.Context, objectName string) error {
+	s.deleteKeys = append(s.deleteKeys, objectName)
+	return s.deleteErr
+}
+
+func (s *fakeMomentObjectStore) MoveObject(context.Context, string, string) error {
+	return nil
+}
+
 func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) {
 	now := time.Now()
 	viewerID := uint(7)
@@ -123,7 +189,7 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 			PageSize: 50,
 			Moments: []momentrepo.MomentAggregate{{
 				Moment: model.Moment{Base: model.Base{ID: 9, CreatedAt: now, UpdatedAt: now}, UserID: 1, Content: "风", Status: 1, CommentStatus: 1},
-				Images: []model.Media{{Base: model.Base{ID: 3}, OwnerID: 9, URL: "moments/cat.jpg", Name: "cat.jpg"}},
+				Images: []model.Media{{Base: model.Base{ID: 3}, MomentID: 9, URL: "moments/cat.jpg", Name: "cat.jpg"}},
 			}},
 		},
 	}
@@ -144,19 +210,24 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testing.T) {
 	now := time.Now()
 	requestUserID := uint(99)
+	store := &fakeMomentObjectStore{
+		exists: map[string]bool{"moments/old.jpg": true},
+	}
 	repo := &fakeMomentRepo{
 		saveResp: &momentrepo.MomentAggregate{
 			Moment: model.Moment{Base: model.Base{ID: 9, CreatedAt: now, UpdatedAt: now}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil)
+	svc := momentservice.NewMomentService(repo, store, nil)
 
 	resp, err := svc.Save(dto.MomentSaveReq{
 		UserID:        &requestUserID,
 		Content:       "  风  ",
 		Status:        1,
 		CommentStatus: 1,
-		Images:        []dto.MomentMediaReq{{Name: "cat.jpg", URL: "moments/cat.jpg", Size: 10}},
+		ImageURLs:     []string{"https://cdn.example.com/blog/moments/old.jpg?sign=1"},
+		ImageOrder:    []string{"file:0", "url:0"},
+		ImageFiles:    []dto.MomentImageFileReq{{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}},
 	}, 7, nil)
 
 	require.NoError(t, err)
@@ -164,8 +235,203 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 	assert.Equal(t, "风", repo.saveData.Moment.Content)
 	assert.False(t, repo.saveData.Force)
 	assert.Equal(t, uint(7), repo.saveData.OperatorID)
-	assert.Equal(t, "moments/cat.jpg", repo.saveData.Images[0].URL)
+	require.Len(t, repo.saveData.Images, 2)
+	assert.Equal(t, "cat.png", repo.saveData.Images[0].Name)
+	assert.Equal(t, "png", repo.saveData.Images[0].FileType)
+	assert.Equal(t, uint(1), repo.saveData.Images[0].Seq)
+	uploaded := store.uploadedData[repo.saveData.Images[0].URL]
+	assert.Equal(t, "moments/7/9/"+md5Hex(uploaded)+".png", repo.saveData.Images[0].URL)
+	assert.Equal(t, uint(len(uploaded)), repo.saveData.Images[0].Size)
+	assert.Equal(t, "moments/old.jpg", repo.saveData.Images[1].URL)
+	assert.Equal(t, uint(2), repo.saveData.Images[1].Seq)
 	assert.Equal(t, uint(9), resp.ID)
+}
+
+func TestMomentService_Save_RejectsIncompleteImageOrder(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/old.jpg": true}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"moments/old.jpg"},
+		ImageOrder:    []string{"file:0"},
+		ImageFiles:    []dto.MomentImageFileReq{{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+}
+
+func TestMomentService_Save_RejectsMissingExistingImage(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/missing.jpg": false}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"https://cdn.example.com/blog/moments/missing.jpg"},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageNotFound)
+	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_RejectsMoreThanNineImages(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+	files := make([]dto.MomentImageFileReq, 10)
+	for i := range files {
+		files[i] = dto.MomentImageFileReq{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}
+	}
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles:    files,
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_RejectsImageLargerThanOneMB(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "big.jpg",
+			ContentType: "image/jpeg",
+			Data:        bytes.Repeat([]byte{1}, 1024*1024+1),
+		}},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageTooLarge)
+	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_CompressesLargeImageToFiveHundredKB(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	repo := &fakeMomentRepo{
+		saveResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "large.png",
+			ContentType: "image/png",
+			Data:        noisyPNG(t, 900, 900),
+		}},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	require.Len(t, repo.saveData.Images, 1)
+	uploaded := store.uploadedData[repo.saveData.Images[0].URL]
+	require.NotEmpty(t, uploaded)
+	assert.LessOrEqual(t, len(uploaded), 500*1024)
+	assert.Equal(t, uint(len(uploaded)), repo.saveData.Images[0].Size)
+}
+
+func TestMomentService_Save_DeletesRemovedOldImagesAfterSuccessfulSave(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/9/keep.jpg": true}}
+	repo := &fakeMomentRepo{
+		removed: []string{"https://cdn.example.com/blog/moments/7/9/remove.jpg?sign=1"},
+		saveResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID:            ptrUint(9),
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"moments/7/9/keep.jpg"},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"moments/7/9/remove.jpg"}, store.deleteKeys)
+}
+
+func TestMomentService_Save_DeletesUploadedImagesWhenRepositoryFails(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	repo := &fakeMomentRepo{saveErr: errors.New("db down")}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles:    []dto.MomentImageFileReq{{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}},
+	}, 7, nil)
+
+	require.EqualError(t, err, "db down")
+	require.Len(t, store.putKeys, 1)
+	assert.Equal(t, store.putKeys, store.deleteKeys)
+}
+
+func ptrUint(value uint) *uint {
+	return &value
+}
+
+func TestMomentService_Save_DeletesUploadedImagesWhenLaterUploadFails(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}, putErrOnCall: 2}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{
+			{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)},
+			{Name: "dog.png", ContentType: "image/png", Data: noisyPNG(t, 9, 9)},
+		},
+	}, 7, nil)
+
+	require.EqualError(t, err, "put failed")
+	require.Len(t, store.putKeys, 2)
+	assert.Equal(t, []string{store.putKeys[0]}, store.deleteKeys)
+}
+
+func md5Hex(data []byte) string {
+	sum := md5.Sum(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func smallPNG(t *testing.T) []byte {
+	t.Helper()
+	return noisyPNG(t, 8, 8)
+}
+
+func noisyPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8((x*17 + y*31) % 256),
+				G: uint8((x*29 + y*11) % 256),
+				B: uint8((x*7 + y*19) % 256),
+				A: 255,
+			})
+		}
+	}
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
 }
 
 func TestMomentService_Save_AllowsAdminManagedAuthor(t *testing.T) {

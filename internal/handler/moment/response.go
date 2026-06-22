@@ -32,5 +32,8 @@ func writeMomentResponse(c *gin.Context, data any, err error) {
 func isMomentBadRequest(err error) bool {
 	return errors.Is(err, momentservice.ErrMomentInvalid) ||
 		errors.Is(err, momentservice.ErrMomentContentRequired) ||
-		errors.Is(err, momentservice.ErrMomentTopLimitExceeded)
+		errors.Is(err, momentservice.ErrMomentTopLimitExceeded) ||
+		errors.Is(err, momentservice.ErrMomentImageInvalid) ||
+		errors.Is(err, momentservice.ErrMomentImageNotFound) ||
+		errors.Is(err, momentservice.ErrMomentImageTooLarge)
 }

@@ -32,6 +32,18 @@ func Query(c *gin.Context, req any) bool {
 	return true
 }
 
+// Form 绑定并校验 Form/multipart 请求；失败时直接返回可读错误响应。
+func Form(c *gin.Context, req any) bool {
+	ensureValidatorLabels()
+
+	if err := c.ShouldBind(req); err != nil {
+		response.Fail(c, response.CodeBadRequest, translateBindingError(err))
+		return false
+	}
+
+	return true
+}
+
 // PathUint 解析路径中的正整数参数；失败时直接返回可读错误响应。
 func PathUint(c *gin.Context, name string, label string) (uint, bool) {
 	raw := c.Param(name)

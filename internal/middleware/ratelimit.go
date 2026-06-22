@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -20,7 +21,7 @@ type RateLimitConfig struct {
 
 // RateLimitStrict 高风险接口限流（send-code、register），60s 内 5 次软限 / 20 次硬限 / 封禁 15min
 func RateLimitStrict(rdb *redis.Client) gin.HandlerFunc {
-	return newRateLimiter(rdb, RateLimitConfig{
+	return newIPRateLimiter(rdb, RateLimitConfig{
 		Window:      60 * time.Second,
 		SoftLimit:   5,
 		HardLimit:   20,
@@ -30,7 +31,7 @@ func RateLimitStrict(rdb *redis.Client) gin.HandlerFunc {
 
 // RateLimitNormal 普通敏感接口限流（login），60s 内 10 次软限 / 30 次硬限 / 封禁 15min
 func RateLimitNormal(rdb *redis.Client) gin.HandlerFunc {
-	return newRateLimiter(rdb, RateLimitConfig{
+	return newIPRateLimiter(rdb, RateLimitConfig{
 		Window:      60 * time.Second,
 		SoftLimit:   10,
 		HardLimit:   30,
@@ -38,13 +39,37 @@ func RateLimitNormal(rdb *redis.Client) gin.HandlerFunc {
 	})
 }
 
-func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
+// RateLimitMomentUpload 按登录用户限制碎语保存频率，降低恶意批量上传图片的资源消耗。
+func RateLimitMomentUpload(rdb *redis.Client) gin.HandlerFunc {
+	return newPrincipalRateLimiter(rdb, RateLimitConfig{
+		Window:      60 * time.Second,
+		SoftLimit:   5,
+		HardLimit:   20,
+		BanDuration: 15 * time.Minute,
+	}, momentUploadRateLimitPrincipal, momentUploadRateLimitBanKey)
+}
+
+func newIPRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
+	return newPrincipalRateLimiter(
+		rdb,
+		cfg,
+		func(c *gin.Context) string { return "ip:" + c.ClientIP() },
+		func(principal string) string { return "ban:" + principal },
+	)
+}
+
+func newPrincipalRateLimiter(
+	rdb *redis.Client,
+	cfg RateLimitConfig,
+	principalFn func(*gin.Context) string,
+	banKeyFn func(string) string,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := context.Background()
-		ip := c.ClientIP()
+		principal := principalFn(c)
 
 		// 优先检查 IP 是否处于硬封禁状态，封禁期内直接拒绝，跳过后续计数操作
-		banKey := fmt.Sprintf("ban:ip:%s", ip)
+		banKey := banKeyFn(principal)
 		banned, _ := rdb.Exists(ctx, banKey).Result()
 		if banned > 0 {
 			// 读取剩余封禁时间并写入 Retry-After header，告知客户端最早重试时机
@@ -56,7 +81,7 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 
 		// Pipeline 原子执行 Incr+Expire，避免 Incr 成功而 Expire 未执行导致 key 永不过期
 		// key 包含 FullPath() 实现按路由独立计数，无需手动命名
-		routeKey := fmt.Sprintf("ratelimit:%s:%s", c.FullPath(), ip)
+		routeKey := fmt.Sprintf("ratelimit:%s:%s", c.FullPath(), principal)
 		pipe := rdb.Pipeline()
 		incrCmd := pipe.Incr(ctx, routeKey)
 		pipe.Expire(ctx, routeKey, cfg.Window)
@@ -80,4 +105,20 @@ func newRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func momentUploadRateLimitPrincipal(c *gin.Context) string {
+	detail := GetUserDetail(c)
+	if detail != nil && detail.ID > 0 {
+		return fmt.Sprintf("user:%d", detail.ID)
+	}
+	claims := jwt.GetClaims(c)
+	if claims != nil && claims.UserId > 0 {
+		return fmt.Sprintf("user:%d", claims.UserId)
+	}
+	return "ip:" + c.ClientIP()
+}
+
+func momentUploadRateLimitBanKey(principal string) string {
+	return "ban:moment-upload:" + principal
 }

@@ -3380,9 +3380,9 @@
                 }
             },
             "post": {
-                "description": "登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者，并同步图片列表。",
+                "description": "登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者。image_urls 传已上传图片 URL/key，images 传新图片文件，图片会整体替换。",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -3393,13 +3393,63 @@
                 "summary": "新增或更新碎语",
                 "parameters": [
                     {
-                        "description": "碎语保存请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.MomentSaveReq"
-                        }
+                        "type": "integer",
+                        "description": "碎语 ID；为空表示新增",
+                        "name": "id",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "作者用户 ID；仅管理员可代管",
+                        "name": "user_id",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "碎语正文",
+                        "name": "content",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "状态：0 隐藏，1 公开",
+                        "name": "status",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "评论状态：0 关闭，1 开启",
+                        "name": "comment_status",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "已上传图片对象 key 或 URL，可重复传入",
+                        "name": "image_urls",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "图片顺序引用，可重复传入；url:N 指向第 N 个 image_urls，file:N 指向第 N 个 images",
+                        "name": "image_order",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "新图片文件，可重复传入",
+                        "name": "images",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -7079,40 +7129,6 @@
                 }
             }
         },
-        "dto.MomentMediaReq": {
-            "type": "object",
-            "required": [
-                "url"
-            ],
-            "properties": {
-                "file_type": {
-                    "description": "FileType 图片文件类型或扩展名。",
-                    "type": "string",
-                    "example": "jpg"
-                },
-                "name": {
-                    "description": "Name 图片原始文件名。",
-                    "type": "string",
-                    "example": "cat.jpg"
-                },
-                "seq": {
-                    "description": "Seq 图片排序值，越小越靠前。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "size": {
-                    "description": "Size 图片大小，单位字节。",
-                    "type": "integer",
-                    "example": 1024
-                },
-                "url": {
-                    "description": "URL 图片对象 key 或可访问 URL。",
-                    "type": "string",
-                    "maxLength": 1000,
-                    "example": "moments/cat.jpg"
-                }
-            }
-        },
         "dto.MomentMediaResp": {
             "type": "object",
             "properties": {
@@ -7182,55 +7198,6 @@
                     "description": "Total 总记录数。",
                     "type": "integer",
                     "example": 100
-                }
-            }
-        },
-        "dto.MomentSaveReq": {
-            "type": "object",
-            "required": [
-                "content"
-            ],
-            "properties": {
-                "comment_status": {
-                    "description": "CommentStatus 评论状态：0 关闭，1 开启。",
-                    "type": "integer",
-                    "enum": [
-                        0,
-                        1
-                    ],
-                    "example": 1
-                },
-                "content": {
-                    "description": "Content 碎语正文，去除首尾空白后不能为空，最多 800 字符。",
-                    "type": "string",
-                    "maxLength": 800,
-                    "example": "今天的风很温柔"
-                },
-                "id": {
-                    "description": "ID 碎语 ID，为空或 0 表示新增。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "images": {
-                    "description": "Images 图片列表，会整体替换该碎语原有图片。",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.MomentMediaReq"
-                    }
-                },
-                "status": {
-                    "description": "Status 状态：0 隐藏，1 公开。",
-                    "type": "integer",
-                    "enum": [
-                        0,
-                        1
-                    ],
-                    "example": 1
-                },
-                "user_id": {
-                    "description": "UserID 作者用户 ID；管理员可传入代管作者，普通用户会被强制设置为当前登录用户。",
-                    "type": "integer",
-                    "example": 1
                 }
             }
         },

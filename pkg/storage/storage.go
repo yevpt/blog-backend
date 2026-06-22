@@ -66,6 +66,11 @@ func (c *Client) PutObject(ctx context.Context, objectName string, data []byte, 
 	return c.putObject(ctx, objectName, data, contentType)
 }
 
+// DeleteObject 从 Garage 删除对象。
+func (c *Client) DeleteObject(ctx context.Context, objectName string) error {
+	return c.deleteObject(ctx, objectName)
+}
+
 // MoveObject 将对象移动到新的 key。
 func (c *Client) MoveObject(ctx context.Context, sourceName string, targetName string) error {
 	// Garage/S3 没有原子重命名，内部使用同 bucket 复制后删除源对象。
@@ -109,6 +114,11 @@ func (r *CachedObjectURLResolver) ObjectExists(ctx context.Context, objectName s
 // PutObject 将对象内容写入 Garage。
 func (r *CachedObjectURLResolver) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {
 	return r.impl.client.PutObject(ctx, objectName, data, contentType)
+}
+
+// DeleteObject 从 Garage 删除对象。
+func (r *CachedObjectURLResolver) DeleteObject(ctx context.Context, objectName string) error {
+	return r.impl.client.DeleteObject(ctx, objectName)
 }
 
 // MoveObject 将对象移动到新的 key。

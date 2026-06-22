@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/middleware"
 )
 
@@ -109,5 +110,33 @@ func TestRateLimitStrict_BannedIPBlocked(t *testing.T) {
 	req := httptest.NewRequest("GET", "/auth/send-code", nil)
 	req.RemoteAddr = "10.0.0.4:9999"
 	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+}
+
+func TestRateLimitMomentUpload_BlocksByUserID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rdb, mr := newTestRedis(t)
+	defer mr.Close()
+
+	r := gin.New()
+	r.POST("/moments", func(c *gin.Context) {
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Status: 1})
+	}, middleware.RateLimitMomentUpload(rdb), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	for i := 0; i < 5; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/moments", nil)
+		req.RemoteAddr = "10.0.0.8:9999"
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/moments", nil)
+	req.RemoteAddr = "10.0.0.9:9999"
+	r.ServeHTTP(w, req)
+
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }

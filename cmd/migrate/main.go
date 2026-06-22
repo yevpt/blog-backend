@@ -15,18 +15,27 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/vpt/blog-backend/internal/migration/garagearticles"
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/database"
+	"github.com/vpt/blog-backend/pkg/storage"
 	"gorm.io/gorm"
 )
 
@@ -34,8 +43,13 @@ import (
 // 程序入口
 // ─────────────────────────────────────────────
 
+type migrateOptions struct {
+	force      bool
+	skipGarage bool
+}
+
 func main() {
-	force := len(os.Args) > 1 && os.Args[1] == "--force"
+	opts := parseMigrateFlags()
 
 	// 1. 加载配置（源库 DSN 和目标库连接信息均从 config.local.yaml 读取）
 	cfg, err := config.Load()
@@ -94,7 +108,7 @@ func main() {
 		{"Step 11: post → article", migrateArticle},
 		{"Step 12: say → moment", migrateMoment},
 		{"Step 13: link → friend_link", migrateFriendLink},
-		{"Step 14: media", migrateMedia},
+		{"Step 14: media → moment_media", migrateMedia},
 		{"Step 15: category_post → article_category", migrateArticleCategory},
 		{"Step 16: tag_post → article_tag", migrateArticleTag},
 		{"Step 17: post_music → article_music", migrateArticleMusic},
@@ -109,7 +123,7 @@ func main() {
 	for _, step := range steps {
 		log.Printf("→ %s", step.name)
 		// 幂等检查：目标表若已有数据则跳过（--force 时强制执行）
-		if !force && hasData(dst, targetTableForStep(step.name)) {
+		if !opts.force && hasData(dst, targetTableForStep(step.name)) {
 			log.Printf("  跳过（目标表已有数据，使用 --force 强制重跑）")
 			continue
 		}
@@ -119,23 +133,35 @@ func main() {
 		log.Printf("  ✓ 完成")
 	}
 
+	if !opts.skipGarage {
+		log.Println("→ Step 24: Garage 对象路径迁移")
+		copier, err := newGarageCopier(cfg)
+		if err != nil {
+			log.Fatalf("  ✗ Garage 初始化失败: %v", err)
+		}
+		if err := migrateGarageObjects(context.Background(), src, dst, copier, cfg.Garage.Bucket); err != nil {
+			log.Fatalf("  ✗ Garage 对象路径迁移失败: %v", err)
+		}
+		log.Printf("  ✓ 完成")
+	}
+
 	// 5. 迁移后完整性清理（无论 force 与否，每次都执行）
 	// 源库中存在被攻击产生的垃圾数据以及历史软删除导致的孤儿记录，需在迁移后统一清理。
-	log.Println("→ Step 24: 完整性清理（孤儿记录）")
+	log.Println("→ Step 25: 完整性清理（孤儿记录）")
 	if err := cleanOrphans(dst); err != nil {
 		log.Fatalf("  ✗ 完整性清理失败: %v", err)
 	}
 	log.Printf("  ✓ 完成")
 
 	// 6. ID 整理：压缩各表因攻击/历史删除产生的 ID 间隙，重置 AUTO_INCREMENT（每次都执行）
-	log.Println("→ Step 25: ID 整理（压缩 ID 间隙 + 重置 AUTO_INCREMENT）")
+	log.Println("→ Step 26: ID 整理（压缩 ID 间隙 + 重置 AUTO_INCREMENT）")
 	if err := defragIDs(dst); err != nil {
 		log.Fatalf("  ✗ ID 整理失败: %v", err)
 	}
 	log.Printf("  ✓ 完成")
 
 	// 7. 清理迁移过程中遗留的旧表，确保目标库结构与当前代码一致
-	log.Println("→ Step 26: 清理旧表")
+	log.Println("→ Step 27: 清理旧表")
 	if err := dropLegacyTables(dst); err != nil {
 		log.Fatalf("  ✗ 清理旧表失败: %v", err)
 	}
@@ -149,7 +175,7 @@ func main() {
 // ─────────────────────────────────────────────
 
 func autoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&model.Role{},
 		&model.User{},
 		&model.UserRole{},
@@ -178,12 +204,73 @@ func autoMigrate(db *gorm.DB) error {
 		&model.GuestbookReply{},
 		&model.Message{},
 		&model.UserMessage{},
-	)
+	); err != nil {
+		return err
+	}
+	return normalizeMomentMediaSchema(db)
 }
 
 // ─────────────────────────────────────────────
 // 工具函数
 // ─────────────────────────────────────────────
+
+func parseMigrateFlags() migrateOptions {
+	opts := migrateOptions{}
+	flag.BoolVar(&opts.force, "force", false, "强制重跑已有数据的迁移步骤")
+	flag.BoolVar(&opts.skipGarage, "skip-garage", false, "跳过 Garage 对象复制和路径更新")
+	flag.Parse()
+	return opts
+}
+
+func normalizeMomentMediaSchema(db *gorm.DB) error {
+	hasMomentID, err := tableColumnExists(db, "moment_media", "moment_id")
+	if err != nil {
+		return err
+	}
+	if !hasMomentID {
+		if err := db.Exec("ALTER TABLE `moment_media` ADD COLUMN `moment_id` bigint unsigned NOT NULL DEFAULT 0 COMMENT '碎语ID' AFTER `uploader_id`").Error; err != nil {
+			return fmt.Errorf("添加 moment_media.moment_id 失败: %w", err)
+		}
+	}
+
+	hasOwnerID, err := tableColumnExists(db, "moment_media", "owner_id")
+	if err != nil {
+		return err
+	}
+	if hasOwnerID {
+		if err := db.Exec("UPDATE `moment_media` SET `moment_id` = `owner_id` WHERE `moment_id` = 0").Error; err != nil {
+			return fmt.Errorf("迁移 moment_media.owner_id 到 moment_id 失败: %w", err)
+		}
+		if err := db.Exec("ALTER TABLE `moment_media` DROP COLUMN `owner_id`").Error; err != nil {
+			return fmt.Errorf("删除 moment_media.owner_id 失败: %w", err)
+		}
+	}
+
+	hasOwnerType, err := tableColumnExists(db, "moment_media", "owner_type")
+	if err != nil {
+		return err
+	}
+	if hasOwnerType {
+		if err := db.Exec("ALTER TABLE `moment_media` DROP COLUMN `owner_type`").Error; err != nil {
+			return fmt.Errorf("删除 moment_media.owner_type 失败: %w", err)
+		}
+	}
+	return nil
+}
+
+func tableColumnExists(db *gorm.DB, table string, column string) (bool, error) {
+	var count int64
+	err := db.Raw(`
+		SELECT COUNT(*)
+		FROM INFORMATION_SCHEMA.COLUMNS
+		WHERE TABLE_SCHEMA = DATABASE()
+		  AND TABLE_NAME = ?
+		  AND COLUMN_NAME = ?`, table, column).Scan(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
 
 // hasData 检查目标表是否已有数据（幂等保护）
 func hasData(db *gorm.DB, table string) bool {
@@ -211,7 +298,7 @@ func targetTableForStep(name string) string {
 		"Step 11": "article",
 		"Step 12": "moment",
 		"Step 13": "friend_link",
-		"Step 14": "media",
+		"Step 14": "moment_media",
 		"Step 15": "article_category",
 		"Step 16": "article_tag",
 		"Step 17": "article_music",
@@ -308,17 +395,6 @@ func parseSongDate(s sql.NullString) *time.Time {
 	return nil
 }
 
-// remapMediaOwnerType 将旧系统 media.owner_type 映射到新系统语义。
-// 旧系统：1=say（碎语）；新系统：1=文章 2=说说 3=用户。
-func remapMediaOwnerType(old int) uint8 {
-	switch old {
-	case 1: // 旧系统 say = 新系统 说说
-		return 2
-	default:
-		return uint8(old)
-	}
-}
-
 // nullUint 将 sql.NullInt64 转为 *uint，0 值也转为 nil
 func nullUint(ni sql.NullInt64) *uint {
 	if !ni.Valid || ni.Int64 == 0 {
@@ -326,6 +402,413 @@ func nullUint(ni sql.NullInt64) *uint {
 	}
 	v := uint(ni.Int64)
 	return &v
+}
+
+type garageCopier struct {
+	client *storage.Client
+}
+
+type garageRunStats struct {
+	planned int
+	copied  int
+	skipped int
+	updated int
+	failed  int
+}
+
+type garageArticleStore struct {
+	db *gorm.DB
+}
+
+type momentMediaGarageRow struct {
+	ID                uint
+	CurrentUploaderID uint
+	CurrentMomentID   uint
+	UserID            uint
+	MomentID          uint
+	URL               string
+}
+
+type momentMediaGaragePlan struct {
+	MediaID           uint
+	CurrentUploaderID uint
+	CurrentMomentID   uint
+	SourceKey         string
+	TargetKey         string
+	UpdatedURL        string
+	UpdatedUploaderID uint
+	UpdatedMomentID   uint
+	Err               error
+}
+
+func (p momentMediaGaragePlan) HasChanges() bool {
+	return p.SourceKey != "" && p.TargetKey != "" && p.UpdatedURL != ""
+}
+
+func (p momentMediaGaragePlan) NeedsDBUpdate() bool {
+	return p.UpdatedUploaderID != 0 &&
+		(p.UpdatedUploaderID != p.CurrentUploaderID || p.UpdatedMomentID != p.CurrentMomentID)
+}
+
+func newGarageCopier(cfg *config.Config) (*garageCopier, error) {
+	client, err := storage.NewGarage(&cfg.Garage, &cfg.CDN)
+	if err != nil {
+		return nil, err
+	}
+	return &garageCopier{client: client}, nil
+}
+
+func migrateGarageObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier *garageCopier, bucket string) error {
+	articleStats, err := migrateGarageArticleObjects(ctx, &garageArticleStore{db: db}, copier, bucket)
+	if err != nil {
+		return err
+	}
+	mediaStats, err := migrateGarageMomentMediaObjects(ctx, src, db, copier, bucket)
+	if err != nil {
+		return err
+	}
+
+	total := garageRunStats{
+		planned: articleStats.planned + mediaStats.planned,
+		copied:  articleStats.copied + mediaStats.copied,
+		skipped: articleStats.skipped + mediaStats.skipped,
+		updated: articleStats.updated + mediaStats.updated,
+		failed:  articleStats.failed + mediaStats.failed,
+	}
+	log.Printf("  Garage 统计 planned=%d copied=%d skipped=%d updated=%d failed=%d",
+		total.planned, total.copied, total.skipped, total.updated, total.failed)
+	if total.failed > 0 {
+		return fmt.Errorf("Garage 迁移存在 %d 个失败项，详见上方日志", total.failed)
+	}
+	return nil
+}
+
+func migrateGarageArticleObjects(ctx context.Context, store *garageArticleStore, copier *garageCopier, bucket string) (garageRunStats, error) {
+	articles, err := store.listArticles()
+	if err != nil {
+		return garageRunStats{}, err
+	}
+
+	stats := garageRunStats{}
+	for _, article := range articles {
+		plan := garagearticles.BuildArticlePlan(article, garagearticles.PlanOptions{Bucket: bucket})
+		if !plan.HasChanges() && len(plan.Failures) == 0 {
+			stats.skipped++
+			continue
+		}
+		for _, failure := range plan.Failures {
+			stats.failed++
+			log.Printf("  Garage 文章失败 article_id=%d stage=%s source=%s target=%s error=%s",
+				failure.ArticleID, failure.Stage, failure.Source, failure.Target, failure.Error())
+		}
+		if len(plan.Failures) > 0 {
+			continue
+		}
+
+		failedBeforeArticle := stats.failed
+		for _, asset := range plan.Assets {
+			stats.planned++
+			copied, err := copier.copyObjectIfNeeded(ctx, asset.SourceKey, asset.TargetKey)
+			if err != nil {
+				stats.failed++
+				log.Printf("  Garage 文章失败 article_id=%d source=%s target=%s error=%v",
+					asset.ArticleID, asset.SourceKey, asset.TargetKey, err)
+				continue
+			}
+			if copied {
+				stats.copied++
+			} else {
+				stats.skipped++
+			}
+			log.Printf("  Garage 文章 article_id=%d source=%s target=%s", asset.ArticleID, asset.SourceKey, asset.TargetKey)
+		}
+		if stats.failed > failedBeforeArticle {
+			continue
+		}
+		if err := store.updateArticle(plan); err != nil {
+			stats.failed++
+			log.Printf("  Garage 文章数据库更新失败 article_id=%d error=%v", plan.ArticleID, err)
+			continue
+		}
+		stats.updated++
+	}
+	return stats, nil
+}
+
+func migrateGarageMomentMediaObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier *garageCopier, bucket string) (garageRunStats, error) {
+	rows, err := listMomentMediaGarageRows(src, db)
+	if err != nil {
+		return garageRunStats{}, err
+	}
+
+	stats := garageRunStats{}
+	for _, row := range rows {
+		plan := buildMomentMediaGaragePlan(row, bucket)
+		if plan.Err != nil {
+			stats.failed++
+			log.Printf("  Garage 碎语媒体规划失败 media_id=%d url=%s error=%v", row.ID, row.URL, plan.Err)
+			continue
+		}
+		if !plan.HasChanges() {
+			if plan.NeedsDBUpdate() {
+				if err := updateMomentMediaURL(db, plan); err != nil {
+					stats.failed++
+					log.Printf("  Garage 碎语媒体数据库修正失败 media_id=%d error=%v", plan.MediaID, err)
+					continue
+				}
+				stats.updated++
+			} else {
+				stats.skipped++
+			}
+			continue
+		}
+
+		stats.planned++
+		copied, err := copier.copyObjectIfNeeded(ctx, plan.SourceKey, plan.TargetKey)
+		if err != nil {
+			stats.failed++
+			log.Printf("  Garage 碎语媒体复制失败 media_id=%d source=%s target=%s error=%v",
+				plan.MediaID, plan.SourceKey, plan.TargetKey, err)
+			continue
+		}
+		if copied {
+			stats.copied++
+		} else {
+			stats.skipped++
+		}
+		if err := updateMomentMediaURL(db, plan); err != nil {
+			stats.failed++
+			log.Printf("  Garage 碎语媒体数据库更新失败 media_id=%d error=%v", plan.MediaID, err)
+			continue
+		}
+		stats.updated++
+		log.Printf("  Garage 碎语媒体 media_id=%d source=%s target=%s", plan.MediaID, plan.SourceKey, plan.TargetKey)
+	}
+	return stats, nil
+}
+
+func listMomentMediaGarageRows(src *sql.DB, db *gorm.DB) ([]momentMediaGarageRow, error) {
+	var media []model.Media
+	if err := db.Model(&model.Media{}).
+		Select("id, uploader_id, moment_id, url").
+		Order("id ASC").
+		Find(&media).Error; err != nil {
+		return nil, err
+	}
+
+	rows := make([]momentMediaGarageRow, 0, len(media))
+	for _, item := range media {
+		row := momentMediaGarageRow{
+			ID:                item.ID,
+			CurrentUploaderID: item.UploaderID,
+			CurrentMomentID:   item.MomentID,
+			UserID:            item.UploaderID,
+			MomentID:          item.MomentID,
+			URL:               item.URL,
+		}
+		legacyMomentID, legacyURL, found, err := findLegacyMomentMedia(src, item.ID)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			row.MomentID = legacyMomentID
+			row.URL = legacyURL
+		}
+		if row.MomentID != 0 {
+			userID, err := findMomentUserID(db, row.MomentID)
+			if err != nil {
+				return nil, fmt.Errorf("查询碎语媒体 media_id=%d moment_id=%d 的用户失败: %w", item.ID, row.MomentID, err)
+			}
+			row.UserID = userID
+		}
+		rows = append(rows, momentMediaGarageRow{
+			ID:                row.ID,
+			CurrentUploaderID: row.CurrentUploaderID,
+			CurrentMomentID:   row.CurrentMomentID,
+			UserID:            row.UserID,
+			MomentID:          row.MomentID,
+			URL:               row.URL,
+		})
+	}
+	return rows, nil
+}
+
+func findLegacyMomentMedia(src *sql.DB, mediaID uint) (uint, string, bool, error) {
+	var (
+		ownerID uint
+		rawURL  sql.NullString
+	)
+	err := src.QueryRow("SELECT owner_id, url FROM media WHERE ID = ? AND owner_type = 1", mediaID).Scan(&ownerID, &rawURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, fmt.Errorf("查询源 media id=%d 失败: %w", mediaID, err)
+	}
+	return ownerID, rawURL.String, true, nil
+}
+
+func buildMomentMediaGaragePlan(row momentMediaGarageRow, bucket string) momentMediaGaragePlan {
+	sourceKey := objectKeyFromStorageValue(row.URL, bucket)
+	plan := momentMediaGaragePlan{
+		MediaID:           row.ID,
+		CurrentUploaderID: row.CurrentUploaderID,
+		CurrentMomentID:   row.CurrentMomentID,
+		UpdatedUploaderID: row.UserID,
+		UpdatedMomentID:   row.MomentID,
+	}
+	if sourceKey == "" {
+		return plan
+	}
+
+	if isMigratedMomentMediaKey(row.UserID, row.MomentID, sourceKey) {
+		return plan
+	}
+
+	_, suffix, ok := legacySayMediaSuffix(sourceKey)
+	if !ok {
+		return plan
+	}
+	if suffix == "" || strings.HasSuffix(suffix, "/") {
+		return momentMediaGaragePlan{
+			MediaID: row.ID,
+			Err:     fmt.Errorf("对象 key 缺少文件名: %s", sourceKey),
+		}
+	}
+
+	targetKey := path.Join("moments", strconv.FormatUint(uint64(row.UserID), 10), strconv.FormatUint(uint64(row.MomentID), 10), suffix)
+	plan.SourceKey = sourceKey
+	plan.TargetKey = targetKey
+	plan.UpdatedURL = targetKey
+	return plan
+}
+
+func isMigratedMomentMediaKey(userID, momentID uint, key string) bool {
+	prefix := path.Join("moments", strconv.FormatUint(uint64(userID), 10), strconv.FormatUint(uint64(momentID), 10)) + "/"
+	return strings.HasPrefix(strings.TrimLeft(key, "/"), prefix)
+}
+
+func updateMomentMediaURL(db *gorm.DB, plan momentMediaGaragePlan) error {
+	updates := map[string]any{
+		"uploader_id": plan.UpdatedUploaderID,
+		"moment_id":   plan.UpdatedMomentID,
+	}
+	if plan.UpdatedURL != "" {
+		updates["url"] = plan.UpdatedURL
+	}
+	return db.Model(&model.Media{}).
+		Where("id = ?", plan.MediaID).
+		Updates(updates).Error
+}
+
+func findMomentUserID(db *gorm.DB, momentID uint) (uint, error) {
+	var moment model.Moment
+	if err := db.Model(&model.Moment{}).Select("id, user_id").First(&moment, momentID).Error; err != nil {
+		return 0, err
+	}
+	return moment.UserID, nil
+}
+
+func (s *garageArticleStore) listArticles() ([]garagearticles.ArticleRow, error) {
+	var articles []model.Article
+	if err := s.db.Model(&model.Article{}).
+		Select("id, cover_img_url, content").
+		Order("id ASC").
+		Find(&articles).Error; err != nil {
+		return nil, err
+	}
+
+	rows := make([]garagearticles.ArticleRow, 0, len(articles))
+	for _, article := range articles {
+		rows = append(rows, garagearticles.ArticleRow{
+			ID:          article.ID,
+			CoverImgURL: article.CoverImgUrl,
+			Content:     article.Content,
+		})
+	}
+	return rows, nil
+}
+
+func (s *garageArticleStore) updateArticle(plan garagearticles.ArticlePlan) error {
+	updates := map[string]any{}
+	if plan.UpdatedCoverImgURL != nil {
+		updates["cover_img_url"] = *plan.UpdatedCoverImgURL
+	}
+	if plan.ContentChanged {
+		updates["content"] = plan.UpdatedContent
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return s.db.Model(&model.Article{}).
+		Where("id = ?", plan.ArticleID).
+		Updates(updates).Error
+}
+
+func (c *garageCopier) copyObjectIfNeeded(ctx context.Context, sourceKey, targetKey string) (bool, error) {
+	exists, err := c.client.ObjectExists(ctx, targetKey)
+	if err != nil {
+		return false, fmt.Errorf("检查目标对象: %w", err)
+	}
+	if exists {
+		return false, nil
+	}
+	_, err = c.client.S3().CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(c.client.Bucket()),
+		Key:        aws.String(targetKey),
+		CopySource: aws.String(copySource(c.client.Bucket(), sourceKey)),
+	})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func copySource(bucket, key string) string {
+	parts := strings.Split(strings.TrimLeft(key, "/"), "/")
+	for i := range parts {
+		parts[i] = url.PathEscape(parts[i])
+	}
+	return strings.Trim(bucket, "/") + "/" + strings.Join(parts, "/")
+}
+
+func objectKeyFromStorageValue(value, bucket string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+
+	rawPath := value
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		parsed, err := url.Parse(value)
+		if err == nil {
+			rawPath = parsed.Path
+		}
+	}
+
+	rawPath, _, _ = strings.Cut(rawPath, "?")
+	rawPath, _, _ = strings.Cut(rawPath, "#")
+	key := strings.TrimLeft(strings.TrimSpace(rawPath), "/")
+	bucket = strings.Trim(bucket, "/")
+	if bucket != "" && strings.HasPrefix(key, bucket+"/") {
+		key = strings.TrimPrefix(key, bucket+"/")
+	}
+	return key
+}
+
+func legacySayMediaSuffix(key string) (uint, string, bool) {
+	parts := strings.Split(strings.TrimLeft(strings.TrimSpace(key), "/"), "/")
+	for index := 0; index < len(parts)-1; index++ {
+		if parts[index] != "say" {
+			continue
+		}
+		id, err := strconv.ParseUint(parts[index+1], 10, 64)
+		if err != nil || id == 0 {
+			return 0, "", false
+		}
+		return uint(id), strings.Join(parts[index+2:], "/"), true
+	}
+	return 0, "", false
 }
 
 // ─────────────────────────────────────────────
@@ -1102,21 +1585,21 @@ func migrateFriendLink(src *sql.DB, dst *gorm.DB) error {
 }
 
 // ─────────────────────────────────────────────
-// Step 14: media → media
+// Step 14: media → moment_media
 // ─────────────────────────────────────────────
 // user_id → uploader_id（字段语义改名，更明确）
 // status varchar '01'/'00' → tinyint 1/0
 // url 从 longtext 缩至 varchar(1000)
 //
-// owner_type 重映射（旧系统与新系统语义不同）：
-//   旧 1 (say/碎语) → 新 2 (说说)
-//   其他值保持原样
+// 源 media 当前只承载 say（碎语）多媒体，目标表收敛为 moment_media。
 
 func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 	rows, err := src.Query(`
-		SELECT ID, user_id, owner_id, owner_type, type, file_type,
+		SELECT ID, user_id, owner_id, type, file_type,
 		       name, url, size, status, seq, read_count, date_create, date_modifed
-		FROM media ORDER BY ID`)
+		FROM media
+		WHERE owner_type = 1
+		ORDER BY ID`)
 	if err != nil {
 		return err
 	}
@@ -1127,7 +1610,6 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 			id          uint
 			userID      sql.NullInt64
 			ownerID     int64
-			ownerType   int
 			typ         int
 			fileType    sql.NullString
 			name        sql.NullString
@@ -1139,7 +1621,7 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 			dateCreate  sql.NullTime
 			dateModifed sql.NullTime
 		)
-		if err := rows.Scan(&id, &userID, &ownerID, &ownerType, &typ, &fileType,
+		if err := rows.Scan(&id, &userID, &ownerID, &typ, &fileType,
 			&name, &url, &size, &status, &seq, &readCount,
 			&dateCreate, &dateModifed); err != nil {
 			return err
@@ -1154,14 +1636,18 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 			}
 		}
 
-		// 旧系统用 1 表示 say（碎语），新系统用 2 表示说说；迁移时重映射。
-		newOwnerType := remapMediaOwnerType(ownerType)
+		momentID := uint(ownerID)
+		newUploaderID := uint(userID.Int64)
+		if resolvedUserID, err := findMomentUserID(dst, momentID); err == nil {
+			newUploaderID = resolvedUserID
+		} else {
+			return fmt.Errorf("查询 moment_media id=%d 对应 moment id=%d 用户失败: %w", id, momentID, err)
+		}
 
 		m := model.Media{
 			Base:       model.Base{ID: id},
-			UploaderID: uint(userID.Int64),
-			OwnerID:    uint(ownerID),
-			OwnerType:  newOwnerType,
+			UploaderID: newUploaderID,
+			MomentID:   momentID,
 			Type:       uint8(typ),
 			FileType:   fileType.String,
 			Name:       name.String,
@@ -1178,7 +1664,7 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 			m.UpdatedAt = dateModifed.Time
 		}
 		if err := dst.Create(&m).Error; err != nil {
-			return fmt.Errorf("insert media id=%d: %w", id, err)
+			return fmt.Errorf("insert moment_media id=%d: %w", id, err)
 		}
 	}
 	return rows.Err()
@@ -1653,7 +2139,7 @@ func replyLikeTypeFromLegacy(commentType uint8) uint8 {
 }
 
 func dropLegacyTables(dst *gorm.DB) error {
-	return dst.Exec("DROP TABLE IF EXISTS `comment_reply`").Error
+	return dst.Exec("DROP TABLE IF EXISTS `comment_reply`, `media`").Error
 }
 
 // ─────────────────────────────────────────────

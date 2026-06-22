@@ -35,7 +35,22 @@ func (r *momentRepo) Save(data SaveData) (*MomentAggregate, error) {
 		}
 		momentID = data.Moment.ID
 
-		if err := tx.Where("owner_id = ? AND owner_type = ?", momentID, MomentMediaOwnerType).Delete(&model.Media{}).Error; err != nil {
+		if data.PrepareImages != nil {
+			images, err := data.PrepareImages(data.Moment)
+			if err != nil {
+				return err
+			}
+			data.Images = images
+		}
+		if data.RemovedURLs != nil {
+			oldImages, err := repo.imagesByMomentID([]uint{momentID})
+			if err != nil {
+				return err
+			}
+			*data.RemovedURLs = append(*data.RemovedURLs, removedImageURLs(oldImages[momentID], data.Images)...)
+		}
+
+		if err := tx.Where("moment_id = ?", momentID).Delete(&model.Media{}).Error; err != nil {
 			return err
 		}
 		images := prepareImages(data.Moment, data.Images)

@@ -37,7 +37,21 @@ func (s *momentService) GetDetail(id uint, viewerID *uint) (*dto.MomentItemResp,
 	return s.momentToDTO(*aggregate)
 }
 
-func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames []string) (*dto.MomentItemResp, error) {
+func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames []string) (resp *dto.MomentItemResp, err error) {
+	uploaded := make([]string, 0, len(req.ImageFiles))
+	rollbackUploaded := true
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if rollbackUploaded {
+				_ = s.deleteUploadedMomentImages(context.Background(), uploaded)
+			}
+			panic(recovered)
+		}
+		if err != nil && rollbackUploaded {
+			err = errors.Join(err, s.deleteUploadedMomentImages(context.Background(), uploaded))
+		}
+	}()
+
 	content, err := cleanMomentContent(req.Content)
 	if err != nil {
 		return nil, err
@@ -59,14 +73,22 @@ func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames [
 		moment.ID = *req.ID
 	}
 
+	removedURLs := make([]string, 0)
 	aggregate, err := s.repo.Save(momentrepo.SaveData{
-		Moment:     moment,
-		Images:     momentImagesFromDTO(req.Images),
-		OperatorID: operatorID,
-		Force:      force,
+		Moment: moment,
+		PrepareImages: func(saved model.Moment) ([]model.Media, error) {
+			return s.prepareMomentImages(context.Background(), saved, req, &uploaded)
+		},
+		RemovedURLs: &removedURLs,
+		OperatorID:  operatorID,
+		Force:       force,
 	})
 	if err != nil {
 		return nil, mapRepoError(err)
+	}
+	rollbackUploaded = false
+	if err := s.deleteRemovedMomentImages(context.Background(), removedURLs); err != nil {
+		return nil, err
 	}
 	return s.momentToDTO(*aggregate)
 }
@@ -198,18 +220,4 @@ func mapRepoError(err error) error {
 		return ErrMomentTopLimitExceeded
 	}
 	return err
-}
-
-func momentImagesFromDTO(images []dto.MomentMediaReq) []model.Media {
-	rows := make([]model.Media, 0, len(images))
-	for _, image := range images {
-		rows = append(rows, model.Media{
-			Name:     image.Name,
-			FileType: image.FileType,
-			URL:      strings.TrimSpace(image.URL),
-			Size:     image.Size,
-			Seq:      image.Seq,
-		})
-	}
-	return rows
 }

@@ -10,9 +10,7 @@ import (
 const (
 	// MomentLikeType 表示 user_like 中的碎语点赞类型。
 	MomentLikeType uint8 = 3
-	// MomentMediaOwnerType 表示 media 中的碎语所属类型。
-	MomentMediaOwnerType uint8 = 2
-	// MomentImageType 表示 media 中的图片类型。
+	// MomentImageType 表示 moment_media 中的图片类型。
 	MomentImageType uint8 = 0
 	// MaxTopMomentsPerUser 限制每个用户最多置顶三条碎语。
 	MaxTopMomentsPerUser int64 = 3
@@ -39,10 +37,12 @@ type ListFilter struct {
 
 // SaveData 保存碎语所需的主表、图片和权限信息。
 type SaveData struct {
-	Moment     model.Moment
-	Images     []model.Media
-	OperatorID uint
-	Force      bool
+	Moment        model.Moment
+	Images        []model.Media
+	PrepareImages func(moment model.Moment) ([]model.Media, error)
+	RemovedURLs   *[]string
+	OperatorID    uint
+	Force         bool
 }
 
 // MomentAggregate 碎语及其作者、图片、点赞和评论聚合。

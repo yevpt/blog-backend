@@ -1308,32 +1308,6 @@ definitions:
         example: 3
         type: integer
     type: object
-  dto.MomentMediaReq:
-    properties:
-      file_type:
-        description: FileType 图片文件类型或扩展名。
-        example: jpg
-        type: string
-      name:
-        description: Name 图片原始文件名。
-        example: cat.jpg
-        type: string
-      seq:
-        description: Seq 图片排序值，越小越靠前。
-        example: 1
-        type: integer
-      size:
-        description: Size 图片大小，单位字节。
-        example: 1024
-        type: integer
-      url:
-        description: URL 图片对象 key 或可访问 URL。
-        example: moments/cat.jpg
-        maxLength: 1000
-        type: string
-    required:
-    - url
-    type: object
   dto.MomentMediaResp:
     properties:
       access_url:
@@ -1388,43 +1362,6 @@ definitions:
         description: Total 总记录数。
         example: 100
         type: integer
-    type: object
-  dto.MomentSaveReq:
-    properties:
-      comment_status:
-        description: CommentStatus 评论状态：0 关闭，1 开启。
-        enum:
-        - 0
-        - 1
-        example: 1
-        type: integer
-      content:
-        description: Content 碎语正文，去除首尾空白后不能为空，最多 800 字符。
-        example: 今天的风很温柔
-        maxLength: 800
-        type: string
-      id:
-        description: ID 碎语 ID，为空或 0 表示新增。
-        example: 1
-        type: integer
-      images:
-        description: Images 图片列表，会整体替换该碎语原有图片。
-        items:
-          $ref: '#/definitions/dto.MomentMediaReq'
-        type: array
-      status:
-        description: Status 状态：0 隐藏，1 公开。
-        enum:
-        - 0
-        - 1
-        example: 1
-        type: integer
-      user_id:
-        description: UserID 作者用户 ID；管理员可传入代管作者，普通用户会被强制设置为当前登录用户。
-        example: 1
-        type: integer
-    required:
-    - content
     type: object
   dto.MomentTopResp:
     properties:
@@ -4003,15 +3940,51 @@ paths:
       - 碎语
     post:
       consumes:
-      - application/json
-      description: 登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者，并同步图片列表。
+      - multipart/form-data
+      description: 登录用户新增或更新自己的碎语；管理员可通过 user_id 指定作者。image_urls 传已上传图片 URL/key，images
+        传新图片文件，图片会整体替换。
       parameters:
-      - description: 碎语保存请求
-        in: body
-        name: request
+      - description: 碎语 ID；为空表示新增
+        in: formData
+        name: id
+        type: integer
+      - description: 作者用户 ID；仅管理员可代管
+        in: formData
+        name: user_id
+        type: integer
+      - description: 碎语正文
+        in: formData
+        name: content
         required: true
-        schema:
-          $ref: '#/definitions/dto.MomentSaveReq'
+        type: string
+      - description: 状态：0 隐藏，1 公开
+        in: formData
+        name: status
+        required: true
+        type: integer
+      - description: 评论状态：0 关闭，1 开启
+        in: formData
+        name: comment_status
+        required: true
+        type: integer
+      - collectionFormat: csv
+        description: 已上传图片对象 key 或 URL，可重复传入
+        in: formData
+        items:
+          type: string
+        name: image_urls
+        type: array
+      - collectionFormat: csv
+        description: 图片顺序引用，可重复传入；url:N 指向第 N 个 image_urls，file:N 指向第 N 个 images
+        in: formData
+        items:
+          type: string
+        name: image_order
+        type: array
+      - description: 新图片文件，可重复传入
+        in: formData
+        name: images
+        type: file
       produces:
       - application/json
       responses:

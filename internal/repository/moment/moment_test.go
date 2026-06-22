@@ -51,12 +51,12 @@ func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 			"id", "created_at", "updated_at", "deleted_at", "username", "password", "nickname",
 			"email", "phone", "site", "avatar_url", "mark", "status", "last_login_at",
 		}).AddRow(1, now, now, nil, "vpt", "", nil, nil, nil, nil, nil, nil, 1, nil))
-	mock.ExpectQuery("SELECT \\* FROM `media`").
-		WithArgs(momentrepo.MomentMediaOwnerType, momentrepo.MomentImageType, uint8(1), uint(9)).
+	mock.ExpectQuery("SELECT \\* FROM `moment_media`").
+		WithArgs(momentrepo.MomentImageType, uint8(1), uint(9)).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "created_at", "updated_at", "deleted_at", "uploader_id", "owner_id", "owner_type",
+			"id", "created_at", "updated_at", "deleted_at", "uploader_id", "moment_id",
 			"type", "file_type", "name", "url", "size", "status", "seq", "read_count",
-		}).AddRow(3, now, now, nil, 1, 9, 2, 0, "jpg", "cat.jpg", "moments/cat.jpg", 10, 1, 1, 0))
+		}).AddRow(3, now, now, nil, 1, 9, 0, "jpg", "cat.jpg", "moments/cat.jpg", 10, 1, 1, 0))
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
 		WithArgs(momentrepo.MomentLikeType, uint(9)).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}).AddRow(9, 2))
@@ -93,11 +93,11 @@ func TestMomentRepository_Save_ReplacesImages(t *testing.T) {
 	mock.ExpectExec("INSERT INTO `moment`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), "风很温柔", uint8(1), uint8(1), uint(0), false).
 		WillReturnResult(sqlmock.NewResult(9, 1))
-	mock.ExpectExec("UPDATE `media` SET `deleted_at`=\\? WHERE \\(owner_id = \\? AND owner_type = \\?\\) AND `media`.`deleted_at` IS NULL").
-		WithArgs(sqlmock.AnyArg(), uint(9), momentrepo.MomentMediaOwnerType).
+	mock.ExpectExec("UPDATE `moment_media` SET `deleted_at`=\\? WHERE moment_id = \\? AND `moment_media`.`deleted_at` IS NULL").
+		WithArgs(sqlmock.AnyArg(), uint(9)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec("INSERT INTO `media`").
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), uint(9), momentrepo.MomentMediaOwnerType, momentrepo.MomentImageType, "jpg", "cat.jpg", "moments/cat.jpg", uint(10), uint8(1), uint(1), uint(0)).
+	mock.ExpectExec("INSERT INTO `moment_media`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), uint(9), momentrepo.MomentImageType, "jpg", "cat.jpg", "moments/cat.jpg", uint(10), uint8(1), uint(1), uint(0)).
 		WillReturnResult(sqlmock.NewResult(3, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT \\* FROM `moment`").
@@ -116,6 +116,61 @@ func TestMomentRepository_Save_ReplacesImages(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, uint(9), resp.Moment.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMomentRepository_Save_CollectsRemovedImageURLs(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user`").
+		WithArgs(uint(1), uint8(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "旧内容", 1, 1, 0, false))
+	mock.ExpectExec("UPDATE `moment` SET").
+		WithArgs(uint8(1), "风很温柔", uint8(1), uint(1), sqlmock.AnyArg(), uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT \\* FROM `moment_media`").
+		WithArgs(momentrepo.MomentImageType, uint8(1), uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "uploader_id", "moment_id",
+			"type", "file_type", "name", "url", "size", "status", "seq", "read_count",
+		}).
+			AddRow(1, now, now, nil, 1, 9, 0, "jpg", "keep.jpg", "moments/7/9/keep.jpg", 10, 1, 1, 0).
+			AddRow(2, now, now, nil, 1, 9, 0, "jpg", "remove.jpg", "moments/7/9/remove.jpg", 10, 1, 2, 0))
+	mock.ExpectExec("UPDATE `moment_media` SET `deleted_at`=\\? WHERE moment_id = \\? AND `moment_media`.`deleted_at` IS NULL").
+		WithArgs(sqlmock.AnyArg(), uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("INSERT INTO `moment_media`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), uint(9), momentrepo.MomentImageType, "jpg", "keep.jpg", "moments/7/9/keep.jpg", uint(10), uint8(1), uint(1), uint(0)).
+		WillReturnResult(sqlmock.NewResult(3, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风很温柔", 1, 1, 0, false))
+	expectEmptyRelations(mock, now, uint(9), uint(1))
+
+	removed := make([]string, 0)
+	_, err := repo.Save(momentrepo.SaveData{
+		Moment:      model.Moment{Base: model.Base{ID: 9}, UserID: 1, Content: "风很温柔", Status: 1, CommentStatus: 1},
+		Images:      []model.Media{{UploaderID: 1, Name: "keep.jpg", FileType: "jpg", URL: "moments/7/9/keep.jpg", Size: 10, Seq: 1}},
+		RemovedURLs: &removed,
+		OperatorID:  1,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"moments/7/9/remove.jpg"}, removed)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -197,10 +252,10 @@ func expectEmptyRelations(mock sqlmock.Sqlmock, now time.Time, momentID uint, us
 			"id", "created_at", "updated_at", "deleted_at", "username", "password", "nickname",
 			"email", "phone", "site", "avatar_url", "mark", "status", "last_login_at",
 		}).AddRow(userID, now, now, nil, "vpt", "", nil, nil, nil, nil, nil, nil, 1, nil))
-	mock.ExpectQuery("SELECT \\* FROM `media`").
-		WithArgs(momentrepo.MomentMediaOwnerType, momentrepo.MomentImageType, uint8(1), momentID).
+	mock.ExpectQuery("SELECT \\* FROM `moment_media`").
+		WithArgs(momentrepo.MomentImageType, uint8(1), momentID).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "created_at", "updated_at", "deleted_at", "uploader_id", "owner_id", "owner_type",
+			"id", "created_at", "updated_at", "deleted_at", "uploader_id", "moment_id",
 			"type", "file_type", "name", "url", "size", "status", "seq", "read_count",
 		}))
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
