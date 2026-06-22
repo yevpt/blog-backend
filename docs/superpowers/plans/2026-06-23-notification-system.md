@@ -238,7 +238,7 @@ git commit -m "feat(notification): 新增通知仓储"
 - Create: `internal/dto/notification.go`
 - Test: `internal/service/notification/*_test.go`
 
-- [ ] **Step 1: Define service contracts**
+- [x] **Step 1: Define service contracts**
 
 Create:
 
@@ -256,7 +256,7 @@ type InboxService interface {
 }
 ```
 
-- [ ] **Step 2: Write service tests first**
+- [x] **Step 2: Write service tests first**
 
 Cover:
 
@@ -270,19 +270,19 @@ Run: `go test ./internal/service/notification -count=1`
 
 Expected: FAIL until service implementation exists.
 
-- [ ] **Step 3: Implement publisher and inbox service**
+- [x] **Step 3: Implement publisher and inbox service**
 
 Publisher creates only `notification_event`. It must not create inbox rows directly. Dispatcher owns delivery.
 
 Inbox service returns DTO only and never returns model types.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `go test ./internal/service/notification -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/notification internal/dto/notification.go
