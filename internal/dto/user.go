@@ -82,9 +82,9 @@ type UserPageResp struct {
 
 // UserUpdateReq 更新当前用户信息请求
 type UserUpdateReq struct {
-	Nickname  *string `json:"nickname,omitempty" binding:"omitempty,max=150" example:"Yevpt"`
+	Nickname  *string `json:"nickname,omitempty" binding:"omitempty,max=30" example:"Yevpt"`
 	AvatarUrl *string `json:"avatar_url,omitempty" binding:"omitempty,max=255" example:"https://cdn.example.com/avatar.png"`
-	Mark      *string `json:"mark,omitempty" binding:"omitempty,max=200" example:"博主"`
+	Mark      *string `json:"mark,omitempty" binding:"omitempty,max=30" example:"博主"`
 }
 
 // UserPublicProfileResp GET /users/:id 某用户的公开详情
@@ -106,10 +106,10 @@ type UserPublicProfileResp struct {
 
 // UpdateProfileReq PATCH /users/me/profile
 type UpdateProfileReq struct {
-	Nickname    *string `json:"nickname" binding:"omitempty,max=150"`
-	Mark        *string `json:"mark" binding:"omitempty,max=200"`
-	Description *string `json:"description" binding:"omitempty,max=1000"`
-	Site        *string `json:"site" binding:"omitempty,max=500"`
+	Nickname    *string `json:"nickname" binding:"omitempty,max=30"`
+	Mark        *string `json:"mark" binding:"omitempty,max=30"`
+	Description *string `json:"description" binding:"omitempty,max=200"`
+	Site        *string `json:"site" binding:"omitempty,max=200"`
 }
 
 // UpdateMetaReq PATCH /users/me/meta
