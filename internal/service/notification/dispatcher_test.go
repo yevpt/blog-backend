@@ -82,6 +82,8 @@ func (r *dispatchRepo) CreateEmailTask(_ context.Context, task *model.Notificati
 func (r *dispatchRepo) LeaseEmailTasks(context.Context, string, int, int) ([]model.NotificationEmailTask, error) {
 	return nil, nil
 }
+func (r *dispatchRepo) DeferEmailTasks(context.Context, []uint, time.Time) error { return nil }
+func (r *dispatchRepo) ReleaseEmailTasks(context.Context, []uint) error          { return nil }
 func (r *dispatchRepo) CreateEmailBatchWithItems(context.Context, *model.NotificationEmailBatch, []uint) error {
 	return nil
 }

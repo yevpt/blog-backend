@@ -96,6 +96,10 @@ type EmailTaskRepository interface {
 	CreateEmailTask(ctx context.Context, task *model.NotificationEmailTask) (created bool, err error)
 	// LeaseEmailTasks 领取可聚合的邮件任务，抢占 pending 与租约过期行。
 	LeaseEmailTasks(ctx context.Context, workerID string, leaseSeconds int, limit int) ([]model.NotificationEmailTask, error)
+	// DeferEmailTasks 将任务标记为 deferred 并设置下次处理时间，同时释放租约。
+	DeferEmailTasks(ctx context.Context, ids []uint, nextAttemptAt time.Time) error
+	// ReleaseEmailTasks 释放任务租约并保持 pending，供未到窗口或超出批次容量的任务下次重领。
+	ReleaseEmailTasks(ctx context.Context, ids []uint) error
 }
 
 // EmailBatchRepository 邮件批次的生成、领取与发送结果落库。

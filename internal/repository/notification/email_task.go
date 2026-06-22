@@ -53,3 +53,31 @@ func (r *repo) LeaseEmailTasks(ctx context.Context, workerID string, leaseSecond
 	}
 	return tasks, nil
 }
+
+// DeferEmailTasks 将任务标记为 deferred 并设置下次处理时间，释放租约。
+func (r *repo) DeferEmailTasks(ctx context.Context, ids []uint, nextAttemptAt time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.NotificationEmailTask{}).
+		Where("id IN ?", ids).
+		Updates(map[string]any{
+			"status":          EmailTaskStatusDeferred,
+			"next_attempt_at": nextAttemptAt,
+			"lease_until":     nil,
+			"locked_by":       nil,
+		}).Error
+}
+
+// ReleaseEmailTasks 释放任务租约并保持 pending，供下次重新领取。
+func (r *repo) ReleaseEmailTasks(ctx context.Context, ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Model(&model.NotificationEmailTask{}).
+		Where("id IN ?", ids).
+		Updates(map[string]any{
+			"lease_until": nil,
+			"locked_by":   nil,
+		}).Error
+}

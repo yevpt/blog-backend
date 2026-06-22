@@ -540,7 +540,7 @@ git commit -m "feat(notification): 新增邮件额度服务"
 - Create: `internal/service/notification/email_planner.go`
 - Test: `internal/service/notification/email_planner_test.go`
 
-- [ ] **Step 1: Write planner tests first**
+- [x] **Step 1: Write planner tests first**
 
 Cover:
 
@@ -555,7 +555,7 @@ Run: `go test ./internal/service/notification -run EmailPlanner -count=1`
 
 Expected: FAIL until planner exists.
 
-- [ ] **Step 2: Implement planner**
+- [x] **Step 2: Implement planner**
 
 Expose:
 
@@ -575,13 +575,13 @@ priority bucket
 
 Do not group by root object; cross-object digest is required.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `go test ./internal/service/notification -run EmailPlanner -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add internal/service/notification/email_planner.go internal/service/notification/email_planner_test.go
