@@ -93,8 +93,8 @@ func TestMomentRepository_Save_ReplacesImages(t *testing.T) {
 	mock.ExpectExec("INSERT INTO `moment`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), "风很温柔", uint8(1), uint8(1), uint(0), false).
 		WillReturnResult(sqlmock.NewResult(9, 1))
-	mock.ExpectExec("UPDATE `moment_media` SET `deleted_at`=\\? WHERE moment_id = \\? AND `moment_media`.`deleted_at` IS NULL").
-		WithArgs(sqlmock.AnyArg(), uint(9)).
+	mock.ExpectExec("DELETE FROM `moment_media` WHERE moment_id = \\?").
+		WithArgs(uint(9)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("INSERT INTO `moment_media`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), uint(9), momentrepo.MomentImageType, "jpg", "cat.jpg", "moments/cat.jpg", uint(10), uint8(1), uint(1), uint(0)).
@@ -146,8 +146,8 @@ func TestMomentRepository_Save_CollectsRemovedImageURLs(t *testing.T) {
 		}).
 			AddRow(1, now, now, nil, 1, 9, 0, "jpg", "keep.jpg", "moments/7/9/keep.jpg", 10, 1, 1, 0).
 			AddRow(2, now, now, nil, 1, 9, 0, "jpg", "remove.jpg", "moments/7/9/remove.jpg", 10, 1, 2, 0))
-	mock.ExpectExec("UPDATE `moment_media` SET `deleted_at`=\\? WHERE moment_id = \\? AND `moment_media`.`deleted_at` IS NULL").
-		WithArgs(sqlmock.AnyArg(), uint(9)).
+	mock.ExpectExec("DELETE FROM `moment_media` WHERE moment_id = \\?").
+		WithArgs(uint(9)).
 		WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("INSERT INTO `moment_media`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(1), uint(9), momentrepo.MomentImageType, "jpg", "keep.jpg", "moments/7/9/keep.jpg", uint(10), uint8(1), uint(1), uint(0)).

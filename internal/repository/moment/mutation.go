@@ -50,7 +50,8 @@ func (r *momentRepo) Save(data SaveData) (*MomentAggregate, error) {
 			*data.RemovedURLs = append(*data.RemovedURLs, removedImageURLs(oldImages[momentID], data.Images)...)
 		}
 
-		if err := tx.Where("moment_id = ?", momentID).Delete(&model.Media{}).Error; err != nil {
+		// 硬删除旧媒体记录，避免软删除残留，只保留真实展示的图片。
+		if err := tx.Unscoped().Where("moment_id = ?", momentID).Delete(&model.Media{}).Error; err != nil {
 			return err
 		}
 		images := prepareImages(data.Moment, data.Images)
