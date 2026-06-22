@@ -119,6 +119,48 @@ func TestLeasePendingEvents_ClaimsExpiredLease(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+// 偏好读取：精确命中事件类型时直接返回，不再回退。
+func TestGetPreference_ExactMatch(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := notificationrepo.NewRepository(db)
+
+	mock.ExpectQuery("SELECT \\* FROM .notification_preference. WHERE user_id = \\? AND event_type = \\?").
+		WithArgs(uint(3), "comment_created", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "event_type", "in_app_enabled", "email_enabled"}).
+			AddRow(1, 3, "comment_created", true, false))
+
+	pref, err := repo.GetPreference(context.Background(), 3, "comment_created")
+
+	require.NoError(t, err)
+	require.NotNil(t, pref)
+	assert.True(t, pref.InAppEnabled)
+	assert.False(t, pref.EmailEnabled)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+// 偏好读取：精确未命中时回退到通配 `*` 行。
+func TestGetPreference_FallsBackToWildcard(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := notificationrepo.NewRepository(db)
+
+	mock.ExpectQuery("SELECT \\* FROM .notification_preference. WHERE user_id = \\? AND event_type = \\?").
+		WithArgs(uint(3), "comment_created", 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+	mock.ExpectQuery("SELECT \\* FROM .notification_preference. WHERE user_id = \\? AND event_type = \\?").
+		WithArgs(uint(3), "*", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "event_type", "in_app_enabled", "email_enabled"}).
+			AddRow(9, 3, "*", true, true))
+
+	pref, err := repo.GetPreference(context.Background(), 3, "comment_created")
+
+	require.NoError(t, err)
+	require.NotNil(t, pref)
+	assert.Equal(t, "*", pref.EventType)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 // 额度预留：未达上限时条件自增成功返回 true，已达上限时影响 0 行返回 false。
 func TestReserveQuota_IncrementsAndRejectsOverLimit(t *testing.T) {
 	key := notificationrepo.QuotaUsageKey{

@@ -110,6 +110,12 @@ type EmailBatchRepository interface {
 	MarkBatchRetry(ctx context.Context, batchID uint, scheduledAt time.Time, lastErr string) error
 }
 
+// PreferenceRepository 用户通知偏好读取。
+type PreferenceRepository interface {
+	// GetPreference 读取用户对某事件类型的偏好；优先精确匹配，其次回退到 `*` 默认，均无则返回 nil。
+	GetPreference(ctx context.Context, userID uint, eventType string) (*model.NotificationPreference, error)
+}
+
 // QuotaRepository 邮件额度策略读取与用量原子预留。
 type QuotaRepository interface {
 	// GetQuotaPolicies 读取全部 purpose 额度策略。
@@ -126,6 +132,7 @@ type Repository interface {
 	InboxRepository
 	EmailTaskRepository
 	EmailBatchRepository
+	PreferenceRepository
 	QuotaRepository
 }
 

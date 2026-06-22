@@ -361,7 +361,7 @@ git commit -m "feat(notification): 新增站内通知接口"
 - Create: `internal/service/notification/preference.go`
 - Test: `internal/service/notification/dispatcher_test.go`
 
-- [ ] **Step 1: Write dispatcher tests first**
+- [x] **Step 1: Write dispatcher tests first**
 
 Cover:
 
@@ -377,7 +377,7 @@ Run: `go test ./internal/service/notification -run Dispatcher -count=1`
 
 Expected: FAIL until dispatcher exists.
 
-- [ ] **Step 2: Implement recipient resolver**
+- [x] **Step 2: Implement recipient resolver**
 
 Resolver maps event type and root/source data to recipients:
 
@@ -392,7 +392,7 @@ system_notice -> explicit recipients from metadata
 
 Use repository helpers instead of querying GORM in service.
 
-- [ ] **Step 3: Implement dispatcher loop method**
+- [x] **Step 3: Implement dispatcher loop method**
 
 Expose a method that can be called by worker bootstrap:
 
@@ -402,13 +402,13 @@ DispatchOnce(ctx context.Context, workerID string, limit int) (int, error)
 
 This method leases events, processes each event idempotently, and returns processed count.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `go test ./internal/service/notification -run Dispatcher -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/notification/dispatcher.go internal/service/notification/preference.go internal/service/notification/dispatcher_test.go
