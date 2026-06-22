@@ -3970,7 +3970,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "碎语作者或管理员可软删除碎语。",
+                "description": "碎语作者或管理员可硬删除碎语；同时级联硬删除关联的媒体、评论、回复、点赞和通知消息，并清理 Garage 对象。",
                 "consumes": [
                     "application/json"
                 ],
