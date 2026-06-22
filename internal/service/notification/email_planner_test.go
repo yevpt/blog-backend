@@ -46,6 +46,9 @@ func (s *plannerRepoStub) LeaseEmailBatches(context.Context, string, int, int) (
 }
 func (s *plannerRepoStub) MarkBatchSent(context.Context, uint, string) error             { return nil }
 func (s *plannerRepoStub) MarkBatchRetry(context.Context, uint, time.Time, string) error { return nil }
+func (s *plannerRepoStub) ListBatchTasks(context.Context, uint) ([]model.NotificationEmailTask, error) {
+	return nil, nil
+}
 
 // fakeRoles 固定返回角色。
 type fakeRoles struct{ roles []string }

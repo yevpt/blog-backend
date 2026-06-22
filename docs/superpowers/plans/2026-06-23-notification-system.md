@@ -598,7 +598,7 @@ git commit -m "feat(notification): 新增邮件摘要规划器"
 - Test: `pkg/email/*_test.go`
 - Test: `internal/service/notification/email_sender_test.go`
 
-- [ ] **Step 1: Extend mail sender interface**
+- [x] **Step 1: Extend mail sender interface**
 
 Keep verification code support and add generic HTML sending:
 
@@ -611,7 +611,7 @@ type MailSender interface {
 
 Update auth tests and mocks accordingly.
 
-- [ ] **Step 2: Write sender tests first**
+- [x] **Step 2: Write sender tests first**
 
 Cover:
 
@@ -630,7 +630,7 @@ go test ./internal/service/notification -run EmailSender -count=1
 
 Expected: FAIL until sender exists.
 
-- [ ] **Step 3: Implement sender**
+- [x] **Step 3: Implement sender**
 
 Expose:
 
@@ -640,7 +640,7 @@ SendOnce(ctx context.Context, workerID string, limit int) (int, error)
 
 Send batches with low concurrency first. Respect `send_interval_seconds`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -652,7 +652,7 @@ go test ./internal/service/auth -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add pkg/email internal/service/notification/email_sender.go internal/service/notification/email_template.go

@@ -9,7 +9,10 @@ import (
 
 // MailSender 邮件发送接口，便于在测试中 mock
 type MailSender interface {
+	// SendVerificationCode 发送验证码邮件。
 	SendVerificationCode(to, code string) error
+	// SendHTML 发送通用 HTML 邮件；messageID 非空时写入 Message-ID 头，用于发送侧幂等与追踪。
+	SendHTML(to string, subject string, htmlBody string, messageID string) error
 }
 
 // Config 邮件服务配置
@@ -42,11 +45,30 @@ func (m *Mailer) SendVerificationCode(to, code string) error {
 		code,
 	))
 
+	return m.dialAndSend(msg)
+}
+
+// SendHTML 发送通用 HTML 邮件，供通知摘要等场景使用。
+func (m *Mailer) SendHTML(to string, subject string, htmlBody string, messageID string) error {
+	msg := gomail.NewMessage()
+	msg.SetHeader("From", m.cfg.From)
+	msg.SetHeader("To", to)
+	msg.SetHeader("Subject", subject)
+	// 写入 Message-ID 便于追踪与发送侧幂等判断。
+	if messageID != "" {
+		msg.SetHeader("Message-ID", messageID)
+	}
+	msg.SetBody("text/html", htmlBody)
+
+	return m.dialAndSend(msg)
+}
+
+// dialAndSend 用统一的 SSL 拨号器发送邮件并自动关闭连接。
+func (m *Mailer) dialAndSend(msg *gomail.Message) error {
 	// 创建 SMTP 拨号器，使用配置中的主机、端口、账号密码
 	d := gomail.NewDialer(m.cfg.Host, m.cfg.Port, m.cfg.From, m.cfg.Password)
-	// 163/QQ SMTP 要求 SSL（端口 465），不能用 STARTTLS
+	// 163/QQ/阿里云企业 SMTP 要求 SSL（端口 465），不能用 STARTTLS
 	d.SSL = true
 	d.TLSConfig = &tls.Config{ServerName: m.cfg.Host}
-	// 建立连接并发送邮件，发送完毕后自动关闭连接
 	return d.DialAndSend(msg)
 }

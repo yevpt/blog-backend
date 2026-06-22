@@ -72,6 +72,8 @@ type EventRepository interface {
 	MarkEventDone(ctx context.Context, id uint) error
 	// MarkEventRetry 分发失败时回退为 pending，设置下次处理时间与错误信息并释放租约。
 	MarkEventRetry(ctx context.Context, id uint, nextProcessAt time.Time, lastErr string) error
+	// GetEventsByIDs 按 ID 批量取事件，返回以事件 ID 为键的映射，供邮件渲染快照。
+	GetEventsByIDs(ctx context.Context, ids []uint) (map[uint]model.NotificationEvent, error)
 }
 
 // InboxRepository 站内收件箱的投递与读取。
@@ -112,6 +114,14 @@ type EmailBatchRepository interface {
 	MarkBatchSent(ctx context.Context, batchID uint, messageID string) error
 	// MarkBatchRetry 发送失败时回退批次为 pending，设置下次发送时间与错误信息。
 	MarkBatchRetry(ctx context.Context, batchID uint, scheduledAt time.Time, lastErr string) error
+	// ListBatchTasks 取某批次包含的全部邮件任务，供发送时渲染。
+	ListBatchTasks(ctx context.Context, batchID uint) ([]model.NotificationEmailTask, error)
+}
+
+// SendLogRepository 邮件发送日志写入。
+type SendLogRepository interface {
+	// CreateSendLog 追加一条真实发送尝试记录。
+	CreateSendLog(ctx context.Context, log *model.EmailSendLog) error
 }
 
 // PreferenceRepository 用户通知偏好读取。
@@ -140,6 +150,7 @@ type Repository interface {
 	EmailBatchRepository
 	PreferenceRepository
 	QuotaRepository
+	SendLogRepository
 }
 
 type repo struct {

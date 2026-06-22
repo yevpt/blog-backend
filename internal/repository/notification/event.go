@@ -52,6 +52,11 @@ func (r *repo) LeasePendingEvents(ctx context.Context, workerID string, leaseSec
 	return events, nil
 }
 
+// GetEventsByIDs 按 ID 批量取事件，返回以事件 ID 为键的映射。
+func (r *repo) GetEventsByIDs(ctx context.Context, ids []uint) (map[uint]model.NotificationEvent, error) {
+	return r.eventsByIDs(ctx, ids)
+}
+
 // MarkEventDone 标记事件分发完成并释放租约。
 func (r *repo) MarkEventDone(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Model(&model.NotificationEvent{}).

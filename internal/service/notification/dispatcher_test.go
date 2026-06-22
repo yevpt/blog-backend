@@ -50,6 +50,9 @@ func (r *dispatchRepo) MarkEventRetry(_ context.Context, id uint, next time.Time
 	r.retryTimes[id] = next
 	return nil
 }
+func (r *dispatchRepo) GetEventsByIDs(context.Context, []uint) (map[uint]model.NotificationEvent, error) {
+	return nil, nil
+}
 
 func (r *dispatchRepo) CreateInbox(_ context.Context, inbox *model.NotificationInbox) (bool, error) {
 	if r.inboxErr != nil {
@@ -92,6 +95,10 @@ func (r *dispatchRepo) LeaseEmailBatches(context.Context, string, int, int) ([]m
 }
 func (r *dispatchRepo) MarkBatchSent(context.Context, uint, string) error             { return nil }
 func (r *dispatchRepo) MarkBatchRetry(context.Context, uint, time.Time, string) error { return nil }
+func (r *dispatchRepo) ListBatchTasks(context.Context, uint) ([]model.NotificationEmailTask, error) {
+	return nil, nil
+}
+func (r *dispatchRepo) CreateSendLog(context.Context, *model.EmailSendLog) error { return nil }
 func (r *dispatchRepo) GetPreference(context.Context, uint, string) (*model.NotificationPreference, error) {
 	return nil, nil
 }

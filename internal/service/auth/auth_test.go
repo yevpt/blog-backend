@@ -33,6 +33,10 @@ func (m *mockMailSender) SendVerificationCode(to, code string) error {
 	return m.err
 }
 
+func (m *mockMailSender) SendHTML(_ string, _ string, _ string, _ string) error {
+	return m.err
+}
+
 type mockCaptchaTokenConsumer struct {
 	err           error
 	consumedToken string

@@ -100,6 +100,30 @@ func (r *repo) MarkBatchSent(ctx context.Context, batchID uint, messageID string
 	})
 }
 
+// ListBatchTasks 取某批次包含的全部邮件任务。
+// 先从连接表取 task_id，再批量取任务，避免 JOIN 扫描的脆弱性。
+func (r *repo) ListBatchTasks(ctx context.Context, batchID uint) ([]model.NotificationEmailTask, error) {
+	var taskIDs []uint
+	if err := r.db.WithContext(ctx).Model(&model.NotificationEmailBatchItem{}).
+		Where("batch_id = ?", batchID).
+		Pluck("task_id", &taskIDs).Error; err != nil {
+		return nil, err
+	}
+	if len(taskIDs) == 0 {
+		return nil, nil
+	}
+	var tasks []model.NotificationEmailTask
+	if err := r.db.WithContext(ctx).Where("id IN ?", taskIDs).Find(&tasks).Error; err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+// CreateSendLog 追加一条真实发送尝试记录。
+func (r *repo) CreateSendLog(ctx context.Context, log *model.EmailSendLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
 // MarkBatchRetry 发送失败时回退批次为 pending，设置下次发送时间与错误信息。
 func (r *repo) MarkBatchRetry(ctx context.Context, batchID uint, scheduledAt time.Time, lastErr string) error {
 	return r.db.WithContext(ctx).Model(&model.NotificationEmailBatch{}).

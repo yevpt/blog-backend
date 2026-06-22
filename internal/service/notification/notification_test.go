@@ -35,6 +35,9 @@ func (f *fakeEventRepo) MarkEventDone(context.Context, uint) error { return nil 
 func (f *fakeEventRepo) MarkEventRetry(context.Context, uint, time.Time, string) error {
 	return nil
 }
+func (f *fakeEventRepo) GetEventsByIDs(context.Context, []uint) (map[uint]model.NotificationEvent, error) {
+	return nil, nil
+}
 
 // fakeInboxRepo 用可配置返回值驱动 InboxService 用例。
 type fakeInboxRepo struct {
