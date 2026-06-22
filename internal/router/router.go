@@ -16,6 +16,7 @@ import (
 	friendlinkhandler "github.com/vpt/blog-backend/internal/handler/friendlink"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
+	notificationhandler "github.com/vpt/blog-backend/internal/handler/notification"
 	oauthhandler "github.com/vpt/blog-backend/internal/handler/oauth"
 	taghandler "github.com/vpt/blog-backend/internal/handler/tag"
 	userhandler "github.com/vpt/blog-backend/internal/handler/user"
@@ -28,6 +29,7 @@ import (
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
@@ -40,6 +42,7 @@ import (
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
 	tagservice "github.com/vpt/blog-backend/internal/service/tag"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
@@ -57,20 +60,21 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health     *handler.HealthHandler
-	test       *handler.TestHandler
-	auth       *authhandler.AuthHandler
-	oauth      *oauthhandler.OAuthHandler
-	captcha    *captchahandler.CaptchaHandler
-	article    *articlehandler.ArticleHandler
-	comment    *commenthandler.CommentHandler
-	guestbook  *guestbookhandler.GuestbookHandler
-	moment     *momenthandler.MomentHandler
-	user       *userhandler.UserHandler
-	category   *categoryhandler.CategoryHandler
-	tag        *taghandler.TagHandler
-	friendLink *friendlinkhandler.FriendLinkHandler
-	userCache  userservice.UserCacheService
+	health       *handler.HealthHandler
+	test         *handler.TestHandler
+	auth         *authhandler.AuthHandler
+	oauth        *oauthhandler.OAuthHandler
+	captcha      *captchahandler.CaptchaHandler
+	article      *articlehandler.ArticleHandler
+	comment      *commenthandler.CommentHandler
+	guestbook    *guestbookhandler.GuestbookHandler
+	moment       *momenthandler.MomentHandler
+	notification *notificationhandler.NotificationHandler
+	user         *userhandler.UserHandler
+	category     *categoryhandler.CategoryHandler
+	tag          *taghandler.TagHandler
+	friendLink   *friendlinkhandler.FriendLinkHandler
+	userCache    userservice.UserCacheService
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -205,21 +209,25 @@ func newRouteHandlers(
 	momentRepo := momentrepo.NewMomentRepository(db)
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc)
 
+	notificationRepo := notificationrepo.NewRepository(db)
+	notificationInboxSvc := notificationservice.NewInboxService(notificationRepo)
+
 	return routeHandlers{
-		health:     handler.NewHealthHandler(db, redisClient),
-		test:       handler.NewTestHandler(jwtManager),
-		auth:       authhandler.NewAuthHandler(authSvc),
-		oauth:      oauthhandler.NewOAuthHandler(oauthSvc),
-		captcha:    captchahandler.NewCaptchaHandler(captchaSvc),
-		article:    articlehandler.NewArticleHandler(articleSvc),
-		comment:    commenthandler.NewCommentHandler(commentSvc),
-		guestbook:  guestbookhandler.NewGuestbookHandler(guestbookSvc),
-		moment:     momenthandler.NewMomentHandler(momentSvc),
-		user:       userhandler.NewUserHandler(userSvc),
-		category:   categoryhandler.NewCategoryHandler(categorySvc),
-		tag:        taghandler.NewTagHandler(tagSvc),
-		friendLink: friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
-		userCache:  userCacheSvc,
+		health:       handler.NewHealthHandler(db, redisClient),
+		test:         handler.NewTestHandler(jwtManager),
+		auth:         authhandler.NewAuthHandler(authSvc),
+		oauth:        oauthhandler.NewOAuthHandler(oauthSvc),
+		captcha:      captchahandler.NewCaptchaHandler(captchaSvc),
+		article:      articlehandler.NewArticleHandler(articleSvc),
+		comment:      commenthandler.NewCommentHandler(commentSvc),
+		guestbook:    guestbookhandler.NewGuestbookHandler(guestbookSvc),
+		moment:       momenthandler.NewMomentHandler(momentSvc),
+		notification: notificationhandler.NewNotificationHandler(notificationInboxSvc),
+		user:         userhandler.NewUserHandler(userSvc),
+		category:     categoryhandler.NewCategoryHandler(categorySvc),
+		tag:          taghandler.NewTagHandler(tagSvc),
+		friendLink:   friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
+		userCache:    userCacheSvc,
 	}
 }
 
@@ -341,6 +349,11 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.DELETE("/moments/:id/top", handlers.moment.RemoveTop)
 	authed.GET("/moments/:id/like", handlers.moment.IsLiked)
 	authed.POST("/moments/:id/like", handlers.moment.ToggleLike)
+	authed.GET("/notifications", handlers.notification.List)
+	authed.GET("/notifications/unread-count", handlers.notification.UnreadCount)
+	authed.PATCH("/notifications/read", handlers.notification.MarkAllRead)
+	authed.PATCH("/notifications/:id/read", handlers.notification.MarkRead)
+	authed.DELETE("/notifications/:id", handlers.notification.Delete)
 }
 
 func registerVIPRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {

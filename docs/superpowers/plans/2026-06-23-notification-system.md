@@ -297,7 +297,7 @@ git commit -m "feat(notification): 新增通知发布和收件箱服务"
 - Modify: `internal/router/router.go`
 - Test: `internal/handler/notification/*_test.go`
 
-- [ ] **Step 1: API Risk Pass**
+- [x] **Step 1: API Risk Pass**
 
 Record answers in the handler test or task notes:
 
@@ -307,7 +307,7 @@ Record answers in the handler test or task notes:
 - Failure convergence: DB errors return server error; no partial external side effects.
 - Old state cleanup: delete is soft delete of inbox row only.
 
-- [ ] **Step 2: Write handler tests first**
+- [x] **Step 2: Write handler tests first**
 
 Cover:
 
@@ -321,7 +321,7 @@ Run: `go test ./internal/handler/notification -count=1`
 
 Expected: FAIL until handler exists.
 
-- [ ] **Step 3: Implement handlers and routes**
+- [x] **Step 3: Implement handlers and routes**
 
 Routes:
 
@@ -335,7 +335,7 @@ authed.DELETE("/notifications/:id", handlers.notification.Delete)
 
 Use `jwt.GetClaims(c)` through existing project pattern and `pkg/response`.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -346,7 +346,7 @@ go test ./internal/router -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/handler/notification internal/router/router.go
