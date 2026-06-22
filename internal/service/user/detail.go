@@ -122,8 +122,8 @@ func buildPublicProfile(resolver storage.ObjectURLResolver, agg *userrepo.UserDe
 		switch agg.Setting.MailShow {
 		case 1:
 			resp.DisplayEmail = user.Email
-		// case 0: sub email（暂无字段，留空）
-		// case 2: none（不展示）
+			// case 0: sub email（暂无字段，留空）
+			// case 2: none（不展示）
 		}
 	}
 

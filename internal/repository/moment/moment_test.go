@@ -271,7 +271,7 @@ func TestMomentRepository_SetTop_RejectsFourthTop(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestMomentRepository_ToggleLike_CreatesLikeAndMessage(t *testing.T) {
+func TestMomentRepository_ToggleLike_CreatesLike(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
 	repo := momentrepo.NewMomentRepository(db)
@@ -290,10 +290,6 @@ func TestMomentRepository_ToggleLike_CreatesLikeAndMessage(t *testing.T) {
 	mock.ExpectExec("INSERT INTO `user_like`").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(7), uint(9), momentrepo.MomentLikeType).
 		WillReturnResult(sqlmock.NewResult(12, 1))
-	mock.ExpectExec("INSERT INTO `message`").
-		WillReturnResult(sqlmock.NewResult(15, 1))
-	mock.ExpectExec("INSERT INTO `user_message`").
-		WillReturnResult(sqlmock.NewResult(16, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT \\* FROM `moment`").
 		WithArgs(uint(9), uint8(1), 1).

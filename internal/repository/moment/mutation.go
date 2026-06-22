@@ -187,20 +187,15 @@ func (r *momentRepo) ToggleLike(id uint, userID uint) (*MomentAggregate, bool, e
 			First(&like).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			liked = true
-			if err := tx.Create(&model.UserLike{UserID: userID, TargetID: id, Type: MomentLikeType}).Error; err != nil {
-				return err
-			}
-			return createMomentLikeMessage(tx, moment, userID)
+			// 点赞通知改由 service 层发布 notification_event，仓储不再写旧 message。
+			return tx.Create(&model.UserLike{UserID: userID, TargetID: id, Type: MomentLikeType}).Error
 		}
 		if err != nil {
 			return err
 		}
 		if like.DeletedAt.Valid {
 			liked = true
-			if err := tx.Unscoped().Model(&like).Update("deleted_at", nil).Error; err != nil {
-				return err
-			}
-			return createMomentLikeMessage(tx, moment, userID)
+			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
 		}
 
 		liked = false
@@ -284,29 +279,6 @@ func (r *momentRepo) findAnyDetail(id uint, viewerID *uint) (*MomentAggregate, e
 		return nil, ErrMomentNotFound
 	}
 	return &aggregates[0], nil
-}
-
-func createMomentLikeMessage(tx *gorm.DB, moment model.Moment, fromUserID uint) error {
-	if moment.UserID == fromUserID {
-		return nil
-	}
-	title := "碎语点赞"
-	content := ""
-	message := model.Message{
-		Title:      &title,
-		Content:    &content,
-		Type:       "moment_like",
-		TypeID:     moment.ID,
-		FromUserID: fromUserID,
-	}
-	if err := tx.Create(&message).Error; err != nil {
-		return err
-	}
-	return tx.Create(&model.UserMessage{
-		UserID:    moment.UserID,
-		MessageID: message.ID,
-		IsRead:    false,
-	}).Error
 }
 
 func momentUpdateFields(moment model.Moment) map[string]any {

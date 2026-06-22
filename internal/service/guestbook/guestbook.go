@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -34,9 +35,11 @@ type GuestbookService interface {
 type guestbookService struct {
 	repo              guestbookrepo.GuestbookRepository
 	objectURLResolver storage.ObjectURLResolver
+	publisher         notificationservice.Publisher
 }
 
 // NewGuestbookService 创建留言板业务服务实例。
-func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver) GuestbookService {
-	return &guestbookService{repo: repo, objectURLResolver: objectURLResolver}
+// publisher 用于留言、点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
+func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher) GuestbookService {
+	return &guestbookService{repo: repo, objectURLResolver: objectURLResolver, publisher: publisher}
 }

@@ -239,20 +239,15 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 			First(&like).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			liked = true
-			if err := tx.Create(&model.UserLike{UserID: userID, TargetID: articleID, Type: ArticleLikeType}).Error; err != nil {
-				return err
-			}
-			return createArticleLikeMessage(tx, article, userID)
+			// 点赞通知改由 service 层发布 notification_event，仓储不再写旧 message。
+			return tx.Create(&model.UserLike{UserID: userID, TargetID: articleID, Type: ArticleLikeType}).Error
 		}
 		if err != nil {
 			return err
 		}
 		if like.DeletedAt.Valid {
 			liked = true
-			if err := tx.Unscoped().Model(&like).Update("deleted_at", nil).Error; err != nil {
-				return err
-			}
-			return createArticleLikeMessage(tx, article, userID)
+			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
 		}
 
 		liked = false
@@ -271,30 +266,6 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 
 func visibleArticleStatuses() []uint {
 	return []uint{1, 2}
-}
-
-func createArticleLikeMessage(tx *gorm.DB, article model.Article, fromUserID uint) error {
-	if article.UserID == fromUserID {
-		return nil
-	}
-	title := "文章点赞"
-	content := ""
-	message := model.Message{
-		Title:      &title,
-		Content:    &content,
-		Type:       "article_like",
-		TypeID:     article.ID,
-		FromUserID: fromUserID,
-		ArticleID:  &article.ID,
-	}
-	if err := tx.Create(&message).Error; err != nil {
-		return err
-	}
-	return tx.Create(&model.UserMessage{
-		UserID:    article.UserID,
-		MessageID: message.ID,
-		IsRead:    false,
-	}).Error
 }
 
 func articleUpdateFields(article model.Article) map[string]any {

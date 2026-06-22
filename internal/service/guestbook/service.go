@@ -23,10 +23,13 @@ func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (
 		return nil, err
 	}
 
-	aggregate, err := s.repo.Create(normalizeOwnerUserID(req.OwnerUserID), fromUserID, content)
+	ownerUserID := normalizeOwnerUserID(req.OwnerUserID)
+	aggregate, err := s.repo.Create(ownerUserID, fromUserID, content)
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
+	// 留言成功后发布 guestbook_created 事件，接收人为板主。
+	s.notifyGuestbookCreated(ownerUserID, fromUserID, aggregate)
 	return guestbookItemToDTO(*aggregate, s.objectURLResolver), nil
 }
 
@@ -37,6 +40,10 @@ func (s *guestbookService) ToggleLike(id uint, userID uint) (*dto.GuestbookLikeR
 	result, err := s.repo.ToggleLike(id, userID)
 	if err != nil {
 		return nil, mapRepoError(err)
+	}
+	// 仅在本次为点赞时发布事件，接收人由分发器按留言归属解析；点赞仅站内通知。
+	if result.IsLiked {
+		s.notifyGuestbookLiked(id, userID)
 	}
 	return &dto.GuestbookLikeResp{ID: result.ID, IsLiked: result.IsLiked, LikeCount: result.LikeCount}, nil
 }

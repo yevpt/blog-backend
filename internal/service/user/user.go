@@ -127,7 +127,7 @@ func (s *userService) buildUserPageResp(users []model.User, total int64, page, p
 			t := u.CreatedAt
 			lastLoginAt = &t
 		}
-		
+
 		list = append(list, dto.UserListItemResp{
 			ID:          u.ID,
 			Nickname:    u.Nickname,
@@ -163,7 +163,7 @@ func (s *userService) Update(userID uint, req *dto.UserUpdateReq) error {
 	if req.Mark != nil {
 		updates["mark"] = *req.Mark
 	}
-	
+
 	if len(updates) > 0 {
 		if err := s.repo.Update(userID, updates); err != nil {
 			return err

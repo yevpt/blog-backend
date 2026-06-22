@@ -16,6 +16,14 @@ const (
 	PriorityNotification = 100
 )
 
+// emailEligibleEventTypes 是首版允许进入邮件队列的事件类型。
+// 评论、回复、留言进邮件；点赞等仅站内通知，不发邮件以控制邮件量。
+var emailEligibleEventTypes = map[string]struct{}{
+	EventTypeCommentCreated:   {},
+	EventTypeReplyCreated:     {},
+	EventTypeGuestbookCreated: {},
+}
+
 // 分发默认参数。
 const (
 	defaultLeaseSeconds = 300              // 事件租约默认 5 分钟
@@ -139,7 +147,10 @@ func (d *Dispatcher) deliverTo(ctx context.Context, event model.NotificationEven
 		}
 	}
 
-	// 邮件通知：偏好开启 + 总开关允许 + 有邮箱，才幂等入队邮件任务。
+	// 邮件通知：事件类型在白名单 + 偏好开启 + 总开关允许 + 有邮箱，才幂等入队邮件任务。
+	if _, eligible := emailEligibleEventTypes[event.Type]; !eligible {
+		return nil
+	}
 	if !pref.EmailEnabled {
 		return nil
 	}

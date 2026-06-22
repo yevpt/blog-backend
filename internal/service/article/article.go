@@ -10,6 +10,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"gorm.io/gorm"
@@ -42,11 +43,13 @@ type articleService struct {
 	repo              articlerepo.ArticleRepository
 	objectURLResolver storage.ObjectURLResolver
 	uvSvc             uv.UVService
+	publisher         notificationservice.Publisher
 }
 
 // NewArticleService 创建文章业务服务实例。
-func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService) ArticleService {
-	return &articleService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc}
+// publisher 用于点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
+func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher) ArticleService {
+	return &articleService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc, publisher: publisher}
 }
 
 func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -245,7 +248,28 @@ func (s *articleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp,
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
+	// 仅在本次为点赞（而非取消）时发布通知事件，接收人由分发器按文章作者解析。
+	if liked {
+		s.notifyArticleLiked(id, userID, aggregate.Article.Title)
+	}
 	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: aggregate.LikeCount}, nil
+}
+
+// notifyArticleLiked 发布 article_liked 事件；点赞仅站内通知，不进邮件队列。
+func (s *articleService) notifyArticleLiked(articleID uint, userID uint, title string) {
+	if s.publisher == nil {
+		return
+	}
+	actorID := userID
+	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
+		Type:        notificationservice.EventTypeArticleLiked,
+		ActorUserID: &actorID,
+		SourceType:  "article",
+		SourceID:    articleID,
+		RootType:    "article",
+		RootID:      articleID,
+		Title:       title,
+	})
 }
 
 func mapArticleDeleteError(err error) error {

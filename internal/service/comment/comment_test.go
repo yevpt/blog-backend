@@ -1,6 +1,7 @@
 package comment_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -9,8 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/model"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
@@ -105,7 +108,7 @@ func TestCommentService_List_UsesViewerAndPaging(t *testing.T) {
 	repo := &fakeCommentRepo{
 		listResp: &commentrepo.PageResult{Page: 2, PageSize: 50},
 	}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	resp, err := svc.List("article", 3, dto.CommentListReq{Page: 0, PageSize: 99}, &viewerID)
 
@@ -133,7 +136,7 @@ func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	resp, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "  好文章  ",
@@ -171,7 +174,7 @@ func TestCommentService_ListReplies_UsesViewerAndPaging(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	resp, err := svc.ListReplies("article", 9, dto.CommentReplyListReq{Page: 2, PageSize: 5}, &viewerID)
 
@@ -202,7 +205,7 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	resp, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{
 		ParentReplyID: 11,
@@ -218,7 +221,7 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 }
 
 func TestCommentService_ToggleLike_InvalidID(t *testing.T) {
-	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil)
+	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil)
 
 	_, err := svc.ToggleLike("article", 0, 7)
 
@@ -229,7 +232,7 @@ func TestCommentService_ToggleLike_ReturnsLatestState(t *testing.T) {
 	repo := &fakeCommentRepo{
 		toggleLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 3},
 	}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	resp, err := svc.ToggleLike("article", 9, 7)
 
@@ -242,7 +245,7 @@ func TestCommentService_ToggleLike_ReturnsLatestState(t *testing.T) {
 }
 
 func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
-	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil)
+	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "  ",
@@ -253,7 +256,7 @@ func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
 
 func TestCommentService_Create_MapsClosedTarget(t *testing.T) {
 	repo := &fakeCommentRepo{createErr: commentrepo.ErrTargetCommentClosed}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "好文章",
@@ -264,7 +267,7 @@ func TestCommentService_Create_MapsClosedTarget(t *testing.T) {
 
 func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	_, err := svc.DeleteComment("article", 9, 7, []string{roles.AdminRole})
 
@@ -274,7 +277,7 @@ func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 
 func TestCommentService_DeleteReply_UsesTargetPrefix(t *testing.T) {
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	_, err := svc.DeleteReply("article", 12, 7, []string{roles.AdminRole})
 
@@ -286,9 +289,74 @@ func TestCommentService_DeleteReply_UsesTargetPrefix(t *testing.T) {
 
 func TestCommentService_List_MapsRepositoryErrors(t *testing.T) {
 	repo := &fakeCommentRepo{listErr: errors.New("boom")}
-	svc := commentservice.NewCommentService(repo, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil)
 
 	_, err := svc.List("article", 3, dto.CommentListReq{Page: 1, PageSize: 10}, nil)
 
 	require.EqualError(t, err, "boom")
+}
+
+// recordingPublisher 记录发布的事件，用于断言业务变更是否发布通知。
+type recordingPublisher struct {
+	events []notificationservice.PublishEvent
+}
+
+func (p *recordingPublisher) Publish(_ context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
+	p.events = append(p.events, e)
+	return &model.NotificationEvent{}, nil
+}
+
+func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {
+	repo := &fakeCommentRepo{createResp: &commentrepo.CommentAggregate{
+		Comment: commentrepo.CommentRecord{ID: 9, UserID: 7, Content: "好文章"},
+	}}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "好文章"}, 7)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeCommentCreated, pub.events[0].Type)
+	assert.Equal(t, "article", pub.events[0].RootType)
+	assert.Equal(t, uint(3), pub.events[0].RootID)
+	assert.Equal(t, uint(9), pub.events[0].SourceID)
+	require.NotNil(t, pub.events[0].ActorUserID)
+	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
+	// 文章评论接收人由分发器按归属解析，不写显式 metadata。
+	assert.Nil(t, pub.events[0].Metadata)
+}
+
+func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
+	repo := &fakeCommentRepo{createResp: &commentrepo.CommentAggregate{
+		Comment: commentrepo.CommentRecord{ID: 9, UserID: 7, Content: "留言"},
+	}}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	// 留言板评论 target.ID 即板主用户 ID，应写入显式接收人 metadata。
+	_, err := svc.Create("guestbook", 1, dto.CommentCreateReq{Content: "留言"}, 7)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeCommentCreated, pub.events[0].Type)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+}
+
+func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
+	repo := &fakeCommentRepo{replyResp: &commentrepo.ReplyAggregate{
+		Reply: commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 8, Content: "收到"},
+	}}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeReplyCreated, pub.events[0].Type)
+	require.NotNil(t, pub.events[0].Metadata)
+	// 被回复人 8 应出现在显式接收人列表。
+	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
 }

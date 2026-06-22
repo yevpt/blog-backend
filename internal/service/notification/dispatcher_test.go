@@ -65,8 +65,8 @@ func (r *dispatchRepo) CreateInbox(_ context.Context, inbox *model.NotificationI
 func (r *dispatchRepo) ListInbox(context.Context, uint, bool, int, int) (*notificationrepo.InboxPage, error) {
 	return nil, nil
 }
-func (r *dispatchRepo) CountUnread(context.Context, uint) (int64, error)          { return 0, nil }
-func (r *dispatchRepo) MarkInboxRead(context.Context, uint, uint) (int64, error)  { return 0, nil }
+func (r *dispatchRepo) CountUnread(context.Context, uint) (int64, error)         { return 0, nil }
+func (r *dispatchRepo) MarkInboxRead(context.Context, uint, uint) (int64, error) { return 0, nil }
 func (r *dispatchRepo) MarkAllInboxRead(context.Context, uint, []uint) (int64, error) {
 	return 0, nil
 }
@@ -114,7 +114,9 @@ func (f fixedRecipients) Resolve(context.Context, model.NotificationEvent) ([]ui
 	return f.ids, nil
 }
 
-type fixedPreference struct{ pref notificationservice.Preference }
+type fixedPreference struct {
+	pref notificationservice.Preference
+}
 
 func (f fixedPreference) Resolve(context.Context, uint, string) (notificationservice.Preference, error) {
 	return f.pref, nil
@@ -221,6 +223,26 @@ func TestDispatcher_DuplicateDispatchIsIdempotent(t *testing.T) {
 
 	assert.Len(t, repo.inboxKeys, 1)
 	assert.Len(t, repo.taskKeys, 1)
+}
+
+// 点赞类事件不在邮件白名单内：只写收件箱，不创建邮件任务。
+func TestDispatcher_LikeEventStaysInAppOnly(t *testing.T) {
+	actor := uint(2)
+	likeEvent := model.NotificationEvent{
+		Base:        model.Base{ID: 20},
+		Type:        notificationservice.EventTypeMomentLiked,
+		ActorUserID: &actor,
+		RootType:    "moment",
+		RootID:      12,
+	}
+	repo := newDispatchRepo(likeEvent)
+	d := notificationservice.NewDispatcher(repo, fixedRecipients{ids: []uint{5}}, bothEnabled(), fixedDirectory{email: "owner@x.com", canReceive: true})
+
+	_, err := d.DispatchOnce(context.Background(), "worker-1", 10)
+
+	require.NoError(t, err)
+	assert.Len(t, repo.inboxKeys, 1)
+	assert.Empty(t, repo.taskKeys)
 }
 
 // 仓储出错时事件被回退重试并设置未来的下次处理时间。

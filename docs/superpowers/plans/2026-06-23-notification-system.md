@@ -426,15 +426,15 @@ git commit -m "feat(notification): 新增通知事件分发器"
 - Modify: `internal/router/router.go`
 - Tests: related service tests
 
-- [ ] **Step 1: Remove new notification writes from repositories**
+- [x] **Step 1: Remove new notification writes from repositories**
 
 Do not add new notification side effects inside repository methods. Existing old `message` writes should be retired or isolated as part of this task.
 
-- [ ] **Step 2: Inject notification publisher into services**
+- [x] **Step 2: Inject notification publisher into services**
 
 Service constructors should accept `notification.Publisher` where events are produced. Keep nil-safe behavior only in tests where the event is not relevant.
 
-- [ ] **Step 3: Publish events after successful business mutation**
+- [x] **Step 3: Publish events after successful business mutation**
 
 Examples:
 
@@ -448,7 +448,7 @@ guestbook liked -> guestbook_liked
 
 Use content snapshots from service-layer DTO/aggregate data.
 
-- [ ] **Step 4: Write and run tests**
+- [x] **Step 4: Write and run tests**
 
 Cover each event-producing path:
 
@@ -465,7 +465,7 @@ go test ./internal/service/moment -count=1
 go test ./internal/service/guestbook -count=1
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/comment internal/service/article internal/service/moment internal/service/guestbook internal/router/router.go

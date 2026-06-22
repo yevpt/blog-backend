@@ -18,8 +18,8 @@ const (
 	friendLinkStatusVisible      uint8 = 1
 	friendLinkStatusDisconnected uint8 = 2
 	friendLinkDefaultPage              = 1
-	friendLinkDefaultPageSize       = 10
-	friendLinkMaxPageSize           = 50
+	friendLinkDefaultPageSize          = 10
+	friendLinkMaxPageSize              = 50
 )
 
 var (

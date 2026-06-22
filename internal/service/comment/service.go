@@ -36,6 +36,8 @@ func (s *commentService) Create(targetType string, targetID uint, req dto.Commen
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
+	// 评论落库成功后发布通知事件，失败不影响评论本身。
+	s.notifyCommentCreated(targetType, targetID, aggregate)
 	return commentToDTO(*aggregate, target.Type, s.objectURLResolver), nil
 }
 
@@ -72,6 +74,8 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
+	// 回复落库成功后发布通知事件，接收人为被回复人。
+	s.notifyReplyCreated(targetType, commentID, aggregate)
 	return replyToDTO(*aggregate, s.objectURLResolver), nil
 }
 

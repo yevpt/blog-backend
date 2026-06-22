@@ -188,9 +188,13 @@ func (s *momentService) ToggleLike(id uint, userID uint) (*dto.MomentItemResp, e
 	if id == 0 {
 		return nil, ErrMomentInvalid
 	}
-	aggregate, _, err := s.repo.ToggleLike(id, userID)
+	aggregate, liked, err := s.repo.ToggleLike(id, userID)
 	if err != nil {
 		return nil, mapRepoError(err)
+	}
+	// 仅在本次为点赞（而非取消）时发布通知事件，接收人由分发器按碎语作者解析。
+	if liked {
+		s.notifyMomentLiked(id, userID, aggregate.Moment.Content)
 	}
 	return s.momentToDTO(*aggregate)
 }

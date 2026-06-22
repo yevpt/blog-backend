@@ -456,7 +456,7 @@ func TestArticleRepository_IsLiked_HiddenArticleNotFound(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testing.T) {
+func TestArticleRepository_ToggleLike_CreatesLike(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
 	repo := article.NewArticleRepository(db)
@@ -477,10 +477,6 @@ func TestArticleRepository_ToggleLike_CreatesNotificationForOtherAuthor(t *testi
 		}))
 	mock.ExpectExec("INSERT INTO `user_like`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec("INSERT INTO `message`").
-		WillReturnResult(sqlmock.NewResult(12, 1))
-	mock.ExpectExec("INSERT INTO `user_message`").
-		WillReturnResult(sqlmock.NewResult(13, 1))
 	mock.ExpectCommit()
 	mock.ExpectQuery("SELECT \\* FROM `article`").
 		WithArgs(uint(7), uint(1), uint(2), 1).

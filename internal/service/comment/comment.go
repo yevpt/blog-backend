@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -40,9 +41,11 @@ type CommentService interface {
 type commentService struct {
 	repo              commentrepo.CommentRepository
 	objectURLResolver storage.ObjectURLResolver
+	publisher         notificationservice.Publisher
 }
 
 // NewCommentService 创建评论业务服务实例。
-func NewCommentService(repo commentrepo.CommentRepository, objectURLResolver storage.ObjectURLResolver) CommentService {
-	return &commentService{repo: repo, objectURLResolver: objectURLResolver}
+// publisher 用于评论、回复成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
+func NewCommentService(repo commentrepo.CommentRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher) CommentService {
+	return &commentService{repo: repo, objectURLResolver: objectURLResolver, publisher: publisher}
 }

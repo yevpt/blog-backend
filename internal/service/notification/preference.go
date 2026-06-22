@@ -77,6 +77,20 @@ type recipientMetadata struct {
 	RecipientUserIDs []uint `json:"recipient_user_ids"`
 }
 
+// BuildRecipientMetadata 把显式接收人列表编码为事件 metadata JSON；空列表返回 nil。
+// 供回复、留言等已知接收人的业务在发布事件时写入，分发时优先于按归属解析。
+func BuildRecipientMetadata(userIDs ...uint) *string {
+	if len(userIDs) == 0 {
+		return nil
+	}
+	encoded, err := json.Marshal(recipientMetadata{RecipientUserIDs: userIDs})
+	if err != nil {
+		return nil
+	}
+	value := string(encoded)
+	return &value
+}
+
 // explicitRecipients 从事件 metadata 解析显式接收人列表，解析失败或缺失时返回空。
 func explicitRecipients(metadataJSON *string) []uint {
 	if metadataJSON == nil || *metadataJSON == "" {

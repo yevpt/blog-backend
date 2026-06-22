@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -47,9 +48,11 @@ type momentService struct {
 	repo              momentrepo.MomentRepository
 	objectURLResolver storage.ObjectURLResolver
 	uvSvc             uv.UVService
+	publisher         notificationservice.Publisher
 }
 
 // NewMomentService 创建碎语业务服务实例。
-func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService) MomentService {
-	return &momentService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc}
+// publisher 用于点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
+func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher) MomentService {
+	return &momentService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc, publisher: publisher}
 }

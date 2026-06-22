@@ -187,9 +187,14 @@ func newRouteHandlers(
 
 	uvSvc := uv.NewService(redisClient)
 
+	// 组装通知链路：仓储 + 事件发布器（业务侧用），收件箱服务供站内接口。
+	notificationRepo := notificationrepo.NewRepository(db)
+	notificationPublisher := notificationservice.NewPublisher(notificationRepo)
+	notificationInboxSvc := notificationservice.NewInboxService(notificationRepo)
+
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
-	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc)
+	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc, notificationPublisher)
 
 	categoryRepo := categoryrepo.NewCategoryRepository(db)
 	categorySvc := categoryservice.NewCategoryService(categoryRepo)
@@ -201,16 +206,13 @@ func newRouteHandlers(
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
 	commentRepo := commentrepo.NewCommentRepository(db)
-	commentSvc := commentservice.NewCommentService(commentRepo, objectStore)
+	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher)
 
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
-	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore)
+	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher)
 
 	momentRepo := momentrepo.NewMomentRepository(db)
-	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc)
-
-	notificationRepo := notificationrepo.NewRepository(db)
-	notificationInboxSvc := notificationservice.NewInboxService(notificationRepo)
+	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher)
 
 	return routeHandlers{
 		health:       handler.NewHealthHandler(db, redisClient),
