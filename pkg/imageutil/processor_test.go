@@ -2,6 +2,7 @@ package imageutil_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"image"
 	"image/color"
 	"image/png"
@@ -62,6 +63,20 @@ func TestProcess_OutputsPNGWhenRequested(t *testing.T) {
 	assert.Equal(t, 60, result.Height)
 }
 
+func TestProcess_DecodesWebP(t *testing.T) {
+	input := smallWebP(t)
+
+	result, err := imageutil.Process(bytes.NewReader(input), imageutil.Options{
+		Format: imageutil.FormatJPEG,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, imageutil.FormatJPEG, result.Format)
+	assert.Equal(t, "image/jpeg", result.ContentType)
+	assert.Equal(t, ".jpg", result.Ext)
+	assert.NotEmpty(t, result.Bytes)
+}
+
 func noisyPNG(t *testing.T, width, height int) []byte {
 	t.Helper()
 
@@ -80,4 +95,11 @@ func noisyPNG(t *testing.T, width, height int) []byte {
 	var buf bytes.Buffer
 	require.NoError(t, png.Encode(&buf, img))
 	return buf.Bytes()
+}
+
+func smallWebP(t *testing.T) []byte {
+	t.Helper()
+	data, err := base64.StdEncoding.DecodeString("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")
+	require.NoError(t, err)
+	return data
 }
