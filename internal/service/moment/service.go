@@ -97,11 +97,25 @@ func (s *momentService) Delete(id uint, operatorID uint, roleNames []string) (*d
 	if id == 0 {
 		return nil, ErrMomentInvalid
 	}
-	moment, err := s.repo.Delete(id, operatorID, roles.HasPermission(roleNames, roles.AdminRole))
+	moment, images, err := s.repo.Delete(id, operatorID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
+	urls := mediaURLs(images)
+	if err := s.deleteRemovedMomentImages(context.Background(), urls); err != nil {
+		return nil, err
+	}
 	return &dto.MomentDeleteResp{ID: moment.ID}, nil
+}
+
+func mediaURLs(images []model.Media) []string {
+	urls := make([]string, 0, len(images))
+	for _, img := range images {
+		if img.URL != "" {
+			urls = append(urls, img.URL)
+		}
+	}
+	return urls
 }
 
 func (s *momentService) SetTop(id uint, operatorID uint, roleNames []string) (*dto.MomentTopResp, error) {

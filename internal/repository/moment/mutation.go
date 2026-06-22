@@ -68,8 +68,9 @@ func (r *momentRepo) Save(data SaveData) (*MomentAggregate, error) {
 	return r.findAnyDetail(momentID, nil)
 }
 
-func (r *momentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment, error) {
+func (r *momentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment, []model.Media, error) {
 	var moment model.Moment
+	var images []model.Media
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		repo := &momentRepo{db: tx}
 		found, err := repo.findMomentForMutation(id)
@@ -80,12 +81,46 @@ func (r *momentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment
 			return ErrNoPermission
 		}
 		moment = *found
-		return tx.Delete(&moment).Error
+
+		// 查出该碎语的所有媒体记录，交给上层删除 Garage 对象。
+		if err := tx.Where("moment_id = ?", id).Find(&images).Error; err != nil {
+			return err
+		}
+
+		// 硬删除碎语媒体记录，不留软删除痕迹。
+		if err := tx.Unscoped().Where("moment_id = ?", id).Delete(&model.Media{}).Error; err != nil {
+			return err
+		}
+
+		// 级联硬删除评论、回复、点赞和通知消息。
+		commentIDs, err := momentCommentIDs(tx, id)
+		if err != nil {
+			return err
+		}
+		replyIDs, err := momentReplyIDs(tx, commentIDs)
+		if err != nil {
+			return err
+		}
+		if err := hardDeleteMomentLikes(tx, id, commentIDs, replyIDs); err != nil {
+			return err
+		}
+		if err := hardDeleteMomentMessages(tx, id, commentIDs); err != nil {
+			return err
+		}
+		if len(commentIDs) > 0 {
+			if err := tx.Unscoped().Where("comment_id IN ?", commentIDs).Delete(&model.MomentCommentReply{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Unscoped().Where("moment_id = ?", id).Delete(&model.MomentComment{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&moment).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, ErrMomentNotFound
+		return nil, nil, ErrMomentNotFound
 	}
-	return &moment, err
+	return &moment, images, err
 }
 
 func (r *momentRepo) SetTop(id uint, operatorID uint, force bool) (*model.Moment, error) {
@@ -280,4 +315,67 @@ func momentUpdateFields(moment model.Moment) map[string]any {
 		"status":         moment.Status,
 		"comment_status": moment.CommentStatus,
 	}
+}
+
+func momentCommentIDs(tx *gorm.DB, momentID uint) ([]uint, error) {
+	var ids []uint
+	err := tx.Unscoped().
+		Model(&model.MomentComment{}).
+		Where("moment_id = ?", momentID).
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
+func momentReplyIDs(tx *gorm.DB, commentIDs []uint) ([]uint, error) {
+	if len(commentIDs) == 0 {
+		return nil, nil
+	}
+	var ids []uint
+	err := tx.Unscoped().
+		Model(&model.MomentCommentReply{}).
+		Where("comment_id IN ?", commentIDs).
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
+func hardDeleteMomentLikes(tx *gorm.DB, momentID uint, commentIDs []uint, replyIDs []uint) error {
+	if err := tx.Unscoped().
+		Where("target_id = ? AND type = ?", momentID, MomentLikeType).
+		Delete(&model.UserLike{}).Error; err != nil {
+		return err
+	}
+	if len(commentIDs) > 0 {
+		if err := tx.Unscoped().
+			Where("target_id IN ? AND type = ?", commentIDs, MomentCommentLikeType).
+			Delete(&model.UserLike{}).Error; err != nil {
+			return err
+		}
+	}
+	if len(replyIDs) > 0 {
+		if err := tx.Unscoped().
+			Where("target_id IN ? AND type = ?", replyIDs, MomentCommentReplyLikeType).
+			Delete(&model.UserLike{}).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func hardDeleteMomentMessages(tx *gorm.DB, momentID uint, commentIDs []uint) error {
+	var messageIDs []uint
+	query := tx.Unscoped().Model(&model.Message{}).
+		Where("type = ? AND type_id = ?", MomentLikeMessageType, momentID)
+	if len(commentIDs) > 0 {
+		query = query.Or("type = ? AND type_id IN ?", MomentCommentMessageType, commentIDs)
+	}
+	if err := query.Pluck("id", &messageIDs).Error; err != nil {
+		return err
+	}
+	if len(messageIDs) == 0 {
+		return nil
+	}
+	if err := tx.Unscoped().Where("message_id IN ?", messageIDs).Delete(&model.UserMessage{}).Error; err != nil {
+		return err
+	}
+	return tx.Unscoped().Where("id IN ?", messageIDs).Delete(&model.Message{}).Error
 }

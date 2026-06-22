@@ -101,7 +101,7 @@ func readMomentImageFiles(c *gin.Context) ([]dto.MomentImageFileReq, error) {
 
 // Delete 删除碎语。
 // @Summary 删除碎语
-// @Description 碎语作者或管理员可软删除碎语。
+// @Description 碎语作者或管理员可硬删除碎语；同时级联硬删除关联的媒体、评论、回复、点赞和通知消息，并清理 Garage 对象。
 // @Tags 碎语
 // @Accept json
 // @Produce json

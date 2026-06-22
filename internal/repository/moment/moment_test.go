@@ -174,6 +174,79 @@ func TestMomentRepository_Save_CollectsRemovedImageURLs(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestMomentRepository_Delete_HardDeletesMomentAndCascade(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风", 1, 1, 0, false))
+	mock.ExpectQuery("SELECT \\* FROM `moment_media`").
+		WithArgs(uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "uploader_id", "moment_id",
+			"type", "file_type", "name", "url", "size", "status", "seq", "read_count",
+		}).
+			AddRow(3, now, now, nil, 1, 9, 0, "jpg", "a.jpg", "moments/1/9/a.jpg", 10, 1, 1, 0).
+			AddRow(4, now, now, nil, 1, 9, 0, "jpg", "b.jpg", "moments/1/9/b.jpg", 10, 1, 2, 0))
+	mock.ExpectExec("DELETE FROM `moment_media` WHERE moment_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectQuery("SELECT `id` FROM `moment_comment` WHERE moment_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE target_id = \\? AND type = \\?").
+		WithArgs(uint(9), momentrepo.MomentLikeType).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT `id` FROM `message` WHERE type = \\? AND type_id = \\?").
+		WithArgs(momentrepo.MomentLikeMessageType, uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	mock.ExpectExec("DELETE FROM `moment_comment` WHERE moment_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM `moment` WHERE").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	moment, images, err := repo.Delete(9, 1, false)
+
+	require.NoError(t, err)
+	require.NotNil(t, moment)
+	assert.Equal(t, uint(9), moment.ID)
+	require.Len(t, images, 2)
+	assert.Equal(t, "moments/1/9/a.jpg", images[0].URL)
+	assert.Equal(t, "moments/1/9/b.jpg", images[1].URL)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMomentRepository_Delete_RejectsNonOwner(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风", 1, 1, 0, false))
+	mock.ExpectRollback()
+
+	_, _, err := repo.Delete(9, 7, false)
+
+	require.ErrorIs(t, err, momentrepo.ErrNoPermission)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMomentRepository_SetTop_RejectsFourthTop(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()

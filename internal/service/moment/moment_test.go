@@ -36,6 +36,7 @@ type fakeMomentRepo struct {
 	deleteOperator uint
 	deleteForce    bool
 	deleteResp     *model.Moment
+	deleteMedia    []model.Media
 	deleteErr      error
 
 	topID       uint
@@ -89,11 +90,11 @@ func (f *fakeMomentRepo) Save(data momentrepo.SaveData) (*momentrepo.MomentAggre
 	return f.saveResp, f.saveErr
 }
 
-func (f *fakeMomentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment, error) {
+func (f *fakeMomentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment, []model.Media, error) {
 	f.deleteID = id
 	f.deleteOperator = operatorID
 	f.deleteForce = force
-	return f.deleteResp, f.deleteErr
+	return f.deleteResp, f.deleteMedia, f.deleteErr
 }
 
 func (f *fakeMomentRepo) SetTop(id uint, operatorID uint, force bool) (*model.Moment, error) {
@@ -404,6 +405,53 @@ func TestMomentService_Save_DeletesUploadedImagesWhenLaterUploadFails(t *testing
 	require.EqualError(t, err, "put failed")
 	require.Len(t, store.putKeys, 2)
 	assert.Equal(t, []string{store.putKeys[0]}, store.deleteKeys)
+}
+
+func TestMomentService_Delete_RemovesMediaFilesFromGarage(t *testing.T) {
+	store := &fakeMomentObjectStore{}
+	repo := &fakeMomentRepo{
+		deleteResp: &model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风"},
+		deleteMedia: []model.Media{
+			{Base: model.Base{ID: 3}, MomentID: 9, URL: "moments/7/9/a.jpg"},
+			{Base: model.Base{ID: 4}, MomentID: 9, URL: "moments/7/9/b.jpg"},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	resp, err := svc.Delete(9, 7, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(9), resp.ID)
+	assert.Equal(t, []string{"moments/7/9/a.jpg", "moments/7/9/b.jpg"}, store.deleteKeys)
+}
+
+func TestMomentService_Delete_ReturnsErrorWhenGarageDeleteFails(t *testing.T) {
+	store := &fakeMomentObjectStore{deleteErr: errors.New("garage down")}
+	repo := &fakeMomentRepo{
+		deleteResp: &model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风"},
+		deleteMedia: []model.Media{
+			{Base: model.Base{ID: 3}, MomentID: 9, URL: "moments/7/9/a.jpg"},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	_, err := svc.Delete(9, 7, nil)
+
+	require.EqualError(t, err, "garage down")
+}
+
+func TestMomentService_Delete_SucceedsWithNoMedia(t *testing.T) {
+	store := &fakeMomentObjectStore{}
+	repo := &fakeMomentRepo{
+		deleteResp: &model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风"},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	resp, err := svc.Delete(9, 7, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(9), resp.ID)
+	assert.Empty(t, store.deleteKeys)
 }
 
 func md5Hex(data []byte) string {

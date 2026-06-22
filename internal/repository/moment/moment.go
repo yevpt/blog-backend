@@ -10,10 +10,18 @@ import (
 const (
 	// MomentLikeType 表示 user_like 中的碎语点赞类型。
 	MomentLikeType uint8 = 3
+	// MomentCommentLikeType 表示 user_like 中的碎语评论点赞类型。
+	MomentCommentLikeType uint8 = 6
+	// MomentCommentReplyLikeType 表示 user_like 中的碎语评论回复点赞类型。
+	MomentCommentReplyLikeType uint8 = 7
 	// MomentImageType 表示 moment_media 中的图片类型。
 	MomentImageType uint8 = 0
 	// MaxTopMomentsPerUser 限制每个用户最多置顶三条碎语。
 	MaxTopMomentsPerUser int64 = 3
+	// MomentLikeMessageType 表示碎语点赞通知的消息类型。
+	MomentLikeMessageType = "moment_like"
+	// MomentCommentMessageType 表示碎语评论通知的消息类型。
+	MomentCommentMessageType = "moment_comment"
 )
 
 var (
@@ -68,7 +76,7 @@ type MomentRepository interface {
 	List(filter ListFilter, viewerID *uint) (*PageResult, error)
 	FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate, error)
 	Save(data SaveData) (*MomentAggregate, error)
-	Delete(id uint, operatorID uint, force bool) (*model.Moment, error)
+	Delete(id uint, operatorID uint, force bool) (*model.Moment, []model.Media, error)
 	SetTop(id uint, operatorID uint, force bool) (*model.Moment, error)
 	RemoveTop(id uint, operatorID uint, force bool) (*model.Moment, error)
 	IncrementReadCount(id uint) (*model.Moment, error)
