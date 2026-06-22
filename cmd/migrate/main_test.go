@@ -3,8 +3,11 @@ package main
 import (
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 func TestBuildMomentMediaGaragePlan_RewritesSayPath(t *testing.T) {
@@ -78,4 +81,32 @@ func TestBuildMomentMediaGaragePlan_ReportsMissingFileName(t *testing.T) {
 	assert.False(t, plan.HasChanges())
 	require.Error(t, plan.Err)
 	assert.Contains(t, plan.Err.Error(), "对象 key 缺少文件名")
+}
+
+func TestUpdateMomentMediaURL_DoesNotTouchUpdatedAt(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	gormDB, err := gorm.Open(mysql.New(mysql.Config{
+		Conn:                      db,
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{})
+	require.NoError(t, err)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `moment_media` SET `moment_id`=\\?,`uploader_id`=\\?,`url`=\\? WHERE id = \\? AND `moment_media`.`deleted_at` IS NULL").
+		WithArgs(9, 7, "moments/7/9/images/cat.jpg", 5).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err = updateMomentMediaURL(gormDB, momentMediaGaragePlan{
+		MediaID:           5,
+		UpdatedURL:        "moments/7/9/images/cat.jpg",
+		UpdatedUploaderID: 7,
+		UpdatedMomentID:   9,
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

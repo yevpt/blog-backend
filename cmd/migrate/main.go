@@ -330,6 +330,25 @@ func nullTime(nt sql.NullTime) *time.Time {
 	return &nt.Time
 }
 
+func migrationBase(id uint, createdAt sql.NullTime, updatedAt sql.NullTime) model.Base {
+	base := model.Base{ID: id}
+	applyMigrationTimestamps(&base, createdAt, updatedAt)
+	return base
+}
+
+func applyMigrationTimestamps(base *model.Base, createdAt sql.NullTime, updatedAt sql.NullTime) {
+	if createdAt.Valid {
+		base.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		base.UpdatedAt = updatedAt.Time
+		return
+	}
+	if !base.CreatedAt.IsZero() {
+		base.UpdatedAt = base.CreatedAt
+	}
+}
+
 // isUseToBool '01' = true（使用中），'00' = false（已停用）
 func isUseToBool(s sql.NullString) bool {
 	return s.Valid && s.String == "01"
@@ -698,7 +717,7 @@ func updateMomentMediaURL(db *gorm.DB, plan momentMediaGaragePlan) error {
 	}
 	return db.Model(&model.Media{}).
 		Where("id = ?", plan.MediaID).
-		Updates(updates).Error
+		UpdateColumns(updates).Error
 }
 
 func findMomentUserID(db *gorm.DB, momentID uint) (uint, error) {
@@ -742,7 +761,7 @@ func (s *garageArticleStore) updateArticle(plan garagearticles.ArticlePlan) erro
 	}
 	return s.db.Model(&model.Article{}).
 		Where("id = ?", plan.ArticleID).
-		Updates(updates).Error
+		UpdateColumns(updates).Error
 }
 
 func (c *garageCopier) copyObjectIfNeeded(ctx context.Context, sourceKey, targetKey string) (bool, error) {
@@ -880,7 +899,7 @@ func migrateUser(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		u := model.User{
-			Base:        model.Base{ID: id},
+			Base:        migrationBase(id, registerTime, sql.NullTime{}),
 			Username:    username,
 			Password:    password,
 			Nickname:    nullStr(name),
@@ -892,11 +911,6 @@ func migrateUser(src *sql.DB, dst *gorm.DB) error {
 			Status:      statusVarcharToUint8(status),
 			LastLoginAt: nullTime(loginTime),
 		}
-		// 用 register_time 作为 created_at
-		if registerTime.Valid {
-			u.CreatedAt = registerTime.Time
-		}
-
 		if err := dst.Create(&u).Error; err != nil {
 			return fmt.Errorf("insert user id=%d: %w", id, err)
 		}
@@ -1141,16 +1155,13 @@ func migrateSocialUser(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		su := model.SocialUser{
-			Base:         model.Base{ID: id},
+			Base:         migrationBase(id, dateCreate, sql.NullTime{}),
 			UUID:         uuid,
 			Source:       source,
 			AccessToken:  accessToken.String,
 			RefreshToken: nullStr(refreshToken),
 			OpenID:       nullStr(openID),
 			IsActive:     isUseToBool(isUse),
-		}
-		if dateCreate.Valid {
-			su.CreatedAt = dateCreate.Time
 		}
 		if err := dst.Create(&su).Error; err != nil {
 			return fmt.Errorf("insert social_user id=%d: %w", id, err)
@@ -1231,7 +1242,7 @@ func migrateCategory(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		c := model.Category{
-			Base:        model.Base{ID: id},
+			Base:        migrationBase(id, dateCreate, dateModifed),
 			ParentID:    nullUint(parentID),
 			Name:        name.String,
 			URL:         nullStr(url),
@@ -1239,12 +1250,6 @@ func migrateCategory(src *sql.DB, dst *gorm.DB) error {
 			Description: nullStr(description),
 			CoverImgUrl: nullStr(bgImgUrl),
 			Seq:         uint(seq.Int32),
-		}
-		if dateCreate.Valid {
-			c.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			c.UpdatedAt = dateModifed.Time
 		}
 		if isUse.Valid && isUse.String == "00" {
 			t := time.Now()
@@ -1290,19 +1295,13 @@ func migrateTag(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		t := model.Tag{
-			Base:        model.Base{ID: id},
+			Base:        migrationBase(id, dateCreate, dateModifed),
 			Name:        name.String,
 			URL:         nullStr(url),
 			Icon:        nullStr(icon),
 			Description: nullStr(description),
 			CoverImgUrl: nullStr(bgImgUrl),
 			Seq:         uint(seq.Int32),
-		}
-		if dateCreate.Valid {
-			t.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			t.UpdatedAt = dateModifed.Time
 		}
 		if isUse.Valid && isUse.String == "00" {
 			now := time.Now()
@@ -1359,7 +1358,7 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		m := model.Music{
-			Base:        model.Base{ID: id},
+			Base:        migrationBase(id, dateCreate, dateModifed),
 			Name:        name.String,
 			Singer:      singer.String,
 			Album:       album.String,
@@ -1370,12 +1369,6 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 			Lyric:       nullStr(lyric),
 			Duration:    parseMusicDuration(musicTime),
 			Seq:         uint(seq.Int32),
-		}
-		if dateCreate.Valid {
-			m.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			m.UpdatedAt = dateModifed.Time
 		}
 		if isUse.Valid && isUse.String == "00" {
 			t := time.Now()
@@ -1441,7 +1434,7 @@ func migrateArticle(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		a := model.Article{
-			Base:          model.Base{ID: id},
+			Base:          migrationBase(id, dateCreate, dateModifed),
 			Title:         title.String,
 			CoverImgUrl:   coverImgUrl,
 			ShortContent:  nullStr(shortContent),
@@ -1451,12 +1444,6 @@ func migrateArticle(src *sql.DB, dst *gorm.DB) error {
 			CommentStatus: statusVarcharToUint8(commentStatus),
 			Password:      nullStr(password),
 			ReadCount:     uint(readCount.Int32),
-		}
-		if dateCreate.Valid {
-			a.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			a.UpdatedAt = dateModifed.Time
 		}
 		if err := dst.Create(&a).Error; err != nil {
 			return fmt.Errorf("insert article id=%d: %w", id, err)
@@ -1500,19 +1487,13 @@ func migrateMoment(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		m := model.Moment{
-			Base:          model.Base{ID: id},
+			Base:          migrationBase(id, dateCreate, dateModifed),
 			UserID:        uint(userID.Int64),
 			Content:       content.String,
 			Status:        statusVarcharToUint8(status),
 			CommentStatus: statusVarcharToUint8(commentStatus),
 			ReadCount:     uint(readCount.Int32),
 			IsTop:         isTop.Valid && isTop.Int32 == 1,
-		}
-		if dateCreate.Valid {
-			m.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			m.UpdatedAt = dateModifed.Time
 		}
 		if err := dst.Create(&m).Error; err != nil {
 			return fmt.Errorf("insert moment id=%d: %w", id, err)
@@ -1557,7 +1538,7 @@ func migrateFriendLink(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		fl := model.FriendLink{
-			Base:        model.Base{ID: id},
+			Base:        migrationBase(id, dateCreate, dateModifed),
 			Name:        name.String,
 			Description: nullStr(description),
 			Email:       nullStr(email),
@@ -1566,12 +1547,6 @@ func migrateFriendLink(src *sql.DB, dst *gorm.DB) error {
 			AvatarUrl:   nullStr(avatarUrl),
 			Seq:         uint(seq.Int32),
 			Status:      statusVarcharToUint8(isUse),
-		}
-		if dateCreate.Valid {
-			fl.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			fl.UpdatedAt = dateModifed.Time
 		}
 		if isUse.Valid && isUse.String == "00" {
 			t := time.Now()
@@ -1645,7 +1620,7 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		m := model.Media{
-			Base:       model.Base{ID: id},
+			Base:       migrationBase(id, dateCreate, dateModifed),
 			UploaderID: newUploaderID,
 			MomentID:   momentID,
 			Type:       uint8(typ),
@@ -1656,12 +1631,6 @@ func migrateMedia(src *sql.DB, dst *gorm.DB) error {
 			Status:     statusVarcharToUint8(status),
 			Seq:        uint(seq.Int32),
 			ReadCount:  uint(readCount.Int32),
-		}
-		if dateCreate.Valid {
-			m.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			m.UpdatedAt = dateModifed.Time
 		}
 		if err := dst.Create(&m).Error; err != nil {
 			return fmt.Errorf("insert moment_media id=%d: %w", id, err)
@@ -1764,12 +1733,9 @@ func migrateArticleRecommend(src *sql.DB, dst *gorm.DB) error {
 			return err
 		}
 		ar := model.ArticleRecommend{
-			Base:      model.Base{ID: id},
+			Base:      migrationBase(id, dateCreate, sql.NullTime{}),
 			ArticleID: postID,
 			Seq:       uint(seq.Int32),
-		}
-		if dateCreate.Valid {
-			ar.CreatedAt = dateCreate.Time
 		}
 		if err := dst.Create(&ar).Error; err != nil {
 			return fmt.Errorf("insert article_recommend id=%d: %w", id, err)
@@ -1819,13 +1785,7 @@ func migrateComments(src *sql.DB, dst *gorm.DB) error {
 			deletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
 		}
 
-		base := model.Base{ID: id}
-		if dateCreate.Valid {
-			base.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			base.UpdatedAt = dateModifed.Time
-		}
+		base := migrationBase(id, dateCreate, dateModifed)
 		base.DeletedAt = deletedAt
 
 		switch ctype {
@@ -1918,13 +1878,7 @@ func migrateCommentReply(src *sql.DB, dst *gorm.DB) error {
 			parentReplyID = uint(lastID.Int64)
 		}
 
-		base := model.Base{ID: id}
-		if dateCreate.Valid {
-			base.CreatedAt = dateCreate.Time
-		}
-		if dateModifed.Valid {
-			base.UpdatedAt = dateModifed.Time
-		}
+		base := migrationBase(id, dateCreate, dateModifed)
 		if isUse.Valid && isUse.String == "00" {
 			base.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
 		}
@@ -2044,14 +1998,11 @@ func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
 		seen[key] = true
 
 		ul := model.UserLike{
-			Base:   model.Base{ID: id},
+			Base:   migrationBase(id, dateCreate, sql.NullTime{}),
 			UserID: userID,
 			// 先保留源库里的旧目标 ID，后续由 Step 25 defrag 按类型同步更新为压缩后的新 ID。
 			TargetID: postID,
 			Type:     typeVal,
-		}
-		if dateCreate.Valid {
-			ul.CreatedAt = dateCreate.Time
 		}
 		if isUse.Valid && isUse.String == "00" {
 			ul.DeletedAt = gorm.DeletedAt{Time: time.Now(), Valid: true}
@@ -2176,7 +2127,7 @@ func migrateMessage(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		m := model.Message{
-			Base:       model.Base{ID: id},
+			Base:       migrationBase(id, dateCreate, sql.NullTime{}),
 			Title:      nullStr(title),
 			Content:    nullStr(content),
 			Type:       mtype.String,
@@ -2184,9 +2135,6 @@ func migrateMessage(src *sql.DB, dst *gorm.DB) error {
 			FromUserID: fromID,
 			ArticleID:  nullUint(postID),
 			CommentID:  nullUint(commentID),
-		}
-		if dateCreate.Valid {
-			m.CreatedAt = dateCreate.Time
 		}
 		if err := dst.Create(&m).Error; err != nil {
 			return fmt.Errorf("insert message id=%d: %w", id, err)
@@ -2226,13 +2174,10 @@ func migrateUserMessage(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		um := model.UserMessage{
-			Base:      model.Base{ID: id},
+			Base:      migrationBase(id, dateCreate, sql.NullTime{}),
 			UserID:    userID,
 			MessageID: messageID,
 			IsRead:    readStatus.Valid && readStatus.String == "01",
-		}
-		if dateCreate.Valid {
-			um.CreatedAt = dateCreate.Time
 		}
 		if err := dst.Create(&um).Error; err != nil {
 			return fmt.Errorf("insert user_message id=%d: %w", id, err)
