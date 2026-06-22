@@ -24,7 +24,13 @@ const (
 	momentImageObjectPrefix   = "moments/"
 	maxMomentImageCount       = 9
 	maxMomentImageOriginal    = 1024 * 1024
+	maxMomentGifOriginal      = 300 * 1024
 	maxMomentImageStoredBytes = 500 * 1024
+)
+
+const (
+	momentImageReadableFormatsText = "JPG、PNG、WebP 或 300KB 以内的 GIF"
+	momentGifTooLargeMessage       = "GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。"
 )
 
 func (s *momentService) prepareMomentImages(ctx context.Context, moment model.Moment, req dto.MomentSaveReq, uploaded *[]string) ([]model.Media, error) {
@@ -272,6 +278,13 @@ type processedMomentImage struct {
 }
 
 func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, error) {
+	if isMomentGifFile(file) {
+		if len(file.Data) > maxMomentGifOriginal {
+			return processedMomentImage{}, newMomentImageInvalidError(momentGifTooLargeMessage)
+		}
+		return processedMomentImage{Data: file.Data, ContentType: "image/gif", Ext: ".gif"}, nil
+	}
+
 	if len(file.Data) > maxMomentImageOriginal {
 		return processedMomentImage{}, ErrMomentImageTooLarge
 	}
@@ -285,10 +298,20 @@ func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, 
 		opts.MinJPEGQuality = 35
 	}
 	result, err := imageutil.Process(bytes.NewReader(file.Data), opts)
-	if errors.Is(err, imageutil.ErrInvalidImage) ||
-		errors.Is(err, imageutil.ErrUnsupportedFormat) ||
-		errors.Is(err, imageutil.ErrImageTooLarge) {
-		return processedMomentImage{}, ErrMomentImageInvalid
+	if errors.Is(err, imageutil.ErrInvalidImage) {
+		return processedMomentImage{}, newMomentImageInvalidError(
+			"图片无法读取，请确认文件未损坏，并尝试换一张 " + momentImageReadableFormatsText,
+		)
+	}
+	if errors.Is(err, imageutil.ErrUnsupportedFormat) {
+		return processedMomentImage{}, newMomentImageInvalidError(
+			"图片格式不支持，请上传 " + momentImageReadableFormatsText,
+		)
+	}
+	if errors.Is(err, imageutil.ErrImageTooLarge) {
+		return processedMomentImage{}, newMomentImageInvalidError(
+			"图片过大，压缩后仍超过 500KB，请换一张更小的图片",
+		)
 	}
 	if err != nil {
 		return processedMomentImage{}, err
@@ -301,7 +324,9 @@ func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, 
 			MinJPEGQuality: 35,
 		})
 		if errors.Is(err, imageutil.ErrImageTooLarge) {
-			return processedMomentImage{}, ErrMomentImageInvalid
+			return processedMomentImage{}, newMomentImageInvalidError(
+				"图片过大，压缩后仍超过 500KB，请换一张更小的图片",
+			)
 		}
 		if err != nil {
 			return processedMomentImage{}, err
@@ -309,6 +334,22 @@ func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, 
 	}
 
 	return processedMomentImage{Data: result.Bytes, ContentType: result.ContentType, Ext: result.Ext}, nil
+}
+
+type momentImageInvalidError struct {
+	message string
+}
+
+func newMomentImageInvalidError(message string) error {
+	return momentImageInvalidError{message: message}
+}
+
+func (err momentImageInvalidError) Error() string {
+	return err.message
+}
+
+func (err momentImageInvalidError) Is(target error) bool {
+	return target == ErrMomentImageInvalid
 }
 
 func uploadedMomentImageObjectName(moment model.Moment, image processedMomentImage) string {
@@ -369,6 +410,11 @@ func imageFormatFromFile(file dto.MomentImageFileReq) imageutil.Format {
 		return imageutil.FormatPNG
 	}
 	return imageutil.FormatJPEG
+}
+
+func isMomentGifFile(file dto.MomentImageFileReq) bool {
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(file.ContentType, ";")[0]))
+	return contentType == "image/gif" || strings.EqualFold(fileExt(file), ".gif")
 }
 
 func fileTypeFromName(name string) string {
