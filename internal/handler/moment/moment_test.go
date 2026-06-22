@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -188,6 +189,74 @@ func TestMomentHandler_Save_RejectsImageOverOneMBBeforeService(t *testing.T) {
 	assert.Equal(t, response.CodeBadRequest, resp.Code)
 }
 
+func TestMomentHandler_Save_RejectsGifOverThreeHundredKBBeforeService(t *testing.T) {
+	stub := &stubMomentService{saveResp: &dto.MomentItemResp{ID: 9}}
+	r := newMomentRouter(stub)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	require.NoError(t, writer.WriteField("content", "风"))
+	require.NoError(t, writer.WriteField("status", "1"))
+	require.NoError(t, writer.WriteField("comment_status", "1"))
+	file, err := writer.CreatePart(textprotoMIMEHeader(map[string]string{
+		"Content-Disposition": `form-data; name="images"; filename="motion.gif"`,
+		"Content-Type":        "image/gif",
+	}))
+	require.NoError(t, err)
+	_, err = file.Write(append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 300*1024-5)...))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Zero(t, stub.saveUserID)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。", resp.Message)
+}
+
+func TestMomentHandler_Save_ReturnsSpecificImageErrorFromService(t *testing.T) {
+	stub := &stubMomentService{
+		saveErr: specificMomentImageError{
+			message: "图片无法读取，请确认文件未损坏，并尝试换一张 JPG、PNG、WebP 或 300KB 以内的 GIF",
+		},
+	}
+	r := newMomentRouter(stub)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	require.NoError(t, writer.WriteField("content", "风"))
+	require.NoError(t, writer.WriteField("status", "1"))
+	require.NoError(t, writer.WriteField("comment_status", "1"))
+	require.NoError(t, writer.Close())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "图片无法读取，请确认文件未损坏，并尝试换一张 JPG、PNG、WebP 或 300KB 以内的 GIF", resp.Message)
+}
+
+type specificMomentImageError struct {
+	message string
+}
+
+func (err specificMomentImageError) Error() string {
+	return err.message
+}
+
+func (err specificMomentImageError) Is(target error) bool {
+	return target == momentservice.ErrMomentImageInvalid
+}
+
 func TestMomentHandler_ToggleLike_BindsIDAndUser(t *testing.T) {
 	stub := &stubMomentService{likeResp: &dto.MomentItemResp{ID: 9, IsLiked: true}}
 	r := newMomentRouter(stub)
@@ -213,4 +282,12 @@ func TestMomentHandler_Delete_ForwardsRoles(t *testing.T) {
 	assert.Equal(t, uint(9), stub.deleteID)
 	assert.Equal(t, uint(7), stub.deleteUserID)
 	assert.Equal(t, []string{roles.AdminRole}, stub.deleteRoles)
+}
+
+func textprotoMIMEHeader(values map[string]string) textproto.MIMEHeader {
+	header := make(textproto.MIMEHeader, len(values))
+	for key, value := range values {
+		header.Set(key, value)
+	}
+	return header
 }
