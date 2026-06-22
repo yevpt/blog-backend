@@ -55,6 +55,7 @@
 - Do not send notification emails synchronously from user requests.
 - Do not rely on Redis for queue durability.
 - Keep every worker operation idempotent and lease based.
+- Treat `cmd/migrate` as the old-database rebuild tool. Production schema changes need versioned migrations, not app-start AutoMigrate.
 - Commit after each completed task group with a Chinese Conventional Commit message.
 
 ## Task 1: Models And Config
@@ -850,10 +851,63 @@ git commit -m "feat(notification): 新增通知管理接口"
 
 - Modify: `cmd/migrate/main.go`
 - Optional Create: `cmd/notification-migrate/main.go`
+- Optional Create: `internal/migration/schema/20260623_001_create_notification_tables.sql`
+- Optional Create: `internal/migration/schema/20260623_002_seed_notification_quota.sql`
 - Modify after migration: old `internal/model/message.go` and old message writes
 - Test: `cmd/migrate/*_test.go`
 
-- [ ] **Step 1: Decide migration mode**
+- [ ] **Step 1: Decide schema migration mode**
+
+Pick one path for the target environment:
+
+- Rebuild/dev path: add new models to `cmd/migrate/main.go` `AutoMigrate`.
+- Existing production path: create versioned SQL or Go schema migrations for new notification tables and seed policies.
+
+Do not use app startup to AutoMigrate production databases.
+
+- [ ] **Step 2: Create new table migration**
+
+Create all notification tables from the spec:
+
+```text
+notification_event
+notification_inbox
+notification_preference
+notification_email_task
+notification_email_batch
+notification_email_batch_item
+email_quota_policy
+email_role_quota_policy
+email_quota_usage
+email_send_log
+```
+
+Include unique keys:
+
+```text
+notification_inbox(recipient_user_id, event_id)
+notification_email_task(idempotency_key)
+notification_email_batch_item(task_id)
+email_quota_policy(purpose)
+email_role_quota_policy(role, scope_type)
+email_quota_usage(scope_type, scope_id, purpose, window_type, window_start)
+```
+
+- [ ] **Step 3: Create seed migration**
+
+Seed default `email_quota_policy`:
+
+```text
+register_code
+password_reset
+security
+notification
+admin_notice
+```
+
+Seed default `email_role_quota_policy` for normal, vip, and admin actor/recipient limits.
+
+- [ ] **Step 4: Decide legacy data migration mode**
 
 Use one of:
 
@@ -862,7 +916,7 @@ Use one of:
 
 Do not delete old tables until production data has been verified.
 
-- [ ] **Step 2: Write migration tests**
+- [ ] **Step 5: Write migration tests**
 
 Cover:
 
@@ -870,34 +924,68 @@ Cover:
 - old `user_message` becomes `notification_inbox`.
 - orphan old rows are skipped.
 - old content that does not map cleanly is preserved in `metadata_json`.
+- repeated migration is idempotent and does not duplicate events or inbox rows.
+- per-user unread counts match between old and new tables for migrated rows.
 
 Run: `go test ./cmd/migrate -count=1`
 
 Expected: FAIL until migration exists.
 
-- [ ] **Step 3: Implement migration**
+- [ ] **Step 6: Implement legacy type mapping**
 
 Map known old types:
 
 ```text
-post_like -> article_liked
-say_like -> moment_liked
+post_like/article_like -> article_liked
+say_like/moment_like -> moment_liked
 comment -> comment_created
+moment_comment/say -> comment_created
 comment_reply -> reply_created
 guestBook -> guestbook_created
 guestBook_reply -> reply_created
+unknown -> legacy_notice
 ```
 
-- [ ] **Step 4: Verify**
+- [ ] **Step 7: Implement legacy migration**
+
+For full old Java source migration:
+
+- Change `migrateMessage` to create `notification_event`, or add a new step immediately after old message import to convert old rows.
+- Change `migrateUserMessage` to create `notification_inbox`, or add a new conversion step.
+- Preserve `legacy_message_id`, `legacy_user_message_id`, old type, and old relation IDs in `metadata_json`.
+
+For already migrated Go databases:
+
+- Implement `cmd/notification-migrate`.
+- Read current `message` and `user_message`.
+- Write v2 rows with deterministic idempotency keys such as `legacy:message:{id}`.
+- Skip rows whose `message_id` has no parent message.
+
+- [ ] **Step 8: Add verification command output**
+
+Migration command must print:
+
+```text
+events_created
+events_skipped
+inbox_created
+inbox_skipped
+orphans_skipped
+failed_rows
+old_unread_count
+new_unread_count
+```
+
+- [ ] **Step 9: Verify**
 
 Run: `go test ./cmd/migrate -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add cmd/migrate
+git add cmd/migrate cmd/notification-migrate internal/migration/schema
 git commit -m "feat(notification): 迁移旧消息数据"
 ```
 
@@ -990,4 +1078,3 @@ Two execution options:
 
 1. Subagent-Driven (recommended): dispatch a fresh subagent per task, review between tasks, fast iteration.
 2. Inline Execution: execute tasks in this session using executing-plans, batch execution with checkpoints.
-

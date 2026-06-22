@@ -498,16 +498,105 @@ SSE 不是可靠队列，只负责在线提示。
 
 通知创建应从业务 service 调用 `notification.Publisher`，而不是业务 repository 直接写通知表。
 
-## 旧表迁移策略
+## 建表与迁移策略
 
-第一阶段可保留旧 `message` 与 `user_message`，新代码不再写入。
+当前仓库的 `cmd/migrate` 是“旧 Java 库全量迁移到当前 Go 表结构”的工具，不是线上数据库的通用版本迁移系统。因此通知系统需要同时设计两条路径：
 
-后续迁移：
+1. 新建或可重建环境：通过 `cmd/migrate` 的 `AutoMigrate` 创建新通知表，并在旧库迁移步骤中直接生成 v2 通知数据。
+2. 已运行的 Go 数据库：通过版本化 schema 迁移脚本创建新表，再运行一次性数据回填任务，最后切换业务代码只写新表。
 
-- 将旧 `message` 转成 `notification_event`。
-- 将旧 `user_message` 转成 `notification_inbox`。
-- 无法准确映射的旧字段保存在 `metadata_json`。
-- 完成验证后再删除旧模型和迁移逻辑。
+### 新表创建
+
+开发环境和可重建迁移库：
+
+- 在 `internal/model/notification.go` 定义新模型。
+- 在 `cmd/migrate/main.go` 的 `autoMigrate` 注册新模型。
+- `cmd/migrate` 全量重建时直接创建新表。
+
+线上或不可重建环境：
+
+- 新增版本化迁移目录，例如 `internal/migration/schema` 或 `db/migrations`。
+- 每个迁移使用明确版本号和名称，例如 `20260623_001_create_notification_tables.sql`。
+- 迁移脚本只做向前变更：建表、加列、加索引、种子策略数据。
+- 禁止依赖应用启动时的 `AutoMigrate` 修改线上库。
+
+通知系统第一批 schema 迁移应包含：
+
+- 创建 `notification_event`。
+- 创建 `notification_inbox`。
+- 创建 `notification_preference`。
+- 创建 `notification_email_task`。
+- 创建 `notification_email_batch`。
+- 创建 `notification_email_batch_item`。
+- 创建 `email_quota_policy`。
+- 创建 `email_role_quota_policy`。
+- 创建 `email_quota_usage`。
+- 创建 `email_send_log`。
+- 插入默认 `email_quota_policy`，包含 `register_code`、`password_reset`、`security`、`notification`、`admin_notice`。
+- 插入默认 `email_role_quota_policy`，包含 normal、vip、admin 的 actor 与 recipient 限额。
+
+### 旧数据处理
+
+旧数据来源有两类：
+
+1. 旧 Java 源库的 `message` / `user_messages`。
+2. 当前 Go 目标库已迁移出来的 `message` / `user_message`。
+
+两类都要迁移到 v2 表，但执行入口不同。
+
+从旧 Java 源库全量迁移时：
+
+- 不再把旧 `message` 写入新库 `message` 表作为最终形态。
+- 将旧 `message` 直接映射为 `notification_event`。
+- 将旧 `user_messages` 通过 JOIN 过滤孤儿记录后映射为 `notification_inbox`。
+- 无法准确映射的旧字段写入 `metadata_json`。
+- 旧 `from_role` 不再进入主字段；需要追溯时放入 `metadata_json`。
+
+从当前 Go 库增量升级时：
+
+- 新增一次性命令，例如 `cmd/notification-migrate`。
+- 从当前库 `message` / `user_message` 读取数据，写入 v2 表。
+- 回填过程必须幂等：同一旧消息重复执行不能生成重复事件或重复 inbox。
+- 建议在 `notification_event.metadata_json` 中保存 `legacy_message_id`，并对迁移事件建立幂等键。
+- 建议在 `notification_inbox.metadata_json` 或单独迁移映射表中保存 `legacy_user_message_id`；如果不加字段，则至少用 `recipient_user_id + event_id` 唯一约束防重。
+
+### 旧类型映射
+
+旧类型需要规范化。第一版建议映射如下：
+
+| 旧类型 | 新事件类型 | 说明 |
+| --- | --- | --- |
+| `post_like` / `article_like` | `article_liked` | 文章点赞 |
+| `say_like` / `moment_like` | `moment_liked` | 碎语点赞 |
+| `comment` | `comment_created` | 文章评论 |
+| `moment_comment` / `say` | `comment_created` | 碎语评论 |
+| `comment_reply` | `reply_created` | 评论回复 |
+| `guestBook` | `guestbook_created` | 留言 |
+| `guestBook_reply` | `reply_created` | 留言回复 |
+| 其他未知类型 | `legacy_notice` | 保留原始 type 到 `metadata_json` |
+
+### 新旧系统切换顺序
+
+推荐执行顺序：
+
+1. 新表上线，但业务仍读旧表、写旧表。
+2. 部署支持新表的代码，打开“只写新通知事件”的功能开关，停止新增旧 `message`。
+3. 运行旧数据回填，把旧 `message` / `user_message` 写入 v2 表。
+4. 对比旧表和新表数量：事件数、收件箱数、未读数、每用户未读数抽样。
+5. 前端和后端读接口切到 v2。
+6. 观察一段时间后，将旧表改为只读保留。
+7. 确认无回滚需求后再删除旧模型、旧 repository 副作用和旧表。
+
+如果实现阶段不想引入功能开关，也可以选择停机维护窗口：先迁移数据，再一次性部署只读写 v2 的代码。个人博客流量较小，这条路径更简单。
+
+### 后续 schema 迁移原则
+
+- 加字段优先使用可空字段或有默认值字段，避免长时间锁表。
+- 新增索引要评估表数据量；大表索引尽量在低峰执行。
+- 先部署兼容旧字段和新字段的代码，再迁移数据，最后删除旧字段。
+- 删除字段和删除表必须延后到至少一个稳定版本之后。
+- 每个迁移脚本必须可追溯：版本号、目的、影响表、回滚建议。
+- 数据回填任务要可重复执行，并输出处理数、跳过数、失败数。
 
 ## 风险与注意事项
 
@@ -526,4 +615,3 @@ SSE 不是可靠队列，只负责在线提示。
 - 阶段 4：sender、模板、失败重试、管理查询。
 - 阶段 5：SSE。
 - 阶段 6：旧表迁移和清理。
-
