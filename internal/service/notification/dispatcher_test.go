@@ -102,6 +102,9 @@ func (r *dispatchRepo) GetRoleQuotaPolicies(context.Context) ([]model.EmailRoleQ
 func (r *dispatchRepo) ReserveQuota(context.Context, notificationrepo.QuotaUsageKey, int) (bool, error) {
 	return true, nil
 }
+func (r *dispatchRepo) GetUsage(context.Context, notificationrepo.QuotaUsageKey) (int, error) {
+	return 0, nil
+}
 
 func keyOf(recipient, event uint) string {
 	return string(rune(recipient)) + ":" + string(rune(event))

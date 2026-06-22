@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"errors"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
@@ -20,6 +21,22 @@ func (r *repo) GetRoleQuotaPolicies(ctx context.Context) ([]model.EmailRoleQuota
 	var policies []model.EmailRoleQuotaPolicy
 	err := r.db.WithContext(ctx).Find(&policies).Error
 	return policies, err
+}
+
+// GetUsage 读取某额度键当前已用计数，无记录返回 0。
+func (r *repo) GetUsage(ctx context.Context, key QuotaUsageKey) (int, error) {
+	var usage model.EmailQuotaUsage
+	err := r.db.WithContext(ctx).
+		Where("scope_type = ? AND scope_id = ? AND purpose = ? AND window_type = ? AND window_start = ?",
+			key.ScopeType, key.ScopeID, key.Purpose, key.WindowType, key.WindowStart).
+		Take(&usage).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	return usage.UsedCount, nil
 }
 
 // ReserveQuota 原子占用一次额度。

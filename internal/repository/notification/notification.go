@@ -124,6 +124,8 @@ type QuotaRepository interface {
 	GetRoleQuotaPolicies(ctx context.Context) ([]model.EmailRoleQuotaPolicy, error)
 	// ReserveQuota 原子占用一次额度：用量未达 limit 时自增并返回 true，已达上限返回 false。
 	ReserveQuota(ctx context.Context, key QuotaUsageKey, limit int) (bool, error)
+	// GetUsage 读取某额度键当前已用计数，无记录返回 0。
+	GetUsage(ctx context.Context, key QuotaUsageKey) (int, error)
 }
 
 // Repository 聚合通知系统全部数据访问能力，便于在 router 统一构造与注入。

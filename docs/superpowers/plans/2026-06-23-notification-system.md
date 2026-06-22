@@ -480,7 +480,7 @@ git commit -m "feat(notification): 接入业务通知事件"
 - Extend: `internal/repository/notification/quota.go`
 - Test: `internal/service/notification/quota_test.go`
 
-- [ ] **Step 1: Write quota tests first**
+- [x] **Step 1: Write quota tests first**
 
 Cover:
 
@@ -495,7 +495,7 @@ Run: `go test ./internal/service/notification -run Quota -count=1`
 
 Expected: FAIL until quota service exists.
 
-- [ ] **Step 2: Implement quota evaluator**
+- [x] **Step 2: Implement quota evaluator**
 
 Inputs:
 
@@ -516,17 +516,17 @@ defer_until time.Time
 reason string
 ```
 
-- [ ] **Step 3: Implement atomic reservation**
+- [x] **Step 3: Implement atomic reservation**
 
 Quota reservation must be in the same transaction that changes batch status to sending, so multiple workers cannot over-consume.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run: `go test ./internal/service/notification -run Quota -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/notification/quota.go internal/repository/notification/quota.go internal/service/notification/quota_test.go
