@@ -72,7 +72,7 @@ func (s *stubInboxService) Delete(userID uint, id uint) error {
 func newRouter(svc *stubInboxService, authed bool) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := notificationhandler.NewNotificationHandler(svc)
+	h := notificationhandler.NewNotificationHandler(svc, nil)
 
 	withAuth := func(next gin.HandlerFunc) gin.HandlerFunc {
 		return func(c *gin.Context) {

@@ -87,6 +87,7 @@ func Setup(
 	mailer email.MailSender,
 	objectStore storage.ObjectStore,
 	cfg *config.Config,
+	notificationHub *notificationservice.SSEHub,
 ) {
 	// 配置信任代理，确保反向代理链路下能拿到真实客户端 IP。
 	configureTrustedProxies(r)
@@ -98,7 +99,7 @@ func Setup(
 	r.Use(middleware.RequestID(), middleware.Recovery(log), middleware.Logger(log))
 
 	// 组装路由所需的 handler，保持 Setup 只关心注册流程。
-	handlers := newRouteHandlers(db, redisClient, jwtManager, mailer, objectStore, cfg)
+	handlers := newRouteHandlers(db, redisClient, jwtManager, mailer, objectStore, cfg, notificationHub)
 
 	// 按权限层级注册路由，公开路由在前，受保护路由在后。
 	registerPublicRoutes(r, handlers, jwtManager, redisClient)
@@ -168,6 +169,7 @@ func newRouteHandlers(
 	mailer email.MailSender,
 	objectStore storage.ObjectStore,
 	cfg *config.Config,
+	notificationHub *notificationservice.SSEHub,
 ) routeHandlers {
 	// 组装图形验证码链路，注册发送邮箱验证码前会消费它签发的一次性票据。
 	captchaSvc, err := captchaservice.NewService(redisClient)
@@ -224,7 +226,7 @@ func newRouteHandlers(
 		comment:      commenthandler.NewCommentHandler(commentSvc),
 		guestbook:    guestbookhandler.NewGuestbookHandler(guestbookSvc),
 		moment:       momenthandler.NewMomentHandler(momentSvc),
-		notification: notificationhandler.NewNotificationHandler(notificationInboxSvc),
+		notification: notificationhandler.NewNotificationHandler(notificationInboxSvc, notificationHub),
 		user:         userhandler.NewUserHandler(userSvc),
 		category:     categoryhandler.NewCategoryHandler(categorySvc),
 		tag:          taghandler.NewTagHandler(tagSvc),
@@ -356,6 +358,7 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.PATCH("/notifications/read", handlers.notification.MarkAllRead)
 	authed.PATCH("/notifications/:id/read", handlers.notification.MarkRead)
 	authed.DELETE("/notifications/:id", handlers.notification.Delete)
+	authed.GET("/notifications/stream", handlers.notification.Stream)
 }
 
 func registerVIPRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {

@@ -86,7 +86,7 @@ func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.Obje
 
 // StartNotificationWorker 组装并在后台启动通知 worker（dispatcher/planner/sender）。
 // 未启用时（email.worker_enabled=false）静默跳过；worker 依赖 MySQL 租约，进程退出后可恢复。
-func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, zapLogger *zap.Logger) {
+func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, hub *notificationservice.SSEHub, zapLogger *zap.Logger) {
 	if !cfg.Email.WorkerEnabled {
 		zapLogger.Info("通知 worker 未启用，跳过启动")
 		return
@@ -103,6 +103,10 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 		notificationservice.NewPreferenceResolver(repo),
 		directory,
 	)
+	// 共享 HTTP 侧的 SSE hub，分发写入收件箱后实时推送在线用户。
+	if hub != nil {
+		dispatcher.SetInboxNotifier(hub)
+	}
 	quota := notificationservice.NewQuotaService(repo, notificationservice.QuotaConfig{
 		SiteDailySafeLimit: cfg.Email.SiteDailySafeLimit,
 		MaxPerMinute:       cfg.Email.MaxPerMinute,

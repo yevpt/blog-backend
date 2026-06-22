@@ -723,7 +723,7 @@ git commit -m "feat(notification): 启动通知后台任务"
 - Test: `internal/service/notification/sse_test.go`
 - Test: `internal/handler/notification/stream_test.go`
 
-- [ ] **Step 1: API Risk Pass**
+- [x] **Step 1: API Risk Pass**
 
 - Who can call: logged-in users only.
 - Input bounds: optional `Last-Event-ID`; no body.
@@ -731,7 +731,7 @@ git commit -m "feat(notification): 启动通知后台任务"
 - Failure convergence: SSE loss is repaired by list API.
 - Old state cleanup: hub removes connection on disconnect.
 
-- [ ] **Step 2: Write SSE tests first**
+- [x] **Step 2: Write SSE tests first**
 
 Cover:
 
@@ -749,7 +749,7 @@ go test ./internal/handler/notification -run Stream -count=1
 
 Expected: FAIL until SSE exists.
 
-- [ ] **Step 3: Implement SSE hub and handler**
+- [x] **Step 3: Implement SSE hub and handler**
 
 Route:
 
@@ -759,7 +759,7 @@ authed.GET("/notifications/stream", handlers.notification.Stream)
 
 Dispatcher should call hub after inbox creation.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -770,7 +770,7 @@ go test ./internal/handler/notification -run Stream -count=1
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add internal/service/notification/sse.go internal/handler/notification/stream.go internal/router/router.go

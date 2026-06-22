@@ -53,6 +53,11 @@ type UserDirectory interface {
 	MailProfile(ctx context.Context, userID uint) (email string, canReceiveMail bool, err error)
 }
 
+// InboxNotifier 收件箱写入后的在线推送回调，由 SSE hub 实现，可选。
+type InboxNotifier interface {
+	NotifyInbox(ctx context.Context, userID uint, eventType string)
+}
+
 // Dispatcher 通知事件分发器：领取待分发事件，解析接收人，写收件箱并按偏好入队邮件任务。
 // 每个事件处理保持幂等，可被 worker 反复安全调用。
 type Dispatcher struct {
@@ -62,8 +67,14 @@ type Dispatcher struct {
 	recipients   RecipientResolver
 	preferences  PreferenceResolver
 	directory    UserDirectory
+	notifier     InboxNotifier
 	leaseSeconds int
 	retryBackoff time.Duration
+}
+
+// SetInboxNotifier 注入收件箱在线推送回调（SSE）；不设置则不推送。
+func (d *Dispatcher) SetInboxNotifier(notifier InboxNotifier) {
+	d.notifier = notifier
 }
 
 // NewDispatcher 创建事件分发器。
@@ -144,6 +155,10 @@ func (d *Dispatcher) deliverTo(ctx context.Context, event model.NotificationEven
 		}
 		if _, err := d.inbox.CreateInbox(ctx, inbox); err != nil {
 			return err
+		}
+		// 写入成功后做在线 SSE 推送（若已接入 hub）；推送是尽力而为，不影响分发。
+		if d.notifier != nil {
+			d.notifier.NotifyInbox(ctx, userID, event.Type)
 		}
 	}
 
