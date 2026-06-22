@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"image"
@@ -147,6 +148,7 @@ type fakeMomentObjectStore struct {
 	deleteKeys   []string
 	deleteErr    error
 	uploadedData map[string][]byte
+	uploadedType map[string]string
 }
 
 func (s *fakeMomentObjectStore) ObjectExists(_ context.Context, objectName string) (bool, error) {
@@ -156,7 +158,7 @@ func (s *fakeMomentObjectStore) ObjectExists(_ context.Context, objectName strin
 	return s.exists[objectName], nil
 }
 
-func (s *fakeMomentObjectStore) PutObject(_ context.Context, objectName string, data []byte, _ string) error {
+func (s *fakeMomentObjectStore) PutObject(_ context.Context, objectName string, data []byte, contentType string) error {
 	s.putKeys = append(s.putKeys, objectName)
 	if s.putErrOnCall > 0 && len(s.putKeys) == s.putErrOnCall {
 		return errors.New("put failed")
@@ -167,7 +169,11 @@ func (s *fakeMomentObjectStore) PutObject(_ context.Context, objectName string, 
 	if s.uploadedData == nil {
 		s.uploadedData = map[string][]byte{}
 	}
+	if s.uploadedType == nil {
+		s.uploadedType = map[string]string{}
+	}
 	s.uploadedData[objectName] = append([]byte(nil), data...)
+	s.uploadedType[objectName] = contentType
 	return nil
 }
 
@@ -317,6 +323,46 @@ func TestMomentService_Save_RejectsImageLargerThanOneMB(t *testing.T) {
 	assert.Empty(t, store.putKeys)
 }
 
+func TestMomentService_Save_ReturnsReadableMessageForBrokenImage(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "broken.png",
+			ContentType: "image/png",
+			Data:        []byte("not a real image"),
+		}},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+	assert.EqualError(t, err, "图片无法读取，请确认文件未损坏，并尝试换一张 JPG、PNG、WebP 或 300KB 以内的 GIF")
+	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_ReturnsReadableMessageForOversizedGif(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "motion.gif",
+			ContentType: "image/gif",
+			Data:        append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 300*1024-5)...),
+		}},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+	assert.EqualError(t, err, "GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
+	assert.Empty(t, store.putKeys)
+}
+
 func TestMomentService_Save_CompressesLargeImageToFiveHundredKB(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
 	repo := &fakeMomentRepo{
@@ -343,6 +389,67 @@ func TestMomentService_Save_CompressesLargeImageToFiveHundredKB(t *testing.T) {
 	require.NotEmpty(t, uploaded)
 	assert.LessOrEqual(t, len(uploaded), 500*1024)
 	assert.Equal(t, uint(len(uploaded)), repo.saveData.Images[0].Size)
+}
+
+func TestMomentService_Save_KeepsSmallGifOriginal(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	repo := &fakeMomentRepo{
+		saveResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+	gif := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 128)...)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "motion.gif",
+			ContentType: "image/gif",
+			Data:        gif,
+		}},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	require.Len(t, repo.saveData.Images, 1)
+	image := repo.saveData.Images[0]
+	assert.Equal(t, "gif", image.FileType)
+	assert.Equal(t, "moments/7/9/"+md5Hex(gif)+".gif", image.URL)
+	assert.Equal(t, uint(len(gif)), image.Size)
+	assert.Equal(t, gif, store.uploadedData[image.URL])
+	assert.Equal(t, "image/gif", store.uploadedType[image.URL])
+}
+
+func TestMomentService_Save_AcceptsWebP(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	repo := &fakeMomentRepo{
+		saveResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "photo.webp",
+			ContentType: "image/webp",
+			Data:        smallWebP(t),
+		}},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	require.Len(t, repo.saveData.Images, 1)
+	image := repo.saveData.Images[0]
+	assert.Equal(t, "jpg", image.FileType)
+	assert.Contains(t, image.URL, "moments/7/9/")
+	assert.Contains(t, image.URL, ".jpg")
+	assert.Equal(t, "image/jpeg", store.uploadedType[image.URL])
+	assert.NotEmpty(t, store.uploadedData[image.URL])
 }
 
 func TestMomentService_Save_DeletesRemovedOldImagesAfterSuccessfulSave(t *testing.T) {
@@ -480,6 +587,13 @@ func noisyPNG(t *testing.T, width, height int) []byte {
 	var buf bytes.Buffer
 	require.NoError(t, png.Encode(&buf, img))
 	return buf.Bytes()
+}
+
+func smallWebP(t *testing.T) []byte {
+	t.Helper()
+	data, err := base64.StdEncoding.DecodeString("UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA")
+	require.NoError(t, err)
+	return data
 }
 
 func TestMomentService_Save_AllowsAdminManagedAuthor(t *testing.T) {
