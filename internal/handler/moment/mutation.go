@@ -4,6 +4,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
@@ -11,7 +13,10 @@ import (
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
-const maxMomentImageUploadBytes = 1024 * 1024
+const (
+	maxMomentImageUploadBytes = 1024 * 1024
+	maxMomentGifUploadBytes   = 300 * 1024
+)
 
 // Save 新增或更新碎语。
 // @Summary 新增或更新碎语
@@ -83,12 +88,15 @@ func readMomentImageFiles(c *gin.Context) ([]dto.MomentImageFileReq, error) {
 		if closeErr != nil {
 			return nil, closeErr
 		}
-		if len(data) > maxMomentImageUploadBytes {
-			return nil, errors.New("图片不能超过 1MB")
-		}
 		contentType := header.Header.Get("Content-Type")
 		if contentType == "" || contentType == "application/octet-stream" {
 			contentType = http.DetectContentType(data)
+		}
+		if isMomentGifUpload(contentType, header.Filename) && len(data) > maxMomentGifUploadBytes {
+			return nil, errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
+		}
+		if len(data) > maxMomentImageUploadBytes {
+			return nil, errors.New("图片不能超过 1MB")
 		}
 		files = append(files, dto.MomentImageFileReq{
 			Name:        header.Filename,
@@ -97,6 +105,11 @@ func readMomentImageFiles(c *gin.Context) ([]dto.MomentImageFileReq, error) {
 		})
 	}
 	return files, nil
+}
+
+func isMomentGifUpload(contentType string, fileName string) bool {
+	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	return mediaType == "image/gif" || strings.EqualFold(filepath.Ext(fileName), ".gif")
 }
 
 // Delete 删除碎语。
