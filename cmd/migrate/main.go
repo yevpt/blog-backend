@@ -173,6 +173,12 @@ func main() {
 	if err := defragIDs(dst); err != nil {
 		log.Fatalf("  ✗ ID 整理失败: %v", err)
 	}
+	if err := refreshNotificationActors(dst); err != nil {
+		log.Fatalf("  ✗ 通知 actor 刷新失败: %v", err)
+	}
+	if err := refreshNotificationMetadata(dst); err != nil {
+		log.Fatalf("  ✗ 通知 metadata 刷新失败: %v", err)
+	}
 	log.Printf("  ✓ 完成")
 
 	// 7. 清理迁移过程中遗留的旧表，确保目标库结构与当前代码一致
@@ -2376,48 +2382,68 @@ func cleanOrphans(dst *gorm.DB) error {
 			"UPDATE guestbook_reply SET parent_reply_id = 0 WHERE parent_reply_id <> 0 AND parent_reply_id NOT IN (SELECT id FROM (SELECT id FROM guestbook_reply) AS valid_reply)",
 		},
 		{
-			"notification_event 孤儿（source article 已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.source_id)",
-		},
-		{
-			"notification_event 孤儿（source moment 已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.source_id)",
-		},
-		{
-			"notification_event 孤儿（source guestbook 已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
-		},
-		{
-			"notification_event 孤儿（article comment 事件对象已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'article' AND (NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id))",
-		},
-		{
-			"notification_event 孤儿（moment comment 事件对象已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'moment' AND (NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id))",
-		},
-		{
-			"notification_event 孤儿（guestbook comment 事件对象已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_event.root_id))",
-		},
-		{
-			"notification_event 孤儿（article reply 事件对象已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'article' AND (NOT EXISTS (SELECT 1 FROM article_comment_reply WHERE article_comment_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.root_id))",
-		},
-		{
-			"notification_event 孤儿（moment reply 事件对象已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'moment' AND (NOT EXISTS (SELECT 1 FROM moment_comment_reply WHERE moment_comment_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.root_id))",
-		},
-		{
-			"notification_event 孤儿（guestbook reply 事件对象已删除）",
-			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook_reply WHERE guestbook_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.root_id))",
-		},
-		{
 			"notification_inbox 孤儿（recipient_user_id 无对应 user）",
 			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_inbox.recipient_user_id)",
 		},
 		{
 			"notification_event 冗余 actor（actor_user_id 无对应 user，置空）",
 			"UPDATE notification_event SET actor_user_id = NULL WHERE actor_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_event.actor_user_id)",
+		},
+		{
+			"notification_event 孤儿（source article 已删除）",
+			"DELETE FROM notification_event WHERE source_type='article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（source moment 已删除）",
+			"DELETE FROM notification_event WHERE source_type='moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（source guestbook 已删除）",
+			"DELETE FROM notification_event WHERE source_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（文章评论 source 已删除）",
+			"DELETE FROM notification_event WHERE source_type='comment' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（文章评论 root 已删除）",
+			"DELETE FROM notification_event WHERE source_type='comment' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id)",
+		},
+		{
+			"notification_event 孤儿（碎语评论 source 已删除）",
+			"DELETE FROM notification_event WHERE source_type='comment' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（碎语评论 root 已删除）",
+			"DELETE FROM notification_event WHERE source_type='comment' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id)",
+		},
+		{
+			"notification_event 孤儿（留言评论 source 已删除）",
+			"DELETE FROM notification_event WHERE source_type='comment' AND root_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（文章回复 source 已删除）",
+			"DELETE FROM notification_event WHERE source_type='reply' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article_comment_reply WHERE article_comment_reply.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（文章回复 root 已删除）",
+			"DELETE FROM notification_event WHERE source_type='reply' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id)",
+		},
+		{
+			"notification_event 孤儿（碎语回复 source 已删除）",
+			"DELETE FROM notification_event WHERE source_type='reply' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment_comment_reply WHERE moment_comment_reply.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（碎语回复 root 已删除）",
+			"DELETE FROM notification_event WHERE source_type='reply' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id)",
+		},
+		{
+			"notification_event 孤儿（留言回复 source 已删除）",
+			"DELETE FROM notification_event WHERE source_type='reply' AND root_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook_reply WHERE guestbook_reply.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（留言回复 root 已删除）",
+			"DELETE FROM notification_event WHERE source_type='reply' AND root_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.root_id)",
 		},
 		{
 			"notification_preference 孤儿（user_id 无对应 user）",
@@ -2473,17 +2499,23 @@ func cleanOrphans(dst *gorm.DB) error {
 		}
 	}
 
-	if err := pruneOrphanNotificationEvents(dst); err != nil {
+	prunedEvents, err := pruneOrphanNotificationEvents(dst)
+	if err != nil {
 		return err
 	}
+	totalDeleted += prunedEvents
 
-	inboxCleanups := []cleanup{
+	notificationDependCleanups := []cleanup{
 		{
 			"notification_inbox 孤儿（event_id 无对应 notification_event）",
 			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_inbox.event_id)",
 		},
+		{
+			"notification_email_task 孤儿（event_id 无对应 notification_event）",
+			"DELETE FROM notification_email_task WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_email_task.event_id)",
+		},
 	}
-	for _, c := range inboxCleanups {
+	for _, c := range notificationDependCleanups {
 		result := dst.Exec(c.sql)
 		if result.Error != nil {
 			return fmt.Errorf("清理 %s 失败: %w", c.desc, result.Error)
@@ -2569,7 +2601,6 @@ func defragSpecs() []defragSpec {
 				{"article_comment_reply", "comment_id", ""},
 				{"user_like", "target_id", "type=2"},
 				{"notification_event", "source_id", "source_type='comment' AND root_type='article'"},
-				{"notification_event", "root_id", "source_type='reply' AND root_type='article'"},
 			},
 		},
 		{
@@ -2578,7 +2609,6 @@ func defragSpecs() []defragSpec {
 				{"moment_comment_reply", "comment_id", ""},
 				{"user_like", "target_id", "type=6"},
 				{"notification_event", "source_id", "source_type='comment' AND root_type='moment'"},
-				{"notification_event", "root_id", "source_type='reply' AND root_type='moment'"},
 			},
 		},
 		{
@@ -2587,6 +2617,7 @@ func defragSpecs() []defragSpec {
 				{"guestbook_reply", "comment_id", ""},
 				{"user_like", "target_id", "type=5"},
 				{"notification_event", "source_id", "source_type IN ('guestbook','comment') AND root_type='guestbook'"},
+				{"notification_event", "root_id", "source_type IN ('guestbook','comment') AND root_type='guestbook'"},
 				{"notification_event", "root_id", "source_type='reply' AND root_type='guestbook'"},
 			},
 		},

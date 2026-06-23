@@ -126,18 +126,23 @@ func TestCleanOrphans_CleansNotificationTablesInsteadOfLegacyMessages(t *testing
 
 	mock.MatchExpectationsInOrder(false)
 	for _, stmt := range []string{
-		"DELETE FROM notification_event WHERE source_type = 'article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.source_id)",
-		"DELETE FROM notification_event WHERE source_type = 'moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.source_id)",
-		"DELETE FROM notification_event WHERE source_type = 'guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
-		"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'article' AND (NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id))",
-		"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'moment' AND (NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id))",
-		"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_event.root_id))",
-		"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'article' AND (NOT EXISTS (SELECT 1 FROM article_comment_reply WHERE article_comment_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.root_id))",
-		"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'moment' AND (NOT EXISTS (SELECT 1 FROM moment_comment_reply WHERE moment_comment_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.root_id))",
-		"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook_reply WHERE guestbook_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.root_id))",
 		"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_inbox.event_id)",
 		"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_inbox.recipient_user_id)",
 		"UPDATE notification_event SET actor_user_id = NULL WHERE actor_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_event.actor_user_id)",
+		"DELETE FROM notification_event WHERE source_type='article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='comment' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='comment' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id)",
+		"DELETE FROM notification_event WHERE source_type='comment' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='comment' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id)",
+		"DELETE FROM notification_event WHERE source_type='comment' AND root_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='reply' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article_comment_reply WHERE article_comment_reply.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='reply' AND root_type='article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id)",
+		"DELETE FROM notification_event WHERE source_type='reply' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment_comment_reply WHERE moment_comment_reply.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='reply' AND root_type='moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id)",
+		"DELETE FROM notification_event WHERE source_type='reply' AND root_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook_reply WHERE guestbook_reply.id = notification_event.source_id)",
+		"DELETE FROM notification_event WHERE source_type='reply' AND root_type='guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.root_id)",
 		"DELETE FROM notification_preference WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_preference.user_id)",
 		"DELETE FROM notification_email_task WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_email_task.event_id)",
 		"DELETE FROM notification_email_task WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_email_task.recipient_user_id)",
@@ -192,22 +197,26 @@ func TestCleanOrphans_CleansNotificationTablesInsteadOfLegacyMessages(t *testing
 		"DELETE FROM guestbook_reply WHERE to_user_id NOT IN (SELECT id FROM user)",
 		"DELETE FROM guestbook_reply WHERE from_user_id NOT IN (SELECT id FROM user)",
 		"UPDATE guestbook_reply SET parent_reply_id = 0 WHERE parent_reply_id <> 0 AND parent_reply_id NOT IN (SELECT id FROM (SELECT id FROM guestbook_reply) AS valid_reply)",
+		"DELETE FROM notification_email_task WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_email_task.event_id)",
 	} {
 		mock.ExpectExec(regexp.QuoteMeta(stmt)).
 			WillReturnResult(sqlmock.NewResult(0, 0))
 	}
-
 	for _, table := range []string{
-		"article", "moment", "guestbook", "article_comment", "moment_comment",
-		"article_comment_reply", "moment_comment_reply", "guestbook_reply",
+		"article",
+		"moment",
+		"guestbook",
+		"article_comment",
+		"moment_comment",
+		"article_comment_reply",
+		"moment_comment_reply",
+		"guestbook_reply",
 	} {
-		mock.ExpectQuery("SELECT `id` FROM `" + table + "`").
+		mock.ExpectQuery("SELECT .* FROM `" + table + "`").
 			WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	}
-	mock.ExpectQuery("SELECT (.+) FROM `notification_event`").
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "type", "source_type", "source_id", "root_type", "root_id", "metadata_json",
-		}))
+	mock.ExpectQuery("SELECT .* FROM `notification_event`").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "type", "source_type", "source_id", "root_type", "root_id"}))
 
 	err = cleanOrphans(gormDB)
 
@@ -223,10 +232,9 @@ func TestDefragSpecs_UpdateNotificationRefsAndSkipLegacyUserMessage(t *testing.T
 	}
 
 	assertHasDefragRef(t, specs, "article_comment", "notification_event", "source_id", "source_type='comment' AND root_type='article'")
-	assertHasDefragRef(t, specs, "article_comment", "notification_event", "root_id", "source_type='reply' AND root_type='article'")
 	assertHasDefragRef(t, specs, "moment_comment", "notification_event", "source_id", "source_type='comment' AND root_type='moment'")
-	assertHasDefragRef(t, specs, "moment_comment", "notification_event", "root_id", "source_type='reply' AND root_type='moment'")
 	assertHasDefragRef(t, specs, "guestbook", "notification_event", "source_id", "source_type IN ('guestbook','comment') AND root_type='guestbook'")
+	assertHasDefragRef(t, specs, "guestbook", "notification_event", "root_id", "source_type IN ('guestbook','comment') AND root_type='guestbook'")
 	assertHasDefragRef(t, specs, "guestbook", "notification_event", "root_id", "source_type='reply' AND root_type='guestbook'")
 	assertHasDefragRef(t, specs, "article_comment_reply", "article_comment_reply", "parent_reply_id", "parent_reply_id <> 0")
 	assertHasDefragRef(t, specs, "article_comment_reply", "notification_event", "source_id", "source_type='reply' AND root_type='article'")
