@@ -42,8 +42,9 @@ const (
 
 // InboxAggregate 收件箱条目与其事件快照的聚合，供 service 转换为 DTO。
 type InboxAggregate struct {
-	Inbox model.NotificationInbox // 收件状态
-	Event model.NotificationEvent // 事件事实与展示快照
+	Inbox     model.NotificationInbox // 收件状态
+	Event     model.NotificationEvent // 事件事实与展示快照
+	ActorUser *model.User             // 操作人用户摘要，系统通知为 nil
 }
 
 // InboxPage 收件箱分页结果，保持 repository 不返回 dto。

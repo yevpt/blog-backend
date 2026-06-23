@@ -52,22 +52,37 @@ func (d *Directory) scalarOwner(ctx context.Context, table any, column string, i
 // maxRootLabelRunes 根对象快照的最大展示长度，超出以省略号收尾。
 const maxRootLabelRunes = 60
 
+// maxRootExcerptRunes 文章正文摘录的最大展示长度，超出以省略号收尾。
+// 取 200 字作为站内通知正文预览，与标题级 root_label 区分。
+const maxRootExcerptRunes = 200
+
 // RootSnapshotOf 取根对象的展示快照文本：文章返回标题，碎语返回内容摘要，
 // 其余类型（留言板等）留空。用于通知邮件正文中标识「哪篇文章/哪条碎语」。
 // 对象不存在或被删除时返回空串，不视作错误，避免阻断邮件发送。
 func (d *Directory) RootSnapshotOf(ctx context.Context, objectType string, objectID uint) (string, error) {
 	switch objectType {
 	case "article":
-		return d.scalarString(ctx, &model.Article{}, "title", objectID)
+		return d.scalarString(ctx, &model.Article{}, "title", objectID, maxRootLabelRunes)
 	case "moment":
-		return d.scalarString(ctx, &model.Moment{}, "content", objectID)
+		return d.scalarString(ctx, &model.Moment{}, "content", objectID, maxRootLabelRunes)
+	default:
+		return "", nil
+	}
+}
+
+// RootExcerptOf 取文章正文摘录，仅 article 类型有效，其余返回空串。
+// 用于站内通知列表展示正文预览；文章不存在或被删除时返回空串，不视作错误。
+func (d *Directory) RootExcerptOf(ctx context.Context, objectType string, objectID uint) (string, error) {
+	switch objectType {
+	case "article":
+		return d.scalarString(ctx, &model.Article{}, "content", objectID, maxRootExcerptRunes)
 	default:
 		return "", nil
 	}
 }
 
 // scalarString 取某表指定行的字符串列，不存在返回空串，并对结果按 rune 截断。
-func (d *Directory) scalarString(ctx context.Context, table any, column string, id uint) (string, error) {
+func (d *Directory) scalarString(ctx context.Context, table any, column string, id uint, maxRunes int) (string, error) {
 	var value string
 	err := d.db.WithContext(ctx).Model(table).
 		Select(column).
@@ -79,7 +94,7 @@ func (d *Directory) scalarString(ctx context.Context, table any, column string, 
 	if err != nil {
 		return "", err
 	}
-	return truncateRunes(value, maxRootLabelRunes), nil
+	return truncateRunes(value, maxRunes), nil
 }
 
 // truncateRunes 按 rune 截断字符串，超出 max 时尾部以「…」收尾。

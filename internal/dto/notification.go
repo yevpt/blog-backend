@@ -40,6 +40,8 @@ type NotificationItemResp struct {
 	CreatedAt time.Time `json:"created_at"`
 	// ActorUserID 操作人用户 ID，系统通知为空。
 	ActorUserID *uint `json:"actor_user_id,omitempty" example:"2"`
+	// ActorUser 操作人用户摘要，含昵称与头像，系统通知为空。
+	ActorUser *NotificationActorUserResp `json:"actor_user,omitempty"`
 	// SourceType 直接对象类型，如 comment。
 	SourceType string `json:"source_type" example:"comment"`
 	// SourceID 直接对象 ID。
@@ -50,6 +52,14 @@ type NotificationItemResp struct {
 	RootID uint `json:"root_id" example:"12"`
 	// RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。
 	RootTitle *string `json:"root_title,omitempty" example:"我的第一篇文章"`
+	// RootExcerpt 文章正文摘录，仅 root_type=article 且无评论/回复内容时填充。
+	RootExcerpt *string `json:"root_excerpt,omitempty"`
+	// LikeCount 来源对象当前点赞数；仅 comment/reply/guestbook 来源填充。
+	LikeCount *int64 `json:"like_count,omitempty" example:"3"`
+	// IsLiked 当前登录用户是否已点赞来源对象；仅 comment/reply/guestbook 来源填充。
+	IsLiked *bool `json:"is_liked,omitempty" example:"false"`
+	// ReplyCount 来源对象当前回复数；评论/留言统计其下回复，回复统计对其的跟评数。
+	ReplyCount *int64 `json:"reply_count,omitempty" example:"2"`
 	// Metadata 跳转与扩展信息的原始 JSON，前端按需解析。
 	Metadata *string `json:"metadata,omitempty"`
 }
@@ -76,4 +86,18 @@ type NotificationUnreadCountResp struct {
 type NotificationReadResp struct {
 	// Updated 实际被置为已读的通知数量。
 	Updated int64 `json:"updated" example:"3"`
+}
+
+// NotificationActorUserResp 操作人用户摘要，供前端展示发送者昵称与头像。
+type NotificationActorUserResp struct {
+	// ID 用户 ID。
+	ID uint `json:"id" example:"2"`
+	// Nickname 昵称，未设置时为空。
+	Nickname *string `json:"nickname,omitempty" example:"VPT"`
+	// AvatarUrl 头像访问地址，已解析为可访问 URL。
+	AvatarUrl *string `json:"avatar_url,omitempty"`
+	// Site 个人站点，未设置时为空。
+	Site *string `json:"site,omitempty"`
+	// Mark 用户标识/备注，未设置时为空。
+	Mark *string `json:"mark,omitempty"`
 }

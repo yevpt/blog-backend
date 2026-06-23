@@ -62,11 +62,18 @@ func (r *repo) ListInbox(ctx context.Context, recipientID uint, unreadOnly bool,
 	if err != nil {
 		return nil, err
 	}
+	// 批量取操作人用户摘要，供前端展示发送者昵称与头像。
+	users, err := r.usersByID(ctx, collectActorIDs(events))
+	if err != nil {
+		return nil, err
+	}
 	result.Items = make([]InboxAggregate, 0, len(inboxes))
 	for _, inbox := range inboxes {
+		event := events[inbox.EventID]
 		result.Items = append(result.Items, InboxAggregate{
-			Inbox: inbox,
-			Event: events[inbox.EventID],
+			Inbox:     inbox,
+			Event:     event,
+			ActorUser: actorUserOf(event, users),
 		})
 	}
 	return result, nil
@@ -82,6 +89,27 @@ func collectEventIDs(inboxes []model.NotificationInbox) []uint {
 		}
 		seen[inbox.EventID] = struct{}{}
 		ids = append(ids, inbox.EventID)
+	}
+	return ids
+}
+
+// collectActorIDs 去重收集事件中的操作人用户 ID，跳过系统通知的空指针。
+func collectActorIDs(events map[uint]model.NotificationEvent) []uint {
+	seen := make(map[uint]struct{}, len(events))
+	ids := make([]uint, 0, len(events))
+	for _, event := range events {
+		if event.ActorUserID == nil {
+			continue
+		}
+		id := *event.ActorUserID
+		if id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
 	}
 	return ids
 }
