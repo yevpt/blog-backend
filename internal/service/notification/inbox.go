@@ -17,10 +17,16 @@ func (s *inboxService) List(userID uint, req dto.NotificationListReq) (*dto.Noti
 		return nil, err
 	}
 
+	// 按根对象去重解析展示标题，供前端直接显示「来自哪篇文章/哪条碎语」。
+	labels, err := s.rootLabels(context.Background(), result.Items)
+	if err != nil {
+		return nil, err
+	}
+
 	// 逐条把收件箱 + 事件快照聚合映射为对外条目。
 	items := make([]dto.NotificationItemResp, 0, len(result.Items))
 	for _, aggregate := range result.Items {
-		items = append(items, inboxAggregateToDTO(aggregate))
+		items = append(items, inboxAggregateToDTO(aggregate, labels))
 	}
 	return &dto.NotificationPageResp{
 		Total:    result.Total,
@@ -74,8 +80,9 @@ func (s *inboxService) Delete(userID uint, id uint) error {
 }
 
 // inboxAggregateToDTO 把收件箱聚合映射为对外通知条目。
-func inboxAggregateToDTO(aggregate notificationrepo.InboxAggregate) dto.NotificationItemResp {
-	return dto.NotificationItemResp{
+// labels 为按根对象去重的展示标题，命中且非空时填充 RootTitle。
+func inboxAggregateToDTO(aggregate notificationrepo.InboxAggregate, labels map[rootKey]string) dto.NotificationItemResp {
+	resp := dto.NotificationItemResp{
 		ID:             aggregate.Inbox.ID,
 		EventID:        aggregate.Inbox.EventID,
 		Type:           aggregate.Event.Type,
@@ -91,6 +98,46 @@ func inboxAggregateToDTO(aggregate notificationrepo.InboxAggregate) dto.Notifica
 		RootID:         aggregate.Event.RootID,
 		Metadata:       aggregate.Event.MetadataJSON,
 	}
+	if label, ok := labels[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && label != "" {
+		resp.RootTitle = &label
+	}
+	return resp
+}
+
+// rootKey 是根对象的复合去重键。
+type rootKey struct {
+	rootType string
+	rootID   uint
+}
+
+// rootLabels 批量解析当前页事件根对象的展示标题，按 (rootType, rootID) 去重。
+// roots 为 nil 时返回空 map，调用方据此跳过 RootTitle 填充，保持旧行为。
+// 仅解析 article/moment 两类根对象，其余类型（留言板等）无展示标题。
+func (s *inboxService) rootLabels(ctx context.Context, items []notificationrepo.InboxAggregate) (map[rootKey]string, error) {
+	if s.roots == nil {
+		return nil, nil
+	}
+	out := make(map[rootKey]string, len(items))
+	for _, aggregate := range items {
+		if aggregate.Event.RootID == 0 {
+			continue
+		}
+		switch aggregate.Event.RootType {
+		case "article", "moment":
+		default:
+			continue
+		}
+		key := rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}
+		if _, exists := out[key]; exists {
+			continue
+		}
+		label, err := s.roots.RootSnapshotOf(ctx, aggregate.Event.RootType, aggregate.Event.RootID)
+		if err != nil {
+			return nil, err
+		}
+		out[key] = label
+	}
+	return out, nil
 }
 
 // normalizePage 规整页码，最小为 1。

@@ -8315,6 +8315,11 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 12
                 },
+                "root_title": {
+                    "description": "RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。",
+                    "type": "string",
+                    "example": "我的第一篇文章"
+                },
                 "root_type": {
                     "description": "RootType 根对象类型，如 moment。",
                     "type": "string",

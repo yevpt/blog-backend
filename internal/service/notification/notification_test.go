@@ -2,6 +2,8 @@ package notification_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -83,6 +85,21 @@ func (f *fakeInboxRepo) MarkAllInboxRead(_ context.Context, _ uint, ids []uint) 
 
 func (f *fakeInboxRepo) DeleteInbox(context.Context, uint, uint) (int64, error) {
 	return f.deleteAffected, nil
+}
+
+// fakeRootResolver 按 (rootType, rootID) 预置展示标题，记录调用次数以验证去重。
+type fakeRootResolver struct {
+	labels   map[string]string
+	calls    int
+	callErr  error
+}
+
+func (f *fakeRootResolver) RootSnapshotOf(_ context.Context, rootType string, rootID uint) (string, error) {
+	f.calls++
+	if f.callErr != nil {
+		return "", f.callErr
+	}
+	return f.labels[fmt.Sprintf("%s:%d", rootType, rootID)], nil
 }
 
 // publisher 应去除标题/摘要首尾空白并按列宽截断后落库。
@@ -175,7 +192,7 @@ func TestInboxService_List_MapsAggregateToDTO(t *testing.T) {
 			},
 		},
 	}
-	service := notificationservice.NewInboxService(repo)
+	service := notificationservice.NewInboxService(repo, nil)
 
 	resp, err := service.List(3, dto.NotificationListReq{Page: 2, PageSize: 5, UnreadOnly: true})
 
@@ -200,10 +217,117 @@ func TestInboxService_List_MapsAggregateToDTO(t *testing.T) {
 	assert.Equal(t, int64(1), resp.Total)
 }
 
+// 列表应在读取时按根对象解析展示标题并去重，命中 article/moment 时填充 RootTitle。
+func TestInboxService_List_ResolvesRootTitleWithDedup(t *testing.T) {
+	repo := &fakeInboxRepo{
+		listResp: &notificationrepo.InboxPage{
+			Total: 3,
+			Items: []notificationrepo.InboxAggregate{
+				{
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
+					Event: model.NotificationEvent{
+						Base:       model.Base{ID: 10},
+						Type:       notificationservice.EventTypeCommentCreated,
+						SourceType: "comment",
+						SourceID:   99,
+						RootType:   "article",
+						RootID:     7,
+					},
+				},
+				{
+					// 同一篇文章的第二条评论，应复用去重结果。
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 2}, EventID: 11},
+					Event: model.NotificationEvent{
+						Base:       model.Base{ID: 11},
+						Type:       notificationservice.EventTypeReplyCreated,
+						SourceType: "reply",
+						SourceID:   100,
+						RootType:   "article",
+						RootID:     7,
+					},
+				},
+				{
+					// 留言板根对象无展示标题，RootTitle 应为空。
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 3}, EventID: 12},
+					Event: model.NotificationEvent{
+						Base:       model.Base{ID: 12},
+						Type:       notificationservice.EventTypeGuestbookCreated,
+						SourceType: "guestbook",
+						SourceID:   5,
+						RootType:   "guestbook",
+						RootID:     1,
+					},
+				},
+			},
+		},
+	}
+	roots := &fakeRootResolver{labels: map[string]string{"article:7": "我的第一篇文章"}}
+	service := notificationservice.NewInboxService(repo, roots)
+
+	resp, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Len(t, resp.List, 3)
+	// 前两条命中同一文章，RootTitle 一致且只解析一次。
+	require.NotNil(t, resp.List[0].RootTitle)
+	assert.Equal(t, "我的第一篇文章", *resp.List[0].RootTitle)
+	require.NotNil(t, resp.List[1].RootTitle)
+	assert.Equal(t, "我的第一篇文章", *resp.List[1].RootTitle)
+	// 留言板无展示标题。
+	assert.Nil(t, resp.List[2].RootTitle)
+	// 去重：article:7 仅解析一次，guestbook 不走解析。
+	assert.Equal(t, 1, roots.calls)
+}
+
+// roots 为 nil 时退化为不填充 RootTitle，保持旧行为。
+func TestInboxService_List_SkipsRootTitleWhenResolverNil(t *testing.T) {
+	repo := &fakeInboxRepo{
+		listResp: &notificationrepo.InboxPage{
+			Total: 1,
+			Items: []notificationrepo.InboxAggregate{
+				{
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
+					Event: model.NotificationEvent{RootType: "article", RootID: 7},
+				},
+			},
+		},
+	}
+	service := notificationservice.NewInboxService(repo, nil)
+
+	resp, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.Nil(t, resp.List[0].RootTitle)
+}
+
+// 根对象解析出错时应把错误透传出 List。
+func TestInboxService_List_PropagatesRootResolveError(t *testing.T) {
+	repo := &fakeInboxRepo{
+		listResp: &notificationrepo.InboxPage{
+			Total: 1,
+			Items: []notificationrepo.InboxAggregate{
+				{
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
+					Event: model.NotificationEvent{RootType: "article", RootID: 7},
+				},
+			},
+		},
+	}
+	roots := &fakeRootResolver{callErr: errors.New("boom")}
+	service := notificationservice.NewInboxService(repo, roots)
+
+	_, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "boom")
+}
+
 // 标记已读时仓储影响 0 行表示通知不属于该用户，应返回 ErrNotificationNotFound。
 func TestInboxService_MarkRead_RejectsNotOwned(t *testing.T) {
 	repo := &fakeInboxRepo{markReadAffected: 0}
-	service := notificationservice.NewInboxService(repo)
+	service := notificationservice.NewInboxService(repo, nil)
 
 	err := service.MarkRead(3, 7)
 
@@ -213,7 +337,7 @@ func TestInboxService_MarkRead_RejectsNotOwned(t *testing.T) {
 // ids 为空表示全部未读，服务应把空 ids 透传给仓储并返回受影响数量。
 func TestInboxService_MarkAllRead_SupportsAllWhenIDsEmpty(t *testing.T) {
 	repo := &fakeInboxRepo{markAllReadAffected: 4}
-	service := notificationservice.NewInboxService(repo)
+	service := notificationservice.NewInboxService(repo, nil)
 
 	resp, err := service.MarkAllRead(3, nil)
 

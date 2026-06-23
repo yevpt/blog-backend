@@ -48,6 +48,8 @@ type NotificationItemResp struct {
 	RootType string `json:"root_type" example:"moment"`
 	// RootID 根对象 ID。
 	RootID uint `json:"root_id" example:"12"`
+	// RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。
+	RootTitle *string `json:"root_title,omitempty" example:"我的第一篇文章"`
 	// Metadata 跳转与扩展信息的原始 JSON，前端按需解析。
 	Metadata *string `json:"metadata,omitempty"`
 }

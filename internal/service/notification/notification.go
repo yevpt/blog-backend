@@ -93,10 +93,13 @@ func NewPublisher(repo notificationrepo.EventRepository) Publisher {
 }
 
 type inboxService struct {
-	repo notificationrepo.InboxRepository
+	repo  notificationrepo.InboxRepository
+	roots RootSnapshotResolver
 }
 
 // NewInboxService 创建收件箱业务服务。
-func NewInboxService(repo notificationrepo.InboxRepository) InboxService {
-	return &inboxService{repo: repo}
+// roots 用于在列表读取时解析根对象展示标题（文章标题/碎语摘要），可为 nil
+// （此时退化为不填充 RootTitle，保持旧行为）。
+func NewInboxService(repo notificationrepo.InboxRepository, roots RootSnapshotResolver) InboxService {
+	return &inboxService{repo: repo, roots: roots}
 }
