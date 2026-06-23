@@ -40,13 +40,14 @@ type objectAPI interface {
 
 // clientImpl 保存 Garage 客户端运行所需的内部状态。
 type clientImpl struct {
-	s3             *s3.Client      // 底层 S3 客户端
-	objectAPI      objectAPI       // S3 对象读写 API
-	presigner      objectPresigner // S3 GetObject 预签名器
-	bucket         string          // 默认 bucket 名称
-	useCDN         bool            // 是否优先生成 CDN 签名 URL
-	cdnSigner      *CDNSigner      // CDN 签名器
-	presignExpires time.Duration   // S3 预签名 URL 有效期
+	s3             *s3.Client       // 底层 S3 客户端
+	objectAPI      objectAPI        // S3 对象读写 API
+	presigner      objectPresigner  // S3 GetObject 预签名器
+	bucket         string           // 默认 bucket 名称
+	useCDN         bool             // 是否优先生成 CDN 签名 URL
+	cdnSigner      *CDNSigner       // CDN 签名器
+	presignExpires time.Duration    // S3 预签名 URL 有效期
+	keyParser      *ObjectKeyParser // 对象 URL/key 反解器
 }
 
 // newGarageClient 按配置创建 Garage 客户端，并按需接入 CDN 签名器。
@@ -110,6 +111,10 @@ func buildClient(awsCfg aws.Config, cfg *appconfig.GarageConfig, cdnCfg *appconf
 		useCDN:         cfg.CDN,
 		presignExpires: defaultPresignExpires,
 	}
+	impl.keyParser = NewObjectKeyParser(ObjectKeyParserConfig{
+		Bucket:       cfg.Bucket,
+		AllowedHosts: storageAllowedHosts(cfg.Endpoint, cdnCfg),
+	})
 
 	// 未启用 CDN 时，客户端只需要 S3 预签名能力。
 	if !cfg.CDN {
@@ -202,7 +207,7 @@ func (c *Client) deleteObject(ctx context.Context, objectName string) error {
 	return err
 }
 
-func (c *Client) moveObject(ctx context.Context, sourceName string, targetName string) error {
+func (c *Client) copyObject(ctx context.Context, sourceName string, targetName string) error {
 	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
 		return errors.New("对象存储客户端未初始化")
 	}
@@ -215,11 +220,21 @@ func (c *Client) moveObject(ctx context.Context, sourceName string, targetName s
 		return nil
 	}
 
-	if _, err := c.impl.objectAPI.CopyObject(ctx, &s3.CopyObjectInput{
+	_, err := c.impl.objectAPI.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(c.impl.bucket),
 		Key:        aws.String(targetName),
 		CopySource: aws.String(copySource(c.impl.bucket, sourceName)),
-	}); err != nil {
+	})
+	return err
+}
+
+func (c *Client) moveObject(ctx context.Context, sourceName string, targetName string) error {
+	sourceName = normalizeObjectName(sourceName)
+	targetName = normalizeObjectName(targetName)
+	if sourceName == targetName {
+		return nil
+	}
+	if err := c.copyObject(ctx, sourceName, targetName); err != nil {
 		return err
 	}
 	_, err := c.impl.objectAPI.DeleteObject(ctx, &s3.DeleteObjectInput{
@@ -227,6 +242,26 @@ func (c *Client) moveObject(ctx context.Context, sourceName string, targetName s
 		Key:    aws.String(sourceName),
 	})
 	return err
+}
+
+func (c *Client) objectKey(value string) (string, error) {
+	if c == nil || c.impl == nil || c.impl.keyParser == nil {
+		return "", errors.New("对象存储客户端未初始化")
+	}
+	return c.impl.keyParser.ObjectKey(value)
+}
+
+func storageAllowedHosts(endpoint string, cdnCfg *appconfig.CDNConfig) []string {
+	var hosts []string
+	if parsed, err := url.Parse(endpoint); err == nil && parsed.Host != "" {
+		hosts = append(hosts, parsed.Host)
+	}
+	if cdnCfg != nil && cdnCfg.Host != "" {
+		if parsed, err := url.Parse(cdnCfg.Host); err == nil && parsed.Host != "" {
+			hosts = append(hosts, parsed.Host)
+		}
+	}
+	return hosts
 }
 
 func copySource(bucket string, key string) string {

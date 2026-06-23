@@ -15,10 +15,20 @@ type ObjectMover interface {
 	MoveObject(ctx context.Context, sourceName string, targetName string) error
 }
 
+type ObjectCopier interface {
+	CopyObject(ctx context.Context, sourceName string, targetName string) error
+}
+
+type ObjectKeyResolver interface {
+	ObjectKey(value string) (string, error)
+}
+
 // ObjectStore 提供对象访问 URL、存在性检查和写入能力。
 type ObjectStore interface {
 	ObjectURLResolver
 	ObjectMover
+	ObjectCopier
+	ObjectKeyResolver
 	ObjectExists(ctx context.Context, objectName string) (bool, error)
 	PutObject(ctx context.Context, objectName string, data []byte, contentType string) error
 	DeleteObject(ctx context.Context, objectName string) error

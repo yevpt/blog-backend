@@ -77,6 +77,16 @@ func (c *Client) MoveObject(ctx context.Context, sourceName string, targetName s
 	return c.moveObject(ctx, sourceName, targetName)
 }
 
+// CopyObject 在同 bucket 内复制对象，不删除源对象。
+func (c *Client) CopyObject(ctx context.Context, sourceName string, targetName string) error {
+	return c.copyObject(ctx, sourceName, targetName)
+}
+
+// ObjectKey 从对象 URL 或路径反解出对象 key。
+func (c *Client) ObjectKey(value string) (string, error) {
+	return c.objectKey(value)
+}
+
 // S3 返回底层 S3 客户端，供需要直接操作对象存储的 service 使用。
 func (c *Client) S3() *s3.Client {
 	// 只暴露已初始化的底层客户端，不允许外部改写 Client 状态。
@@ -124,6 +134,16 @@ func (r *CachedObjectURLResolver) DeleteObject(ctx context.Context, objectName s
 // MoveObject 将对象移动到新的 key。
 func (r *CachedObjectURLResolver) MoveObject(ctx context.Context, sourceName string, targetName string) error {
 	return r.impl.client.MoveObject(ctx, sourceName, targetName)
+}
+
+// CopyObject 在同 bucket 内复制对象，不删除源对象。
+func (r *CachedObjectURLResolver) CopyObject(ctx context.Context, sourceName string, targetName string) error {
+	return r.impl.client.CopyObject(ctx, sourceName, targetName)
+}
+
+// ObjectKey 从对象 URL 或路径反解出对象 key。
+func (r *CachedObjectURLResolver) ObjectKey(value string) (string, error) {
+	return r.impl.client.ObjectKey(value)
 }
 
 // CDNSigner 使用腾讯云 CDN TypeD 兼容算法生成私有读 URL。
