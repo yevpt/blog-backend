@@ -94,14 +94,37 @@ func BuildRecipientMetadata(userIDs ...uint) *string {
 
 // eventMetadata 是事件 metadata_json 的可选扩展字段。
 type eventMetadata struct {
-	RecipientUserIDs []uint `json:"recipient_user_ids,omitempty"`
-	QuotedExcerpt    string `json:"quoted_excerpt,omitempty"`
-	CommentID        uint   `json:"comment_id,omitempty"`
+	RecipientUserIDs []uint                `json:"recipient_user_ids,omitempty"`
+	CommentID        uint                  `json:"comment_id,omitempty"`
+	SourceSnapshot   *NotificationSnapshot `json:"source_snapshot,omitempty"`
+	RootSnapshot     *NotificationSnapshot `json:"root_snapshot,omitempty"`
+	QuoteSnapshot    *NotificationSnapshot `json:"quote_snapshot,omitempty"`
 }
 
-// BuildReplyCreatedMetadata 编码回复通知的接收人、父评论 ID 与被引用评论/回复摘要。
-func BuildReplyCreatedMetadata(recipientUserID, commentID uint, quotedExcerpt string) *string {
-	if recipientUserID == 0 && commentID == 0 && strings.TrimSpace(quotedExcerpt) == "" {
+// NotificationSnapshot 记录通知发生时对象的展示快照，供对象删除后继续展示上下文。
+type NotificationSnapshot struct {
+	Type    string `json:"type,omitempty"`
+	ID      uint   `json:"id,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Excerpt string `json:"excerpt,omitempty"`
+}
+
+// BuildCommentLikedMetadata 编码评论点赞通知的接收人与被点赞评论摘要。
+func BuildCommentLikedMetadata(recipientUserID uint, quotedExcerpt string) *string {
+	if recipientUserID == 0 && strings.TrimSpace(quotedExcerpt) == "" {
+		return nil
+	}
+	meta := eventMetadata{}
+	if recipientUserID != 0 {
+		meta.RecipientUserIDs = []uint{recipientUserID}
+	}
+	meta.SourceSnapshot = snapshot("comment", 0, "", quotedExcerpt)
+	return marshalEventMetadata(meta)
+}
+
+// BuildReplyCreatedMetadata 编码回复通知的接收人、父评论 ID、根对象快照与被引用内容摘要。
+func BuildReplyCreatedMetadata(recipientUserID, commentID uint, replyExcerpt string, root *NotificationSnapshot, quotedExcerpt string) *string {
+	if recipientUserID == 0 && commentID == 0 && strings.TrimSpace(replyExcerpt) == "" && strings.TrimSpace(quotedExcerpt) == "" && (root == nil || snapshotEmpty(*root)) {
 		return nil
 	}
 	meta := eventMetadata{}
@@ -111,13 +134,20 @@ func BuildReplyCreatedMetadata(recipientUserID, commentID uint, quotedExcerpt st
 	if commentID != 0 {
 		meta.CommentID = commentID
 	}
-	meta.QuotedExcerpt = strings.TrimSpace(quotedExcerpt)
+	meta.SourceSnapshot = snapshot("reply", 0, "", replyExcerpt)
+	if root != nil {
+		rootSnapshot := normalizeSnapshot(*root)
+		if !snapshotEmpty(rootSnapshot) {
+			meta.RootSnapshot = &rootSnapshot
+		}
+	}
+	meta.QuoteSnapshot = snapshot("comment", commentID, "", quotedExcerpt)
 	return marshalEventMetadata(meta)
 }
 
-// BuildReplyLikedMetadata 编码回复点赞通知的接收人与父评论 ID。
-func BuildReplyLikedMetadata(recipientUserID, commentID uint) *string {
-	if recipientUserID == 0 && commentID == 0 {
+// BuildReplyLikedMetadata 编码回复点赞通知的接收人、父评论 ID 与根对象快照。
+func BuildReplyLikedMetadata(recipientUserID, commentID uint, replyExcerpt string, root *NotificationSnapshot) *string {
+	if recipientUserID == 0 && commentID == 0 && strings.TrimSpace(replyExcerpt) == "" && (root == nil || snapshotEmpty(*root)) {
 		return nil
 	}
 	meta := eventMetadata{}
@@ -127,7 +157,62 @@ func BuildReplyLikedMetadata(recipientUserID, commentID uint) *string {
 	if commentID != 0 {
 		meta.CommentID = commentID
 	}
+	meta.SourceSnapshot = snapshot("reply", 0, "", replyExcerpt)
+	if root != nil {
+		rootSnapshot := normalizeSnapshot(*root)
+		if !snapshotEmpty(rootSnapshot) {
+			meta.RootSnapshot = &rootSnapshot
+		}
+	}
 	return marshalEventMetadata(meta)
+}
+
+// BuildSourceRootMetadata 编码来源对象与根对象快照。
+func BuildSourceRootMetadata(source NotificationSnapshot, root *NotificationSnapshot, recipientUserIDs ...uint) *string {
+	meta := eventMetadata{}
+	if len(recipientUserIDs) > 0 {
+		meta.RecipientUserIDs = recipientUserIDs
+	}
+	source = normalizeSnapshot(source)
+	if !snapshotEmpty(source) {
+		meta.SourceSnapshot = &source
+	}
+	if root != nil {
+		rootSnapshot := normalizeSnapshot(*root)
+		if !snapshotEmpty(rootSnapshot) {
+			meta.RootSnapshot = &rootSnapshot
+		}
+	}
+	if len(meta.RecipientUserIDs) == 0 && meta.SourceSnapshot == nil && meta.RootSnapshot == nil {
+		return nil
+	}
+	return marshalEventMetadata(meta)
+}
+
+func snapshot(objectType string, id uint, title string, excerpt string) *NotificationSnapshot {
+	s := normalizeSnapshot(NotificationSnapshot{
+		Type:    objectType,
+		ID:      id,
+		Title:   title,
+		Excerpt: excerpt,
+	})
+	if snapshotEmpty(s) {
+		return nil
+	}
+	return &s
+}
+
+func normalizeSnapshot(s NotificationSnapshot) NotificationSnapshot {
+	return NotificationSnapshot{
+		Type:    strings.TrimSpace(s.Type),
+		ID:      s.ID,
+		Title:   truncateRunes(strings.TrimSpace(s.Title), maxTitleRunes),
+		Excerpt: truncateRunes(strings.TrimSpace(s.Excerpt), maxExcerptRunes),
+	}
+}
+
+func snapshotEmpty(s NotificationSnapshot) bool {
+	return s.Type == "" && s.ID == 0 && strings.TrimSpace(s.Title) == "" && strings.TrimSpace(s.Excerpt) == ""
 }
 
 func marshalEventMetadata(meta eventMetadata) *string {

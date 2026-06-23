@@ -19,13 +19,7 @@ func (s *inboxService) List(userID uint, req dto.NotificationListReq) (*dto.Noti
 		return nil, err
 	}
 
-	// 按根对象去重解析展示标题，供前端直接显示「来自哪篇文章/哪条碎语」。
-	labels, err := s.rootLabels(context.Background(), result.Items)
-	if err != nil {
-		return nil, err
-	}
-	// 按根对象去重解析文章正文摘录，仅对无评论/回复内容的通知填充。
-	excerpts, err := s.rootExcerpts(context.Background(), result.Items)
+	deleted, err := s.loadObjectDeletedStatus(context.Background(), result.Items)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +31,7 @@ func (s *inboxService) List(userID uint, req dto.NotificationListReq) (*dto.Noti
 	// 逐条把收件箱 + 事件快照聚合映射为对外条目。
 	items := make([]dto.NotificationItemResp, 0, len(result.Items))
 	for _, aggregate := range result.Items {
-		items = append(items, inboxAggregateToDTO(aggregate, labels, excerpts, engagements, replyCommentIDs, s.resolver))
+		items = append(items, inboxAggregateToDTO(aggregate, deleted, engagements, replyCommentIDs, s.resolver))
 	}
 	return &dto.NotificationPageResp{
 		Total:    result.Total,
@@ -93,8 +87,7 @@ func (s *inboxService) Delete(userID uint, id uint) error {
 // inboxAggregateToDTO 把收件箱聚合映射为对外通知条目。
 func inboxAggregateToDTO(
 	aggregate notificationrepo.InboxAggregate,
-	labels map[rootKey]string,
-	excerpts map[rootKey]string,
+	deleted map[notificationrepo.ObjectDeletedKey]bool,
 	engagements map[notificationrepo.SourceEngagementKey]notificationrepo.SourceEngagement,
 	replyCommentIDs map[uint]uint,
 	resolver storage.ObjectURLResolver,
@@ -119,15 +112,9 @@ func inboxAggregateToDTO(
 		SourceID:       aggregate.Event.SourceID,
 		RootType:       aggregate.Event.RootType,
 		RootID:         aggregate.Event.RootID,
+		SourceDeleted:  deleted[sourceDeletedKey(aggregate.Event)],
+		RootDeleted:    deleted[rootDeletedKey(aggregate.Event)],
 		Metadata:       metadata,
-	}
-	if label, ok := labels[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && label != "" {
-		resp.RootTitle = &label
-	}
-	if aggregate.Event.RootType == "article" {
-		if excerpt, ok := excerpts[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && excerpt != "" {
-			resp.RootExcerpt = &excerpt
-		}
 	}
 	if isEngagementSource(aggregate.Event.SourceType) {
 		if engagement, ok := engagements[notificationrepo.SourceEngagementKey{
@@ -192,67 +179,6 @@ func actorUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.N
 		Site:      user.Site,
 		Mark:      user.Mark,
 	}
-}
-
-// rootKey 是根对象的复合去重键。
-type rootKey struct {
-	rootType string
-	rootID   uint
-}
-
-// rootLabels 批量解析当前页事件根对象的展示标题，按 (rootType, rootID) 去重。
-// roots 为 nil 时返回空 map，调用方据此跳过 RootTitle 填充，保持旧行为。
-// 仅解析 article/moment 两类根对象，其余类型（留言板等）无展示标题。
-func (s *inboxService) rootLabels(ctx context.Context, items []notificationrepo.InboxAggregate) (map[rootKey]string, error) {
-	if s.roots == nil {
-		return nil, nil
-	}
-	out := make(map[rootKey]string, len(items))
-	for _, aggregate := range items {
-		if aggregate.Event.RootID == 0 {
-			continue
-		}
-		switch aggregate.Event.RootType {
-		case "article", "moment":
-		default:
-			continue
-		}
-		key := rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}
-		if _, exists := out[key]; exists {
-			continue
-		}
-		label, err := s.roots.RootSnapshotOf(ctx, aggregate.Event.RootType, aggregate.Event.RootID)
-		if err != nil {
-			return nil, err
-		}
-		out[key] = label
-	}
-	return out, nil
-}
-
-// rootExcerpts 批量解析当前页文章根对象的正文摘录，按 rootID 去重。
-// content_excerpt 为评论/回复正文，与文章摘录互不重复，故评论类事件同样需要填充。
-// roots 为 nil 时返回空 map。
-func (s *inboxService) rootExcerpts(ctx context.Context, items []notificationrepo.InboxAggregate) (map[rootKey]string, error) {
-	if s.roots == nil {
-		return nil, nil
-	}
-	out := make(map[rootKey]string, len(items))
-	for _, aggregate := range items {
-		if aggregate.Event.RootID == 0 || aggregate.Event.RootType != "article" {
-			continue
-		}
-		key := rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}
-		if _, exists := out[key]; exists {
-			continue
-		}
-		excerpt, err := s.roots.RootExcerptOf(ctx, aggregate.Event.RootType, aggregate.Event.RootID)
-		if err != nil {
-			return nil, err
-		}
-		out[key] = excerpt
-	}
-	return out, nil
 }
 
 // normalizePage 规整页码，最小为 1。

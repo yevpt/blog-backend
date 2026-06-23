@@ -2,8 +2,7 @@ package notification_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -87,32 +86,6 @@ func (f *fakeInboxRepo) DeleteInbox(context.Context, uint, uint) (int64, error) 
 	return f.deleteAffected, nil
 }
 
-// fakeRootResolver 按 (rootType, rootID) 预置展示标题与正文摘录，记录调用次数以验证去重。
-type fakeRootResolver struct {
-	labels         map[string]string
-	excerpts       map[string]string
-	calls          int
-	excerptCalls   int
-	callErr        error
-	excerptCallErr error
-}
-
-func (f *fakeRootResolver) RootSnapshotOf(_ context.Context, rootType string, rootID uint) (string, error) {
-	f.calls++
-	if f.callErr != nil {
-		return "", f.callErr
-	}
-	return f.labels[fmt.Sprintf("%s:%d", rootType, rootID)], nil
-}
-
-func (f *fakeRootResolver) RootExcerptOf(_ context.Context, rootType string, rootID uint) (string, error) {
-	f.excerptCalls++
-	if f.excerptCallErr != nil {
-		return "", f.excerptCallErr
-	}
-	return f.excerpts[fmt.Sprintf("%s:%d", rootType, rootID)], nil
-}
-
 // publisher 应去除标题/摘要首尾空白并按列宽截断后落库。
 func TestPublisher_TrimsAndSnapshotsContentExcerpt(t *testing.T) {
 	repo := &fakeEventRepo{}
@@ -139,6 +112,27 @@ func TestPublisher_TrimsAndSnapshotsContentExcerpt(t *testing.T) {
 	assert.False(t, strings.HasPrefix(repo.created.ContentExcerpt, " "))
 	// 默认进入待分发状态。
 	assert.Equal(t, notificationrepo.EventStatusPending, repo.created.DispatchStatus)
+}
+
+func TestBuildSourceRootMetadata_TrimsAndTruncatesSnapshots(t *testing.T) {
+	longTitle := strings.Repeat("题", 150)
+	longExcerpt := strings.Repeat("摘", 600)
+	metadata := notificationservice.BuildSourceRootMetadata(
+		notificationservice.NotificationSnapshot{Type: "article", ID: 1, Title: " " + longTitle + " ", Excerpt: " " + longExcerpt + " "},
+		&notificationservice.NotificationSnapshot{Type: "article", ID: 1, Title: " " + longTitle + " ", Excerpt: " " + longExcerpt + " "},
+	)
+
+	require.NotNil(t, metadata)
+	var decoded struct {
+		SourceSnapshot notificationservice.NotificationSnapshot `json:"source_snapshot"`
+		RootSnapshot   notificationservice.NotificationSnapshot `json:"root_snapshot"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(*metadata), &decoded))
+	assert.Equal(t, 120, len([]rune(decoded.SourceSnapshot.Title)))
+	assert.Equal(t, 500, len([]rune(decoded.SourceSnapshot.Excerpt)))
+	assert.False(t, strings.HasPrefix(decoded.SourceSnapshot.Title, " "))
+	assert.Equal(t, 120, len([]rune(decoded.RootSnapshot.Title)))
+	assert.Equal(t, 500, len([]rune(decoded.RootSnapshot.Excerpt)))
 }
 
 func TestPublisher_AllowsReplyLikedEvent(t *testing.T) {
@@ -266,182 +260,6 @@ func TestInboxService_List_SystemNoticeHasNilActorUser(t *testing.T) {
 	assert.Nil(t, resp.List[0].ActorUser)
 }
 
-// 列表应在读取时按根对象解析展示标题并去重，命中 article/moment 时填充 RootTitle。
-func TestInboxService_List_ResolvesRootTitleWithDedup(t *testing.T) {
-	repo := &fakeInboxRepo{
-		listResp: &notificationrepo.InboxPage{
-			Total: 3,
-			Items: []notificationrepo.InboxAggregate{
-				{
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
-					Event: model.NotificationEvent{
-						Base:       model.Base{ID: 10},
-						Type:       notificationservice.EventTypeCommentCreated,
-						SourceType: "comment",
-						SourceID:   99,
-						RootType:   "article",
-						RootID:     7,
-					},
-				},
-				{
-					// 同一篇文章的第二条评论，应复用去重结果。
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 2}, EventID: 11},
-					Event: model.NotificationEvent{
-						Base:       model.Base{ID: 11},
-						Type:       notificationservice.EventTypeReplyCreated,
-						SourceType: "reply",
-						SourceID:   100,
-						RootType:   "article",
-						RootID:     7,
-					},
-				},
-				{
-					// 留言板根对象无展示标题，RootTitle 应为空。
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 3}, EventID: 12},
-					Event: model.NotificationEvent{
-						Base:       model.Base{ID: 12},
-						Type:       notificationservice.EventTypeGuestbookCreated,
-						SourceType: "guestbook",
-						SourceID:   5,
-						RootType:   "guestbook",
-						RootID:     1,
-					},
-				},
-			},
-		},
-	}
-	roots := &fakeRootResolver{labels: map[string]string{"article:7": "我的第一篇文章"}}
-	service := notificationservice.NewInboxService(repo, roots, nil, nil)
-
-	resp, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
-
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	require.Len(t, resp.List, 3)
-	// 前两条命中同一文章，RootTitle 一致且只解析一次。
-	require.NotNil(t, resp.List[0].RootTitle)
-	assert.Equal(t, "我的第一篇文章", *resp.List[0].RootTitle)
-	require.NotNil(t, resp.List[1].RootTitle)
-	assert.Equal(t, "我的第一篇文章", *resp.List[1].RootTitle)
-	// 留言板无展示标题。
-	assert.Nil(t, resp.List[2].RootTitle)
-	// 去重：article:7 仅解析一次，guestbook 不走解析。
-	assert.Equal(t, 1, roots.calls)
-}
-
-// roots 为 nil 时退化为不填充 RootTitle，保持旧行为。
-func TestInboxService_List_SkipsRootTitleWhenResolverNil(t *testing.T) {
-	repo := &fakeInboxRepo{
-		listResp: &notificationrepo.InboxPage{
-			Total: 1,
-			Items: []notificationrepo.InboxAggregate{
-				{
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
-					Event: model.NotificationEvent{RootType: "article", RootID: 7},
-				},
-			},
-		},
-	}
-	service := notificationservice.NewInboxService(repo, nil, nil, nil)
-
-	resp, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
-
-	require.NoError(t, err)
-	require.Len(t, resp.List, 1)
-	assert.Nil(t, resp.List[0].RootTitle)
-}
-
-// 根对象解析出错时应把错误透传出 List。
-func TestInboxService_List_PropagatesRootResolveError(t *testing.T) {
-	repo := &fakeInboxRepo{
-		listResp: &notificationrepo.InboxPage{
-			Total: 1,
-			Items: []notificationrepo.InboxAggregate{
-				{
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
-					Event: model.NotificationEvent{RootType: "article", RootID: 7},
-				},
-			},
-		},
-	}
-	roots := &fakeRootResolver{callErr: errors.New("boom")}
-	service := notificationservice.NewInboxService(repo, roots, nil, nil)
-
-	_, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "boom")
-}
-
-// 文章点赞与评论通知均应填充 root_excerpt；content_excerpt 为评论正文，与文章摘录不重复。
-func TestInboxService_List_FillsRootExcerptForArticleWithoutContentExcerpt(t *testing.T) {
-	repo := &fakeInboxRepo{
-		listResp: &notificationrepo.InboxPage{
-			Total: 3,
-			Items: []notificationrepo.InboxAggregate{
-				{
-					// 文章点赞：无 ContentExcerpt，应填充 root_excerpt。
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
-					Event: model.NotificationEvent{
-						Base:       model.Base{ID: 10},
-						Type:       notificationservice.EventTypeArticleLiked,
-						SourceType: "article",
-						SourceID:   7,
-						RootType:   "article",
-						RootID:     7,
-					},
-				},
-				{
-					// 同一篇文章的评论通知：ContentExcerpt 为评论正文，仍应填充 root_excerpt。
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 2}, EventID: 11},
-					Event: model.NotificationEvent{
-						Base:           model.Base{ID: 11},
-						Type:           notificationservice.EventTypeCommentCreated,
-						SourceType:     "comment",
-						SourceID:       99,
-						RootType:       "article",
-						RootID:         7,
-						ContentExcerpt: "好文章",
-					},
-				},
-				{
-					// 碎语点赞：RootType 非 article，不应填充 root_excerpt。
-					Inbox: model.NotificationInbox{Base: model.Base{ID: 3}, EventID: 12},
-					Event: model.NotificationEvent{
-						Base:       model.Base{ID: 12},
-						Type:       notificationservice.EventTypeMomentLiked,
-						SourceType: "moment",
-						SourceID:   5,
-						RootType:   "moment",
-						RootID:     5,
-					},
-				},
-			},
-		},
-	}
-	roots := &fakeRootResolver{
-		labels:   map[string]string{"article:7": "我的第一篇文章"},
-		excerpts: map[string]string{"article:7": "这是文章正文的前面一部分内容"},
-	}
-	service := notificationservice.NewInboxService(repo, roots, nil, nil)
-
-	resp, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
-
-	require.NoError(t, err)
-	require.NotNil(t, resp)
-	require.Len(t, resp.List, 3)
-	// 文章点赞：填充 root_excerpt。
-	require.NotNil(t, resp.List[0].RootExcerpt)
-	assert.Equal(t, "这是文章正文的前面一部分内容", *resp.List[0].RootExcerpt)
-	// 文章评论：同样填充 root_excerpt。
-	require.NotNil(t, resp.List[1].RootExcerpt)
-	assert.Equal(t, "这是文章正文的前面一部分内容", *resp.List[1].RootExcerpt)
-	// 碎语点赞：不填充 root_excerpt。
-	assert.Nil(t, resp.List[2].RootExcerpt)
-	// 去重：article:7 的正文摘录只解析一次。
-	assert.Equal(t, 1, roots.excerptCalls)
-}
-
 // 标记已读时仓储影响 0 行表示通知不属于该用户，应返回 ErrNotificationNotFound。
 func TestInboxService_MarkRead_RejectsNotOwned(t *testing.T) {
 	repo := &fakeInboxRepo{markReadAffected: 0}
@@ -489,6 +307,71 @@ func (f *fakeEngagementResolver) BatchReplyCommentIDs(_ context.Context, refs []
 		}
 	}
 	return out, nil
+}
+
+type fakeDeletedResolver struct {
+	deleted map[notificationrepo.ObjectDeletedKey]bool
+	refs    []notificationrepo.ObjectDeletedRef
+}
+
+func (f *fakeDeletedResolver) BatchObjectDeleted(_ context.Context, refs []notificationrepo.ObjectDeletedRef) (map[notificationrepo.ObjectDeletedKey]bool, error) {
+	f.refs = append(f.refs, refs...)
+	out := make(map[notificationrepo.ObjectDeletedKey]bool, len(refs))
+	for _, ref := range refs {
+		key := notificationrepo.ObjectDeletedKey{ObjectType: ref.ObjectType, ObjectID: ref.ObjectID, RootType: ref.RootType}
+		out[key] = f.deleted[key]
+	}
+	return out, nil
+}
+
+func TestInboxService_List_FillsDeletedStatus(t *testing.T) {
+	repo := &fakeInboxRepo{
+		listResp: &notificationrepo.InboxPage{
+			Total: 2,
+			Items: []notificationrepo.InboxAggregate{
+				{
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 1}, EventID: 10},
+					Event: model.NotificationEvent{
+						SourceType: "comment",
+						SourceID:   99,
+						RootType:   "article",
+						RootID:     7,
+					},
+				},
+				{
+					Inbox: model.NotificationInbox{Base: model.Base{ID: 2}, EventID: 11},
+					Event: model.NotificationEvent{
+						SourceType: "reply",
+						SourceID:   100,
+						RootType:   "guestbook",
+						RootID:     12,
+					},
+				},
+			},
+		},
+	}
+	status := &fakeDeletedResolver{
+		deleted: map[notificationrepo.ObjectDeletedKey]bool{
+			{ObjectType: "comment", ObjectID: 99, RootType: "article"}:  true,
+			{ObjectType: "article", ObjectID: 7}:                        false,
+			{ObjectType: "reply", ObjectID: 100, RootType: "guestbook"}: false,
+			{ObjectType: "guestbook", ObjectID: 12}:                     true,
+		},
+	}
+	service := notificationservice.NewInboxService(repo, status, nil, nil)
+
+	resp, err := service.List(3, dto.NotificationListReq{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 2)
+	assert.True(t, resp.List[0].SourceDeleted)
+	assert.False(t, resp.List[0].RootDeleted)
+	assert.False(t, resp.List[1].SourceDeleted)
+	assert.True(t, resp.List[1].RootDeleted)
+	assert.Contains(t, status.refs, notificationrepo.ObjectDeletedRef{ObjectType: "comment", ObjectID: 99, RootType: "article"})
+	assert.Contains(t, status.refs, notificationrepo.ObjectDeletedRef{ObjectType: "article", ObjectID: 7})
+	assert.Contains(t, status.refs, notificationrepo.ObjectDeletedRef{ObjectType: "reply", ObjectID: 100, RootType: "guestbook"})
+	assert.Contains(t, status.refs, notificationrepo.ObjectDeletedRef{ObjectType: "guestbook", ObjectID: 12})
 }
 
 func TestInboxService_List_FillsEngagementAndReplyCommentID(t *testing.T) {

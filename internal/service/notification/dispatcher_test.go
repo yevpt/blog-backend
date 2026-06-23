@@ -276,8 +276,8 @@ func TestDispatcher_RetriesEventOnRepoError(t *testing.T) {
 // 不依赖 OwnerOf(RootType, RootID) 解析碎语作者。
 // 验证"自己碎语 + 自己评论 + 他人点赞"场景：接收人=评论作者(A)，actor=点赞者(C)。
 func TestDispatcher_CommentLiked_DeliversToCommentAuthorViaMetadata(t *testing.T) {
-	actor := uint(2)                                   // C(2) 点赞
-	metadata := `{"recipient_user_ids":[1]}`           // 接收人 = A(1)，评论作者
+	actor := uint(2)                         // C(2) 点赞
+	metadata := `{"recipient_user_ids":[1]}` // 接收人 = A(1)，评论作者
 	metaPtr := metadata
 	event := model.NotificationEvent{
 		Base:         model.Base{ID: 30},
@@ -309,4 +309,39 @@ type erroringOwnerLookup struct{}
 
 func (erroringOwnerLookup) OwnerOf(context.Context, string, uint) (uint, bool, error) {
 	return 0, false, errors.New("OwnerOf should not be called when metadata has explicit recipients")
+}
+
+// reply_created 写入收件箱后应通过共享 SSE hub 推送给在线订阅者。
+func TestDispatcher_ReplyCreatedNotifiesSSEHub(t *testing.T) {
+	hub := notificationservice.NewSSEHub()
+	sub := hub.Subscribe(8)
+	defer hub.Unsubscribe(8, sub)
+
+	metadata := `{"recipient_user_ids":[8],"comment_id":9}`
+	metaPtr := metadata
+	actor := uint(7)
+	event := model.NotificationEvent{
+		Base:         model.Base{ID: 40},
+		Type:         notificationservice.EventTypeReplyCreated,
+		ActorUserID:  &actor,
+		MetadataJSON: &metaPtr,
+	}
+	repo := newDispatchRepo(event)
+	d := notificationservice.NewDispatcher(
+		repo,
+		notificationservice.NewRecipientResolver(erroringOwnerLookup{}),
+		bothEnabled(),
+		fixedDirectory{},
+	)
+	d.SetInboxNotifier(hub)
+
+	_, err := d.DispatchOnce(context.Background(), "worker-1", 10)
+	require.NoError(t, err)
+
+	select {
+	case msg := <-sub.Events:
+		assert.Equal(t, "reply_created", msg)
+	case <-time.After(time.Second):
+		t.Fatal("hub 订阅者未收到 reply_created 推送")
+	}
 }

@@ -50,10 +50,10 @@ type NotificationItemResp struct {
 	RootType string `json:"root_type" example:"moment"`
 	// RootID 根对象 ID。
 	RootID uint `json:"root_id" example:"12"`
-	// RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。
-	RootTitle *string `json:"root_title,omitempty" example:"我的第一篇文章"`
-	// RootExcerpt 文章正文摘录，仅 root_type=article 时填充；与 content_excerpt（评论/回复正文）并存。
-	RootExcerpt *string `json:"root_excerpt,omitempty"`
+	// SourceDeleted 来源对象当前是否已删除或不存在。
+	SourceDeleted bool `json:"source_deleted" example:"false"`
+	// RootDeleted 根对象当前是否已删除或不存在。
+	RootDeleted bool `json:"root_deleted" example:"false"`
 	// LikeCount 来源对象当前点赞数；仅 comment/reply/guestbook 来源填充。
 	LikeCount *int64 `json:"like_count,omitempty" example:"3"`
 	// IsLiked 当前登录用户是否已点赞来源对象；仅 comment/reply/guestbook 来源填充。

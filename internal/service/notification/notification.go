@@ -94,17 +94,16 @@ func NewPublisher(repo notificationrepo.EventRepository) Publisher {
 }
 
 type inboxService struct {
-	repo        notificationrepo.InboxRepository
-	roots       RootSnapshotResolver
-	engagement  SourceEngagementResolver
-	resolver    storage.ObjectURLResolver
+	repo       notificationrepo.InboxRepository
+	status     ObjectDeletedResolver
+	engagement SourceEngagementResolver
+	resolver   storage.ObjectURLResolver
 }
 
 // NewInboxService 创建收件箱业务服务。
-// roots 用于在列表读取时解析根对象展示标题（文章标题/碎语摘要），可为 nil
-// （此时退化为不填充 RootTitle，保持旧行为）。
+// status 用于在列表读取时解析来源对象与根对象是否已删除，可为 nil。
 // engagement 用于解析来源对象点赞/回复数，可为 nil。
 // resolver 用于解析操作人头像的对象存储路径为可访问 URL，可为 nil。
-func NewInboxService(repo notificationrepo.InboxRepository, roots RootSnapshotResolver, engagement SourceEngagementResolver, resolver storage.ObjectURLResolver) InboxService {
-	return &inboxService{repo: repo, roots: roots, engagement: engagement, resolver: resolver}
+func NewInboxService(repo notificationrepo.InboxRepository, status ObjectDeletedResolver, engagement SourceEngagementResolver, resolver storage.ObjectURLResolver) InboxService {
+	return &inboxService{repo: repo, status: status, engagement: engagement, resolver: resolver}
 }
