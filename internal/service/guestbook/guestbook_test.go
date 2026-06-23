@@ -1,6 +1,7 @@
 package guestbook_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
@@ -169,4 +171,76 @@ func TestGuestbookService_List_MapsUnknownError(t *testing.T) {
 	_, err := svc.List(dto.GuestbookListReq{}, nil)
 
 	require.EqualError(t, err, "db down")
+}
+
+// recordingPublisher 记录发布事件，用于断言是否发布通知。
+type recordingPublisher struct {
+	events []notificationservice.PublishEvent
+}
+
+func (p *recordingPublisher) Publish(_ context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
+	p.events = append(p.events, e)
+	return &model.NotificationEvent{}, nil
+}
+
+// 自己在自己留言板留言不产生通知事件。
+func TestGuestbookService_Create_SelfMessageDoesNotPublish(t *testing.T) {
+	repo := &fakeGuestbookRepo{
+		createResp: &guestbookrepo.GuestbookAggregate{
+			Message: model.Guestbook{Base: model.Base{ID: 9}, OwnerUserID: 7, FromUserID: 7, Content: "自言自语"},
+		},
+	}
+	pub := &recordingPublisher{}
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+
+	_, err := svc.Create(dto.GuestbookCreateReq{OwnerUserID: 7, Content: "自言自语"}, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 板主与留言者不同时正常发布通知事件。
+func TestGuestbookService_Create_PublishesForOtherOwner(t *testing.T) {
+	repo := &fakeGuestbookRepo{
+		createResp: &guestbookrepo.GuestbookAggregate{
+			Message: model.Guestbook{Base: model.Base{ID: 9}, OwnerUserID: 1, FromUserID: 7, Content: "你好"},
+		},
+	}
+	pub := &recordingPublisher{}
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+
+	_, err := svc.Create(dto.GuestbookCreateReq{OwnerUserID: 1, Content: "你好"}, 7)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeGuestbookCreated, pub.events[0].Type)
+}
+
+// 自己点赞自己的留言不产生通知事件。
+func TestGuestbookService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
+	repo := &fakeGuestbookRepo{
+		toggleResp: &guestbookrepo.LikeResult{ID: 9, IsLiked: true, LikeCount: 2, OwnerUserID: 7},
+	}
+	pub := &recordingPublisher{}
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+
+	_, err := svc.ToggleLike(9, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 点赞别人的留言正常发布通知事件。
+func TestGuestbookService_ToggleLike_PublishesForOtherOwner(t *testing.T) {
+	repo := &fakeGuestbookRepo{
+		toggleResp: &guestbookrepo.LikeResult{ID: 9, IsLiked: true, LikeCount: 2, OwnerUserID: 1},
+	}
+	pub := &recordingPublisher{}
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+
+	_, err := svc.ToggleLike(9, 7)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeGuestbookLiked, pub.events[0].Type)
 }

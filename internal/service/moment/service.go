@@ -193,7 +193,8 @@ func (s *momentService) ToggleLike(id uint, userID uint) (*dto.MomentItemResp, e
 		return nil, mapRepoError(err)
 	}
 	// 仅在本次为点赞（而非取消）时发布通知事件，接收人由分发器按碎语作者解析。
-	if liked {
+	// 自己点赞自己的碎语不产生通知事件。
+	if liked && aggregate.Moment.UserID != userID {
 		s.notifyMomentLiked(id, userID, aggregate.Moment.Content)
 	}
 	return s.momentToDTO(*aggregate)

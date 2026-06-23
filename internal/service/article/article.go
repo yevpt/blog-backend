@@ -249,7 +249,8 @@ func (s *articleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp,
 		return nil, ErrArticleNotFound
 	}
 	// 仅在本次为点赞（而非取消）时发布通知事件，接收人由分发器按文章作者解析。
-	if liked {
+	// 自己点赞自己的文章不产生通知事件。
+	if liked && aggregate.Article.UserID != userID {
 		s.notifyArticleLiked(id, userID, aggregate.Article.Title)
 	}
 	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: aggregate.LikeCount}, nil

@@ -695,3 +695,24 @@ func TestArticleService_ToggleLike_DoesNotPublishOnUnlike(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, pub.events)
 }
+
+// 作者点赞自己的文章不产生通知事件。
+func TestArticleService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	pub := &recordingPublisher{}
+	svc := articleservice.NewArticleService(repo, nil, nil, pub)
+
+	// 文章作者与点赞者同为 userID=5。
+	repo.EXPECT().ToggleLike(uint(8), uint(5)).Return(&articlerepo.ArticleAggregate{
+		Article:   model.Article{Base: model.Base{ID: 8}, Title: "A", UserID: 5, Status: 1},
+		LikeCount: 11,
+		IsLiked:   true,
+	}, true, nil)
+
+	_, err := svc.ToggleLike(8, 5)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}

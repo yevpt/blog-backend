@@ -6,7 +6,8 @@ import (
 )
 
 func (r *commentRepo) Create(target Target, userID uint, content string) (*CommentAggregate, error) {
-	if err := r.ensureCommentableTarget(target); err != nil {
+	ownerUserID, err := r.ensureCommentableTarget(target)
+	if err != nil {
 		return nil, err
 	}
 
@@ -20,11 +21,12 @@ func (r *commentRepo) Create(target Target, userID uint, content string) (*Comme
 		return nil, err
 	}
 	return &CommentAggregate{
-		Comment:    *comment,
-		User:       userMap[userID],
-		ReplyCount: 0,
-		LikeCount:  0,
-		IsLiked:    false,
+		Comment:     *comment,
+		User:        userMap[userID],
+		ReplyCount:  0,
+		LikeCount:   0,
+		IsLiked:     false,
+		OwnerUserID: ownerUserID,
 	}, nil
 }
 

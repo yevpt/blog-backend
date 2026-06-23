@@ -8,17 +8,32 @@ import (
 )
 
 func (r *commentRepo) ToggleLike(target Target, commentID uint, userID uint) (*LikeResult, error) {
-	if _, err := r.findCommentByID(target.Type, commentID); err != nil {
+	comment, err := r.findCommentByID(target.Type, commentID)
+	if err != nil {
 		return nil, err
 	}
-	return r.toggleLike(commentLikeType(target.Type), commentID, userID)
+	result, err := r.toggleLike(commentLikeType(target.Type), commentID, userID)
+	if err != nil {
+		return nil, err
+	}
+	// 填充评论作者与根对象 ID，供通知层发布 comment_liked 事件使用。
+	result.RootID = comment.TargetID
+	result.TargetUserID = comment.UserID
+	return result, nil
 }
 
 func (r *commentRepo) ToggleReplyLike(target Target, replyID uint, userID uint) (*LikeResult, error) {
-	if _, err := r.findReplyByID(target.Type, replyID); err != nil {
+	reply, err := r.findReplyByID(target.Type, replyID)
+	if err != nil {
 		return nil, err
 	}
-	return r.toggleLike(replyLikeType(target.Type), replyID, userID)
+	result, err := r.toggleLike(replyLikeType(target.Type), replyID, userID)
+	if err != nil {
+		return nil, err
+	}
+	result.RootID = reply.CommentID
+	result.TargetUserID = reply.FromUserID
+	return result, nil
 }
 
 func (r *commentRepo) toggleLike(likeType uint8, targetID uint, userID uint) (*LikeResult, error) {

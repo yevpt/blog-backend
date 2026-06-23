@@ -40,9 +40,10 @@ type PageResult struct {
 
 // LikeResult 留言点赞切换结果。
 type LikeResult struct {
-	ID        uint
-	IsLiked   bool
-	LikeCount int64
+	ID          uint
+	IsLiked     bool
+	LikeCount   int64
+	OwnerUserID uint
 }
 
 // GuestbookRepository 留言板数据访问接口。

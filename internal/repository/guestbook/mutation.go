@@ -31,8 +31,8 @@ func (r *guestbookRepo) Create(ownerUserID uint, fromUserID uint, content string
 
 func (r *guestbookRepo) ToggleLike(id uint, userID uint) (*LikeResult, error) {
 	liked := false
+	var message model.Guestbook
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		var message model.Guestbook
 		if err := tx.First(&message, id).Error; err != nil {
 			return err
 		}
@@ -67,7 +67,7 @@ func (r *guestbookRepo) ToggleLike(id uint, userID uint) (*LikeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LikeResult{ID: id, IsLiked: liked, LikeCount: count}, nil
+	return &LikeResult{ID: id, IsLiked: liked, LikeCount: count, OwnerUserID: message.OwnerUserID}, nil
 }
 
 func (r *guestbookRepo) Delete(id uint, userID uint, force bool) (*model.Guestbook, error) {

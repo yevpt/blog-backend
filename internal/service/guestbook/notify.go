@@ -12,6 +12,10 @@ func (s *guestbookService) notifyGuestbookCreated(ownerUserID uint, fromUserID u
 	if s.publisher == nil || aggregate == nil {
 		return
 	}
+	// 自己在自己留言板留言不产生通知。
+	if fromUserID == ownerUserID {
+		return
+	}
 	actorID := fromUserID
 	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
 		Type:           notificationservice.EventTypeGuestbookCreated,

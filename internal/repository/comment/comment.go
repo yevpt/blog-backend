@@ -60,11 +60,12 @@ type CommentRecord struct {
 
 // CommentAggregate 一级评论及其用户、回复数量、点赞信息聚合，供 service 转换为 DTO。
 type CommentAggregate struct {
-	Comment    CommentRecord
-	User       *model.User
-	ReplyCount int64
-	LikeCount  int64
-	IsLiked    bool
+	Comment     CommentRecord
+	User        *model.User
+	ReplyCount  int64
+	LikeCount   int64
+	IsLiked     bool
+	OwnerUserID uint
 }
 
 // ReplyRecord 统一的评论回复记录，屏蔽三张回复表差异。
@@ -86,6 +87,7 @@ type ReplyAggregate struct {
 	ToUser    *model.User
 	LikeCount int64
 	IsLiked   bool
+	TargetID  uint
 }
 
 // PageResult 评论分页查询结果，保持 repository 不返回 dto。
@@ -106,8 +108,10 @@ type ReplyPageResult struct {
 
 // LikeResult 点赞切换结果。
 type LikeResult struct {
-	IsLiked   bool
-	LikeCount int64
+	IsLiked      bool
+	LikeCount    int64
+	RootID       uint
+	TargetUserID uint
 }
 
 // ReplyData 创建回复所需的数据。

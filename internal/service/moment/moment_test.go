@@ -19,6 +19,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
+	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
@@ -636,4 +637,51 @@ func TestMomentService_List_ReturnsUnknownError(t *testing.T) {
 	_, err := svc.List(dto.MomentListReq{}, nil)
 
 	require.EqualError(t, err, "db down")
+}
+
+// recordingPublisher 记录发布事件，用于断言点赞是否发布通知。
+type recordingPublisher struct {
+	events []notificationservice.PublishEvent
+}
+
+func (p *recordingPublisher) Publish(_ context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
+	p.events = append(p.events, e)
+	return &model.NotificationEvent{}, nil
+}
+
+// 自己点赞自己的碎语不产生通知事件。
+func TestMomentService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
+	repo := &fakeMomentRepo{
+		likeResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 8}, UserID: 5, Content: "碎语"},
+		},
+	}
+	pub := &recordingPublisher{}
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, pub)
+
+	// 碎语作者与点赞者同为 userID=5。
+	repo.likeID = 0
+	repo.likeUserID = 0
+
+	_, err := svc.ToggleLike(8, 5)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 点赞别人的碎语正常发布通知事件。
+func TestMomentService_ToggleLike_PublishesForOtherAuthor(t *testing.T) {
+	repo := &fakeMomentRepo{
+		likeResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 8}, UserID: 1, Content: "碎语"},
+		},
+	}
+	pub := &recordingPublisher{}
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, pub)
+
+	_, err := svc.ToggleLike(8, 5)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeMomentLiked, pub.events[0].Type)
 }

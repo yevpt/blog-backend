@@ -204,6 +204,40 @@ func TestCommentRepository_ToggleLike_ReturnsLatestState(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestCommentRepository_ToggleReplyLike_ReturnsReplyOwnerAndRoot(t *testing.T) {
+	db, mock, sqlDB := newCommentMockDB(t)
+	defer sqlDB.Close()
+	repo := commentrepo.NewCommentRepository(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT \\* FROM `guestbook_reply`").
+		WithArgs(uint(12), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "comment_id", "to_user_id", "from_user_id", "parent_reply_id", "content",
+		}).AddRow(12, now, now, nil, 9, 6, 8, 0, "收到"))
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `user_like`").
+		WithArgs(uint(12), uint(7), uint8(commentrepo.GuestbookReplyLikeType), 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+	mock.ExpectExec("INSERT INTO `user_like`").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(7), uint(12), uint8(commentrepo.GuestbookReplyLikeType)).
+		WillReturnResult(sqlmock.NewResult(15, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user_like`").
+		WithArgs(uint(12), uint8(commentrepo.GuestbookReplyLikeType)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(3))
+
+	resp, err := repo.ToggleReplyLike(commentrepo.Target{Type: commentrepo.TargetGuestbook}, 12, 7)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.True(t, resp.IsLiked)
+	assert.Equal(t, int64(3), resp.LikeCount)
+	assert.Equal(t, uint(9), resp.RootID)
+	assert.Equal(t, uint(8), resp.TargetUserID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestCommentRepository_DeleteComment_DeletesArticleReplyTable(t *testing.T) {
 	db, mock, sqlDB := newCommentMockDB(t)
 	defer sqlDB.Close()

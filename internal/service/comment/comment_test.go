@@ -18,37 +18,42 @@ import (
 )
 
 type fakeCommentRepo struct {
-	listTarget           commentrepo.Target
-	listPage             int
-	listPageSize         int
-	listViewerID         *uint
-	listResp             *commentrepo.PageResult
-	listErr              error
-	createTarget         commentrepo.Target
-	createUserID         uint
-	createContent        string
-	createResp           *commentrepo.CommentAggregate
-	createErr            error
-	listRepliesTarget    commentrepo.Target
-	listRepliesCommentID uint
-	listRepliesPage      int
-	listRepliesPageSize  int
-	listRepliesViewerID  *uint
-	listRepliesResp      *commentrepo.ReplyPageResult
-	listRepliesErr       error
-	replyData            commentrepo.ReplyData
-	replyResp            *commentrepo.ReplyAggregate
-	replyErr             error
-	toggleLikeTarget     commentrepo.Target
-	toggleLikeCommentID  uint
-	toggleLikeUserID     uint
-	toggleLikeResp       *commentrepo.LikeResult
-	toggleLikeErr        error
-	deleteCommentForce   bool
-	deleteReplyTarget    commentrepo.Target
-	deleteReplyID        uint
-	deleteReplyForce     bool
-	deleteErr            error
+	listTarget            commentrepo.Target
+	listPage              int
+	listPageSize          int
+	listViewerID          *uint
+	listResp              *commentrepo.PageResult
+	listErr               error
+	createTarget          commentrepo.Target
+	createUserID          uint
+	createContent         string
+	createResp            *commentrepo.CommentAggregate
+	createErr             error
+	listRepliesTarget     commentrepo.Target
+	listRepliesCommentID  uint
+	listRepliesPage       int
+	listRepliesPageSize   int
+	listRepliesViewerID   *uint
+	listRepliesResp       *commentrepo.ReplyPageResult
+	listRepliesErr        error
+	replyData             commentrepo.ReplyData
+	replyResp             *commentrepo.ReplyAggregate
+	replyErr              error
+	toggleLikeTarget      commentrepo.Target
+	toggleLikeCommentID   uint
+	toggleLikeUserID      uint
+	toggleLikeResp        *commentrepo.LikeResult
+	toggleLikeErr         error
+	toggleReplyLikeTarget commentrepo.Target
+	toggleReplyLikeID     uint
+	toggleReplyLikeUserID uint
+	toggleReplyLikeResp   *commentrepo.LikeResult
+	toggleReplyLikeErr    error
+	deleteCommentForce    bool
+	deleteReplyTarget     commentrepo.Target
+	deleteReplyID         uint
+	deleteReplyForce      bool
+	deleteErr             error
 }
 
 func (f *fakeCommentRepo) List(target commentrepo.Target, viewerID *uint, page int, pageSize int) (*commentrepo.PageResult, error) {
@@ -88,6 +93,12 @@ func (f *fakeCommentRepo) ToggleLike(target commentrepo.Target, commentID uint, 
 }
 
 func (f *fakeCommentRepo) ToggleReplyLike(target commentrepo.Target, replyID uint, userID uint) (*commentrepo.LikeResult, error) {
+	f.toggleReplyLikeTarget = target
+	f.toggleReplyLikeID = replyID
+	f.toggleReplyLikeUserID = userID
+	if f.toggleReplyLikeResp != nil || f.toggleReplyLikeErr != nil {
+		return f.toggleReplyLikeResp, f.toggleReplyLikeErr
+	}
 	return &commentrepo.LikeResult{IsLiked: true, LikeCount: 1}, nil
 }
 
@@ -244,6 +255,32 @@ func TestCommentService_ToggleLike_ReturnsLatestState(t *testing.T) {
 	assert.Equal(t, int64(3), resp.LikeCount)
 }
 
+func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
+	repo := &fakeCommentRepo{
+		toggleReplyLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 3, TargetUserID: 8, RootID: 9},
+	}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	resp, err := svc.ToggleReplyLike("guestbook", 12, 7)
+
+	require.NoError(t, err)
+	assert.True(t, resp.IsLiked)
+	assert.Equal(t, uint8(commentrepo.TargetGuestbook), repo.toggleReplyLikeTarget.Type)
+	assert.Equal(t, uint(12), repo.toggleReplyLikeID)
+	assert.Equal(t, uint(7), repo.toggleReplyLikeUserID)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeReplyLiked, pub.events[0].Type)
+	assert.Equal(t, "reply", pub.events[0].SourceType)
+	assert.Equal(t, uint(12), pub.events[0].SourceID)
+	assert.Equal(t, "guestbook", pub.events[0].RootType)
+	assert.Equal(t, uint(9), pub.events[0].RootID)
+	require.NotNil(t, pub.events[0].ActorUserID)
+	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+}
+
 func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
 	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil)
 
@@ -359,4 +396,147 @@ func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 	require.NotNil(t, pub.events[0].Metadata)
 	// 被回复人 8 应出现在显式接收人列表。
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+}
+
+// 回复事件 RootID 应为根对象 ID（article ID），而非 commentID。
+func TestCommentService_Reply_RootIDIsTargetIDNotCommentID(t *testing.T) {
+	repo := &fakeCommentRepo{replyResp: &commentrepo.ReplyAggregate{
+		Reply:    commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 8, Content: "收到"},
+		TargetID: 3,
+	}}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, uint(3), pub.events[0].RootID)
+}
+
+// 自己评论自己的对象不产生通知事件。
+func TestCommentService_Create_SelfCommentDoesNotPublish(t *testing.T) {
+	repo := &fakeCommentRepo{createResp: &commentrepo.CommentAggregate{
+		Comment:     commentrepo.CommentRecord{ID: 9, UserID: 7, Content: "自评"},
+		OwnerUserID: 7,
+	}}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "自评"}, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 自己回复自己不产生通知事件。
+func TestCommentService_Reply_SelfReplyDoesNotPublish(t *testing.T) {
+	repo := &fakeCommentRepo{replyResp: &commentrepo.ReplyAggregate{
+		Reply: commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 7, Content: "自回"},
+	}}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "自回"}, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 自己点赞自己的回复不产生通知事件。
+func TestCommentService_ToggleReplyLike_SelfLikeDoesNotPublish(t *testing.T) {
+	repo := &fakeCommentRepo{
+		toggleReplyLikeResp: &commentrepo.LikeResult{
+			IsLiked: true, LikeCount: 2, RootID: 3, TargetUserID: 7,
+		},
+	}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.ToggleReplyLike("article", 12, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 一级评论被其他用户点赞时发布 comment_liked 事件，接收人为评论作者。
+func TestCommentService_ToggleLike_PublishesCommentLikedEvent(t *testing.T) {
+	repo := &fakeCommentRepo{
+		toggleLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 3, TargetUserID: 8, RootID: 5},
+	}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	resp, err := svc.ToggleLike("moment", 12, 7)
+
+	require.NoError(t, err)
+	assert.True(t, resp.IsLiked)
+	assert.Equal(t, uint8(commentrepo.TargetMoment), repo.toggleLikeTarget.Type)
+	assert.Equal(t, uint(12), repo.toggleLikeCommentID)
+	assert.Equal(t, uint(7), repo.toggleLikeUserID)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeCommentLiked, pub.events[0].Type)
+	assert.Equal(t, "comment", pub.events[0].SourceType)
+	assert.Equal(t, uint(12), pub.events[0].SourceID)
+	assert.Equal(t, "moment", pub.events[0].RootType)
+	assert.Equal(t, uint(5), pub.events[0].RootID)
+	require.NotNil(t, pub.events[0].ActorUserID)
+	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+}
+
+// 自己点赞自己的评论不产生通知事件。
+func TestCommentService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
+	repo := &fakeCommentRepo{
+		toggleLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 2, RootID: 5, TargetUserID: 7},
+	}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.ToggleLike("moment", 12, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 取消评论点赞时不发布通知事件。
+func TestCommentService_ToggleLike_DoesNotPublishOnUnlike(t *testing.T) {
+	repo := &fakeCommentRepo{
+		toggleLikeResp: &commentrepo.LikeResult{IsLiked: false, LikeCount: 1, TargetUserID: 8, RootID: 5},
+	}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.ToggleLike("moment", 12, 7)
+
+	require.NoError(t, err)
+	assert.Empty(t, pub.events)
+}
+
+// 精确匹配用户场景：A(1) 的碎语(10)，A(1) 自己评论(20)，C(2) 点赞 A 的评论。
+// comment_liked 的接收人通过 metadata 显式指定为评论作者(A)，与碎语作者无关。
+func TestCommentService_ToggleLike_SelfMomentSelfCommentOtherLike_Publishes(t *testing.T) {
+	repo := &fakeCommentRepo{
+		toggleLikeResp: &commentrepo.LikeResult{
+			IsLiked:      true,
+			LikeCount:    1,
+			TargetUserID: 1, // 评论作者 = A(1)
+			RootID:       10, // A(1) 的碎语
+		},
+	}
+	pub := &recordingPublisher{}
+	svc := commentservice.NewCommentService(repo, nil, pub)
+
+	_, err := svc.ToggleLike("moment", 20, 2) // C(2) 点赞
+
+	require.NoError(t, err)
+	require.Len(t, pub.events, 1)
+	assert.Equal(t, notificationservice.EventTypeCommentLiked, pub.events[0].Type)
+	assert.Equal(t, "moment", pub.events[0].RootType)
+	assert.Equal(t, uint(10), pub.events[0].RootID)
+	require.NotNil(t, pub.events[0].ActorUserID)
+	assert.Equal(t, uint(2), *pub.events[0].ActorUserID) // actor = C(2)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, `"recipient_user_ids":[1]`) // 接收人 = A(1)
 }

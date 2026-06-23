@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func (r *commentRepo) ensureCommentableTarget(target Target) error {
+func (r *commentRepo) ensureCommentableTarget(target Target) (uint, error) {
 	switch target.Type {
 	case TargetArticle:
 		return r.ensureArticleCommentable(target.ID)
@@ -16,26 +16,26 @@ func (r *commentRepo) ensureCommentableTarget(target Target) error {
 	case TargetGuestbook:
 		return r.ensureGuestbookOwner(target.ID)
 	default:
-		return ErrTargetNotFound
+		return 0, ErrTargetNotFound
 	}
 }
 
-func (r *commentRepo) ensureArticleCommentable(articleID uint) error {
+func (r *commentRepo) ensureArticleCommentable(articleID uint) (uint, error) {
 	var article model.Article
 	err := r.db.
-		Select("id", "comment_status").
+		Select("id", "comment_status", "user_id").
 		Where("id = ? AND status IN ?", articleID, readableArticleStatuses()).
 		First(&article).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return ErrTargetNotFound
+		return 0, ErrTargetNotFound
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if article.CommentStatus == 0 {
-		return ErrTargetCommentClosed
+		return 0, ErrTargetCommentClosed
 	}
-	return nil
+	return article.UserID, nil
 }
 
 func (r *commentRepo) ensureArticleReadable(articleID uint) error {
@@ -56,22 +56,22 @@ func readableArticleStatuses() []uint {
 	return []uint{1, 2}
 }
 
-func (r *commentRepo) ensureMomentCommentable(momentID uint) error {
+func (r *commentRepo) ensureMomentCommentable(momentID uint) (uint, error) {
 	var moment model.Moment
 	err := r.db.
-		Select("id", "comment_status").
+		Select("id", "comment_status", "user_id").
 		Where("id = ? AND status = ?", momentID, uint8(1)).
 		First(&moment).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return ErrTargetNotFound
+		return 0, ErrTargetNotFound
 	}
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if moment.CommentStatus == 0 {
-		return ErrTargetCommentClosed
+		return 0, ErrTargetCommentClosed
 	}
-	return nil
+	return moment.UserID, nil
 }
 
 func (r *commentRepo) ensureMomentReadable(momentID uint) error {
@@ -88,16 +88,16 @@ func (r *commentRepo) ensureMomentReadable(momentID uint) error {
 	return nil
 }
 
-func (r *commentRepo) ensureGuestbookOwner(ownerUserID uint) error {
+func (r *commentRepo) ensureGuestbookOwner(ownerUserID uint) (uint, error) {
 	var count int64
 	err := r.db.Model(&model.User{}).
 		Where("id = ? AND status = ?", ownerUserID, uint8(1)).
 		Count(&count).Error
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if count == 0 {
-		return ErrTargetNotFound
+		return 0, ErrTargetNotFound
 	}
-	return nil
+	return ownerUserID, nil
 }

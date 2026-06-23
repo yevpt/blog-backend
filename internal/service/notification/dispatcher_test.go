@@ -271,3 +271,42 @@ func TestDispatcher_RetriesEventOnRepoError(t *testing.T) {
 	assert.Empty(t, repo.doneIDs)
 	assert.True(t, repo.retryTimes[10].After(time.Now()))
 }
+
+// comment_liked 事件通过 metadata 显式接收人投递给评论作者，
+// 不依赖 OwnerOf(RootType, RootID) 解析碎语作者。
+// 验证"自己碎语 + 自己评论 + 他人点赞"场景：接收人=评论作者(A)，actor=点赞者(C)。
+func TestDispatcher_CommentLiked_DeliversToCommentAuthorViaMetadata(t *testing.T) {
+	actor := uint(2)                                   // C(2) 点赞
+	metadata := `{"recipient_user_ids":[1]}`           // 接收人 = A(1)，评论作者
+	metaPtr := metadata
+	event := model.NotificationEvent{
+		Base:         model.Base{ID: 30},
+		Type:         notificationservice.EventTypeCommentLiked,
+		ActorUserID:  &actor,
+		RootType:     "moment",
+		RootID:       10, // A(1) 的碎语
+		MetadataJSON: &metaPtr,
+	}
+	repo := newDispatchRepo(event)
+	// 用 DefaultRecipientResolver + 会报错的 OwnerLookup：如果走了 OwnerOf 路径测试会失败，
+	// 从而证明 metadata 接收人优先生效。
+	d := notificationservice.NewDispatcher(
+		repo,
+		notificationservice.NewRecipientResolver(erroringOwnerLookup{}),
+		bothEnabled(),
+		fixedDirectory{},
+	)
+
+	n, err := d.DispatchOnce(context.Background(), "worker-1", 10)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	assert.Contains(t, repo.inboxKeys, keyOf(1, 30)) // A(1) 收到 inbox
+}
+
+// erroringOwnerLookup 在被调用时返回错误，用于验证 metadata 接收人优先时 OwnerOf 不被调用。
+type erroringOwnerLookup struct{}
+
+func (erroringOwnerLookup) OwnerOf(context.Context, string, uint) (uint, bool, error) {
+	return 0, false, errors.New("OwnerOf should not be called when metadata has explicit recipients")
+}

@@ -17,7 +17,9 @@ import (
 // 事件类型，发布时据此校验合法性。
 const (
 	EventTypeCommentCreated   = "comment_created"   // 评论
+	EventTypeCommentLiked     = "comment_liked"     // 评论点赞
 	EventTypeReplyCreated     = "reply_created"     // 回复
+	EventTypeReplyLiked       = "reply_liked"       // 回复点赞
 	EventTypeArticleLiked     = "article_liked"     // 文章点赞
 	EventTypeMomentLiked      = "moment_liked"      // 碎语点赞
 	EventTypeGuestbookCreated = "guestbook_created" // 留言
@@ -42,7 +44,9 @@ var (
 // allowedEventTypes 是允许发布的事件类型集合。
 var allowedEventTypes = map[string]struct{}{
 	EventTypeCommentCreated:   {},
+	EventTypeCommentLiked:     {},
 	EventTypeReplyCreated:     {},
+	EventTypeReplyLiked:       {},
 	EventTypeArticleLiked:     {},
 	EventTypeMomentLiked:      {},
 	EventTypeGuestbookCreated: {},

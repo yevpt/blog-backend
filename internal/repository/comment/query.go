@@ -40,7 +40,8 @@ func (r *commentRepo) ensureTargetReadable(target Target) error {
 	case TargetMoment:
 		return r.ensureMomentReadable(target.ID)
 	case TargetGuestbook:
-		return r.ensureGuestbookOwner(target.ID)
+		_, err := r.ensureGuestbookOwner(target.ID)
+		return err
 	default:
 		return ErrTargetNotFound
 	}

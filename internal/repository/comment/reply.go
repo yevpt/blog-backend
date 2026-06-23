@@ -28,7 +28,7 @@ func (r *commentRepo) Reply(data ReplyData) (*ReplyAggregate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.replyAggregate(data.Target, *reply)
+	return r.replyAggregate(data.Target, *reply, comment.TargetID)
 }
 
 func (r *commentRepo) replyToUserID(data ReplyData, comment *CommentRecord) (uint, error) {
@@ -150,7 +150,7 @@ func (r *commentRepo) attachReplyRelations(target Target, replies []ReplyRecord,
 	return aggregates, nil
 }
 
-func (r *commentRepo) replyAggregate(target Target, reply ReplyRecord) (*ReplyAggregate, error) {
+func (r *commentRepo) replyAggregate(target Target, reply ReplyRecord, targetID uint) (*ReplyAggregate, error) {
 	userMap, err := r.usersByID([]uint{reply.FromUserID, reply.ToUserID})
 	if err != nil {
 		return nil, err
@@ -165,6 +165,7 @@ func (r *commentRepo) replyAggregate(target Target, reply ReplyRecord) (*ReplyAg
 		ToUser:    userMap[reply.ToUserID],
 		LikeCount: likeCounts[reply.ID],
 		IsLiked:   false,
+		TargetID:  targetID,
 	}, nil
 }
 

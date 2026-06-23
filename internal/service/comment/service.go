@@ -75,7 +75,7 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 		return nil, mapRepoError(err)
 	}
 	// 回复落库成功后发布通知事件，接收人为被回复人。
-	s.notifyReplyCreated(targetType, commentID, aggregate)
+	s.notifyReplyCreated(targetType, aggregate)
 	return replyToDTO(*aggregate, s.objectURLResolver), nil
 }
 
@@ -88,6 +88,10 @@ func (s *commentService) ToggleLike(targetType string, commentID uint, userID ui
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
+	// 仅在本次为点赞时发布通知事件，接收人为评论作者；点赞仅站内通知。
+	if result.IsLiked {
+		s.notifyCommentLiked(targetType, commentID, result, userID)
+	}
 	return &dto.CommentLikeResp{IsLiked: result.IsLiked, LikeCount: result.LikeCount}, nil
 }
 
@@ -99,6 +103,9 @@ func (s *commentService) ToggleReplyLike(targetType string, replyID uint, userID
 	result, err := s.repo.ToggleReplyLike(commentrepo.Target{Type: target.Type}, replyID, userID)
 	if err != nil {
 		return nil, mapRepoError(err)
+	}
+	if result.IsLiked {
+		s.notifyReplyLiked(targetType, replyID, result, userID)
 	}
 	return &dto.CommentLikeResp{IsLiked: result.IsLiked, LikeCount: result.LikeCount}, nil
 }
