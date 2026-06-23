@@ -1694,21 +1694,22 @@ definitions:
         description: ReplyCount 来源对象当前回复数；评论/留言统计其下回复，回复统计对其的跟评数。
         example: 2
         type: integer
-      root_excerpt:
-        description: RootExcerpt 文章正文摘录，仅 root_type=article 且无评论/回复内容时填充。
-        type: string
+      root_deleted:
+        description: RootDeleted 根对象当前是否已删除或不存在。
+        example: false
+        type: boolean
       root_id:
         description: RootID 根对象 ID。
         example: 12
         type: integer
-      root_title:
-        description: RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。
-        example: 我的第一篇文章
-        type: string
       root_type:
         description: RootType 根对象类型，如 moment。
         example: moment
         type: string
+      source_deleted:
+        description: SourceDeleted 来源对象当前是否已删除或不存在。
+        example: false
+        type: boolean
       source_id:
         description: SourceID 直接对象 ID。
         example: 99

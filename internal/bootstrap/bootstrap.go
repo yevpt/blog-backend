@@ -102,6 +102,9 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 	// 共享 HTTP 侧的 SSE hub，分发写入收件箱后实时推送在线用户。
 	if hub != nil {
 		dispatcher.SetInboxNotifier(hub)
+		zapLogger.Info("通知 SSE 已接入 dispatcher")
+	} else {
+		zapLogger.Warn("通知 SSE hub 未注入，在线推送不可用")
 	}
 	quota := notificationservice.NewQuotaService(repo, notificationservice.QuotaConfig{
 		SiteDailySafeLimit: cfg.Email.SiteDailySafeLimit,

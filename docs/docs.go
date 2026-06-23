@@ -8360,24 +8360,25 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 2
                 },
-                "root_excerpt": {
-                    "description": "RootExcerpt 文章正文摘录，仅 root_type=article 且无评论/回复内容时填充。",
-                    "type": "string"
+                "root_deleted": {
+                    "description": "RootDeleted 根对象当前是否已删除或不存在。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "root_id": {
                     "description": "RootID 根对象 ID。",
                     "type": "integer",
                     "example": 12
                 },
-                "root_title": {
-                    "description": "RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。",
-                    "type": "string",
-                    "example": "我的第一篇文章"
-                },
                 "root_type": {
                     "description": "RootType 根对象类型，如 moment。",
                     "type": "string",
                     "example": "moment"
+                },
+                "source_deleted": {
+                    "description": "SourceDeleted 来源对象当前是否已删除或不存在。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "source_id": {
                     "description": "SourceID 直接对象 ID。",
