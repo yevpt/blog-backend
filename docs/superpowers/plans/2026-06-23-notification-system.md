@@ -995,7 +995,7 @@ git commit -m "feat(notification): 迁移旧消息数据"
 
 - All touched files
 
-- [ ] **Step 1: Run focused package tests**
+- [x] **Step 1: Run focused package tests**
 
 Run:
 
@@ -1009,7 +1009,7 @@ go test ./pkg/email ./pkg/config -count=1
 
 Expected: PASS.
 
-- [ ] **Step 2: Run related business tests**
+- [x] **Step 2: Run related business tests**
 
 Run:
 
@@ -1020,7 +1020,7 @@ go test ./internal/handler/comment ./internal/handler/article ./internal/handler
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full test suite**
+- [x] **Step 3: Run full test suite**
 
 Run:
 
@@ -1030,7 +1030,7 @@ go test ./...
 
 Expected: PASS.
 
-- [ ] **Step 4: Swagger verification**
+- [x] **Step 4: Swagger verification**
 
 Run:
 
@@ -1055,7 +1055,7 @@ Run server locally and verify:
 8. SSE sends event when A is online.
 ```
 
-- [ ] **Step 6: Final commit**
+- [x] **Step 6: Final commit**
 
 ```bash
 git add .
