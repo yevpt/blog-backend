@@ -307,6 +307,48 @@ func TestMomentRepository_ToggleLike_CreatesLike(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestMomentRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint8(1), uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风", 1, 1, 0, false))
+	mock.ExpectQuery("SELECT \\* FROM `user_like`").
+		WithArgs(uint(9), uint(7), momentrepo.MomentLikeType, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "target_id", "type",
+		}).AddRow(12, now, now, nil, 7, 9, momentrepo.MomentLikeType))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE `user_like`.`id` = \\?").
+		WithArgs(uint(12)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), uint8(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风", 1, 1, 0, false))
+	expectEmptyRelations(mock, now, uint(9), uint(1))
+	mock.ExpectQuery("SELECT `target_id` FROM `user_like`").
+		WithArgs(momentrepo.MomentLikeType, uint(7), uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{"target_id"}))
+
+	resp, liked, err := repo.ToggleLike(9, 7)
+
+	require.NoError(t, err)
+	assert.False(t, liked)
+	assert.False(t, resp.IsLiked)
+	assert.Equal(t, int64(0), resp.LikeCount)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func ptrUint(v uint) *uint {
 	return &v
 }

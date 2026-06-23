@@ -48,13 +48,8 @@ func (r *guestbookRepo) ToggleLike(id uint, userID uint) (*LikeResult, error) {
 		if err != nil {
 			return err
 		}
-		if like.DeletedAt.Valid {
-			liked = true
-			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
-		}
-
 		liked = false
-		return tx.Delete(&like).Error
+		return tx.Unscoped().Delete(&like).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrGuestbookNotFound
@@ -67,7 +62,7 @@ func (r *guestbookRepo) ToggleLike(id uint, userID uint) (*LikeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &LikeResult{ID: id, IsLiked: liked, LikeCount: count, OwnerUserID: message.OwnerUserID}, nil
+	return &LikeResult{ID: id, IsLiked: liked, LikeCount: count, OwnerUserID: message.OwnerUserID, Content: message.Content}, nil
 }
 
 func (r *guestbookRepo) Delete(id uint, userID uint, force bool) (*model.Guestbook, error) {

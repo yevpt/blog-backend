@@ -16,9 +16,17 @@ func (r *commentRepo) ToggleLike(target Target, commentID uint, userID uint) (*L
 	if err != nil {
 		return nil, err
 	}
-	// 填充评论作者与根对象 ID，供通知层发布 comment_liked 事件使用。
+	// 填充评论作者、根对象 ID 与评论正文，供通知层发布 comment_liked 事件使用。
 	result.RootID = comment.TargetID
 	result.TargetUserID = comment.UserID
+	result.TargetContent = comment.Content
+	if result.IsLiked {
+		rootSnapshot, err := r.rootSnapshot(Target{Type: target.Type, ID: comment.TargetID})
+		if err != nil {
+			return nil, err
+		}
+		result.RootSnapshot = rootSnapshot
+	}
 	return result, nil
 }
 
@@ -27,12 +35,23 @@ func (r *commentRepo) ToggleReplyLike(target Target, replyID uint, userID uint) 
 	if err != nil {
 		return nil, err
 	}
+	comment, err := r.findCommentByID(target.Type, reply.CommentID)
+	if err != nil {
+		return nil, err
+	}
 	result, err := r.toggleLike(replyLikeType(target.Type), replyID, userID)
 	if err != nil {
 		return nil, err
 	}
-	result.RootID = reply.CommentID
+	rootID, rootSnapshot, err := r.replyRootSnapshot(target.Type, comment)
+	if err != nil {
+		return nil, err
+	}
+	result.RootID = rootID
+	result.CommentID = reply.CommentID
 	result.TargetUserID = reply.FromUserID
+	result.TargetContent = reply.Content
+	result.RootSnapshot = rootSnapshot
 	return result, nil
 }
 
@@ -50,13 +69,8 @@ func (r *commentRepo) toggleLike(likeType uint8, targetID uint, userID uint) (*L
 		if err != nil {
 			return err
 		}
-		if like.DeletedAt.Valid {
-			liked = true
-			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
-		}
-
 		liked = false
-		return tx.Delete(&like).Error
+		return tx.Unscoped().Delete(&like).Error
 	})
 	if err != nil {
 		return nil, err

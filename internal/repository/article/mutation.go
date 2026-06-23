@@ -224,13 +224,8 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 		if err != nil {
 			return err
 		}
-		if like.DeletedAt.Valid {
-			liked = true
-			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
-		}
-
 		liked = false
-		return tx.Delete(&like).Error
+		return tx.Unscoped().Delete(&like).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, nil

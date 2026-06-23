@@ -106,6 +106,39 @@ func TestGuestbookRepository_ToggleLike_CreatesLike(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestGuestbookRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
+	db, mock, sqlDB := newGuestbookMockDB(t)
+	defer sqlDB.Close()
+	repo := guestbookrepo.NewGuestbookRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `guestbook`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "owner_user_id", "from_user_id", "content",
+		}).AddRow(9, now, now, nil, 1, 8, "你好"))
+	mock.ExpectQuery("SELECT \\* FROM `user_like`").
+		WithArgs(uint(9), uint(7), guestbookrepo.LikeType, 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "target_id", "type",
+		}).AddRow(12, now, now, nil, 7, 9, guestbookrepo.LikeType))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE `user_like`.`id` = \\?").
+		WithArgs(uint(12)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user_like`").
+		WithArgs(uint(9), guestbookrepo.LikeType).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	resp, err := repo.ToggleLike(9, 7)
+
+	require.NoError(t, err)
+	assert.False(t, resp.IsLiked)
+	assert.Equal(t, int64(0), resp.LikeCount)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestGuestbookRepository_Delete_AllowsOwnerUser(t *testing.T) {
 	db, mock, sqlDB := newGuestbookMockDB(t)
 	defer sqlDB.Close()

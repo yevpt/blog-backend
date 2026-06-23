@@ -44,6 +44,7 @@ type LikeResult struct {
 	IsLiked     bool
 	LikeCount   int64
 	OwnerUserID uint
+	Content     string
 }
 
 // GuestbookRepository 留言板数据访问接口。

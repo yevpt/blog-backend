@@ -190,13 +190,8 @@ func (r *momentRepo) ToggleLike(id uint, userID uint) (*MomentAggregate, bool, e
 		if err != nil {
 			return err
 		}
-		if like.DeletedAt.Valid {
-			liked = true
-			return tx.Unscoped().Model(&like).Update("deleted_at", nil).Error
-		}
-
 		liked = false
-		return tx.Delete(&like).Error
+		return tx.Unscoped().Delete(&like).Error
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, false, ErrMomentNotFound

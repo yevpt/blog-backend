@@ -529,6 +529,81 @@ func TestArticleRepository_ToggleLike_CreatesLike(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestArticleRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(1), uint(2), uint(7), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+	mock.ExpectQuery("SELECT \\* FROM `user_like`").
+		WithArgs(uint(7), uint(1), uint8(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "target_id", "type",
+		}).AddRow(12, now, now, nil, 1, 7, article.ArticleLikeType))
+	mock.ExpectExec("DELETE FROM `user_like` WHERE `user_like`.`id` = \\?").
+		WithArgs(uint(12)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(7), uint(1), uint(2), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
+		WithArgs(uint8(1), uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}))
+	mock.ExpectQuery("SELECT article_id, count\\(\\*\\) as count FROM `article_comment`").
+		WithArgs(uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"article_id", "count"}))
+	mock.ExpectQuery("SELECT \\* FROM `article_recommend`").
+		WithArgs(uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "article_id", "seq",
+		}))
+	mock.ExpectQuery("SELECT article_category.article_id, category.\\* FROM `article_category` JOIN category ON category.id = article_category.category_id AND category.deleted_at IS NULL").
+		WithArgs(uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"article_id", "id", "created_at", "updated_at", "deleted_at", "parent_id",
+			"name", "url", "icon", "description", "cover_img_url", "seq",
+		}))
+	mock.ExpectQuery("SELECT article_tag.article_id, tag.\\* FROM `article_tag` JOIN tag ON tag.id = article_tag.tag_id AND tag.deleted_at IS NULL").
+		WithArgs(uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"article_id", "id", "created_at", "updated_at", "deleted_at",
+			"name", "url", "icon", "description", "cover_img_url", "seq",
+		}))
+	mock.ExpectQuery("SELECT article_music.article_id, music.\\* FROM `article_music` JOIN music ON music.id = article_music.music_id AND music.deleted_at IS NULL").
+		WithArgs(uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
+			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"lyric", "duration", "seq",
+		}))
+	expectArticleUsers(mock, 2)
+	mock.ExpectQuery("SELECT `target_id` FROM `user_like`").
+		WithArgs(uint8(1), uint(1), uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"target_id"}))
+
+	detail, liked, err := repo.ToggleLike(7, 1)
+
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	assert.False(t, liked)
+	assert.False(t, detail.IsLiked)
+	assert.Equal(t, int64(0), detail.LikeCount)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()

@@ -10,6 +10,10 @@ func (r *commentRepo) Create(target Target, userID uint, content string) (*Comme
 	if err != nil {
 		return nil, err
 	}
+	rootSnapshot, err := r.rootSnapshot(target)
+	if err != nil {
+		return nil, err
+	}
 
 	// 评论落库；通知改由 service 层发布 notification_event，不再在仓储写旧 message。
 	comment, err := r.createCommentRecord(target, userID, content)
@@ -21,12 +25,13 @@ func (r *commentRepo) Create(target Target, userID uint, content string) (*Comme
 		return nil, err
 	}
 	return &CommentAggregate{
-		Comment:     *comment,
-		User:        userMap[userID],
-		ReplyCount:  0,
-		LikeCount:   0,
-		IsLiked:     false,
-		OwnerUserID: ownerUserID,
+		Comment:      *comment,
+		User:         userMap[userID],
+		ReplyCount:   0,
+		LikeCount:    0,
+		IsLiked:      false,
+		OwnerUserID:  ownerUserID,
+		RootSnapshot: rootSnapshot,
 	}, nil
 }
 

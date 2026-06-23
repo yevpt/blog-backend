@@ -36,7 +36,11 @@ func (r *commentRepo) Reply(data ReplyData) (*ReplyAggregate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.replyAggregate(data.Target, *reply, comment.TargetID, quotedContent)
+	rootID, rootSnapshot, err := r.replyRootSnapshot(data.Target.Type, comment)
+	if err != nil {
+		return nil, err
+	}
+	return r.replyAggregate(data.Target, *reply, rootID, quotedContent, rootSnapshot)
 }
 
 func (r *commentRepo) replyToUserID(data ReplyData, comment *CommentRecord) (uint, error) {
@@ -158,7 +162,7 @@ func (r *commentRepo) attachReplyRelations(target Target, replies []ReplyRecord,
 	return aggregates, nil
 }
 
-func (r *commentRepo) replyAggregate(target Target, reply ReplyRecord, targetID uint, quotedContent string) (*ReplyAggregate, error) {
+func (r *commentRepo) replyAggregate(target Target, reply ReplyRecord, targetID uint, quotedContent string, rootSnapshot RootSnapshot) (*ReplyAggregate, error) {
 	userMap, err := r.usersByID([]uint{reply.FromUserID, reply.ToUserID})
 	if err != nil {
 		return nil, err
@@ -175,7 +179,23 @@ func (r *commentRepo) replyAggregate(target Target, reply ReplyRecord, targetID 
 		IsLiked:       false,
 		TargetID:      targetID,
 		QuotedContent: quotedContent,
+		RootSnapshot:  rootSnapshot,
 	}, nil
+}
+
+func (r *commentRepo) replyRootSnapshot(commentType uint8, comment *CommentRecord) (uint, RootSnapshot, error) {
+	if commentType == TargetGuestbook {
+		return comment.ID, RootSnapshot{
+			Type:    "guestbook",
+			ID:      comment.ID,
+			Excerpt: comment.Content,
+		}, nil
+	}
+	rootSnapshot, err := r.rootSnapshot(Target{Type: commentType, ID: comment.TargetID})
+	if err != nil {
+		return 0, RootSnapshot{}, err
+	}
+	return comment.TargetID, rootSnapshot, nil
 }
 
 func (r *commentRepo) createReplyRecord(commentType uint8, record ReplyRecord) (*ReplyRecord, error) {

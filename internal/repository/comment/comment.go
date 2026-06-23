@@ -60,12 +60,13 @@ type CommentRecord struct {
 
 // CommentAggregate 一级评论及其用户、回复数量、点赞信息聚合，供 service 转换为 DTO。
 type CommentAggregate struct {
-	Comment     CommentRecord
-	User        *model.User
-	ReplyCount  int64
-	LikeCount   int64
-	IsLiked     bool
-	OwnerUserID uint
+	Comment      CommentRecord
+	User         *model.User
+	ReplyCount   int64
+	LikeCount    int64
+	IsLiked      bool
+	OwnerUserID  uint
+	RootSnapshot RootSnapshot
 }
 
 // ReplyRecord 统一的评论回复记录，屏蔽三张回复表差异。
@@ -82,13 +83,14 @@ type ReplyRecord struct {
 
 // ReplyAggregate 回复及其双方用户聚合，供 service 转换为 DTO。
 type ReplyAggregate struct {
-	Reply          ReplyRecord
-	FromUser       *model.User
-	ToUser         *model.User
-	LikeCount      int64
-	IsLiked        bool
-	TargetID       uint
-	QuotedContent  string // 被回复的评论/回复正文，供通知引用展示
+	Reply         ReplyRecord
+	FromUser      *model.User
+	ToUser        *model.User
+	LikeCount     int64
+	IsLiked       bool
+	TargetID      uint
+	QuotedContent string // 被回复的评论/回复正文，供通知引用展示
+	RootSnapshot  RootSnapshot
 }
 
 // PageResult 评论分页查询结果，保持 repository 不返回 dto。
@@ -109,10 +111,21 @@ type ReplyPageResult struct {
 
 // LikeResult 点赞切换结果。
 type LikeResult struct {
-	IsLiked      bool
-	LikeCount    int64
-	RootID       uint
-	TargetUserID uint
+	IsLiked       bool
+	LikeCount     int64
+	RootID        uint
+	CommentID     uint
+	TargetUserID  uint
+	TargetContent string // 被点赞评论正文，供 comment_liked 通知引用展示
+	RootSnapshot  RootSnapshot
+}
+
+// RootSnapshot 记录评论根对象的展示快照，供 service 写入通知 metadata。
+type RootSnapshot struct {
+	Type    string
+	ID      uint
+	Title   string
+	Excerpt string
 }
 
 // ReplyData 创建回复所需的数据。
