@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -112,4 +113,20 @@ func TestNewOAuthManager_RegistersEnabledSocialProviders(t *testing.T) {
 	manager := newOAuthManager(nil, cfg)
 
 	assert.Equal(t, []string{"baidu", "gitee", "github", "qq", "weibo"}, manager.Sources())
+}
+
+func TestRegisterAuthedRoutes_RegistersTempUpload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	jwtManager := jwt.NewManager("test-secret", 2, 24)
+
+	registerAuthedRoutes(r, routeHandlers{}, jwtManager, nil)
+
+	paths := make([]string, 0, len(r.Routes()))
+	for _, route := range r.Routes() {
+		if route.Method == http.MethodPost {
+			paths = append(paths, route.Path)
+		}
+	}
+	assert.True(t, slices.Contains(paths, "/uploads/temp"))
 }

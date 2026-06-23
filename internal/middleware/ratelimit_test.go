@@ -140,3 +140,51 @@ func TestRateLimitMomentUpload_BlocksByUserID(t *testing.T) {
 
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
+
+func TestRateLimitTempUpload_NormalUserBlockedAfterSoftLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rdb, mr := newTestRedis(t)
+	defer mr.Close()
+
+	r := gin.New()
+	r.POST("/uploads/temp", func(c *gin.Context) {
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 18, Status: 1, Roles: []string{}})
+	}, middleware.RateLimitTempUpload(rdb), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	for i := 0; i < 10; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/uploads/temp", nil)
+		req.RemoteAddr = "10.0.0.18:9999"
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	}
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/uploads/temp", nil)
+	req.RemoteAddr = "10.0.0.18:9999"
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+}
+
+func TestRateLimitTempUpload_AdminStillAllowedAtEleventhRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rdb, mr := newTestRedis(t)
+	defer mr.Close()
+
+	r := gin.New()
+	r.POST("/uploads/temp", func(c *gin.Context) {
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 21, Status: 1, Roles: []string{"ROLE_ADMIN"}})
+	}, middleware.RateLimitTempUpload(rdb), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	for i := 0; i < 11; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("POST", "/uploads/temp", nil)
+		req.RemoteAddr = "10.0.0.21:9999"
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code, "第 %d 次请求管理员应通过", i+1)
+	}
+}

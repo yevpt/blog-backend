@@ -19,6 +19,7 @@ import (
 	notificationhandler "github.com/vpt/blog-backend/internal/handler/notification"
 	oauthhandler "github.com/vpt/blog-backend/internal/handler/oauth"
 	taghandler "github.com/vpt/blog-backend/internal/handler/tag"
+	uploadhandler "github.com/vpt/blog-backend/internal/handler/upload"
 	userhandler "github.com/vpt/blog-backend/internal/handler/user"
 	"github.com/vpt/blog-backend/internal/middleware"
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
@@ -45,6 +46,7 @@ import (
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
 	tagservice "github.com/vpt/blog-backend/internal/service/tag"
+	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/config"
@@ -75,6 +77,7 @@ type routeHandlers struct {
 	category          *categoryhandler.CategoryHandler
 	tag               *taghandler.TagHandler
 	friendLink        *friendlinkhandler.FriendLinkHandler
+	upload            *uploadhandler.Handler
 	userCache         userservice.UserCacheService
 }
 
@@ -218,6 +221,7 @@ func newRouteHandlers(
 
 	momentRepo := momentrepo.NewMomentRepository(db)
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher)
+	uploadSvc := uploadservice.NewService(objectStore)
 
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
@@ -235,6 +239,7 @@ func newRouteHandlers(
 		category:          categoryhandler.NewCategoryHandler(categorySvc),
 		tag:               taghandler.NewTagHandler(tagSvc),
 		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
+		upload:            uploadhandler.NewHandler(uploadSvc),
 		userCache:         userCacheSvc,
 	}
 }
@@ -330,6 +335,7 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.GET("/users/me/oauth-bindings", handlers.oauth.ListBindings)
 	authed.GET("/oauth/bindings", handlers.oauth.ListBindings)
 	authed.DELETE("/oauth/bindings/:source", handlers.oauth.Unbind)
+	authed.POST("/uploads/temp", middleware.RateLimitTempUpload(redisClient), handlers.upload.TempImage)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
 	authed.POST("/articles/:id/comments", handlers.comment.CreateArticle)
