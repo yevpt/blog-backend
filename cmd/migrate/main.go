@@ -44,9 +44,8 @@ import (
 // ─────────────────────────────────────────────
 
 type migrateOptions struct {
-	force             bool
-	skipGarage        bool
-	onlyNotifications bool
+	force      bool
+	skipGarage bool
 }
 
 func main() {
@@ -56,12 +55,6 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("配置加载失败（请确保 config/config.local.yaml 存在）: %v", err)
-	}
-
-	// 仅通知迁移模式：只连目标库，建新表、种子、转换旧消息并删旧表，跳过源库与其余步骤。
-	if opts.onlyNotifications {
-		runNotificationsOnly(cfg, opts)
-		return
 	}
 
 	// 2. 连接源库（原始 blog 库，只读）
@@ -123,8 +116,6 @@ func main() {
 		{"Step 19: comment → article_comment/moment_comment/guestbook", migrateComments},
 		{"Step 20: comment_reply", migrateCommentReply},
 		{"Step 21: post_like → user_like", migrateUserLike},
-		{"Step 22: message", migrateMessage},
-		{"Step 23: user_messages → user_message", migrateUserMessage},
 	}
 
 	for _, step := range steps {
@@ -141,17 +132,17 @@ func main() {
 	}
 
 	// 种子默认邮件额度策略（幂等），让额度系统在新库即可生效。
-	log.Println("→ Step 23b: 种子邮件额度策略")
+	log.Println("→ Step 22: 种子邮件额度策略")
 	if err := seedNotificationPolicies(dst); err != nil {
 		log.Fatalf("  ✗ 种子额度策略失败: %v", err)
 	}
 	log.Printf("  ✓ 完成")
 
-	// 将旧 message/user_message 转换为 v2 通知事件与收件箱；目标表已有数据则跳过。
-	log.Println("→ Step 23c: 旧消息 → 通知事件/收件箱")
+	// 将源库旧消息转换为 v2 通知事件与收件箱；目标表已有数据则跳过。
+	log.Println("→ Step 23: 旧消息 → 通知事件/收件箱")
 	if !opts.force && hasData(dst, "notification_event") {
 		log.Printf("  跳过（notification_event 已有数据，使用 --force 强制重跑）")
-	} else if err := migrateNotifications(dst); err != nil {
+	} else if err := migrateNotifications(src, dst); err != nil {
 		log.Fatalf("  ✗ 通知数据迁移失败: %v", err)
 	} else {
 		log.Printf("  ✓ 完成")
@@ -226,8 +217,6 @@ func autoMigrate(db *gorm.DB) error {
 		&model.ArticleCommentReply{},
 		&model.MomentCommentReply{},
 		&model.GuestbookReply{},
-		&model.Message{},
-		&model.UserMessage{},
 		&model.NotificationEvent{},
 		&model.NotificationInbox{},
 		&model.NotificationPreference{},
@@ -252,91 +241,8 @@ func parseMigrateFlags() migrateOptions {
 	opts := migrateOptions{}
 	flag.BoolVar(&opts.force, "force", false, "强制重跑已有数据的迁移步骤")
 	flag.BoolVar(&opts.skipGarage, "skip-garage", false, "跳过 Garage 对象复制和路径更新")
-	flag.BoolVar(&opts.onlyNotifications, "only-notifications", false, "仅在目标库执行通知迁移：建新表、种子额度、转换旧消息并删除 message/user_message")
 	flag.Parse()
 	return opts
-}
-
-// runNotificationsOnly 仅对目标库执行通知系统迁移，不连接源库、不跑 Garage/defrag 等步骤。
-//
-// 适用于「当前 Go 库已迁移过、仅需补建并回填 v2 通知」的场景：
-//  1. 建通知相关新表（已存在则无操作）；
-//  2. 种子默认邮件额度与角色额度策略；
-//  3. 把现有 message/user_message 转换为 notification_event/notification_inbox（notification_event 已有数据则跳过，--force 强制）；
-//  4. 删除当前库的 message/user_message（原始数据仍在源库）。
-func runNotificationsOnly(cfg *config.Config, opts migrateOptions) {
-	dst, err := database.NewMySQL(&cfg.DB)
-	if err != nil {
-		log.Fatalf("目标库连接失败: %v", err)
-	}
-	log.Printf("✓ 目标库连接成功（%s/%s）", cfg.DB.Host, cfg.DB.Name)
-
-	log.Println("→ AutoMigrate 通知相关表...")
-	if err := autoMigrateNotifications(dst); err != nil {
-		log.Fatalf("AutoMigrate 失败: %v", err)
-	}
-	log.Println("✓ 建表完成")
-
-	log.Println("→ 种子邮件额度策略")
-	if err := seedNotificationPolicies(dst); err != nil {
-		log.Fatalf("  ✗ 种子额度策略失败: %v", err)
-	}
-	log.Println("  ✓ 完成")
-
-	log.Println("→ 旧消息 → 通知事件/收件箱")
-	if !opts.force && hasData(dst, "notification_event") {
-		log.Println("  跳过（notification_event 已有数据，使用 --force 强制重跑）")
-	} else if err := migrateNotifications(dst); err != nil {
-		log.Fatalf("  ✗ 通知迁移失败: %v", err)
-	} else {
-		log.Println("  ✓ 完成")
-	}
-
-	log.Println("→ 校验数量")
-	logNotificationCounts(dst)
-
-	log.Println("→ 删除旧 message/user_message")
-	if err := dst.Exec("DROP TABLE IF EXISTS `user_message`, `message`").Error; err != nil {
-		log.Fatalf("  ✗ 删除旧消息表失败: %v", err)
-	}
-	log.Println("  ✓ 完成")
-
-	log.Println("\n✓ 通知迁移完成")
-}
-
-// autoMigrateNotifications 只建通知系统相关表，不影响其它业务表。
-func autoMigrateNotifications(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&model.NotificationEvent{},
-		&model.NotificationInbox{},
-		&model.NotificationPreference{},
-		&model.NotificationEmailTask{},
-		&model.NotificationEmailBatch{},
-		&model.NotificationEmailBatchItem{},
-		&model.EmailQuotaPolicy{},
-		&model.EmailRoleQuotaPolicy{},
-		&model.EmailQuotaUsage{},
-		&model.EmailSendLog{},
-	)
-}
-
-// logNotificationCounts 打印迁移前后的数量对比，便于核对。
-func logNotificationCounts(db *gorm.DB) {
-	count := func(table, where string) int64 {
-		var n int64
-		q := db.Table(table)
-		if where != "" {
-			q = q.Where(where)
-		}
-		q.Count(&n)
-		return n
-	}
-	log.Printf("  events=%d inbox=%d old_unread=%d new_unread=%d",
-		count("notification_event", ""),
-		count("notification_inbox", ""),
-		count("user_message", "is_read = 0"),
-		count("notification_inbox", "is_read = 0"),
-	)
 }
 
 func normalizeMomentMediaSchema(db *gorm.DB) error {
@@ -423,8 +329,6 @@ func targetTableForStep(name string) string {
 		"Step 19": "article_comment",
 		"Step 20": "article_comment_reply",
 		"Step 21": "user_like",
-		"Step 22": "message",
-		"Step 23": "user_message",
 		// Step 24 无独立目标表，每次都执行，不纳入幂等检查
 	}
 	prefix := name[:7] // "Step XX"
@@ -2274,109 +2178,15 @@ func replyLikeTypeFromLegacy(commentType uint8) uint8 {
 }
 
 func dropLegacyTables(dst *gorm.DB) error {
-	// message/user_message 已在 Step 23c 转换为 v2 通知事件/收件箱，原始数据仍保留在源库，
-	// 此处直接删除当前库的旧消息表，使目标库只保留 v2 通知模型。
+	// 清理历史迁移可能遗留的旧表；本脚本已不再向 message/user_message 写入数据。
 	return dst.Exec("DROP TABLE IF EXISTS `comment_reply`, `media`, `user_message`, `message`").Error
 }
 
 // ─────────────────────────────────────────────
-// Step 22: message → message
-// ─────────────────────────────────────────────
-// 丢弃的字段：from_role（角色信息通过 user_role 表查询，不在 message 里冗余存储）
-// from_id → from_user_id
-// post_id → article_id
-
-func migrateMessage(src *sql.DB, dst *gorm.DB) error {
-	rows, err := src.Query(`
-		SELECT ID, title, content, type, type_id, from_id, post_id, comment_id, date_create
-		FROM message ORDER BY ID`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var (
-			id         uint
-			title      sql.NullString
-			content    sql.NullString
-			mtype      sql.NullString
-			typeID     uint
-			fromID     uint
-			postID     sql.NullInt64
-			commentID  sql.NullInt64
-			dateCreate sql.NullTime
-		)
-		if err := rows.Scan(&id, &title, &content, &mtype, &typeID, &fromID,
-			&postID, &commentID, &dateCreate); err != nil {
-			return err
-		}
-
-		m := model.Message{
-			Base:       migrationBase(id, dateCreate, sql.NullTime{}),
-			Title:      nullStr(title),
-			Content:    nullStr(content),
-			Type:       mtype.String,
-			TypeID:     typeID,
-			FromUserID: fromID,
-			ArticleID:  nullUint(postID),
-			CommentID:  nullUint(commentID),
-		}
-		if err := dst.Create(&m).Error; err != nil {
-			return fmt.Errorf("insert message id=%d: %w", id, err)
-		}
-	}
-	return rows.Err()
-}
-
-// ─────────────────────────────────────────────
-// Step 23: user_messages → user_message
-// ─────────────────────────────────────────────
-// 注意：源库存在大量攻击残留的孤儿记录（message_id 对应的 message 不存在），
-// 此处直接通过 JOIN message 过滤，避免先插入海量无效数据再清理导致连接超时。
-// read_status varchar '01'=已读，'00'=未读 → is_read bool
-
-func migrateUserMessage(src *sql.DB, dst *gorm.DB) error {
-	rows, err := src.Query(`
-		SELECT um.ID, um.user_id, um.message_id, um.read_status, um.date_create
-		FROM user_messages um
-		JOIN message m ON m.ID = um.message_id
-		ORDER BY um.ID`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var (
-			id         uint
-			userID     uint
-			messageID  uint
-			readStatus sql.NullString
-			dateCreate sql.NullTime
-		)
-		if err := rows.Scan(&id, &userID, &messageID, &readStatus, &dateCreate); err != nil {
-			return err
-		}
-
-		um := model.UserMessage{
-			Base:      migrationBase(id, dateCreate, sql.NullTime{}),
-			UserID:    userID,
-			MessageID: messageID,
-			IsRead:    readStatus.Valid && readStatus.String == "01",
-		}
-		if err := dst.Create(&um).Error; err != nil {
-			return fmt.Errorf("insert user_message id=%d: %w", id, err)
-		}
-	}
-	return rows.Err()
-}
-
-// ─────────────────────────────────────────────
-// Step 24: 完整性清理（孤儿记录）
+// Step 25: 完整性清理（孤儿记录）
 // ─────────────────────────────────────────────
 // 源库中有两类垃圾数据：
-//   1. 攻击残留：大量 user_message 记录的 message_id 指向不存在的 message（攻击者伪造消息通知）
+//   1. 新版通知回填后的冗余关系：收件箱、邮件任务、批次、额度用量可能引用不存在的用户或事件
 //   2. 历史软删除产生的悬空关联：文章/用户被删除后，对应的关联表记录未同步清理
 //
 // 此步骤在所有数据迁移完成后执行，清理目标库中所有无父记录的孤儿行。
@@ -2389,35 +2199,269 @@ func cleanOrphans(dst *gorm.DB) error {
 	}
 
 	cleanups := []cleanup{
-		// 攻击残留：大量 user_message.message_id 指向不存在的 message
 		{
-			"user_message 孤儿（message_id 无对应 message）",
-			"DELETE FROM user_message WHERE message_id NOT IN (SELECT id FROM message)",
+			"article_recommend 孤儿（article 已删除）",
+			"DELETE FROM article_recommend WHERE article_id NOT IN (SELECT id FROM article)",
 		},
-		// 文章被删除后，点赞记录中仍有对该文章的引用
+		{
+			"user_like 孤儿（user 已删除）",
+			"DELETE FROM user_like WHERE user_id NOT IN (SELECT id FROM user)",
+		},
 		{
 			"user_like 孤儿（文章点赞，article 已删除）",
 			"DELETE FROM user_like WHERE type=1 AND target_id NOT IN (SELECT id FROM article)",
 		},
-		// 文章被删除后，标签关联记录未清理
+		{
+			"user_like 孤儿（文章评论点赞，article_comment 已删除）",
+			"DELETE FROM user_like WHERE type=2 AND target_id NOT IN (SELECT id FROM article_comment)",
+		},
+		{
+			"user_like 孤儿（文章回复点赞，article_comment_reply 已删除）",
+			"DELETE FROM user_like WHERE type=3 AND target_id NOT IN (SELECT id FROM article_comment_reply)",
+		},
+		{
+			"user_like 孤儿（碎语点赞，moment 已删除）",
+			"DELETE FROM user_like WHERE type=4 AND target_id NOT IN (SELECT id FROM moment)",
+		},
+		{
+			"user_like 孤儿（留言点赞，guestbook 已删除）",
+			"DELETE FROM user_like WHERE type=5 AND target_id NOT IN (SELECT id FROM guestbook)",
+		},
+		{
+			"user_like 孤儿（碎语评论点赞，moment_comment 已删除）",
+			"DELETE FROM user_like WHERE type=6 AND target_id NOT IN (SELECT id FROM moment_comment)",
+		},
+		{
+			"user_like 孤儿（碎语回复点赞，moment_comment_reply 已删除）",
+			"DELETE FROM user_like WHERE type=7 AND target_id NOT IN (SELECT id FROM moment_comment_reply)",
+		},
+		{
+			"user_like 孤儿（留言回复点赞，guestbook_reply 已删除）",
+			"DELETE FROM user_like WHERE type=8 AND target_id NOT IN (SELECT id FROM guestbook_reply)",
+		},
 		{
 			"article_tag 孤儿（article 已删除）",
 			"DELETE FROM article_tag WHERE article_id NOT IN (SELECT id FROM article)",
 		},
-		// 文章被删除后，分类关联记录未清理
+		{
+			"article_tag 孤儿（tag 已删除）",
+			"DELETE FROM article_tag WHERE tag_id NOT IN (SELECT id FROM tag)",
+		},
 		{
 			"article_category 孤儿（article 已删除）",
 			"DELETE FROM article_category WHERE article_id NOT IN (SELECT id FROM article)",
 		},
-		// 用户被删除后，角色分配记录未清理
+		{
+			"article_category 孤儿（category 已删除）",
+			"DELETE FROM article_category WHERE category_id NOT IN (SELECT id FROM category)",
+		},
+		{
+			"article_music 孤儿（article 已删除）",
+			"DELETE FROM article_music WHERE article_id NOT IN (SELECT id FROM article)",
+		},
+		{
+			"article_music 孤儿（music 已删除）",
+			"DELETE FROM article_music WHERE music_id NOT IN (SELECT id FROM music)",
+		},
+		{
+			"user_meta 孤儿（user 已删除）",
+			"DELETE FROM user_meta WHERE user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"user_setting 孤儿（user 已删除）",
+			"DELETE FROM user_setting WHERE user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"user_social_link 孤儿（user 已删除）",
+			"DELETE FROM user_social_link WHERE user_id NOT IN (SELECT id FROM user)",
+		},
 		{
 			"user_role 孤儿（user 已删除）",
 			"DELETE FROM user_role WHERE user_id NOT IN (SELECT id FROM user)",
 		},
-		// 用户被删除后，第三方绑定记录未清理
+		{
+			"user_role 孤儿（role 已删除）",
+			"DELETE FROM user_role WHERE role_id NOT IN (SELECT id FROM role)",
+		},
+		{
+			"social_user_auth 孤儿（social_user 已删除）",
+			"DELETE FROM social_user_auth WHERE social_user_id NOT IN (SELECT id FROM social_user)",
+		},
 		{
 			"social_user_auth 孤儿（user 已删除）",
 			"DELETE FROM social_user_auth WHERE user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"category 冗余父级（parent_id 无对应 category，置空）",
+			"UPDATE category SET parent_id = NULL WHERE parent_id IS NOT NULL AND parent_id NOT IN (SELECT id FROM (SELECT id FROM category) AS valid_category)",
+		},
+		{
+			"moment_media 孤儿（moment 已删除）",
+			"DELETE FROM moment_media WHERE moment_id NOT IN (SELECT id FROM moment)",
+		},
+		{
+			"moment_media 孤儿（uploader 已删除）",
+			"DELETE FROM moment_media WHERE uploader_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"article_comment 孤儿（article 已删除）",
+			"DELETE FROM article_comment WHERE article_id NOT IN (SELECT id FROM article)",
+		},
+		{
+			"article_comment 孤儿（user 已删除）",
+			"DELETE FROM article_comment WHERE user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"moment_comment 孤儿（moment 已删除）",
+			"DELETE FROM moment_comment WHERE moment_id NOT IN (SELECT id FROM moment)",
+		},
+		{
+			"moment_comment 孤儿（user 已删除）",
+			"DELETE FROM moment_comment WHERE user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"guestbook 孤儿（owner_user 已删除）",
+			"DELETE FROM guestbook WHERE owner_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"guestbook 孤儿（from_user 已删除）",
+			"DELETE FROM guestbook WHERE from_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"article_comment_reply 孤儿（comment 已删除）",
+			"DELETE FROM article_comment_reply WHERE comment_id NOT IN (SELECT id FROM article_comment)",
+		},
+		{
+			"article_comment_reply 孤儿（to_user 已删除）",
+			"DELETE FROM article_comment_reply WHERE to_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"article_comment_reply 孤儿（from_user 已删除）",
+			"DELETE FROM article_comment_reply WHERE from_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"article_comment_reply 冗余父回复（parent_reply_id 已删除，置为顶层回复）",
+			"UPDATE article_comment_reply SET parent_reply_id = 0 WHERE parent_reply_id <> 0 AND parent_reply_id NOT IN (SELECT id FROM (SELECT id FROM article_comment_reply) AS valid_reply)",
+		},
+		{
+			"moment_comment_reply 孤儿（comment 已删除）",
+			"DELETE FROM moment_comment_reply WHERE comment_id NOT IN (SELECT id FROM moment_comment)",
+		},
+		{
+			"moment_comment_reply 孤儿（to_user 已删除）",
+			"DELETE FROM moment_comment_reply WHERE to_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"moment_comment_reply 孤儿（from_user 已删除）",
+			"DELETE FROM moment_comment_reply WHERE from_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"moment_comment_reply 冗余父回复（parent_reply_id 已删除，置为顶层回复）",
+			"UPDATE moment_comment_reply SET parent_reply_id = 0 WHERE parent_reply_id <> 0 AND parent_reply_id NOT IN (SELECT id FROM (SELECT id FROM moment_comment_reply) AS valid_reply)",
+		},
+		{
+			"guestbook_reply 孤儿（comment 已删除）",
+			"DELETE FROM guestbook_reply WHERE comment_id NOT IN (SELECT id FROM guestbook)",
+		},
+		{
+			"guestbook_reply 孤儿（to_user 已删除）",
+			"DELETE FROM guestbook_reply WHERE to_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"guestbook_reply 孤儿（from_user 已删除）",
+			"DELETE FROM guestbook_reply WHERE from_user_id NOT IN (SELECT id FROM user)",
+		},
+		{
+			"guestbook_reply 冗余父回复（parent_reply_id 已删除，置为顶层回复）",
+			"UPDATE guestbook_reply SET parent_reply_id = 0 WHERE parent_reply_id <> 0 AND parent_reply_id NOT IN (SELECT id FROM (SELECT id FROM guestbook_reply) AS valid_reply)",
+		},
+		{
+			"notification_event 孤儿（source article 已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'article' AND NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（source moment 已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'moment' AND NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（source guestbook 已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'guestbook' AND NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id)",
+		},
+		{
+			"notification_event 孤儿（article comment 事件对象已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'article' AND (NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM article WHERE article.id = notification_event.root_id))",
+		},
+		{
+			"notification_event 孤儿（moment comment 事件对象已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'moment' AND (NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM moment WHERE moment.id = notification_event.root_id))",
+		},
+		{
+			"notification_event 孤儿（guestbook comment 事件对象已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'comment' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_event.root_id))",
+		},
+		{
+			"notification_event 孤儿（article reply 事件对象已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'article' AND (NOT EXISTS (SELECT 1 FROM article_comment_reply WHERE article_comment_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM article_comment WHERE article_comment.id = notification_event.root_id))",
+		},
+		{
+			"notification_event 孤儿（moment reply 事件对象已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'moment' AND (NOT EXISTS (SELECT 1 FROM moment_comment_reply WHERE moment_comment_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM moment_comment WHERE moment_comment.id = notification_event.root_id))",
+		},
+		{
+			"notification_event 孤儿（guestbook reply 事件对象已删除）",
+			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook_reply WHERE guestbook_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.root_id))",
+		},
+		{
+			"notification_inbox 孤儿（event_id 无对应 notification_event）",
+			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_inbox.event_id)",
+		},
+		{
+			"notification_inbox 孤儿（recipient_user_id 无对应 user）",
+			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_inbox.recipient_user_id)",
+		},
+		{
+			"notification_event 冗余 actor（actor_user_id 无对应 user，置空）",
+			"UPDATE notification_event SET actor_user_id = NULL WHERE actor_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_event.actor_user_id)",
+		},
+		{
+			"notification_preference 孤儿（user_id 无对应 user）",
+			"DELETE FROM notification_preference WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_preference.user_id)",
+		},
+		{
+			"notification_email_task 孤儿（event_id 无对应 notification_event）",
+			"DELETE FROM notification_email_task WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_email_task.event_id)",
+		},
+		{
+			"notification_email_task 孤儿（recipient_user_id 无对应 user）",
+			"DELETE FROM notification_email_task WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_email_task.recipient_user_id)",
+		},
+		{
+			"notification_email_task 孤儿（actor_user_id 无对应 user）",
+			"DELETE FROM notification_email_task WHERE actor_user_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_email_task.actor_user_id)",
+		},
+		{
+			"notification_email_task 孤儿（batch_id 无对应 notification_email_batch）",
+			"DELETE FROM notification_email_task WHERE batch_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM notification_email_batch WHERE notification_email_batch.id = notification_email_task.batch_id)",
+		},
+		{
+			"notification_email_batch 孤儿（recipient_user_id 无对应 user）",
+			"DELETE FROM notification_email_batch WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_email_batch.recipient_user_id)",
+		},
+		{
+			"notification_email_batch_item 孤儿（batch_id 无对应 notification_email_batch）",
+			"DELETE FROM notification_email_batch_item WHERE NOT EXISTS (SELECT 1 FROM notification_email_batch WHERE notification_email_batch.id = notification_email_batch_item.batch_id)",
+		},
+		{
+			"notification_email_batch_item 孤儿（task_id 无对应 notification_email_task）",
+			"DELETE FROM notification_email_batch_item WHERE NOT EXISTS (SELECT 1 FROM notification_email_task WHERE notification_email_task.id = notification_email_batch_item.task_id)",
+		},
+		{
+			"email_send_log 孤儿（batch_id 无对应 notification_email_batch）",
+			"DELETE FROM email_send_log WHERE batch_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM notification_email_batch WHERE notification_email_batch.id = email_send_log.batch_id)",
+		},
+		{
+			"email_quota_usage 孤儿（用户维度 scope_id 无对应 user）",
+			"DELETE FROM email_quota_usage WHERE scope_type IN ('actor', 'recipient') AND scope_id <> 0 AND NOT EXISTS (SELECT 1 FROM user WHERE user.id = email_quota_usage.scope_id)",
 		},
 	}
 
@@ -2445,24 +2489,19 @@ func cleanOrphans(dst *gorm.DB) error {
 // Step 25: ID 整理（压缩间隙 + 重置 AUTO_INCREMENT）
 // ─────────────────────────────────────────────
 // 旧系统曾遭受攻击，攻击者批量写入评论和消息通知，后来被清除，导致各表 ID 出现巨大空洞。
-// 例如 moment_comment 有效数据 27 条，但 MAX(id) = 166856；user_message 302 条，MAX=167426。
+// 例如 moment_comment 有效数据 27 条，但 MAX(id) = 166856。
 // 若不处理，新记录会从 166857 / 167427 开始，与实际数据量完全不匹配。
 //
 // 处理策略：
 //   1. 按原 id 升序逐行将 id 改为 1,2,3,...（rank）
 //      由于 rank(n) <= sorted_id(n) 且按升序处理，不会出现主键冲突
-//   2. 同步更新所有引用该表 id 的外键列
+//   2. 同步更新所有引用该表 id 的外键列，包括新版 notification_event 的跳转引用
 //   3. 清理 user_like 中仍然悬空的评论点赞记录
 //   4. 将 AUTO_INCREMENT 重置为 count + 1
 //
 // 处理顺序：先处理被引用的父表，再处理子表
-//   article_comment → 被 article_comment_reply 和 user_like(type=2) 引用
-//   moment_comment  → 被 moment_comment_reply 和 user_like(type=6) 引用
-//   guestbook       → 被 guestbook_reply 和 user_like(type=5) 引用
-//   article_comment_reply → 被 user_like(type=3) 引用
-//   moment_comment_reply  → 被 user_like(type=7) 引用
-//   guestbook_reply       → 被 user_like(type=8) 引用
-//   user_message    → 无外键引用，独立处理
+//   article_comment / moment_comment / guestbook → 被回复、点赞、通知事件引用
+//   *_reply → 被点赞、父回复、自身通知事件引用
 
 func defragIDs(dst *gorm.DB) error {
 	db, err := dst.DB()
@@ -2470,81 +2509,95 @@ func defragIDs(dst *gorm.DB) error {
 		return err
 	}
 
-	// article_comment → 更新 article_comment_reply + user_like(type=2)
-	if err := defragTable(db, "article_comment", []fkRef{
-		{"article_comment_reply", "comment_id", ""},
-		{"user_like", "target_id", "type=2"},
-	}); err != nil {
-		return fmt.Errorf("defrag article_comment: %w", err)
-	}
-
-	// moment_comment → 更新 moment_comment_reply + user_like(type=6)
-	if err := defragTable(db, "moment_comment", []fkRef{
-		{"moment_comment_reply", "comment_id", ""},
-		{"user_like", "target_id", "type=6"},
-	}); err != nil {
-		return fmt.Errorf("defrag moment_comment: %w", err)
-	}
-
-	// guestbook → 更新 guestbook_reply + user_like(type=5)
-	if err := defragTable(db, "guestbook", []fkRef{
-		{"guestbook_reply", "comment_id", ""},
-		{"user_like", "target_id", "type=5"},
-	}); err != nil {
-		return fmt.Errorf("defrag guestbook: %w", err)
-	}
-
-	// article_comment_reply → 更新 user_like(type=3)
-	if err := defragTable(db, "article_comment_reply", []fkRef{
-		{"user_like", "target_id", "type=3"},
-	}); err != nil {
-		return fmt.Errorf("defrag article_comment_reply: %w", err)
-	}
-
-	// moment_comment_reply → 更新 user_like(type=7)
-	if err := defragTable(db, "moment_comment_reply", []fkRef{
-		{"user_like", "target_id", "type=7"},
-	}); err != nil {
-		return fmt.Errorf("defrag moment_comment_reply: %w", err)
-	}
-
-	// guestbook_reply → 更新 user_like(type=8)
-	if err := defragTable(db, "guestbook_reply", []fkRef{
-		{"user_like", "target_id", "type=8"},
-	}); err != nil {
-		return fmt.Errorf("defrag guestbook_reply: %w", err)
-	}
-
-	// user_message → 无外键引用，直接压缩
-	if err := defragTable(db, "user_message", nil); err != nil {
-		return fmt.Errorf("defrag user_message: %w", err)
+	for _, spec := range defragSpecs() {
+		if err := defragTable(db, spec.table, spec.refs); err != nil {
+			return fmt.Errorf("defrag %s: %w", spec.table, err)
+		}
 	}
 
 	// 清理 user_like 中仍然悬空的顶层评论点赞（评论已被删除，迁移后无对应记录）
-	res, err := db.Exec(`DELETE FROM user_like WHERE type IN (2,5,6)
-		AND target_id NOT IN (SELECT id FROM article_comment)
-		AND target_id NOT IN (SELECT id FROM moment_comment)
-		AND target_id NOT IN (SELECT id FROM guestbook)`)
-	if err != nil {
-		return fmt.Errorf("清理悬空评论点赞: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("  清理悬空顶层评论点赞: %d 条", n)
-	}
-
-	// 清理 user_like 中悬空的回复点赞。
-	res, err = db.Exec(`DELETE FROM user_like WHERE type IN (3,7,8)
-		AND target_id NOT IN (SELECT id FROM article_comment_reply)
-		AND target_id NOT IN (SELECT id FROM moment_comment_reply)
-		AND target_id NOT IN (SELECT id FROM guestbook_reply)`)
-	if err != nil {
-		return fmt.Errorf("清理悬空回复点赞: %w", err)
-	}
-	if n, _ := res.RowsAffected(); n > 0 {
-		log.Printf("  清理悬空回复点赞: %d 条", n)
+	for _, cleanup := range []struct {
+		desc string
+		sql  string
+	}{
+		{"文章评论点赞", "DELETE FROM user_like WHERE type=2 AND target_id NOT IN (SELECT id FROM article_comment)"},
+		{"留言点赞", "DELETE FROM user_like WHERE type=5 AND target_id NOT IN (SELECT id FROM guestbook)"},
+		{"碎语评论点赞", "DELETE FROM user_like WHERE type=6 AND target_id NOT IN (SELECT id FROM moment_comment)"},
+		{"文章回复点赞", "DELETE FROM user_like WHERE type=3 AND target_id NOT IN (SELECT id FROM article_comment_reply)"},
+		{"碎语回复点赞", "DELETE FROM user_like WHERE type=7 AND target_id NOT IN (SELECT id FROM moment_comment_reply)"},
+		{"留言回复点赞", "DELETE FROM user_like WHERE type=8 AND target_id NOT IN (SELECT id FROM guestbook_reply)"},
+	} {
+		res, err := db.Exec(cleanup.sql)
+		if err != nil {
+			return fmt.Errorf("清理悬空%s: %w", cleanup.desc, err)
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			log.Printf("  清理悬空%s: %d 条", cleanup.desc, n)
+		}
 	}
 
 	return nil
+}
+
+type defragSpec struct {
+	table string
+	refs  []fkRef
+}
+
+func defragSpecs() []defragSpec {
+	return []defragSpec{
+		{
+			table: "article_comment",
+			refs: []fkRef{
+				{"article_comment_reply", "comment_id", ""},
+				{"user_like", "target_id", "type=2"},
+				{"notification_event", "source_id", "source_type='comment' AND root_type='article'"},
+				{"notification_event", "root_id", "source_type='reply' AND root_type='article'"},
+			},
+		},
+		{
+			table: "moment_comment",
+			refs: []fkRef{
+				{"moment_comment_reply", "comment_id", ""},
+				{"user_like", "target_id", "type=6"},
+				{"notification_event", "source_id", "source_type='comment' AND root_type='moment'"},
+				{"notification_event", "root_id", "source_type='reply' AND root_type='moment'"},
+			},
+		},
+		{
+			table: "guestbook",
+			refs: []fkRef{
+				{"guestbook_reply", "comment_id", ""},
+				{"user_like", "target_id", "type=5"},
+				{"notification_event", "source_id", "source_type IN ('guestbook','comment') AND root_type='guestbook'"},
+				{"notification_event", "root_id", "source_type='reply' AND root_type='guestbook'"},
+			},
+		},
+		{
+			table: "article_comment_reply",
+			refs: []fkRef{
+				{"article_comment_reply", "parent_reply_id", "parent_reply_id <> 0"},
+				{"user_like", "target_id", "type=3"},
+				{"notification_event", "source_id", "source_type='reply' AND root_type='article'"},
+			},
+		},
+		{
+			table: "moment_comment_reply",
+			refs: []fkRef{
+				{"moment_comment_reply", "parent_reply_id", "parent_reply_id <> 0"},
+				{"user_like", "target_id", "type=7"},
+				{"notification_event", "source_id", "source_type='reply' AND root_type='moment'"},
+			},
+		},
+		{
+			table: "guestbook_reply",
+			refs: []fkRef{
+				{"guestbook_reply", "parent_reply_id", "parent_reply_id <> 0"},
+				{"user_like", "target_id", "type=8"},
+				{"notification_event", "source_id", "source_type='reply' AND root_type='guestbook'"},
+			},
+		},
+	}
 }
 
 // fkRef 描述一个需要同步更新的外键引用
