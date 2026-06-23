@@ -18,10 +18,6 @@ const (
 	MomentImageType uint8 = 0
 	// MaxTopMomentsPerUser 限制每个用户最多置顶三条碎语。
 	MaxTopMomentsPerUser int64 = 3
-	// MomentLikeMessageType 表示碎语点赞通知的消息类型。
-	MomentLikeMessageType = "moment_like"
-	// MomentCommentMessageType 表示碎语评论通知的消息类型。
-	MomentCommentMessageType = "moment_comment"
 )
 
 var (

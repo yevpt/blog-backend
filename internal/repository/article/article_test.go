@@ -605,15 +605,6 @@ func TestArticleRepository_PermanentDelete_HardDeletesArticleRelations(t *testin
 	mock.ExpectQuery("SELECT `id` FROM `article_comment_reply`").
 		WithArgs(uint(21), uint(22)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(31))
-	mock.ExpectQuery("SELECT `id` FROM `message`").
-		WithArgs(uint(9), uint(21), uint(22)).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(41).AddRow(42))
-	mock.ExpectExec("DELETE FROM `user_message` WHERE message_id IN \\(\\?,\\?\\)").
-		WithArgs(uint(41), uint(42)).
-		WillReturnResult(sqlmock.NewResult(0, 2))
-	mock.ExpectExec("DELETE FROM `message` WHERE id IN \\(\\?,\\?\\)").
-		WithArgs(uint(41), uint(42)).
-		WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("DELETE FROM `user_like` WHERE target_id = \\? AND type = \\?").
 		WithArgs(uint(9), uint8(1)).
 		WillReturnResult(sqlmock.NewResult(0, 1))

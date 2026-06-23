@@ -93,7 +93,7 @@ func (r *momentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment
 			return err
 		}
 
-		// 级联硬删除评论、回复、点赞和通知消息。
+		// 级联硬删除评论、回复和点赞。
 		commentIDs, err := momentCommentIDs(tx, id)
 		if err != nil {
 			return err
@@ -103,9 +103,6 @@ func (r *momentRepo) Delete(id uint, operatorID uint, force bool) (*model.Moment
 			return err
 		}
 		if err := hardDeleteMomentLikes(tx, id, commentIDs, replyIDs); err != nil {
-			return err
-		}
-		if err := hardDeleteMomentMessages(tx, id, commentIDs); err != nil {
 			return err
 		}
 		if len(commentIDs) > 0 {
@@ -332,23 +329,4 @@ func hardDeleteMomentLikes(tx *gorm.DB, momentID uint, commentIDs []uint, replyI
 		}
 	}
 	return nil
-}
-
-func hardDeleteMomentMessages(tx *gorm.DB, momentID uint, commentIDs []uint) error {
-	var messageIDs []uint
-	query := tx.Unscoped().Model(&model.Message{}).
-		Where("type = ? AND type_id = ?", MomentLikeMessageType, momentID)
-	if len(commentIDs) > 0 {
-		query = query.Or("type = ? AND type_id IN ?", MomentCommentMessageType, commentIDs)
-	}
-	if err := query.Pluck("id", &messageIDs).Error; err != nil {
-		return err
-	}
-	if len(messageIDs) == 0 {
-		return nil
-	}
-	if err := tx.Unscoped().Where("message_id IN ?", messageIDs).Delete(&model.UserMessage{}).Error; err != nil {
-		return err
-	}
-	return tx.Unscoped().Where("id IN ?", messageIDs).Delete(&model.Message{}).Error
 }

@@ -204,9 +204,6 @@ func TestMomentRepository_Delete_HardDeletesMomentAndCascade(t *testing.T) {
 	mock.ExpectExec("DELETE FROM `user_like` WHERE target_id = \\? AND type = \\?").
 		WithArgs(uint(9), momentrepo.MomentLikeType).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery("SELECT `id` FROM `message` WHERE type = \\? AND type_id = \\?").
-		WithArgs(momentrepo.MomentLikeMessageType, uint(9)).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}))
 	mock.ExpectExec("DELETE FROM `moment_comment` WHERE moment_id = \\?").
 		WithArgs(uint(9)).
 		WillReturnResult(sqlmock.NewResult(0, 0))

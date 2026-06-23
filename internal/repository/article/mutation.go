@@ -99,9 +99,6 @@ func (r *articleRepo) PermanentDelete(id uint, operatorID uint) (*model.Article,
 		if err != nil {
 			return err
 		}
-		if err := hardDeleteArticleMessages(tx, id, commentIDs); err != nil {
-			return err
-		}
 		if err := hardDeleteArticleLikes(tx, id, commentIDs, replyIDs); err != nil {
 			return err
 		}
@@ -167,24 +164,6 @@ func articleReplyIDs(tx *gorm.DB, commentIDs []uint) ([]uint, error) {
 		Where("comment_id IN ?", commentIDs).
 		Pluck("id", &ids).Error
 	return ids, err
-}
-
-func hardDeleteArticleMessages(tx *gorm.DB, articleID uint, commentIDs []uint) error {
-	var messageIDs []uint
-	query := tx.Unscoped().Model(&model.Message{}).Where("article_id = ?", articleID)
-	if len(commentIDs) > 0 {
-		query = query.Or("comment_id IN ?", commentIDs)
-	}
-	if err := query.Pluck("id", &messageIDs).Error; err != nil {
-		return err
-	}
-	if len(messageIDs) == 0 {
-		return nil
-	}
-	if err := tx.Unscoped().Where("message_id IN ?", messageIDs).Delete(&model.UserMessage{}).Error; err != nil {
-		return err
-	}
-	return tx.Unscoped().Where("id IN ?", messageIDs).Delete(&model.Message{}).Error
 }
 
 func hardDeleteArticleLikes(tx *gorm.DB, articleID uint, commentIDs []uint, replyIDs []uint) error {
