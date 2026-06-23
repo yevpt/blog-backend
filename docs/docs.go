@@ -187,6 +187,72 @@ const docTemplate = `{
             }
         },
         "/admin/articles/{id}": {
+            "get": {
+                "description": "管理员查询文章详情，包含隐藏、加密和已软删除文章；加密文章返回完整正文；软删除文章返回 deleted_at。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "查询管理端文章详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminArticleDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "文章不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
             "delete": {
                 "description": "管理员软删除文章。",
                 "consumes": [
@@ -6142,6 +6208,153 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.AdminArticleDetailResp": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "description": "Categories 分类列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleRelationResp"
+                    }
+                },
+                "category": {
+                    "description": "Category 文章所属分类（每篇文章归属一个分类）。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ArticleRelationResp"
+                        }
+                    ]
+                },
+                "category_ids": {
+                    "description": "CategoryIDs 分类 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "comment_count": {
+                    "description": "CommentCount 评论数量。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "comment_status": {
+                    "description": "CommentStatus 评论状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "content": {
+                    "description": "Content 文章正文。",
+                    "type": "string"
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "CreatedAt 创建时间。",
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "description": "DeletedAt 软删除时间；未删除时为空。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_liked": {
+                    "description": "IsLiked 当前用户是否已点赞。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "is_recommended": {
+                    "description": "IsRecommended 是否为推荐文章。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "like_count": {
+                    "description": "LikeCount 点赞数量。",
+                    "type": "integer",
+                    "example": 3
+                },
+                "music": {
+                    "description": "Music 音乐列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleMusicResp"
+                    }
+                },
+                "music_ids": {
+                    "description": "MusicIDs 音乐 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "passworded": {
+                    "description": "Passworded 是否为加密文章。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "read_count": {
+                    "description": "ReadCount 阅读数量。",
+                    "type": "integer",
+                    "example": 20
+                },
+                "recommend_seq": {
+                    "description": "RecommendSeq 推荐排序值。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "short_content": {
+                    "description": "ShortContent 文章摘要。",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "Status 文章状态。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "tag_ids": {
+                    "description": "TagIDs 标签 ID 列表。",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "tags": {
+                    "description": "Tags 标签列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleRelationResp"
+                    }
+                },
+                "title": {
+                    "description": "Title 文章标题。",
+                    "type": "string",
+                    "example": "文章标题"
+                },
+                "updated_at": {
+                    "description": "UpdatedAt 更新时间。",
+                    "type": "string"
+                },
+                "user": {
+                    "description": "User 作者摘要。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ArticleUserResp"
+                        }
+                    ]
+                },
+                "user_id": {
+                    "description": "UserID 作者用户 ID。",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
         "dto.AdminArticleListItemResp": {
             "type": "object",
             "properties": {

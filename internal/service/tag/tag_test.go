@@ -39,7 +39,7 @@ func (s *stubArticleServiceForTag) GetPublicDetail(id uint, viewerID *uint) (*dt
 	return nil, nil
 }
 
-func (s *stubArticleServiceForTag) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
+func (s *stubArticleServiceForTag) GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArticleDetailResp, error) {
 	return nil, nil
 }
 

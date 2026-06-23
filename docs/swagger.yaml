@@ -1,5 +1,112 @@
 basePath: /
 definitions:
+  dto.AdminArticleDetailResp:
+    properties:
+      categories:
+        description: Categories 分类列表。
+        items:
+          $ref: '#/definitions/dto.ArticleRelationResp'
+        type: array
+      category:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleRelationResp'
+        description: Category 文章所属分类（每篇文章归属一个分类）。
+      category_ids:
+        description: CategoryIDs 分类 ID 列表。
+        items:
+          type: integer
+        type: array
+      comment_count:
+        description: CommentCount 评论数量。
+        example: 2
+        type: integer
+      comment_status:
+        description: CommentStatus 评论状态。
+        example: 1
+        type: integer
+      content:
+        description: Content 文章正文。
+        type: string
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        type: string
+      created_at:
+        description: CreatedAt 创建时间。
+        type: string
+      deleted_at:
+        description: DeletedAt 软删除时间；未删除时为空。
+        type: string
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      is_liked:
+        description: IsLiked 当前用户是否已点赞。
+        example: false
+        type: boolean
+      is_recommended:
+        description: IsRecommended 是否为推荐文章。
+        example: true
+        type: boolean
+      like_count:
+        description: LikeCount 点赞数量。
+        example: 3
+        type: integer
+      music:
+        description: Music 音乐列表。
+        items:
+          $ref: '#/definitions/dto.ArticleMusicResp'
+        type: array
+      music_ids:
+        description: MusicIDs 音乐 ID 列表。
+        items:
+          type: integer
+        type: array
+      passworded:
+        description: Passworded 是否为加密文章。
+        example: false
+        type: boolean
+      read_count:
+        description: ReadCount 阅读数量。
+        example: 20
+        type: integer
+      recommend_seq:
+        description: RecommendSeq 推荐排序值。
+        example: 10
+        type: integer
+      short_content:
+        description: ShortContent 文章摘要。
+        type: string
+      status:
+        description: Status 文章状态。
+        example: 1
+        type: integer
+      tag_ids:
+        description: TagIDs 标签 ID 列表。
+        items:
+          type: integer
+        type: array
+      tags:
+        description: Tags 标签列表。
+        items:
+          $ref: '#/definitions/dto.ArticleRelationResp'
+        type: array
+      title:
+        description: Title 文章标题。
+        example: 文章标题
+        type: string
+      updated_at:
+        description: UpdatedAt 更新时间。
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/dto.ArticleUserResp'
+        description: User 作者摘要。
+      user_id:
+        description: UserID 作者用户 ID。
+        example: 1
+        type: integer
+    type: object
   dto.AdminArticleListItemResp:
     properties:
       category:
@@ -2382,6 +2489,47 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 删除文章
+      tags:
+      - 文章管理
+    get:
+      consumes:
+      - application/json
+      description: 管理员查询文章详情，包含隐藏、加密和已软删除文章；加密文章返回完整正文；软删除文章返回 deleted_at。
+      parameters:
+      - description: 文章 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminArticleDetailResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 文章不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询管理端文章详情
       tags:
       - 文章管理
   /admin/articles/{id}/permanent:

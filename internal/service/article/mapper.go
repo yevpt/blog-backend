@@ -287,6 +287,19 @@ func adminArticleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.Admi
 	return item
 }
 
+func adminArticleDetailToDTO(aggregate *articlerepo.ArticleAggregate, objectURLResolver storage.ObjectURLResolver) (*dto.AdminArticleDetailResp, error) {
+	detail, err := articleDetailToDTO(aggregate, articleContentAdmin, objectURLResolver)
+	if err != nil {
+		return nil, err
+	}
+	resp := &dto.AdminArticleDetailResp{ArticleDetailResp: *detail}
+	if aggregate.Article.DeletedAt.Valid {
+		deletedAt := aggregate.Article.DeletedAt.Time
+		resp.DeletedAt = &deletedAt
+	}
+	return resp, nil
+}
+
 func articleUserToDTO(user *model.User) *dto.ArticleUserResp {
 	if user == nil {
 		return nil

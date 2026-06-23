@@ -382,6 +382,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin := r.Group("/admin", middleware.Auth(jwtManager, handlers.userCache), middleware.RequireRole(roles.AdminRole))
 	admin.GET("/test", handlers.test.Admin)
 	admin.GET("/articles", handlers.article.ListAdmin)
+	admin.GET("/articles/:id", handlers.article.GetAdminDetail)
 	admin.POST("/articles", handlers.article.Save)
 	admin.DELETE("/articles/:id", handlers.article.Delete)
 	admin.DELETE("/articles/:id/permanent", handlers.article.PermanentDelete)

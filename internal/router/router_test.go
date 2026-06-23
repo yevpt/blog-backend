@@ -39,8 +39,8 @@ func (s *stubArticleServiceForRouter) GetPublicDetail(id uint, viewerID *uint) (
 	return &dto.ArticleDetailResp{}, nil
 }
 
-func (s *stubArticleServiceForRouter) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
-	return &dto.ArticleDetailResp{}, nil
+func (s *stubArticleServiceForRouter) GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArticleDetailResp, error) {
+	return &dto.AdminArticleDetailResp{}, nil
 }
 
 func (s *stubArticleServiceForRouter) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {

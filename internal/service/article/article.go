@@ -30,7 +30,7 @@ type ArticleService interface {
 	ListPublic(req dto.ArticleListReq, viewerID *uint) (*dto.ArticlePageResp, error)
 	ListAdmin(req dto.AdminArticleListReq) (*dto.AdminArticlePageResp, error)
 	GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
-	GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error)
+	GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArticleDetailResp, error)
 	Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error)
 	Delete(id uint) (*dto.ArticleDetailResp, error)
 	PermanentDelete(id uint, operatorID uint) (*dto.ArticleDeleteResp, error)
@@ -105,7 +105,7 @@ func (s *articleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleD
 	return articleDetailToDTO(aggregate, articleContentPublic, s.objectURLResolver)
 }
 
-func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
+func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArticleDetailResp, error) {
 	aggregate, err := s.repo.FindAdminDetail(id, viewerID)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDe
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return articleDetailToDTO(aggregate, articleContentAdmin, s.objectURLResolver)
+	return adminArticleDetailToDTO(aggregate, s.objectURLResolver)
 }
 
 func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {

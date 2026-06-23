@@ -27,8 +27,10 @@ type stubArticleService struct {
 	adminListReq  dto.AdminArticleListReq
 	adminListResp *dto.AdminArticlePageResp
 	adminListErr  error
-	detailResp    *dto.ArticleDetailResp
-	detailErr     error
+	detailResp      *dto.ArticleDetailResp
+	detailErr       error
+	adminDetailResp *dto.AdminArticleDetailResp
+	adminDetailID   uint
 	deleteResp    *dto.ArticleDeleteResp
 	deleteErr     error
 	deleteUserID  uint
@@ -55,8 +57,9 @@ func (s *stubArticleService) ListAdmin(req dto.AdminArticleListReq) (*dto.AdminA
 func (s *stubArticleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
 	return s.detailResp, s.detailErr
 }
-func (s *stubArticleService) GetAdminDetail(id uint, viewerID *uint) (*dto.ArticleDetailResp, error) {
-	return s.detailResp, s.detailErr
+func (s *stubArticleService) GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArticleDetailResp, error) {
+	s.adminDetailID = id
+	return s.adminDetailResp, s.detailErr
 }
 func (s *stubArticleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {
 	s.saveReq = req
@@ -90,6 +93,7 @@ func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 		h.ListPublic(c)
 	})
 	r.GET("/admin/articles", h.ListAdmin)
+	r.GET("/admin/articles/:id", h.GetAdminDetail)
 	r.GET("/articles/:id", h.GetPublicDetail)
 	r.POST("/articles/:id/like", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
@@ -171,6 +175,35 @@ func TestArticleHandler_ListPublic_PassesOptionalViewerID(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	require.NotNil(t, stub.listViewer)
 	assert.Equal(t, uint(9), *stub.listViewer)
+}
+
+func TestArticleHandler_GetAdminDetail_Success(t *testing.T) {
+	stub := &stubArticleService{
+		adminDetailResp: &dto.AdminArticleDetailResp{
+			ArticleDetailResp: dto.ArticleDetailResp{
+				ArticleListItemResp: dto.ArticleListItemResp{ID: 9, Title: "Draft", Status: 0},
+				Content:             "body",
+			},
+		},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/articles/9", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(9), stub.adminDetailID)
+}
+
+func TestArticleHandler_GetAdminDetail_NotFound(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{detailErr: articleservice.ErrArticleNotFound})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/articles/404", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestArticleHandler_GetPublicDetail_NotFound(t *testing.T) {

@@ -190,6 +190,13 @@ type AdminArticleListItemResp struct {
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
+// AdminArticleDetailResp 管理端文章详情响应，包含软删除时间。
+type AdminArticleDetailResp struct {
+	ArticleDetailResp
+	// DeletedAt 软删除时间；未删除时为空。
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+}
+
 // AdminArticlePageResp 管理端文章分页响应。
 type AdminArticlePageResp struct {
 	// Total 总记录数。

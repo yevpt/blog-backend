@@ -250,6 +250,31 @@ func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestArticleRepository_FindAdminDetail_IncludesSoftDeletedArticle(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	now := time.Now()
+	deletedAt := now.Add(time.Hour)
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(2), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(2, now, now, deletedAt, "Deleted", nil, "summary", "body", 1, 0, 1, nil, 5))
+	expectEmptyArticleAggregateQueries(mock, 2, 1)
+
+	detail, err := repo.FindAdminDetail(2, nil)
+	require.NoError(t, err)
+	require.NotNil(t, detail)
+	assert.Equal(t, uint8(0), detail.Article.Status)
+	assert.True(t, detail.Article.DeletedAt.Valid)
+	assert.Equal(t, deletedAt, detail.Article.DeletedAt.Time)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestArticleRepository_FindPublicDetail_ReturnsEncryptedArticleShell(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()

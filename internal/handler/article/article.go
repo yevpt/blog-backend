@@ -90,6 +90,29 @@ func (h *ArticleHandler) ListAdmin(c *gin.Context) {
 	writeArticleResponse(c, resp, err)
 }
 
+// GetAdminDetail 查询管理端文章详情。
+// @Summary 查询管理端文章详情
+// @Description 管理员查询文章详情，包含隐藏、加密和已软删除文章；加密文章返回完整正文；软删除文章返回 deleted_at。
+// @Tags 文章管理
+// @Accept json
+// @Produce json
+// @Param id path int true "文章 ID"
+// @Success 200 {object} response.Response{data=dto.AdminArticleDetailResp} "统一响应；code=0 表示查询成功，code=400 表示参数错误"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "权限不足"
+// @Failure 404 {object} response.Response "文章不存在"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /admin/articles/{id} [get]
+func (h *ArticleHandler) GetAdminDetail(c *gin.Context) {
+	id, ok := bindUintPath(c, "id")
+	if !ok {
+		return
+	}
+
+	resp, err := h.svc.GetAdminDetail(id, nil)
+	writeArticleResponse(c, resp, err)
+}
+
 // GetPublicDetail 查询文章详情。
 // @Summary 查询文章详情
 // @Description 查询公开或加密文章详情；加密文章在公开接口中不返回正文。

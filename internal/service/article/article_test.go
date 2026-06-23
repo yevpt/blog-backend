@@ -512,6 +512,34 @@ func TestArticleService_GetAdminDetail_IncludesEncryptedContent(t *testing.T) {
 	assert.Equal(t, "admin body", resp.Content)
 }
 
+func TestArticleService_GetAdminDetail_IncludesDeletedAt(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+
+	deletedAt := time.Now()
+	repo.EXPECT().
+		FindAdminDetail(uint(9), (*uint)(nil)).
+		Return(&articlerepo.ArticleAggregate{
+			Article: model.Article{
+				Base: model.Base{
+					ID:        9,
+					DeletedAt: gorm.DeletedAt{Time: deletedAt, Valid: true},
+				},
+				Title:   "Deleted",
+				Content: "body",
+				UserID:  1,
+				Status:  1,
+			},
+		}, nil)
+
+	resp, err := svc.GetAdminDetail(9, nil)
+	require.NoError(t, err)
+	require.NotNil(t, resp.DeletedAt)
+	assert.Equal(t, deletedAt, *resp.DeletedAt)
+}
+
 func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

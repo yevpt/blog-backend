@@ -221,6 +221,10 @@ func applyArticleSearch(query *gorm.DB, search *string) *gorm.DB {
 func (r *articleRepo) findArticleDetail(id uint, viewerID *uint, publicOnly bool) (*ArticleAggregate, error) {
 	var article model.Article
 	query := r.db.Model(&model.Article{}).Where("id = ?", id)
+	if !publicOnly {
+		// 管理端详情与列表一致，包含已软删除文章。
+		query = query.Unscoped()
+	}
 	if publicOnly {
 		query = query.Where("article.status IN ?", visibleArticleStatuses())
 	}
