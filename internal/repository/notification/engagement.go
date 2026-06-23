@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 	"github.com/vpt/blog-backend/internal/model"
+	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 )
 
 // SourceEngagement 是通知来源对象在读取时的互动快照。

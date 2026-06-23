@@ -53,6 +53,20 @@ type InboxPage struct {
 	Items []InboxAggregate // 当前页条目
 }
 
+// ObjectDeletedRef 标识通知引用的业务对象，用于批量判断当前是否已删除。
+type ObjectDeletedRef struct {
+	ObjectType string // article/moment/guestbook/comment/reply/user
+	ObjectID   uint   // 对象 ID
+	RootType   string // comment/reply 需要根类型来选择具体表
+}
+
+// ObjectDeletedKey 是 ObjectDeletedRef 的查询结果键。
+type ObjectDeletedKey struct {
+	ObjectType string
+	ObjectID   uint
+	RootType   string
+}
+
 // QuotaUsageKey 唯一定位一条额度用量记录，对应 uk_quota_usage 唯一约束。
 type QuotaUsageKey struct {
 	QuotaDate   time.Time // 统计日期
