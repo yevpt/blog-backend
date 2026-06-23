@@ -52,12 +52,13 @@ type ArticleAggregate struct {
 
 // ArticleSaveData 保存文章所需的文章主表和关联数据。
 type ArticleSaveData struct {
-	Article      model.Article
-	CategoryIDs  []uint
-	TagIDs       []uint
-	MusicIDs     []uint
-	Recommend    bool
-	RecommendSeq uint
+	Article        model.Article
+	CategoryIDs    []uint
+	TagIDs         []uint
+	MusicIDs       []uint
+	Recommend      bool
+	RecommendSeq   uint
+	PrepareArticle func(article model.Article) (model.Article, error)
 }
 
 // ArticleRepository 文章数据访问接口，只返回 model 或聚合模型。

@@ -20,12 +20,19 @@ func (r *articleRepo) Save(data ArticleSaveData) (*ArticleAggregate, error) {
 			if err := tx.Select("id").First(&existing, data.Article.ID).Error; err != nil {
 				return err
 			}
-			res := tx.Model(&model.Article{}).
-				Where("id = ?", data.Article.ID).
-				Updates(articleUpdateFields(data.Article))
-			if res.Error != nil {
-				return res.Error
+		}
+		if data.PrepareArticle != nil {
+			prepared, err := data.PrepareArticle(data.Article)
+			if err != nil {
+				return err
 			}
+			data.Article = prepared
+		}
+		res := tx.Model(&model.Article{}).
+			Where("id = ?", data.Article.ID).
+			Updates(articleUpdateFields(data.Article))
+		if res.Error != nil {
+			return res.Error
 		}
 		articleID = data.Article.ID
 

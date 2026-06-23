@@ -377,6 +377,56 @@ func TestArticleRepository_IncrementReadCount_HiddenArticleNotFound(t *testing.T
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestArticleRepository_Save_PreparesArticleAfterIDAllocated(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO `article`").
+		WillReturnResult(sqlmock.NewResult(45, 1))
+	mock.ExpectExec("UPDATE `article` SET").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_category` WHERE article_id = \\?").
+		WithArgs(uint(45)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO `article_category`").
+		WithArgs(uint(45), uint(1)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("DELETE FROM `article_tag` WHERE article_id = \\?").
+		WithArgs(uint(45)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM `article_music` WHERE article_id = \\?").
+		WithArgs(uint(45)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("UPDATE `article_recommend` SET `deleted_at`=\\? WHERE article_id = \\? AND `article_recommend`.`deleted_at` IS NULL").
+		WithArgs(sqlmock.AnyArg(), uint(45)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectCommit()
+	mock.ExpectQuery("SELECT \\* FROM `article`").
+		WithArgs(uint(45), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+			"short_content", "content", "user_id", "status", "comment_status",
+			"password", "read_count",
+		}).AddRow(45, now, now, nil, "T", nil, nil, "normalized 45", 7, 1, 1, nil, 0))
+	expectEmptyArticleAggregateQueries(mock, 45, 7)
+
+	_, err := repo.Save(article.ArticleSaveData{
+		Article:     model.Article{Title: "T", Content: "raw", UserID: 7, Status: 1, CommentStatus: 1},
+		CategoryIDs: []uint{1},
+		PrepareArticle: func(article model.Article) (model.Article, error) {
+			require.Equal(t, uint(45), article.ID)
+			article.Content = "normalized 45"
+			return article, nil
+		},
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
@@ -388,6 +438,8 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO `article`").
 		WillReturnResult(sqlmock.NewResult(7, 1))
+	mock.ExpectExec("UPDATE `article` SET").
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `article_category` WHERE article_id = \\?").
 		WithArgs(uint(7)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
