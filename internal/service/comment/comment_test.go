@@ -279,6 +279,7 @@ func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
 	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
 	require.NotNil(t, pub.events[0].Metadata)
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+	assert.Contains(t, *pub.events[0].Metadata, `"comment_id":9`)
 }
 
 func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
@@ -383,7 +384,8 @@ func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
 
 func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 	repo := &fakeCommentRepo{replyResp: &commentrepo.ReplyAggregate{
-		Reply: commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 8, Content: "收到"},
+		Reply:         commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 8, Content: "收到"},
+		QuotedContent: "原评论正文",
 	}}
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub)
@@ -396,6 +398,8 @@ func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 	require.NotNil(t, pub.events[0].Metadata)
 	// 被回复人 8 应出现在显式接收人列表。
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+	assert.Contains(t, *pub.events[0].Metadata, `"quoted_excerpt":"原评论正文"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"comment_id":9`)
 }
 
 // 回复事件 RootID 应为根对象 ID（article ID），而非 commentID。

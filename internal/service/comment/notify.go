@@ -68,10 +68,11 @@ func (s *commentService) notifyReplyCreated(targetType string, aggregate *commen
 	}
 
 	actorID := aggregate.Reply.FromUserID
-	var metadata *string
-	if aggregate.Reply.ToUserID != 0 {
-		metadata = notificationservice.BuildRecipientMetadata(aggregate.Reply.ToUserID)
-	}
+	metadata := notificationservice.BuildReplyCreatedMetadata(
+		aggregate.Reply.ToUserID,
+		aggregate.Reply.CommentID,
+		aggregate.QuotedContent,
+	)
 
 	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
 		Type:           notificationservice.EventTypeReplyCreated,
@@ -102,6 +103,9 @@ func (s *commentService) notifyReplyLiked(targetType string, replyID uint, resul
 		SourceID:    replyID,
 		RootType:    targetType,
 		RootID:      result.RootID,
-		Metadata:    notificationservice.BuildRecipientMetadata(result.TargetUserID),
+		Metadata: notificationservice.BuildReplyLikedMetadata(
+			result.TargetUserID,
+			result.RootID,
+		),
 	})
 }

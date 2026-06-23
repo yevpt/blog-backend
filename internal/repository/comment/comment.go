@@ -82,12 +82,13 @@ type ReplyRecord struct {
 
 // ReplyAggregate 回复及其双方用户聚合，供 service 转换为 DTO。
 type ReplyAggregate struct {
-	Reply     ReplyRecord
-	FromUser  *model.User
-	ToUser    *model.User
-	LikeCount int64
-	IsLiked   bool
-	TargetID  uint
+	Reply          ReplyRecord
+	FromUser       *model.User
+	ToUser         *model.User
+	LikeCount      int64
+	IsLiked        bool
+	TargetID       uint
+	QuotedContent  string // 被回复的评论/回复正文，供通知引用展示
 }
 
 // PageResult 评论分页查询结果，保持 repository 不返回 dto。
