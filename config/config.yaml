@@ -44,6 +44,11 @@ cdn:
   timestampQueryName: "b"
 
 email:
+  # 发件人昵称，出现在邮件 From 头，如 "YEVPT <noreply@example.com>"；为空时仅显示邮箱
+  from_name: ""
+  # 站点公网访问前缀，用于通知邮件中的跳转链接，如 https://www.example.com
+  # 未配置时邮件正文不带可点击链接，且底部 Footer 退化为纯文本
+  site_url: ""
   # 邮件供应商标识，仅用于日志与发送记录归类
   provider: aliyun_enterprise
   # 供应商标称每日上限，仅作保护参考，不作为实际发送目标

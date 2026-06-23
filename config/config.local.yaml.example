@@ -48,6 +48,10 @@ email:
   port: 465
   from: xxxxx@xx.com
   password: ""
+  # 发件人昵称，出现在邮件 From 头
+  from_name: "YEVPT"
+  # 站点公网访问前缀，用于通知邮件中的跳转链接
+  site_url: "https://www.example.com"
 
 oauth:
   providers:
