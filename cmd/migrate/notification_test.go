@@ -3,11 +3,11 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/vpt/blog-backend/internal/model"
 )
 
 // 旧类型按设计映射规范化，未知类型回退 legacy_notice。
@@ -37,8 +37,8 @@ func TestBuildLegacyEvent_MapsAndPreservesMetadata(t *testing.T) {
 	content := "有人点赞"
 	articleID := uint(3)
 	commentID := uint(99)
-	msg := model.Message{
-		Base:       model.Base{ID: 7},
+	msg := legacyMessage{
+		ID:         7,
 		Title:      &title,
 		Content:    &content,
 		Type:       "post_like",
@@ -67,7 +67,7 @@ func TestBuildLegacyEvent_MapsAndPreservesMetadata(t *testing.T) {
 
 // 无文章关联的旧消息回退到 legacy 根对象。
 func TestBuildLegacyEvent_FallsBackToLegacyRoot(t *testing.T) {
-	msg := model.Message{Base: model.Base{ID: 8}, Type: "guestBook", TypeID: 12, FromUserID: 4}
+	msg := legacyMessage{ID: 8, Type: "guestBook", TypeID: 12, FromUserID: 4}
 
 	event, err := buildLegacyEvent(msg)
 
@@ -77,9 +77,10 @@ func TestBuildLegacyEvent_FallsBackToLegacyRoot(t *testing.T) {
 	assert.Equal(t, uint(12), event.RootID)
 }
 
-// 已读的旧 user_message 映射为已读收件箱并带已读时间。
+// 已读的旧 user_messages 映射为已读收件箱并带已读时间。
 func TestBuildLegacyInbox_MapsReadState(t *testing.T) {
-	um := model.UserMessage{Base: model.Base{ID: 5}, UserID: 9, MessageID: 7, IsRead: true}
+	createdAt := time.Now()
+	um := legacyUserMessage{ID: 5, UserID: 9, MessageID: 7, IsRead: true, CreatedAt: createdAt, UpdatedAt: createdAt}
 
 	inbox := buildLegacyInbox(um, 100)
 
@@ -87,4 +88,45 @@ func TestBuildLegacyInbox_MapsReadState(t *testing.T) {
 	assert.Equal(t, uint(9), inbox.RecipientUserID)
 	assert.True(t, inbox.IsRead)
 	assert.NotNil(t, inbox.ReadAt)
+}
+
+func TestListLegacyMessages_ReadsSourceMessageTable(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	createdAt := time.Now()
+	mock.ExpectQuery("SELECT ID, title, content, type, type_id, from_id, post_id, comment_id, date_create\\s+FROM message ORDER BY ID").
+		WillReturnRows(sqlmock.NewRows([]string{"ID", "title", "content", "type", "type_id", "from_id", "post_id", "comment_id", "date_create"}).
+			AddRow(uint(7), "文章点赞", "有人点赞", "post_like", uint(50), uint(2), int64(3), int64(99), createdAt))
+
+	messages, err := listLegacyMessages(db)
+
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, uint(7), messages[0].ID)
+	assert.Equal(t, "post_like", messages[0].Type)
+	require.NotNil(t, messages[0].ArticleID)
+	assert.Equal(t, uint(3), *messages[0].ArticleID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListLegacyUserMessages_FiltersByExistingSourceMessage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	createdAt := time.Now()
+	mock.ExpectQuery("FROM user_messages um\\s+JOIN message m ON m.ID = um.message_id").
+		WillReturnRows(sqlmock.NewRows([]string{"ID", "user_id", "message_id", "read_status", "date_create"}).
+			AddRow(uint(5), uint(9), uint(7), "01", createdAt))
+
+	userMessages, err := listLegacyUserMessages(db)
+
+	require.NoError(t, err)
+	require.Len(t, userMessages, 1)
+	assert.Equal(t, uint(9), userMessages[0].UserID)
+	assert.Equal(t, uint(7), userMessages[0].MessageID)
+	assert.True(t, userMessages[0].IsRead)
+	require.NoError(t, mock.ExpectationsWereMet())
 }

@@ -1,13 +1,37 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+type legacyMessage struct {
+	ID         uint
+	Title      *string
+	Content    *string
+	Type       string
+	TypeID     uint
+	FromUserID uint
+	ArticleID  *uint
+	CommentID  *uint
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type legacyUserMessage struct {
+	ID        uint
+	UserID    uint
+	MessageID uint
+	IsRead    bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
 
 // legacyEventType 把旧 message.type 规范化为 v2 事件类型，未知类型回退 legacy_notice。
 func legacyEventType(oldType string) string {
@@ -59,12 +83,21 @@ func seedNotificationPolicies(dst *gorm.DB) error {
 	return nil
 }
 
-// migrateNotifications 把已迁入 Go 库的 message/user_message 转换为 v2 通知事件与收件箱。
+// migrateNotifications 把源库 message/user_messages 直接转换为 v2 通知事件与收件箱。
 //
 // 旧 message 映射为 notification_event（type 规范化，原始信息存入 metadata_json）；
-// 旧 user_message 通过 message_id 关联到事件后映射为 notification_inbox，孤儿记录跳过。
+// 旧 user_messages 通过 message_id 关联到事件后映射为 notification_inbox，孤儿记录跳过。
 // 收件箱唯一约束保证重复执行不产生重复投递。
-func migrateNotifications(dst *gorm.DB) error {
+func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
+	messages, err := listLegacyMessages(src)
+	if err != nil {
+		return err
+	}
+	userMessages, err := listLegacyUserMessages(src)
+	if err != nil {
+		return err
+	}
+
 	// 回填可重复执行：先清空 v2 表，保证多次运行（含上次部分失败）后结果一致。
 	if err := dst.Exec("DELETE FROM `notification_inbox`").Error; err != nil {
 		return fmt.Errorf("清空 notification_inbox: %w", err)
@@ -73,12 +106,7 @@ func migrateNotifications(dst *gorm.DB) error {
 		return fmt.Errorf("清空 notification_event: %w", err)
 	}
 
-	var messages []model.Message
-	if err := dst.Order("id").Find(&messages).Error; err != nil {
-		return fmt.Errorf("读取旧 message: %w", err)
-	}
-
-	// 建立 旧 message_id → 新 event_id 映射，供 user_message 关联。
+	// 建立 旧 message_id → 新 event_id 映射，供 user_messages 关联。
 	eventIDByMessage := make(map[uint]uint, len(messages))
 	for _, msg := range messages {
 		event, err := buildLegacyEvent(msg)
@@ -91,15 +119,10 @@ func migrateNotifications(dst *gorm.DB) error {
 		eventIDByMessage[msg.ID] = event.ID
 	}
 
-	var userMessages []model.UserMessage
-	if err := dst.Order("id").Find(&userMessages).Error; err != nil {
-		return fmt.Errorf("读取旧 user_message: %w", err)
-	}
-
 	for _, um := range userMessages {
 		eventID, ok := eventIDByMessage[um.MessageID]
 		if !ok {
-			// 孤儿 user_message（对应 message 不存在）跳过。
+			// 孤儿 user_messages（对应 message 不存在）跳过。
 			continue
 		}
 		inbox := buildLegacyInbox(um, eventID)
@@ -111,8 +134,84 @@ func migrateNotifications(dst *gorm.DB) error {
 	return nil
 }
 
+func listLegacyMessages(src *sql.DB) ([]legacyMessage, error) {
+	rows, err := src.Query(`
+		SELECT ID, title, content, type, type_id, from_id, post_id, comment_id, date_create
+		FROM message ORDER BY ID`)
+	if err != nil {
+		return nil, fmt.Errorf("读取旧 message: %w", err)
+	}
+	defer rows.Close()
+
+	var messages []legacyMessage
+	for rows.Next() {
+		var (
+			msg        legacyMessage
+			title      sql.NullString
+			content    sql.NullString
+			msgType    sql.NullString
+			postID     sql.NullInt64
+			commentID  sql.NullInt64
+			dateCreate sql.NullTime
+		)
+		if err := rows.Scan(&msg.ID, &title, &content, &msgType, &msg.TypeID, &msg.FromUserID, &postID, &commentID, &dateCreate); err != nil {
+			return nil, err
+		}
+		msg.Title = nullStr(title)
+		msg.Content = nullStr(content)
+		if msgType.Valid {
+			msg.Type = msgType.String
+		}
+		msg.ArticleID = nullUint(postID)
+		msg.CommentID = nullUint(commentID)
+		if dateCreate.Valid {
+			msg.CreatedAt = dateCreate.Time
+			msg.UpdatedAt = dateCreate.Time
+		}
+		messages = append(messages, msg)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return messages, nil
+}
+
+func listLegacyUserMessages(src *sql.DB) ([]legacyUserMessage, error) {
+	rows, err := src.Query(`
+		SELECT um.ID, um.user_id, um.message_id, um.read_status, um.date_create
+		FROM user_messages um
+		JOIN message m ON m.ID = um.message_id
+		ORDER BY um.ID`)
+	if err != nil {
+		return nil, fmt.Errorf("读取旧 user_messages: %w", err)
+	}
+	defer rows.Close()
+
+	var userMessages []legacyUserMessage
+	for rows.Next() {
+		var (
+			um         legacyUserMessage
+			readStatus sql.NullString
+			dateCreate sql.NullTime
+		)
+		if err := rows.Scan(&um.ID, &um.UserID, &um.MessageID, &readStatus, &dateCreate); err != nil {
+			return nil, err
+		}
+		um.IsRead = readStatus.Valid && readStatus.String == "01"
+		if dateCreate.Valid {
+			um.CreatedAt = dateCreate.Time
+			um.UpdatedAt = dateCreate.Time
+		}
+		userMessages = append(userMessages, um)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return userMessages, nil
+}
+
 // buildLegacyEvent 把一条旧 message 映射为 notification_event。
-func buildLegacyEvent(msg model.Message) (*model.NotificationEvent, error) {
+func buildLegacyEvent(msg legacyMessage) (*model.NotificationEvent, error) {
 	metadata, err := legacyEventMetadata(msg)
 	if err != nil {
 		return nil, err
@@ -144,8 +243,8 @@ func buildLegacyEvent(msg model.Message) (*model.NotificationEvent, error) {
 	return event, nil
 }
 
-// buildLegacyInbox 把一条旧 user_message 映射为 notification_inbox。
-func buildLegacyInbox(um model.UserMessage, eventID uint) *model.NotificationInbox {
+// buildLegacyInbox 把一条旧 user_messages 映射为 notification_inbox。
+func buildLegacyInbox(um legacyUserMessage, eventID uint) *model.NotificationInbox {
 	inbox := &model.NotificationInbox{
 		EventID:         eventID,
 		RecipientUserID: um.UserID,
@@ -162,7 +261,7 @@ func buildLegacyInbox(um model.UserMessage, eventID uint) *model.NotificationInb
 }
 
 // legacyEventMetadata 构造迁移事件的 metadata_json，保留可追溯的旧字段。
-func legacyEventMetadata(msg model.Message) (*string, error) {
+func legacyEventMetadata(msg legacyMessage) (*string, error) {
 	meta := map[string]any{
 		"legacy_message_id": msg.ID,
 		"legacy_type":       msg.Type,
