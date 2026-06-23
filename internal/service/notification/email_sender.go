@@ -20,6 +20,9 @@ const (
 // 供邮件正文中标识「哪篇文章/哪条碎语」时按需取用。返回空串不视作错误。
 type RootSnapshotResolver interface {
 	RootSnapshotOf(ctx context.Context, rootType string, rootID uint) (string, error)
+	// RootExcerptOf 取文章正文摘录，仅 article 类型有效，其余返回空串。
+	// 供站内通知列表展示正文预览，与 RootSnapshotOf 的标题/摘要互补。
+	RootExcerptOf(ctx context.Context, rootType string, rootID uint) (string, error)
 }
 
 // senderRepo 是 sender 依赖的仓储能力子集。

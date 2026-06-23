@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/model"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 // List 分页查询当前用户的站内通知，并把仓储聚合转换为 DTO。
@@ -22,11 +24,20 @@ func (s *inboxService) List(userID uint, req dto.NotificationListReq) (*dto.Noti
 	if err != nil {
 		return nil, err
 	}
+	// 按根对象去重解析文章正文摘录，仅对无评论/回复内容的通知填充。
+	excerpts, err := s.rootExcerpts(context.Background(), result.Items)
+	if err != nil {
+		return nil, err
+	}
+	engagements, replyCommentIDs, err := s.loadSourceEngagements(context.Background(), userID, result.Items)
+	if err != nil {
+		return nil, err
+	}
 
 	// 逐条把收件箱 + 事件快照聚合映射为对外条目。
 	items := make([]dto.NotificationItemResp, 0, len(result.Items))
 	for _, aggregate := range result.Items {
-		items = append(items, inboxAggregateToDTO(aggregate, labels))
+		items = append(items, inboxAggregateToDTO(aggregate, labels, excerpts, engagements, replyCommentIDs, s.resolver))
 	}
 	return &dto.NotificationPageResp{
 		Total:    result.Total,
@@ -80,8 +91,19 @@ func (s *inboxService) Delete(userID uint, id uint) error {
 }
 
 // inboxAggregateToDTO 把收件箱聚合映射为对外通知条目。
-// labels 为按根对象去重的展示标题，命中且非空时填充 RootTitle。
-func inboxAggregateToDTO(aggregate notificationrepo.InboxAggregate, labels map[rootKey]string) dto.NotificationItemResp {
+func inboxAggregateToDTO(
+	aggregate notificationrepo.InboxAggregate,
+	labels map[rootKey]string,
+	excerpts map[rootKey]string,
+	engagements map[notificationrepo.SourceEngagementKey]notificationrepo.SourceEngagement,
+	replyCommentIDs map[uint]uint,
+	resolver storage.ObjectURLResolver,
+) dto.NotificationItemResp {
+	metadata := aggregate.Event.MetadataJSON
+	if aggregate.Event.SourceType == "reply" {
+		metadata = metadataWithReplyCommentID(metadata, replyCommentIDs[aggregate.Event.SourceID])
+	}
+
 	resp := dto.NotificationItemResp{
 		ID:             aggregate.Inbox.ID,
 		EventID:        aggregate.Inbox.EventID,
@@ -92,16 +114,84 @@ func inboxAggregateToDTO(aggregate notificationrepo.InboxAggregate, labels map[r
 		ReadAt:         aggregate.Inbox.ReadAt,
 		CreatedAt:      aggregate.Inbox.CreatedAt,
 		ActorUserID:    aggregate.Event.ActorUserID,
+		ActorUser:      actorUserToDTO(aggregate.ActorUser, resolver),
 		SourceType:     aggregate.Event.SourceType,
 		SourceID:       aggregate.Event.SourceID,
 		RootType:       aggregate.Event.RootType,
 		RootID:         aggregate.Event.RootID,
-		Metadata:       aggregate.Event.MetadataJSON,
+		Metadata:       metadata,
 	}
 	if label, ok := labels[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && label != "" {
 		resp.RootTitle = &label
 	}
+	if aggregate.Event.RootType == "article" && aggregate.Event.ContentExcerpt == "" {
+		if excerpt, ok := excerpts[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && excerpt != "" {
+			resp.RootExcerpt = &excerpt
+		}
+	}
+	if isEngagementSource(aggregate.Event.SourceType) {
+		if engagement, ok := engagements[notificationrepo.SourceEngagementKey{
+			SourceType: aggregate.Event.SourceType,
+			SourceID:   aggregate.Event.SourceID,
+		}]; ok {
+			likeCount := engagement.LikeCount
+			isLiked := engagement.IsLiked
+			replyCount := engagement.ReplyCount
+			resp.LikeCount = &likeCount
+			resp.IsLiked = &isLiked
+			resp.ReplyCount = &replyCount
+		}
+	}
 	return resp
+}
+
+func (s *inboxService) loadSourceEngagements(ctx context.Context, userID uint, items []notificationrepo.InboxAggregate) (
+	map[notificationrepo.SourceEngagementKey]notificationrepo.SourceEngagement,
+	map[uint]uint,
+	error,
+) {
+	if s.engagement == nil {
+		return nil, nil, nil
+	}
+	refs := sourceEngagementRefs(items)
+	if len(refs) == 0 {
+		return map[notificationrepo.SourceEngagementKey]notificationrepo.SourceEngagement{}, map[uint]uint{}, nil
+	}
+	engagements, err := s.engagement.BatchSourceEngagement(ctx, userID, refs)
+	if err != nil {
+		return nil, nil, err
+	}
+	replyRefs := make([]notificationrepo.SourceEngagementRef, 0)
+	for _, aggregate := range items {
+		if aggregate.Event.SourceType != "reply" {
+			continue
+		}
+		replyRefs = append(replyRefs, notificationrepo.SourceEngagementRef{
+			SourceType: aggregate.Event.SourceType,
+			SourceID:   aggregate.Event.SourceID,
+			RootType:   aggregate.Event.RootType,
+		})
+	}
+	replyCommentIDs, err := s.engagement.BatchReplyCommentIDs(ctx, replyRefs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return engagements, replyCommentIDs, nil
+}
+
+// actorUserToDTO 把操作人 model 映射为对外摘要，解析头像 URL。
+// user 为 nil（系统通知）时返回 nil，保持 omitempty。
+func actorUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.NotificationActorUserResp {
+	if user == nil {
+		return nil
+	}
+	return &dto.NotificationActorUserResp{
+		ID:        user.ID,
+		Nickname:  user.Nickname,
+		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
+		Site:      user.Site,
+		Mark:      user.Mark,
+	}
 }
 
 // rootKey 是根对象的复合去重键。
@@ -136,6 +226,35 @@ func (s *inboxService) rootLabels(ctx context.Context, items []notificationrepo.
 			return nil, err
 		}
 		out[key] = label
+	}
+	return out, nil
+}
+
+// rootExcerpts 批量解析当前页文章根对象的正文摘录，按 rootID 去重。
+// 仅对 rootType=article 且事件 ContentExcerpt 为空（无评论/回复内容）的条目解析，
+// 避免与 content_excerpt 重复。roots 为 nil 时返回空 map。
+func (s *inboxService) rootExcerpts(ctx context.Context, items []notificationrepo.InboxAggregate) (map[rootKey]string, error) {
+	if s.roots == nil {
+		return nil, nil
+	}
+	out := make(map[rootKey]string, len(items))
+	for _, aggregate := range items {
+		if aggregate.Event.RootID == 0 || aggregate.Event.RootType != "article" {
+			continue
+		}
+		// 已有评论/回复内容的条目不再补正文摘录，避免重复。
+		if aggregate.Event.ContentExcerpt != "" {
+			continue
+		}
+		key := rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}
+		if _, exists := out[key]; exists {
+			continue
+		}
+		excerpt, err := s.roots.RootExcerptOf(ctx, aggregate.Event.RootType, aggregate.Event.RootID)
+		if err != nil {
+			return nil, err
+		}
+		out[key] = excerpt
 	}
 	return out, nil
 }

@@ -192,8 +192,9 @@ func newRouteHandlers(
 
 	// 组装通知链路：仓储 + 事件发布器（业务侧用），收件箱服务供站内接口。
 	notificationRepo := notificationrepo.NewRepository(db)
+	notificationDirectory := notificationrepo.NewDirectory(db)
 	notificationPublisher := notificationservice.NewPublisher(notificationRepo)
-	notificationInboxSvc := notificationservice.NewInboxService(notificationRepo, notificationrepo.NewDirectory(db))
+	notificationInboxSvc := notificationservice.NewInboxService(notificationRepo, notificationDirectory, notificationDirectory, objectStore)
 	notificationAdminSvc := notificationservice.NewAdminService(notificationrepo.NewAdminRepository(db))
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。

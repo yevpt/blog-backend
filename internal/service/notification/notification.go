@@ -12,6 +12,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 // 事件类型，发布时据此校验合法性。
@@ -93,13 +94,17 @@ func NewPublisher(repo notificationrepo.EventRepository) Publisher {
 }
 
 type inboxService struct {
-	repo  notificationrepo.InboxRepository
-	roots RootSnapshotResolver
+	repo        notificationrepo.InboxRepository
+	roots       RootSnapshotResolver
+	engagement  SourceEngagementResolver
+	resolver    storage.ObjectURLResolver
 }
 
 // NewInboxService 创建收件箱业务服务。
 // roots 用于在列表读取时解析根对象展示标题（文章标题/碎语摘要），可为 nil
 // （此时退化为不填充 RootTitle，保持旧行为）。
-func NewInboxService(repo notificationrepo.InboxRepository, roots RootSnapshotResolver) InboxService {
-	return &inboxService{repo: repo, roots: roots}
+// engagement 用于解析来源对象点赞/回复数，可为 nil。
+// resolver 用于解析操作人头像的对象存储路径为可访问 URL，可为 nil。
+func NewInboxService(repo notificationrepo.InboxRepository, roots RootSnapshotResolver, engagement SourceEngagementResolver, resolver storage.ObjectURLResolver) InboxService {
+	return &inboxService{repo: repo, roots: roots, engagement: engagement, resolver: resolver}
 }

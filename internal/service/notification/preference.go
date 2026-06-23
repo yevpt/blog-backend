@@ -3,6 +3,7 @@ package notification
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/vpt/blog-backend/internal/model"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
@@ -84,6 +85,53 @@ func BuildRecipientMetadata(userIDs ...uint) *string {
 		return nil
 	}
 	encoded, err := json.Marshal(recipientMetadata{RecipientUserIDs: userIDs})
+	if err != nil {
+		return nil
+	}
+	value := string(encoded)
+	return &value
+}
+
+// eventMetadata 是事件 metadata_json 的可选扩展字段。
+type eventMetadata struct {
+	RecipientUserIDs []uint `json:"recipient_user_ids,omitempty"`
+	QuotedExcerpt    string `json:"quoted_excerpt,omitempty"`
+	CommentID        uint   `json:"comment_id,omitempty"`
+}
+
+// BuildReplyCreatedMetadata 编码回复通知的接收人、父评论 ID 与被引用评论/回复摘要。
+func BuildReplyCreatedMetadata(recipientUserID, commentID uint, quotedExcerpt string) *string {
+	if recipientUserID == 0 && commentID == 0 && strings.TrimSpace(quotedExcerpt) == "" {
+		return nil
+	}
+	meta := eventMetadata{}
+	if recipientUserID != 0 {
+		meta.RecipientUserIDs = []uint{recipientUserID}
+	}
+	if commentID != 0 {
+		meta.CommentID = commentID
+	}
+	meta.QuotedExcerpt = strings.TrimSpace(quotedExcerpt)
+	return marshalEventMetadata(meta)
+}
+
+// BuildReplyLikedMetadata 编码回复点赞通知的接收人与父评论 ID。
+func BuildReplyLikedMetadata(recipientUserID, commentID uint) *string {
+	if recipientUserID == 0 && commentID == 0 {
+		return nil
+	}
+	meta := eventMetadata{}
+	if recipientUserID != 0 {
+		meta.RecipientUserIDs = []uint{recipientUserID}
+	}
+	if commentID != 0 {
+		meta.CommentID = commentID
+	}
+	return marshalEventMetadata(meta)
+}
+
+func marshalEventMetadata(meta eventMetadata) *string {
+	encoded, err := json.Marshal(meta)
 	if err != nil {
 		return nil
 	}
