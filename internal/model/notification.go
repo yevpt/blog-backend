@@ -33,7 +33,7 @@ type NotificationEvent struct {
 	DispatchStatus string     `gorm:"size:20;not null;default:pending;index:idx_event_dispatch,priority:1;comment:分发状态 pending/processing/done/failed" json:"dispatch_status"`
 	Attempts       int        `gorm:"not null;default:0;comment:分发尝试次数" json:"attempts"`
 	NextProcessAt  time.Time  `gorm:"index:idx_event_dispatch,priority:2;comment:下次可处理时间" json:"next_process_at"`
-	LeaseUntil     *time.Time `gorm:"index:idx_event_dispatch,priority:3;comment:worker 租约到期时间" json:"lease_until"`
+	LeaseUntil     *time.Time `gorm:"type:datetime(6);index:idx_event_dispatch,priority:3;comment:worker 租约到期时间" json:"lease_until"`
 	LockedBy       *string    `gorm:"size:80;comment:领取该事件的 worker 标识" json:"locked_by"`
 	LastError      *string    `gorm:"size:1000;comment:最近一次分发错误" json:"last_error"`
 }
@@ -84,7 +84,7 @@ type NotificationEmailTask struct {
 	NextAttemptAt   time.Time  `gorm:"index:idx_email_task_pick,priority:2;comment:下次处理时间" json:"next_attempt_at"`
 	Attempts        int        `gorm:"not null;default:0;comment:尝试次数" json:"attempts"`
 	BatchID         *uint      `gorm:"comment:已归属的邮件批次ID" json:"batch_id"`
-	LeaseUntil      *time.Time `gorm:"comment:worker 租约到期时间" json:"lease_until"`
+	LeaseUntil      *time.Time `gorm:"type:datetime(6);comment:worker 租约到期时间" json:"lease_until"`
 	LockedBy        *string    `gorm:"size:80;comment:领取该任务的 worker 标识" json:"locked_by"`
 	IdempotencyKey  string     `gorm:"size:120;not null;uniqueIndex:uk_email_task_idempotency;comment:幂等键，防止重复入队" json:"idempotency_key"`
 	LastError       *string    `gorm:"size:1000;comment:最近一次处理错误" json:"last_error"`
@@ -104,7 +104,7 @@ type NotificationEmailBatch struct {
 	ScheduledAt     time.Time  `gorm:"index:idx_email_batch_pick,priority:2;comment:计划发送时间" json:"scheduled_at"`
 	SentAt          *time.Time `gorm:"comment:实际发送时间" json:"sent_at"`
 	Attempts        int        `gorm:"not null;default:0;comment:尝试次数" json:"attempts"`
-	LeaseUntil      *time.Time `gorm:"index:idx_email_batch_pick,priority:3;comment:worker 租约到期时间" json:"lease_until"`
+	LeaseUntil      *time.Time `gorm:"type:datetime(6);index:idx_email_batch_pick,priority:3;comment:worker 租约到期时间" json:"lease_until"`
 	LockedBy        *string    `gorm:"size:80;comment:领取该批次的 worker 标识" json:"locked_by"`
 	MessageID       *string    `gorm:"size:120;comment:邮件 Message-ID 或内部幂等 ID" json:"message_id"`
 	LastError       *string    `gorm:"size:1000;comment:最近一次发送错误" json:"last_error"`

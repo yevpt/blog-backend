@@ -72,6 +72,7 @@ func InitMailer(cfg *config.Config) email.MailSender {
 		Port:     cfg.Email.Port,
 		From:     cfg.Email.From,
 		Password: cfg.Email.Password,
+		FromName: cfg.Email.FromName,
 	})
 }
 
@@ -85,13 +86,8 @@ func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.Obje
 }
 
 // StartNotificationWorker 组装并在后台启动通知 worker（dispatcher/planner/sender）。
-// 未启用时（email.worker_enabled=false）静默跳过；worker 依赖 MySQL 租约，进程退出后可恢复。
+// 站内通知分发始终启动；email.worker_enabled=false 时仅关闭邮件聚合与发送。
 func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, hub *notificationservice.SSEHub, zapLogger *zap.Logger) {
-	if !cfg.Email.WorkerEnabled {
-		zapLogger.Info("通知 worker 未启用，跳过启动")
-		return
-	}
-
 	// 组装数据访问与读侧适配器。
 	repo := notificationrepo.NewRepository(db)
 	directory := notificationrepo.NewDirectory(db)
@@ -113,11 +109,12 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 		MaxPerHour:         cfg.Email.MaxPerHour,
 	})
 	planner := notificationservice.NewEmailPlanner(repo, quota, directory)
-	sender := notificationservice.NewEmailSender(repo, quota, directory, mailer, cfg.Email.Provider)
+	sender := notificationservice.NewEmailSender(repo, quota, directory, directory, mailer, cfg.Email.Provider, cfg.Email.SiteURL)
 
 	// 组装 worker 运行配置：发送间隔来自配置，分发/聚合用稳健的固定间隔。
 	worker := notificationworker.NewWorker(notificationworker.Config{
-		Enabled:          cfg.Email.WorkerEnabled,
+		Enabled:          true,
+		EmailEnabled:     cfg.Email.WorkerEnabled,
 		PlannerEnabled:   cfg.Email.PlannerEnabled,
 		WorkerID:         notificationWorkerID(),
 		BatchSize:        cfg.Email.WorkerBatchSize,
@@ -126,7 +123,11 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 		SendInterval:     time.Duration(cfg.Email.SendIntervalSeconds) * time.Second,
 	}, dispatcher.DispatchOnce, planner.PlanOnce, sender.SendOnce, zapLogger)
 
-	zapLogger.Info("通知 worker 启动")
+	if cfg.Email.WorkerEnabled {
+		zapLogger.Info("通知 worker 启动")
+	} else {
+		zapLogger.Info("站内通知 worker 启动，邮件 worker 未启用")
+	}
 	go worker.Run(ctx)
 }
 

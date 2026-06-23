@@ -163,9 +163,11 @@ func NewRepository(db *gorm.DB) Repository {
 }
 
 // leaseUntilFrom 由租约秒数计算到期时间，秒数非正时退化为当前时间。
+// 结果截断到秒，与 MySQL DATETIME（无小数秒）存储精度一致，
+// 确保「写入租约」与「按租约回读」使用同一值，避免精度截断导致回读命中失败。
 func leaseUntilFrom(now time.Time, leaseSeconds int) time.Time {
 	if leaseSeconds <= 0 {
-		return now
+		return now.Truncate(time.Second)
 	}
-	return now.Add(time.Duration(leaseSeconds) * time.Second)
+	return now.Add(time.Duration(leaseSeconds) * time.Second).Truncate(time.Second)
 }

@@ -19,7 +19,8 @@ type LoopFunc func(ctx context.Context, workerID string, limit int) (int, error)
 
 // Config 通知 worker 的运行配置。
 type Config struct {
-	Enabled          bool          // 是否启动 dispatcher/sender 循环
+	Enabled          bool          // 是否启动通知 worker
+	EmailEnabled     bool          // 是否启动邮件 sender 循环
 	PlannerEnabled   bool          // 是否启动 planner 循环
 	WorkerID         string        // worker 标识，用于任务租约 locked_by
 	BatchSize        int           // 单次迭代领取数量
@@ -59,10 +60,12 @@ func (w *Worker) Run(ctx context.Context) {
 	}
 	loops := []namedLoop{
 		{"dispatcher", w.cfg.DispatchInterval, w.dispatch},
-		{"sender", w.cfg.SendInterval, w.send},
+	}
+	if w.cfg.EmailEnabled {
+		loops = append(loops, namedLoop{"sender", w.cfg.SendInterval, w.send})
 	}
 	// planner 可独立开关，便于多实例下只在单实例聚合。
-	if w.cfg.PlannerEnabled {
+	if w.cfg.EmailEnabled && w.cfg.PlannerEnabled {
 		loops = append(loops, namedLoop{"planner", w.cfg.PlanInterval, w.plan})
 	}
 
