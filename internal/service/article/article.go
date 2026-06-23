@@ -140,19 +140,73 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		article.ID = *req.ID
 	}
 
+	var oldContent string
+	if req.ID != nil {
+		oldAggregate, err := s.repo.FindAdminDetail(*req.ID, nil)
+		if err != nil {
+			return nil, err
+		}
+		if oldAggregate == nil {
+			return nil, ErrArticleNotFound
+		}
+		oldContent = oldAggregate.Article.Content
+		if oldAggregate.Article.CoverImgUrl != nil && strings.TrimSpace(*oldAggregate.Article.CoverImgUrl) != "" {
+			oldContent += "\n![](" + strings.TrimSpace(*oldAggregate.Article.CoverImgUrl) + ")"
+		}
+	}
+
+	store, hasStore := s.objectURLResolver.(storage.ObjectStore)
+	if hasArticleImageReferences(article.Content, article.CoverImgUrl) && (!hasStore || store == nil) {
+		return nil, ErrArticleImageInvalid
+	}
+
+	var copiedKeys []string
+	var tempKeys []string
+	var newReferencedKeys []string
+	var prepareArticle func(model.Article) (model.Article, error)
+	if hasStore && store != nil {
+		prepareArticle = func(article model.Article) (model.Article, error) {
+			normalized, err := normalizeArticleAssets(context.Background(), store, articleAssetNormalizeInput{
+				ArticleID: article.ID,
+				UserID:    authorID,
+				Content:   article.Content,
+				Cover:     article.CoverImgUrl,
+			})
+			if err != nil {
+				return model.Article{}, err
+			}
+			copiedKeys = normalized.CopiedKeys
+			tempKeys = normalized.TempKeys
+			newReferencedKeys = normalized.ReferencedKeys
+			article.Content = normalized.Content
+			article.CoverImgUrl = normalized.Cover
+			return article, nil
+		}
+	}
+
 	aggregate, err := s.repo.Save(articlerepo.ArticleSaveData{
-		Article:      article,
-		CategoryIDs:  categoryIDs,
-		TagIDs:       uniqueUintIDs(req.TagIDs),
-		MusicIDs:     uniqueUintIDs(req.MusicIDs),
-		Recommend:    req.Recommend,
-		RecommendSeq: req.RecommendSeq,
+		Article:        article,
+		CategoryIDs:    categoryIDs,
+		TagIDs:         uniqueUintIDs(req.TagIDs),
+		MusicIDs:       uniqueUintIDs(req.MusicIDs),
+		Recommend:      req.Recommend,
+		RecommendSeq:   req.RecommendSeq,
+		PrepareArticle: prepareArticle,
 	})
 	if err != nil {
+		_ = s.deleteArticleAssetKeys(context.Background(), copiedKeys)
 		return nil, err
 	}
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
+	}
+	if err := s.deleteArticleAssetKeys(context.Background(), tempKeys); err != nil {
+		return nil, err
+	}
+	if req.ID != nil {
+		if err := s.moveRemovedArticleAssets(context.Background(), oldContent, newReferencedKeys, *req.ID); err != nil {
+			return nil, err
+		}
 	}
 	return articleDetailToDTO(aggregate, articleContentAdmin, s.objectURLResolver)
 }
@@ -294,4 +348,61 @@ func mapArticleDeleteError(err error) error {
 		return ErrArticleNotSoftDeleted
 	}
 	return err
+}
+
+func (s *articleService) deleteArticleAssetKeys(ctx context.Context, keys []string) error {
+	store, ok := s.objectURLResolver.(storage.ObjectStore)
+	if !ok || store == nil || len(keys) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		if err := store.DeleteObject(ctx, key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *articleService) moveRemovedArticleAssets(ctx context.Context, oldContent string, newKeys []string, articleID uint) error {
+	if strings.TrimSpace(oldContent) == "" {
+		return nil
+	}
+	mover, ok := s.objectURLResolver.(storage.ObjectMover)
+	if !ok || mover == nil {
+		return nil
+	}
+	oldKeys := articleAssetValues(articleID, oldContent)
+	if len(oldKeys) == 0 {
+		return nil
+	}
+	newKeySet := make(map[string]struct{}, len(newKeys))
+	for _, key := range newKeys {
+		key = strings.TrimSpace(key)
+		if key != "" {
+			newKeySet[key] = struct{}{}
+		}
+	}
+	moved := make(map[string]struct{}, len(oldKeys))
+	for _, key := range oldKeys {
+		if _, keep := newKeySet[key]; keep {
+			continue
+		}
+		if _, exists := moved[key]; exists {
+			continue
+		}
+		moved[key] = struct{}{}
+		if err := mover.MoveObject(ctx, key, "deleted/"+key); err != nil {
+			return err
+		}
+	}
+	return nil
 }

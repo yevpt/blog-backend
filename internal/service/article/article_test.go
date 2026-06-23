@@ -3,6 +3,8 @@ package article_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/vpt/blog-backend/internal/repository/article/mock"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
+	"github.com/vpt/blog-backend/pkg/storage"
 	"gorm.io/gorm"
 )
 
@@ -322,6 +325,145 @@ func TestArticleService_SaveKeepsFirstCategoryAndDeduplicatesOtherRelationIDs(t 
 	assert.Equal(t, uint(9), resp.ID)
 }
 
+func TestArticleService_SaveCopiesTempAssetsAndCleansTempOnSuccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	store := newTrackingObjectStore()
+	store.keys["temp/articles/7/images/a.png"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/articles/7/images/a.png?a=1"] = "temp/articles/7/images/a.png"
+	svc := articleservice.NewArticleService(repo, store, nil, nil)
+
+	repo.EXPECT().
+		Save(gomock.Any()).
+		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
+			require.NotNil(t, data.PrepareArticle)
+			prepared, err := data.PrepareArticle(model.Article{
+				Base:          model.Base{ID: 45},
+				Title:         data.Article.Title,
+				Content:       data.Article.Content,
+				CoverImgUrl:   data.Article.CoverImgUrl,
+				UserID:        data.Article.UserID,
+				Status:        data.Article.Status,
+				CommentStatus: data.Article.CommentStatus,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, "![a](articles/45/images/a.png)", prepared.Content)
+			return &articlerepo.ArticleAggregate{Article: prepared}, nil
+		})
+
+	resp, err := svc.Save(dto.ArticleSaveReq{
+		Title:         "A",
+		Content:       "![a](https://cdn.example.com/blog/temp/articles/7/images/a.png?a=1)",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+	}, 7)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, []objectCopy{{
+		source: "temp/articles/7/images/a.png",
+		target: "articles/45/images/a.png",
+	}}, store.copies)
+	assert.Equal(t, []string{"temp/articles/7/images/a.png"}, store.deleted)
+}
+
+func TestArticleService_SaveDeletesCopiedAssetsOnRepoFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	store := newTrackingObjectStore()
+	store.keys["temp/articles/7/images/a.png"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/articles/7/images/a.png"] = "temp/articles/7/images/a.png"
+	svc := articleservice.NewArticleService(repo, store, nil, nil)
+
+	repo.EXPECT().
+		Save(gomock.Any()).
+		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
+			_, err := data.PrepareArticle(model.Article{
+				Base:          model.Base{ID: 45},
+				Title:         data.Article.Title,
+				Content:       data.Article.Content,
+				CoverImgUrl:   data.Article.CoverImgUrl,
+				UserID:        data.Article.UserID,
+				Status:        data.Article.Status,
+				CommentStatus: data.Article.CommentStatus,
+			})
+			require.NoError(t, err)
+			return nil, errors.New("save failed")
+		})
+
+	_, err := svc.Save(dto.ArticleSaveReq{
+		Title:         "A",
+		Content:       "![a](https://cdn.example.com/blog/temp/articles/7/images/a.png)",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+	}, 7)
+
+	require.EqualError(t, err, "save failed")
+	assert.Equal(t, []string{"articles/45/images/a.png"}, store.deleted)
+}
+
+func TestArticleService_SaveMovesRemovedAssetsOnEdit(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	store := newTrackingObjectStore()
+	store.keys["articles/9/images/keep.png"] = true
+	svc := articleservice.NewArticleService(repo, store, nil, nil)
+
+	oldCover := "articles/9/cover/old.jpg"
+	oldContent := "![old](articles/9/images/old.png)\n![keep](articles/9/images/keep.png)"
+	gomock.InOrder(
+		repo.EXPECT().
+			FindAdminDetail(uint(9), (*uint)(nil)).
+			Return(&articlerepo.ArticleAggregate{
+				Article: model.Article{
+					Base:        model.Base{ID: 9},
+					Content:     oldContent,
+					CoverImgUrl: &oldCover,
+					UserID:      7,
+				},
+			}, nil),
+		repo.EXPECT().
+			Save(gomock.Any()).
+			DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
+				prepared, err := data.PrepareArticle(model.Article{
+					Base:          model.Base{ID: 9},
+					Title:         data.Article.Title,
+					Content:       data.Article.Content,
+					CoverImgUrl:   data.Article.CoverImgUrl,
+					UserID:        data.Article.UserID,
+					Status:        data.Article.Status,
+					CommentStatus: data.Article.CommentStatus,
+				})
+				require.NoError(t, err)
+				return &articlerepo.ArticleAggregate{Article: prepared}, nil
+			}),
+	)
+
+	resp, err := svc.Save(dto.ArticleSaveReq{
+		ID:            ptrUint(9),
+		Title:         "Edited",
+		Content:       "![keep](articles/9/images/keep.png)",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+	}, 7)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, []objectMove{{
+		source: "articles/9/images/old.png",
+		target: "deleted/articles/9/images/old.png",
+	}, {
+		source: "articles/9/cover/old.jpg",
+		target: "deleted/articles/9/cover/old.jpg",
+	}}, store.moves)
+}
+
 func TestArticleService_GetPublicDetail_HidesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -552,6 +694,10 @@ func (r *stubObjectURLResolver) ObjectURL(_ context.Context, objectName string) 
 	return r.urls[objectName], nil
 }
 
+func ptrUint(v uint) *uint {
+	return &v
+}
+
 func TestArticleService_PermanentDeleteMovesArticleAssetsBeforeDeleting(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -645,6 +791,72 @@ func (s *stubArticleObjectStore) PutObject(context.Context, string, []byte, stri
 func (s *stubArticleObjectStore) MoveObject(_ context.Context, sourceName string, targetName string) error {
 	s.moves = append(s.moves, objectMove{source: sourceName, target: targetName})
 	return nil
+}
+
+type objectCopy struct {
+	source string
+	target string
+}
+
+type trackingObjectStore struct {
+	keys    map[string]bool
+	keyMap  map[string]string
+	copies  []objectCopy
+	moves   []objectMove
+	deleted []string
+}
+
+func newTrackingObjectStore() *trackingObjectStore {
+	return &trackingObjectStore{
+		keys:   make(map[string]bool),
+		keyMap: make(map[string]string),
+	}
+}
+
+func (s *trackingObjectStore) ObjectURL(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (s *trackingObjectStore) ObjectExists(_ context.Context, objectName string) (bool, error) {
+	return s.keys[objectName], nil
+}
+
+func (s *trackingObjectStore) PutObject(context.Context, string, []byte, string) error {
+	return nil
+}
+
+func (s *trackingObjectStore) MoveObject(_ context.Context, sourceName string, targetName string) error {
+	s.moves = append(s.moves, objectMove{source: sourceName, target: targetName})
+	return nil
+}
+
+func (s *trackingObjectStore) CopyObject(_ context.Context, sourceName string, targetName string) error {
+	s.copies = append(s.copies, objectCopy{source: sourceName, target: targetName})
+	s.keys[targetName] = true
+	return nil
+}
+
+func (s *trackingObjectStore) DeleteObject(_ context.Context, objectName string) error {
+	s.deleted = append(s.deleted, objectName)
+	delete(s.keys, objectName)
+	return nil
+}
+
+func (s *trackingObjectStore) ObjectKey(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", storage.ErrInvalidObjectKey
+	}
+	if key, ok := s.keyMap[value]; ok {
+		return key, nil
+	}
+	if strings.HasPrefix(value, "articles/") || strings.HasPrefix(value, "temp/articles/") {
+		return value, nil
+	}
+	if strings.HasPrefix(value, "http://") || strings.HasPrefix(value, "https://") {
+		return "", fmt.Errorf("%w: %s", storage.ErrExternalObjectURL, value)
+	}
+	return value, nil
 }
 
 // recordingPublisher 记录发布事件，用于断言点赞是否发布通知。

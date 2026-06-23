@@ -220,6 +220,20 @@ func TestArticleHandler_Save_BadRequest(t *testing.T) {
 	assert.Equal(t, response.CodeBadRequest, resp.Code)
 }
 
+func TestArticleHandler_Save_BadRequestForExternalImage(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{saveErr: articleservice.ErrArticleImageExternal})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/articles", bytes.NewReader([]byte(`{"title":"A"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+}
+
 func TestArticleHandler_ListPublic_ServerError(t *testing.T) {
 	r := newArticleRouter(&stubArticleService{listErr: errors.New("db down")})
 

@@ -3,7 +3,6 @@ package article
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"regexp"
 	"strings"
 
@@ -17,7 +16,11 @@ type articleAssetMove struct {
 }
 
 func (s *articleService) moveDeletedArticleAssets(ctx context.Context, article *model.Article) error {
-	moves := deletedArticleAssetMoves(article)
+	var keyResolver storage.ObjectKeyResolver
+	if resolver, ok := s.objectURLResolver.(storage.ObjectKeyResolver); ok {
+		keyResolver = resolver
+	}
+	moves := deletedArticleAssetMoves(article, keyResolver)
 	if len(moves) == 0 {
 		return nil
 	}
@@ -34,7 +37,7 @@ func (s *articleService) moveDeletedArticleAssets(ctx context.Context, article *
 	return nil
 }
 
-func deletedArticleAssetMoves(article *model.Article) []articleAssetMove {
+func deletedArticleAssetMoves(article *model.Article, keyResolver storage.ObjectKeyResolver) []articleAssetMove {
 	if article == nil {
 		return nil
 	}
@@ -42,7 +45,7 @@ func deletedArticleAssetMoves(article *model.Article) []articleAssetMove {
 	moves := make([]articleAssetMove, 0)
 	seen := map[string]struct{}{}
 	appendMove := func(value string) {
-		source := articleAssetKey(article.ID, value)
+		source := articleAssetKey(article.ID, value, keyResolver)
 		if source == "" {
 			return
 		}
@@ -74,23 +77,23 @@ func articleAssetValues(articleID uint, content string) []string {
 	return pattern.FindAllString(content, -1)
 }
 
-func articleAssetKey(articleID uint, value string) string {
+func articleAssetKey(articleID uint, value string, keyResolver storage.ObjectKeyResolver) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""
 	}
 
-	rawPath := value
-	if storage.IsAbsoluteURL(value) {
-		parsed, err := url.Parse(value)
-		if err == nil {
-			rawPath = parsed.Path
+	key := value
+	if keyResolver != nil {
+		resolvedKey, err := keyResolver.ObjectKey(value)
+		if err != nil {
+			return ""
 		}
+		key = resolvedKey
 	}
-	rawPath, _, _ = strings.Cut(rawPath, "?")
-	rawPath, _, _ = strings.Cut(rawPath, "#")
-
-	key := strings.TrimLeft(strings.TrimSpace(rawPath), "/")
+	key, _, _ = strings.Cut(key, "?")
+	key, _, _ = strings.Cut(key, "#")
+	key = strings.TrimLeft(strings.TrimSpace(key), "/")
 	deletedPrefix := fmt.Sprintf("deleted/articles/%d/", articleID)
 	if strings.Contains(key, deletedPrefix) {
 		return ""
