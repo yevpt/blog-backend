@@ -8263,9 +8263,44 @@
                 }
             }
         },
+        "dto.NotificationActorUserResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "description": "AvatarUrl 头像访问地址，已解析为可访问 URL。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 用户 ID。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "mark": {
+                    "description": "Mark 用户标识/备注，未设置时为空。",
+                    "type": "string"
+                },
+                "nickname": {
+                    "description": "Nickname 昵称，未设置时为空。",
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "site": {
+                    "description": "Site 个人站点，未设置时为空。",
+                    "type": "string"
+                }
+            }
+        },
         "dto.NotificationItemResp": {
             "type": "object",
             "properties": {
+                "actor_user": {
+                    "description": "ActorUser 操作人用户摘要，含昵称与头像，系统通知为空。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.NotificationActorUserResp"
+                        }
+                    ]
+                },
                 "actor_user_id": {
                     "description": "ActorUserID 操作人用户 ID，系统通知为空。",
                     "type": "integer",
@@ -8290,10 +8325,20 @@
                     "type": "integer",
                     "example": 1
                 },
+                "is_liked": {
+                    "description": "IsLiked 当前登录用户是否已点赞来源对象；仅 comment/reply/guestbook 来源填充。",
+                    "type": "boolean",
+                    "example": false
+                },
                 "is_read": {
                     "description": "IsRead 是否已读。",
                     "type": "boolean",
                     "example": false
+                },
+                "like_count": {
+                    "description": "LikeCount 来源对象当前点赞数；仅 comment/reply/guestbook 来源填充。",
+                    "type": "integer",
+                    "example": 3
                 },
                 "metadata": {
                     "description": "Metadata 跳转与扩展信息的原始 JSON，前端按需解析。",
@@ -8301,6 +8346,15 @@
                 },
                 "read_at": {
                     "description": "ReadAt 已读时间，未读为空。",
+                    "type": "string"
+                },
+                "reply_count": {
+                    "description": "ReplyCount 来源对象当前回复数；评论/留言统计其下回复，回复统计对其的跟评数。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "root_excerpt": {
+                    "description": "RootExcerpt 文章正文摘录，仅 root_type=article 且无评论/回复内容时填充。",
                     "type": "string"
                 },
                 "root_id": {

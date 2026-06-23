@@ -1627,8 +1627,32 @@ definitions:
         example: 21
         type: integer
     type: object
+  dto.NotificationActorUserResp:
+    properties:
+      avatar_url:
+        description: AvatarUrl 头像访问地址，已解析为可访问 URL。
+        type: string
+      id:
+        description: ID 用户 ID。
+        example: 2
+        type: integer
+      mark:
+        description: Mark 用户标识/备注，未设置时为空。
+        type: string
+      nickname:
+        description: Nickname 昵称，未设置时为空。
+        example: VPT
+        type: string
+      site:
+        description: Site 个人站点，未设置时为空。
+        type: string
+    type: object
   dto.NotificationItemResp:
     properties:
+      actor_user:
+        allOf:
+        - $ref: '#/definitions/dto.NotificationActorUserResp'
+        description: ActorUser 操作人用户摘要，含昵称与头像，系统通知为空。
       actor_user_id:
         description: ActorUserID 操作人用户 ID，系统通知为空。
         example: 2
@@ -1648,15 +1672,30 @@ definitions:
         description: ID 收件箱记录 ID。
         example: 1
         type: integer
+      is_liked:
+        description: IsLiked 当前登录用户是否已点赞来源对象；仅 comment/reply/guestbook 来源填充。
+        example: false
+        type: boolean
       is_read:
         description: IsRead 是否已读。
         example: false
         type: boolean
+      like_count:
+        description: LikeCount 来源对象当前点赞数；仅 comment/reply/guestbook 来源填充。
+        example: 3
+        type: integer
       metadata:
         description: Metadata 跳转与扩展信息的原始 JSON，前端按需解析。
         type: string
       read_at:
         description: ReadAt 已读时间，未读为空。
+        type: string
+      reply_count:
+        description: ReplyCount 来源对象当前回复数；评论/留言统计其下回复，回复统计对其的跟评数。
+        example: 2
+        type: integer
+      root_excerpt:
+        description: RootExcerpt 文章正文摘录，仅 root_type=article 且无评论/回复内容时填充。
         type: string
       root_id:
         description: RootID 根对象 ID。
