@@ -133,6 +133,23 @@ func main() {
 		log.Printf("  ✓ 完成")
 	}
 
+	// 种子默认邮件额度策略（幂等），让额度系统在新库即可生效。
+	log.Println("→ Step 23b: 种子邮件额度策略")
+	if err := seedNotificationPolicies(dst); err != nil {
+		log.Fatalf("  ✗ 种子额度策略失败: %v", err)
+	}
+	log.Printf("  ✓ 完成")
+
+	// 将旧 message/user_message 转换为 v2 通知事件与收件箱；目标表已有数据则跳过。
+	log.Println("→ Step 23c: 旧消息 → 通知事件/收件箱")
+	if !opts.force && hasData(dst, "notification_event") {
+		log.Printf("  跳过（notification_event 已有数据，使用 --force 强制重跑）")
+	} else if err := migrateNotifications(dst); err != nil {
+		log.Fatalf("  ✗ 通知数据迁移失败: %v", err)
+	} else {
+		log.Printf("  ✓ 完成")
+	}
+
 	if !opts.skipGarage {
 		log.Println("→ Step 24: Garage 对象路径迁移")
 		copier, err := newGarageCopier(cfg)

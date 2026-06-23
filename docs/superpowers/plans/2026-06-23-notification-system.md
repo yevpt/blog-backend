@@ -856,7 +856,7 @@ git commit -m "feat(notification): 新增通知管理接口"
 - Modify after migration: old `internal/model/message.go` and old message writes
 - Test: `cmd/migrate/*_test.go`
 
-- [ ] **Step 1: Decide schema migration mode**
+- [x] **Step 1: Decide schema migration mode**
 
 Pick one path for the target environment:
 
@@ -865,7 +865,7 @@ Pick one path for the target environment:
 
 Do not use app startup to AutoMigrate production databases.
 
-- [ ] **Step 2: Create new table migration**
+- [x] **Step 2: Create new table migration**
 
 Create all notification tables from the spec:
 
@@ -893,7 +893,7 @@ email_role_quota_policy(role, scope_type)
 email_quota_usage(scope_type, scope_id, purpose, window_type, window_start)
 ```
 
-- [ ] **Step 3: Create seed migration**
+- [x] **Step 3: Create seed migration**
 
 Seed default `email_quota_policy`:
 
@@ -907,7 +907,7 @@ admin_notice
 
 Seed default `email_role_quota_policy` for normal, vip, and admin actor/recipient limits.
 
-- [ ] **Step 4: Decide legacy data migration mode**
+- [x] **Step 4: Decide legacy data migration mode**
 
 Use one of:
 
@@ -916,7 +916,7 @@ Use one of:
 
 Do not delete old tables until production data has been verified.
 
-- [ ] **Step 5: Write migration tests**
+- [x] **Step 5: Write migration tests**
 
 Cover:
 
@@ -931,7 +931,7 @@ Run: `go test ./cmd/migrate -count=1`
 
 Expected: FAIL until migration exists.
 
-- [ ] **Step 6: Implement legacy type mapping**
+- [x] **Step 6: Implement legacy type mapping**
 
 Map known old types:
 
@@ -946,7 +946,7 @@ guestBook_reply -> reply_created
 unknown -> legacy_notice
 ```
 
-- [ ] **Step 7: Implement legacy migration**
+- [x] **Step 7: Implement legacy migration**
 
 For full old Java source migration:
 
@@ -976,13 +976,13 @@ old_unread_count
 new_unread_count
 ```
 
-- [ ] **Step 9: Verify**
+- [x] **Step 9: Verify**
 
 Run: `go test ./cmd/migrate -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add cmd/migrate cmd/notification-migrate internal/migration/schema
