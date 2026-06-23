@@ -48,6 +48,14 @@ func (s *fakeObjectStore) MoveObject(ctx context.Context, sourceName string, tar
 	return nil
 }
 
+func (s *fakeObjectStore) CopyObject(ctx context.Context, sourceName string, targetName string) error {
+	return nil
+}
+
+func (s *fakeObjectStore) ObjectKey(value string) (string, error) {
+	return value, nil
+}
+
 func (s *fakeObjectStore) DeleteObject(ctx context.Context, objectName string) error {
 	return nil
 }

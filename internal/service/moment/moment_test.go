@@ -187,6 +187,14 @@ func (s *fakeMomentObjectStore) MoveObject(context.Context, string, string) erro
 	return nil
 }
 
+func (s *fakeMomentObjectStore) CopyObject(context.Context, string, string) error {
+	return nil
+}
+
+func (s *fakeMomentObjectStore) ObjectKey(value string) (string, error) {
+	return value, nil
+}
+
 func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) {
 	now := time.Now()
 	viewerID := uint(7)

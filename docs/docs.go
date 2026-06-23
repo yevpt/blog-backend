@@ -5586,6 +5586,75 @@ const docTemplate = `{
                 }
             }
         },
+        "/uploads/temp": {
+            "post": {
+                "description": "登录用户上传文章编辑阶段的临时图片，仅支持 images/covers 目录，服务端按内容哈希去重并返回对象 key 与访问 URL。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "上传"
+                ],
+                "summary": "上传文章临时图片",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "临时目录：images 或 covers",
+                        "name": "dir",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "图片文件，最大 10MB",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示上传成功，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.TempUploadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "请求过于频繁",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/users": {
             "get": {
                 "description": "支持分页，按角色权限排序优先，然后按最后登录时间降序",
@@ -8719,6 +8788,19 @@ const docTemplate = `{
                     "description": "URL 标签路由别名；传空字符串表示清空。",
                     "type": "string",
                     "example": "go"
+                }
+            }
+        },
+        "dto.TempUploadResp": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "temp/articles/7/images/d018d0f4f7b2050d9399e96f87a97b83.png"
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://cdn.example.com/blog/temp/articles/7/images/d018d0f4f7b2050d9399e96f87a97b83.png"
                 }
             }
         },
