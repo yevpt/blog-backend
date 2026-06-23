@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/vpt/blog-backend/internal/model"
@@ -52,6 +53,13 @@ type legacyReplyRef struct {
 	sourceID   uint
 	rootType   string
 	rootID     uint
+}
+
+// legacyReplyQuote 迁移 reply 通知时写入 metadata 的被回复人、父评论与引用摘要。
+type legacyReplyQuote struct {
+	toUserID      uint
+	commentID     uint
+	quotedExcerpt string
 }
 
 // legacyEventType 把旧 message.type 规范化为 v2 事件类型，未知类型回退 legacy_notice。
@@ -118,6 +126,7 @@ func seedNotificationPolicies(dst *gorm.DB) error {
 //
 // 旧 message 映射为 notification_event（type 规范化，原始信息存入 metadata_json）；
 // 旧 user_messages 通过 message_id 关联到事件后映射为 notification_inbox，孤儿记录跳过。
+// 文章、碎言、评论、回复、点赞等源头在目标库已不存在时，整条旧消息及其收件箱一并跳过。
 // 收件箱唯一约束保证重复执行不产生重复投递。
 func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
 	messages, err := listLegacyMessages(src)
@@ -129,6 +138,14 @@ func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
 		return err
 	}
 	refs, err := buildLegacyNotificationRefs(src)
+	if err != nil {
+		return err
+	}
+	existence, err := loadNotificationExistence(dst)
+	if err != nil {
+		return err
+	}
+	replyQuotes, err := loadLegacyReplyQuotes(dst)
 	if err != nil {
 		return err
 	}
@@ -144,8 +161,13 @@ func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
 	// 建立 旧 message_id → 新 event_id 映射，供 user_messages 关联。
 	eventIDByMessage := make(map[uint]uint, len(messages))
 	legacyNoticeTypes := make(map[string]int)
+	skippedMissingSource := 0
 	for _, msg := range messages {
-		event, err := buildLegacyEvent(msg, refs)
+		if !legacyNotificationTargetValid(msg, refs, existence) {
+			skippedMissingSource++
+			continue
+		}
+		event, err := buildLegacyEvent(msg, refs, replyQuotes)
 		if err != nil {
 			return err
 		}
@@ -156,6 +178,9 @@ func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
 			return fmt.Errorf("insert notification_event legacy_message_id=%d: %w", msg.ID, err)
 		}
 		eventIDByMessage[msg.ID] = event.ID
+	}
+	if skippedMissingSource > 0 {
+		log.Printf("  跳过源头已缺失的旧消息 %d 条", skippedMissingSource)
 	}
 	logLegacyNoticeTypes(legacyNoticeTypes)
 
@@ -325,17 +350,17 @@ func loadLegacyReplyRefs(src *sql.DB, refs map[uint]legacyReplyRef) error {
 }
 
 // buildLegacyEvent 把一条旧 message 映射为 notification_event。
-func buildLegacyEvent(msg legacyMessage, refs legacyNotificationRefs) (*model.NotificationEvent, error) {
-	metadata, err := legacyEventMetadata(msg)
+func buildLegacyEvent(msg legacyMessage, refs legacyNotificationRefs, replyQuotes map[uint]legacyReplyQuote) (*model.NotificationEvent, error) {
+	sourceType, sourceID, rootType, rootID := legacyEventRelation(msg, refs)
+	eventType := legacyEventTypeForMessage(msg, sourceType)
+	metadata, err := legacyEventMetadata(msg, eventType, replyQuotes)
 	if err != nil {
 		return nil, err
 	}
 
-	sourceType, sourceID, rootType, rootID := legacyEventRelation(msg, refs)
-
 	actorID := msg.FromUserID
 	event := &model.NotificationEvent{
-		Type:        legacyEventTypeForMessage(msg, sourceType),
+		Type:        eventType,
 		ActorUserID: &actorID,
 		SourceType:  sourceType,
 		SourceID:    sourceID,
@@ -408,6 +433,294 @@ func legacyEventRelation(msg legacyMessage, refs legacyNotificationRefs) (string
 	return "legacy", msg.TypeID, "legacy", msg.TypeID
 }
 
+func loadLegacyReplyQuotes(dst *gorm.DB) (map[uint]legacyReplyQuote, error) {
+	quotes := make(map[uint]legacyReplyQuote)
+	tables := []struct {
+		replyTable   string
+		commentTable string
+	}{
+		{replyTable: "article_comment_reply", commentTable: "article_comment"},
+		{replyTable: "moment_comment_reply", commentTable: "moment_comment"},
+		{replyTable: "guestbook_reply", commentTable: "guestbook"},
+	}
+	for _, table := range tables {
+		if err := appendLegacyReplyQuotes(dst, table.replyTable, table.commentTable, quotes); err != nil {
+			return nil, err
+		}
+	}
+	return quotes, nil
+}
+
+func appendLegacyReplyQuotes(dst *gorm.DB, replyTable, commentTable string, quotes map[uint]legacyReplyQuote) error {
+	commentContents, err := loadLegacyCommentContents(dst, commentTable)
+	if err != nil {
+		return err
+	}
+
+	var rows []struct {
+		ID            uint
+		CommentID     uint
+		ToUserID      uint
+		ParentReplyID uint
+		Content       string
+	}
+	if err := dst.Table(replyTable).
+		Select("id, comment_id, to_user_id, parent_reply_id, content").
+		Find(&rows).Error; err != nil {
+		return fmt.Errorf("读取 %s: %w", replyTable, err)
+	}
+
+	replyContents := make(map[uint]string, len(rows))
+	for _, row := range rows {
+		replyContents[row.ID] = row.Content
+	}
+	for _, row := range rows {
+		quoted := commentContents[row.CommentID]
+		if row.ParentReplyID != 0 {
+			if parent, ok := replyContents[row.ParentReplyID]; ok {
+				quoted = parent
+			}
+		}
+		quotes[row.ID] = legacyReplyQuote{
+			toUserID:      row.ToUserID,
+			commentID:     row.CommentID,
+			quotedExcerpt: strings.TrimSpace(quoted),
+		}
+	}
+	return nil
+}
+
+func loadLegacyCommentContents(dst *gorm.DB, commentTable string) (map[uint]string, error) {
+	var rows []struct {
+		ID      uint
+		Content string
+	}
+	if err := dst.Table(commentTable).Select("id, content").Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("读取 %s: %w", commentTable, err)
+	}
+	contents := make(map[uint]string, len(rows))
+	for _, row := range rows {
+		contents[row.ID] = row.Content
+	}
+	return contents, nil
+}
+
+// notificationExistence 缓存目标库中通知可引用的业务对象 ID，供迁移与孤儿清理复用。
+type notificationExistence struct {
+	articles            map[uint]struct{}
+	moments             map[uint]struct{}
+	guestbooks          map[uint]struct{}
+	articleComments     map[uint]struct{}
+	momentComments      map[uint]struct{}
+	articleCommentReply map[uint]struct{}
+	momentCommentReply  map[uint]struct{}
+	guestbookReplies    map[uint]struct{}
+}
+
+func loadNotificationExistence(dst *gorm.DB) (notificationExistence, error) {
+	loadIDs := func(table string) (map[uint]struct{}, error) {
+		var ids []uint
+		if err := dst.Table(table).Pluck("id", &ids).Error; err != nil {
+			return nil, fmt.Errorf("读取 %s.id: %w", table, err)
+		}
+		set := make(map[uint]struct{}, len(ids))
+		for _, id := range ids {
+			set[id] = struct{}{}
+		}
+		return set, nil
+	}
+
+	articles, err := loadIDs("article")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	moments, err := loadIDs("moment")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	guestbooks, err := loadIDs("guestbook")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	articleComments, err := loadIDs("article_comment")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	momentComments, err := loadIDs("moment_comment")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	articleCommentReply, err := loadIDs("article_comment_reply")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	momentCommentReply, err := loadIDs("moment_comment_reply")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+	guestbookReplies, err := loadIDs("guestbook_reply")
+	if err != nil {
+		return notificationExistence{}, err
+	}
+
+	return notificationExistence{
+		articles:            articles,
+		moments:             moments,
+		guestbooks:          guestbooks,
+		articleComments:     articleComments,
+		momentComments:      momentComments,
+		articleCommentReply: articleCommentReply,
+		momentCommentReply:  momentCommentReply,
+		guestbookReplies:    guestbookReplies,
+	}, nil
+}
+
+func (e notificationExistence) has(set map[uint]struct{}, id uint) bool {
+	if id == 0 {
+		return false
+	}
+	_, ok := set[id]
+	return ok
+}
+
+// isMappableLegacyMessageType 判断旧 message.type 是否本应映射到具体业务对象。
+func isMappableLegacyMessageType(oldType string) bool {
+	switch oldType {
+	case "post_like", "article_like", "say_like", "moment_like",
+		"comment", "moment_comment", "say", "comment_like",
+		"comment_reply", "comment_reply_like",
+		"guestBook", "guestBook_like", "guestBook_reply", "guestBook_reply_like":
+		return true
+	default:
+		return false
+	}
+}
+
+// legacyNotificationTargetValid 判断旧消息引用的业务对象在目标库是否仍存在。
+func legacyNotificationTargetValid(msg legacyMessage, refs legacyNotificationRefs, existence notificationExistence) bool {
+	if msg.Type == "system" {
+		return true
+	}
+	sourceType, sourceID, rootType, rootID := legacyEventRelation(msg, refs)
+	if sourceType == "legacy" {
+		// 可映射类型因源头缺失回退 legacy，视为孤儿；真正未知类型保留。
+		return !isMappableLegacyMessageType(msg.Type)
+	}
+	return notificationTargetExists(sourceType, sourceID, rootType, rootID, existence)
+}
+
+func notificationTargetExists(sourceType string, sourceID uint, rootType string, rootID uint, existence notificationExistence) bool {
+	switch sourceType {
+	case "system":
+		return true
+	case "article":
+		return existence.has(existence.articles, sourceID)
+	case "moment":
+		return existence.has(existence.moments, sourceID)
+	case "guestbook":
+		return existence.has(existence.guestbooks, sourceID)
+	case "comment":
+		switch rootType {
+		case "article":
+			return existence.has(existence.articleComments, sourceID) && existence.has(existence.articles, rootID)
+		case "moment":
+			return existence.has(existence.momentComments, sourceID) && existence.has(existence.moments, rootID)
+		case "guestbook":
+			return existence.has(existence.guestbooks, sourceID)
+		default:
+			return false
+		}
+	case "reply":
+		switch rootType {
+		case "article":
+			return existence.has(existence.articleCommentReply, sourceID) && existence.has(existence.articleComments, rootID)
+		case "moment":
+			return existence.has(existence.momentCommentReply, sourceID) && existence.has(existence.momentComments, rootID)
+		case "guestbook":
+			return existence.has(existence.guestbookReplies, sourceID) && existence.has(existence.guestbooks, rootID)
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+// pruneOrphanNotificationEvents 删除源头业务对象已不存在的通知事件（含 legacy 回退事件）。
+func pruneOrphanNotificationEvents(dst *gorm.DB) error {
+	existence, err := loadNotificationExistence(dst)
+	if err != nil {
+		return err
+	}
+
+	var events []model.NotificationEvent
+	if err := dst.Select("id", "type", "source_type", "source_id", "root_type", "root_id", "metadata_json").
+		Find(&events).Error; err != nil {
+		return fmt.Errorf("读取 notification_event: %w", err)
+	}
+
+	orphanIDs := make([]uint, 0)
+	for _, event := range events {
+		if notificationEventTargetValid(event, existence) {
+			continue
+		}
+		orphanIDs = append(orphanIDs, event.ID)
+	}
+	if len(orphanIDs) == 0 {
+		return nil
+	}
+	result := dst.Where("id IN ?", orphanIDs).Delete(&model.NotificationEvent{})
+	if result.Error != nil {
+		return fmt.Errorf("清理 notification_event 源头缺失: %w", result.Error)
+	}
+	log.Printf("  清理 notification_event 源头缺失: %d 条", result.RowsAffected)
+	return nil
+}
+
+func notificationEventTargetValid(event model.NotificationEvent, existence notificationExistence) bool {
+	if event.Type == "system_notice" || event.SourceType == "system" {
+		return true
+	}
+	if event.SourceType == "legacy" || event.RootType == "legacy" {
+		return legacyStoredEventTargetValid(event, existence)
+	}
+	return notificationTargetExists(event.SourceType, event.SourceID, event.RootType, event.RootID, existence)
+}
+
+func legacyStoredEventTargetValid(event model.NotificationEvent, existence notificationExistence) bool {
+	msg, ok := legacyMessageFromEventMetadata(event)
+	if !ok {
+		return event.Type == "legacy_notice"
+	}
+	if !isMappableLegacyMessageType(msg.Type) {
+		return true
+	}
+	return legacyNotificationTargetValid(msg, legacyNotificationRefs{}, existence)
+}
+
+func legacyMessageFromEventMetadata(event model.NotificationEvent) (legacyMessage, bool) {
+	if event.MetadataJSON == nil {
+		return legacyMessage{}, false
+	}
+	var meta struct {
+		LegacyMessageID uint  `json:"legacy_message_id"`
+		LegacyType      string `json:"legacy_type"`
+		LegacyTypeID    uint  `json:"legacy_type_id"`
+		LegacyCommentID *uint `json:"legacy_comment_id"`
+		LegacyPostID    *uint `json:"legacy_post_id"`
+	}
+	if err := json.Unmarshal([]byte(*event.MetadataJSON), &meta); err != nil || meta.LegacyType == "" {
+		return legacyMessage{}, false
+	}
+	return legacyMessage{
+		ID:         meta.LegacyMessageID,
+		Type:       meta.LegacyType,
+		TypeID:     meta.LegacyTypeID,
+		CommentID:  meta.LegacyCommentID,
+		ArticleID:  meta.LegacyPostID,
+	}, true
+}
+
 func logLegacyNoticeTypes(types map[string]int) {
 	if len(types) == 0 {
 		return
@@ -441,7 +754,7 @@ func buildLegacyInbox(um legacyUserMessage, eventID uint) *model.NotificationInb
 }
 
 // legacyEventMetadata 构造迁移事件的 metadata_json，保留可追溯的旧字段。
-func legacyEventMetadata(msg legacyMessage) (*string, error) {
+func legacyEventMetadata(msg legacyMessage, eventType string, replyQuotes map[uint]legacyReplyQuote) (*string, error) {
 	meta := map[string]any{
 		"legacy_message_id": msg.ID,
 		"legacy_type":       msg.Type,
@@ -453,12 +766,31 @@ func legacyEventMetadata(msg legacyMessage) (*string, error) {
 	if msg.ArticleID != nil {
 		meta["legacy_post_id"] = *msg.ArticleID
 	}
+	if eventType == "reply_created" || eventType == "reply_liked" {
+		mergeLegacyReplyMetadata(meta, msg.TypeID, replyQuotes)
+	}
 	encoded, err := json.Marshal(meta)
 	if err != nil {
 		return nil, fmt.Errorf("编码 legacy metadata message_id=%d: %w", msg.ID, err)
 	}
 	value := string(encoded)
 	return &value, nil
+}
+
+func mergeLegacyReplyMetadata(meta map[string]any, replyID uint, replyQuotes map[uint]legacyReplyQuote) {
+	quote, ok := replyQuotes[replyID]
+	if !ok {
+		return
+	}
+	if quote.toUserID != 0 {
+		meta["recipient_user_ids"] = []uint{quote.toUserID}
+	}
+	if quote.commentID != 0 {
+		meta["comment_id"] = quote.commentID
+	}
+	if quote.quotedExcerpt != "" {
+		meta["quoted_excerpt"] = quote.quotedExcerpt
+	}
 }
 
 // strFromPtr 解引用字符串指针，nil 返回空串。

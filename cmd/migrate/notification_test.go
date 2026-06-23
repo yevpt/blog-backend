@@ -8,6 +8,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpt/blog-backend/internal/model"
 )
 
 // 旧类型按设计映射规范化，未知类型回退 legacy_notice。
@@ -53,7 +54,7 @@ func TestBuildLegacyEvent_MapsAndPreservesMetadata(t *testing.T) {
 		CommentID:  &commentID,
 	}
 
-	event, err := buildLegacyEvent(msg, legacyNotificationRefs{})
+	event, err := buildLegacyEvent(msg, legacyNotificationRefs{}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "article_liked", event.Type)
@@ -224,7 +225,7 @@ func TestBuildLegacyEvent_MapsLegacySemanticRefs(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			event, err := buildLegacyEvent(tt.msg, refs)
+			event, err := buildLegacyEvent(tt.msg, refs, nil)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.sourceType, event.SourceType)
@@ -266,7 +267,7 @@ func TestBuildLegacyEvent_MapsLegacyLikeEventTypes(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			event, err := buildLegacyEvent(tt.msg, refs)
+			event, err := buildLegacyEvent(tt.msg, refs, nil)
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, event.Type)
@@ -286,7 +287,7 @@ func TestBuildLegacyEvent_FallsBackReplyRelationFromMessageColumns(t *testing.T)
 		CommentID:  &commentID,
 	}
 
-	event, err := buildLegacyEvent(msg, legacyNotificationRefs{})
+	event, err := buildLegacyEvent(msg, legacyNotificationRefs{}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "reply_created", event.Type)
@@ -300,7 +301,7 @@ func TestBuildLegacyEvent_FallsBackReplyRelationFromMessageColumns(t *testing.T)
 func TestBuildLegacyEvent_FallsBackToLegacyRoot(t *testing.T) {
 	msg := legacyMessage{ID: 8, Type: "weird_unknown", TypeID: 12, FromUserID: 4}
 
-	event, err := buildLegacyEvent(msg, legacyNotificationRefs{})
+	event, err := buildLegacyEvent(msg, legacyNotificationRefs{}, nil)
 
 	require.NoError(t, err)
 	assert.Equal(t, "legacy_notice", event.Type)
@@ -388,4 +389,103 @@ func TestBuildLegacyNotificationRefs_ReadsCommentAndReplySemantics(t *testing.T)
 	assert.Equal(t, legacyReplyRef{sourceType: "reply", sourceID: 21, rootType: "moment", rootID: 11}, refs.replies[21])
 	assert.Equal(t, legacyReplyRef{sourceType: "reply", sourceID: 22, rootType: "guestbook", rootID: 12}, refs.replies[22])
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestLegacyNotificationTargetValid_SkipsDeletedArticleLike(t *testing.T) {
+	articleID := uint(3)
+	msg := legacyMessage{
+		ID:        7,
+		Type:      "post_like",
+		TypeID:    50,
+		ArticleID: &articleID,
+	}
+	existence := notificationExistence{
+		articles: map[uint]struct{}{99: {}},
+	}
+
+	assert.False(t, legacyNotificationTargetValid(msg, legacyNotificationRefs{}, existence))
+}
+
+func TestLegacyNotificationTargetValid_KeepsUnknownLegacyType(t *testing.T) {
+	msg := legacyMessage{ID: 8, Type: "weird_unknown", TypeID: 12}
+
+	assert.True(t, legacyNotificationTargetValid(msg, legacyNotificationRefs{}, notificationExistence{}))
+}
+
+func TestLegacyNotificationTargetValid_RequiresCommentAndArticle(t *testing.T) {
+	refs := legacyNotificationRefs{
+		comments: map[uint]legacyCommentRef{
+			10: {sourceType: "comment", sourceID: 10, rootType: "article", rootID: 3},
+		},
+	}
+	msg := legacyMessage{ID: 9, Type: "comment", TypeID: 10}
+	existence := notificationExistence{
+		articleComments: map[uint]struct{}{10: {}},
+		articles:        map[uint]struct{}{},
+	}
+
+	assert.False(t, legacyNotificationTargetValid(msg, refs, existence))
+}
+
+func TestNotificationEventTargetValid_RejectsLegacyFallbackForDeletedSource(t *testing.T) {
+	meta := `{"legacy_message_id":7,"legacy_type":"post_like","legacy_type_id":50,"legacy_post_id":3}`
+	event := model.NotificationEvent{
+		Type:         "legacy_notice",
+		SourceType:   "legacy",
+		SourceID:     50,
+		RootType:     "legacy",
+		RootID:       50,
+		MetadataJSON: &meta,
+	}
+
+	assert.False(t, notificationEventTargetValid(event, notificationExistence{}))
+}
+
+func TestBuildLegacyEvent_ReplyCreatedWritesQuotedExcerpt(t *testing.T) {
+	msg := legacyMessage{ID: 12, Type: "comment_reply", TypeID: 20, FromUserID: 4}
+	refs := legacyNotificationRefs{
+		replies: map[uint]legacyReplyRef{
+			20: {sourceType: "reply", sourceID: 20, rootType: "article", rootID: 10},
+		},
+	}
+	replyQuotes := map[uint]legacyReplyQuote{
+		20: {toUserID: 8, commentID: 10, quotedExcerpt: "被回复的评论"},
+	}
+
+	event, err := buildLegacyEvent(msg, refs, replyQuotes)
+
+	require.NoError(t, err)
+	assert.Equal(t, "reply_created", event.Type)
+	require.NotNil(t, event.MetadataJSON)
+	assert.Contains(t, *event.MetadataJSON, `"quoted_excerpt":"被回复的评论"`)
+	assert.Contains(t, *event.MetadataJSON, `"recipient_user_ids":[8]`)
+	assert.Contains(t, *event.MetadataJSON, `"comment_id":10`)
+}
+
+func TestBuildLegacyEvent_ReplyLikedWritesCommentID(t *testing.T) {
+	msg := legacyMessage{ID: 18, Type: "comment_reply_like", TypeID: 20, FromUserID: 4}
+	replyQuotes := map[uint]legacyReplyQuote{
+		20: {toUserID: 8, commentID: 10},
+	}
+
+	event, err := buildLegacyEvent(msg, legacyNotificationRefs{}, replyQuotes)
+
+	require.NoError(t, err)
+	assert.Equal(t, "reply_liked", event.Type)
+	require.NotNil(t, event.MetadataJSON)
+	assert.Contains(t, *event.MetadataJSON, `"comment_id":10`)
+	assert.Contains(t, *event.MetadataJSON, `"recipient_user_ids":[8]`)
+}
+
+func TestMergeLegacyReplyMetadata_PrefersParentReplyContent(t *testing.T) {
+	meta := map[string]any{"legacy_message_id": uint(12)}
+	replyQuotes := map[uint]legacyReplyQuote{
+		21: {toUserID: 9, commentID: 10, quotedExcerpt: "上一层回复"},
+	}
+
+	mergeLegacyReplyMetadata(meta, 21, replyQuotes)
+
+	assert.Equal(t, []uint{uint(9)}, meta["recipient_user_ids"])
+	assert.Equal(t, uint(10), meta["comment_id"])
+	assert.Equal(t, "上一层回复", meta["quoted_excerpt"])
 }

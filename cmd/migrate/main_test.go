@@ -197,6 +197,18 @@ func TestCleanOrphans_CleansNotificationTablesInsteadOfLegacyMessages(t *testing
 			WillReturnResult(sqlmock.NewResult(0, 0))
 	}
 
+	for _, table := range []string{
+		"article", "moment", "guestbook", "article_comment", "moment_comment",
+		"article_comment_reply", "moment_comment_reply", "guestbook_reply",
+	} {
+		mock.ExpectQuery("SELECT `id` FROM `" + table + "`").
+			WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	}
+	mock.ExpectQuery("SELECT (.+) FROM `notification_event`").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "type", "source_type", "source_id", "root_type", "root_id", "metadata_json",
+		}))
+
 	err = cleanOrphans(gormDB)
 
 	require.NoError(t, err)

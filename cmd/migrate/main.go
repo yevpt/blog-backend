@@ -2412,10 +2412,6 @@ func cleanOrphans(dst *gorm.DB) error {
 			"DELETE FROM notification_event WHERE source_type = 'reply' AND root_type = 'guestbook' AND (NOT EXISTS (SELECT 1 FROM guestbook_reply WHERE guestbook_reply.id = notification_event.source_id) OR NOT EXISTS (SELECT 1 FROM guestbook WHERE guestbook.id = notification_event.root_id))",
 		},
 		{
-			"notification_inbox 孤儿（event_id 无对应 notification_event）",
-			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_inbox.event_id)",
-		},
-		{
 			"notification_inbox 孤儿（recipient_user_id 无对应 user）",
 			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM user WHERE user.id = notification_inbox.recipient_user_id)",
 		},
@@ -2467,6 +2463,27 @@ func cleanOrphans(dst *gorm.DB) error {
 
 	totalDeleted := int64(0)
 	for _, c := range cleanups {
+		result := dst.Exec(c.sql)
+		if result.Error != nil {
+			return fmt.Errorf("清理 %s 失败: %w", c.desc, result.Error)
+		}
+		if result.RowsAffected > 0 {
+			log.Printf("  清理 %s: %d 条", c.desc, result.RowsAffected)
+			totalDeleted += result.RowsAffected
+		}
+	}
+
+	if err := pruneOrphanNotificationEvents(dst); err != nil {
+		return err
+	}
+
+	inboxCleanups := []cleanup{
+		{
+			"notification_inbox 孤儿（event_id 无对应 notification_event）",
+			"DELETE FROM notification_inbox WHERE NOT EXISTS (SELECT 1 FROM notification_event WHERE notification_event.id = notification_inbox.event_id)",
+		},
+	}
+	for _, c := range inboxCleanups {
 		result := dst.Exec(c.sql)
 		if result.Error != nil {
 			return fmt.Errorf("清理 %s 失败: %w", c.desc, result.Error)
