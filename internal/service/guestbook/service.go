@@ -44,7 +44,7 @@ func (s *guestbookService) ToggleLike(id uint, userID uint) (*dto.GuestbookLikeR
 	// 仅在本次为点赞时发布事件，接收人由分发器按留言归属解析；点赞仅站内通知。
 	// 自己点赞自己的留言不产生通知事件。
 	if result.IsLiked && result.OwnerUserID != userID {
-		s.notifyGuestbookLiked(id, userID)
+		s.notifyGuestbookLiked(id, userID, result.Content)
 	}
 	return &dto.GuestbookLikeResp{ID: result.ID, IsLiked: result.IsLiked, LikeCount: result.LikeCount}, nil
 }

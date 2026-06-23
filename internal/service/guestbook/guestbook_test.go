@@ -233,7 +233,7 @@ func TestGuestbookService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
 // 点赞别人的留言正常发布通知事件。
 func TestGuestbookService_ToggleLike_PublishesForOtherOwner(t *testing.T) {
 	repo := &fakeGuestbookRepo{
-		toggleResp: &guestbookrepo.LikeResult{ID: 9, IsLiked: true, LikeCount: 2, OwnerUserID: 1},
+		toggleResp: &guestbookrepo.LikeResult{ID: 9, IsLiked: true, LikeCount: 2, OwnerUserID: 1, Content: "留言正文"},
 	}
 	pub := &recordingPublisher{}
 	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
@@ -243,4 +243,8 @@ func TestGuestbookService_ToggleLike_PublishesForOtherOwner(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
 	assert.Equal(t, notificationservice.EventTypeGuestbookLiked, pub.events[0].Type)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, `"source_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"root_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"留言正文"`)
 }

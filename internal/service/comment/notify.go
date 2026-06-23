@@ -21,7 +21,16 @@ func (s *commentService) notifyCommentCreated(targetType string, targetID uint, 
 	actorID := aggregate.Comment.UserID
 	var metadata *string
 	if targetType == targetTypeGuestbook {
-		metadata = notificationservice.BuildRecipientMetadata(targetID)
+		metadata = notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "guestbook", ID: aggregate.Comment.ID, Excerpt: aggregate.Comment.Content},
+			&notificationservice.NotificationSnapshot{Type: "guestbook", ID: aggregate.Comment.ID, Excerpt: aggregate.Comment.Content},
+			targetID,
+		)
+	} else {
+		metadata = notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "comment", ID: aggregate.Comment.ID, Excerpt: aggregate.Comment.Content},
+			notificationRootSnapshot(aggregate.RootSnapshot),
+		)
 	}
 
 	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
@@ -30,10 +39,17 @@ func (s *commentService) notifyCommentCreated(targetType string, targetID uint, 
 		SourceType:     "comment",
 		SourceID:       aggregate.Comment.ID,
 		RootType:       targetType,
-		RootID:         targetID,
+		RootID:         commentCreatedRootID(targetType, targetID, aggregate),
 		ContentExcerpt: aggregate.Comment.Content,
 		Metadata:       metadata,
 	})
+}
+
+func commentCreatedRootID(targetType string, targetID uint, aggregate *commentrepo.CommentAggregate) uint {
+	if targetType == targetTypeGuestbook && aggregate != nil {
+		return aggregate.Comment.ID
+	}
+	return targetID
 }
 
 // notifyCommentLiked 一级评论被点赞后发布 comment_liked 事件，接收人为评论作者。
@@ -53,7 +69,11 @@ func (s *commentService) notifyCommentLiked(targetType string, commentID uint, r
 		SourceID:    commentID,
 		RootType:    targetType,
 		RootID:      result.RootID,
-		Metadata:    notificationservice.BuildRecipientMetadata(result.TargetUserID),
+		Metadata: notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "comment", ID: commentID, Excerpt: result.TargetContent},
+			notificationRootSnapshot(result.RootSnapshot),
+			result.TargetUserID,
+		),
 	})
 }
 
@@ -71,6 +91,8 @@ func (s *commentService) notifyReplyCreated(targetType string, aggregate *commen
 	metadata := notificationservice.BuildReplyCreatedMetadata(
 		aggregate.Reply.ToUserID,
 		aggregate.Reply.CommentID,
+		aggregate.Reply.Content,
+		notificationRootSnapshot(aggregate.RootSnapshot),
 		aggregate.QuotedContent,
 	)
 
@@ -105,7 +127,21 @@ func (s *commentService) notifyReplyLiked(targetType string, replyID uint, resul
 		RootID:      result.RootID,
 		Metadata: notificationservice.BuildReplyLikedMetadata(
 			result.TargetUserID,
-			result.RootID,
+			result.CommentID,
+			result.TargetContent,
+			notificationRootSnapshot(result.RootSnapshot),
 		),
 	})
+}
+
+func notificationRootSnapshot(snapshot commentrepo.RootSnapshot) *notificationservice.NotificationSnapshot {
+	if snapshot.Type == "" && snapshot.ID == 0 && snapshot.Title == "" && snapshot.Excerpt == "" {
+		return nil
+	}
+	return &notificationservice.NotificationSnapshot{
+		Type:    snapshot.Type,
+		ID:      snapshot.ID,
+		Title:   snapshot.Title,
+		Excerpt: snapshot.Excerpt,
+	}
 }

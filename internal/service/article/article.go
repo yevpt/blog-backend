@@ -251,13 +251,13 @@ func (s *articleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp,
 	// 仅在本次为点赞（而非取消）时发布通知事件，接收人由分发器按文章作者解析。
 	// 自己点赞自己的文章不产生通知事件。
 	if liked && aggregate.Article.UserID != userID {
-		s.notifyArticleLiked(id, userID, aggregate.Article.Title)
+		s.notifyArticleLiked(id, userID, aggregate.Article.Title, notificationArticleExcerpt(aggregate.Article))
 	}
 	return &dto.ArticleLikeResp{IsLiked: liked, LikeCount: aggregate.LikeCount}, nil
 }
 
 // notifyArticleLiked 发布 article_liked 事件；点赞仅站内通知，不进邮件队列。
-func (s *articleService) notifyArticleLiked(articleID uint, userID uint, title string) {
+func (s *articleService) notifyArticleLiked(articleID uint, userID uint, title string, excerpt string) {
 	if s.publisher == nil {
 		return
 	}
@@ -270,7 +270,20 @@ func (s *articleService) notifyArticleLiked(articleID uint, userID uint, title s
 		RootType:    "article",
 		RootID:      articleID,
 		Title:       title,
+		Metadata: notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "article", ID: articleID, Title: title, Excerpt: excerpt},
+			&notificationservice.NotificationSnapshot{Type: "article", ID: articleID, Title: title, Excerpt: excerpt},
+		),
 	})
+}
+
+func notificationArticleExcerpt(article model.Article) string {
+	if article.ShortContent != nil {
+		if excerpt := strings.TrimSpace(*article.ShortContent); excerpt != "" {
+			return excerpt
+		}
+	}
+	return strings.TrimSpace(article.Content)
 }
 
 func mapArticleDeleteError(err error) error {

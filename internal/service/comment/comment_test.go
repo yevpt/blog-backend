@@ -257,28 +257,37 @@ func TestCommentService_ToggleLike_ReturnsLatestState(t *testing.T) {
 
 func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
 	repo := &fakeCommentRepo{
-		toggleReplyLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 3, TargetUserID: 8, RootID: 9},
+		toggleReplyLikeResp: &commentrepo.LikeResult{
+			IsLiked: true, LikeCount: 3, TargetUserID: 8, RootID: 3,
+			CommentID:     9,
+			TargetContent: "回复正文",
+			RootSnapshot:  commentrepo.RootSnapshot{Type: "article", ID: 3, Title: "文章标题", Excerpt: "文章摘要"},
+		},
 	}
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub)
 
-	resp, err := svc.ToggleReplyLike("guestbook", 12, 7)
+	resp, err := svc.ToggleReplyLike("article", 12, 7)
 
 	require.NoError(t, err)
 	assert.True(t, resp.IsLiked)
-	assert.Equal(t, uint8(commentrepo.TargetGuestbook), repo.toggleReplyLikeTarget.Type)
+	assert.Equal(t, uint8(commentrepo.TargetArticle), repo.toggleReplyLikeTarget.Type)
 	assert.Equal(t, uint(12), repo.toggleReplyLikeID)
 	assert.Equal(t, uint(7), repo.toggleReplyLikeUserID)
 	require.Len(t, pub.events, 1)
 	assert.Equal(t, notificationservice.EventTypeReplyLiked, pub.events[0].Type)
 	assert.Equal(t, "reply", pub.events[0].SourceType)
 	assert.Equal(t, uint(12), pub.events[0].SourceID)
-	assert.Equal(t, "guestbook", pub.events[0].RootType)
-	assert.Equal(t, uint(9), pub.events[0].RootID)
+	assert.Equal(t, "article", pub.events[0].RootType)
+	assert.Equal(t, uint(3), pub.events[0].RootID)
 	require.NotNil(t, pub.events[0].ActorUserID)
 	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
 	require.NotNil(t, pub.events[0].Metadata)
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+	assert.Contains(t, *pub.events[0].Metadata, `"source_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"回复正文"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"root_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"title":"文章标题"`)
 	assert.Contains(t, *pub.events[0].Metadata, `"comment_id":9`)
 }
 
@@ -346,7 +355,8 @@ func (p *recordingPublisher) Publish(_ context.Context, e notificationservice.Pu
 
 func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {
 	repo := &fakeCommentRepo{createResp: &commentrepo.CommentAggregate{
-		Comment: commentrepo.CommentRecord{ID: 9, UserID: 7, Content: "好文章"},
+		Comment:      commentrepo.CommentRecord{ID: 9, UserID: 7, Content: "好文章"},
+		RootSnapshot: commentrepo.RootSnapshot{Type: "article", ID: 3, Title: "文章标题", Excerpt: "文章摘要"},
 	}}
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub)
@@ -361,8 +371,12 @@ func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {
 	assert.Equal(t, uint(9), pub.events[0].SourceID)
 	require.NotNil(t, pub.events[0].ActorUserID)
 	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
-	// 文章评论接收人由分发器按归属解析，不写显式 metadata。
-	assert.Nil(t, pub.events[0].Metadata)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, `"source_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"好文章"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"root_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"title":"文章标题"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"文章摘要"`)
 }
 
 func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
@@ -378,6 +392,8 @@ func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
 	assert.Equal(t, notificationservice.EventTypeCommentCreated, pub.events[0].Type)
+	assert.Equal(t, "guestbook", pub.events[0].RootType)
+	assert.Equal(t, uint(9), pub.events[0].RootID)
 	require.NotNil(t, pub.events[0].Metadata)
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
 }
@@ -385,7 +401,9 @@ func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
 func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 	repo := &fakeCommentRepo{replyResp: &commentrepo.ReplyAggregate{
 		Reply:         commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 8, Content: "收到"},
+		TargetID:      3,
 		QuotedContent: "原评论正文",
+		RootSnapshot:  commentrepo.RootSnapshot{Type: "article", ID: 3, Title: "文章标题", Excerpt: "文章摘要"},
 	}}
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub)
@@ -398,7 +416,13 @@ func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 	require.NotNil(t, pub.events[0].Metadata)
 	// 被回复人 8 应出现在显式接收人列表。
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
-	assert.Contains(t, *pub.events[0].Metadata, `"quoted_excerpt":"原评论正文"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"source_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"收到"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"root_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"title":"文章标题"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"文章摘要"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"quote_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"原评论正文"`)
 	assert.Contains(t, *pub.events[0].Metadata, `"comment_id":9`)
 }
 
@@ -466,7 +490,11 @@ func TestCommentService_ToggleReplyLike_SelfLikeDoesNotPublish(t *testing.T) {
 // 一级评论被其他用户点赞时发布 comment_liked 事件，接收人为评论作者。
 func TestCommentService_ToggleLike_PublishesCommentLikedEvent(t *testing.T) {
 	repo := &fakeCommentRepo{
-		toggleLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 3, TargetUserID: 8, RootID: 5},
+		toggleLikeResp: &commentrepo.LikeResult{
+			IsLiked: true, LikeCount: 3, TargetUserID: 8, RootID: 5,
+			TargetContent: "碎语评论正文",
+			RootSnapshot:  commentrepo.RootSnapshot{Type: "moment", ID: 5, Excerpt: "碎语正文"},
+		},
 	}
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub)
@@ -488,6 +516,10 @@ func TestCommentService_ToggleLike_PublishesCommentLikedEvent(t *testing.T) {
 	assert.Equal(t, uint(7), *pub.events[0].ActorUserID)
 	require.NotNil(t, pub.events[0].Metadata)
 	assert.Contains(t, *pub.events[0].Metadata, "recipient_user_ids")
+	assert.Contains(t, *pub.events[0].Metadata, `"source_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"碎语评论正文"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"root_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"碎语正文"`)
 }
 
 // 自己点赞自己的评论不产生通知事件。
@@ -525,7 +557,7 @@ func TestCommentService_ToggleLike_SelfMomentSelfCommentOtherLike_Publishes(t *t
 		toggleLikeResp: &commentrepo.LikeResult{
 			IsLiked:      true,
 			LikeCount:    1,
-			TargetUserID: 1, // 评论作者 = A(1)
+			TargetUserID: 1,  // 评论作者 = A(1)
 			RootID:       10, // A(1) 的碎语
 		},
 	}

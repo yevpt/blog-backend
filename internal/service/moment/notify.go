@@ -20,5 +20,9 @@ func (s *momentService) notifyMomentLiked(momentID uint, userID uint, content st
 		RootType:       "moment",
 		RootID:         momentID,
 		ContentExcerpt: content,
+		Metadata: notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "moment", ID: momentID, Excerpt: content},
+			&notificationservice.NotificationSnapshot{Type: "moment", ID: momentID, Excerpt: content},
+		),
 	})
 }

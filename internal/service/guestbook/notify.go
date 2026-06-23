@@ -25,12 +25,16 @@ func (s *guestbookService) notifyGuestbookCreated(ownerUserID uint, fromUserID u
 		RootType:       "guestbook",
 		RootID:         aggregate.Message.ID,
 		ContentExcerpt: aggregate.Message.Content,
-		Metadata:       notificationservice.BuildRecipientMetadata(ownerUserID),
+		Metadata: notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "guestbook", ID: aggregate.Message.ID, Excerpt: aggregate.Message.Content},
+			&notificationservice.NotificationSnapshot{Type: "guestbook", ID: aggregate.Message.ID, Excerpt: aggregate.Message.Content},
+			ownerUserID,
+		),
 	})
 }
 
 // notifyGuestbookLiked 发布 guestbook_liked 事件；接收人由分发器按留言归属解析，点赞仅站内通知。
-func (s *guestbookService) notifyGuestbookLiked(guestbookID uint, userID uint) {
+func (s *guestbookService) notifyGuestbookLiked(guestbookID uint, userID uint, content string) {
 	if s.publisher == nil {
 		return
 	}
@@ -42,5 +46,9 @@ func (s *guestbookService) notifyGuestbookLiked(guestbookID uint, userID uint) {
 		SourceID:    guestbookID,
 		RootType:    "guestbook",
 		RootID:      guestbookID,
+		Metadata: notificationservice.BuildSourceRootMetadata(
+			notificationservice.NotificationSnapshot{Type: "guestbook", ID: guestbookID, Excerpt: content},
+			&notificationservice.NotificationSnapshot{Type: "guestbook", ID: guestbookID, Excerpt: content},
+		),
 	})
 }

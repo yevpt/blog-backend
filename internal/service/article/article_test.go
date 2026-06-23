@@ -663,9 +663,10 @@ func TestArticleService_ToggleLike_PublishesEventOnLike(t *testing.T) {
 	repo := mock.NewMockArticleRepository(ctrl)
 	pub := &recordingPublisher{}
 	svc := articleservice.NewArticleService(repo, nil, nil, pub)
+	shortContent := "文章摘要"
 
 	repo.EXPECT().ToggleLike(uint(8), uint(3)).Return(&articlerepo.ArticleAggregate{
-		Article:   model.Article{Base: model.Base{ID: 8}, Title: "A", UserID: 1, Status: 1},
+		Article:   model.Article{Base: model.Base{ID: 8}, Title: "A", ShortContent: &shortContent, Content: "文章正文", UserID: 1, Status: 1},
 		LikeCount: 11,
 		IsLiked:   true,
 	}, true, nil)
@@ -676,6 +677,11 @@ func TestArticleService_ToggleLike_PublishesEventOnLike(t *testing.T) {
 	require.Len(t, pub.events, 1)
 	assert.Equal(t, notificationservice.EventTypeArticleLiked, pub.events[0].Type)
 	assert.Equal(t, uint(8), pub.events[0].RootID)
+	require.NotNil(t, pub.events[0].Metadata)
+	assert.Contains(t, *pub.events[0].Metadata, `"source_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"root_snapshot"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"title":"A"`)
+	assert.Contains(t, *pub.events[0].Metadata, `"excerpt":"文章摘要"`)
 }
 
 func TestArticleService_ToggleLike_DoesNotPublishOnUnlike(t *testing.T) {
