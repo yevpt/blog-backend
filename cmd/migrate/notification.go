@@ -65,6 +65,14 @@ func seedNotificationPolicies(dst *gorm.DB) error {
 // 旧 user_message 通过 message_id 关联到事件后映射为 notification_inbox，孤儿记录跳过。
 // 收件箱唯一约束保证重复执行不产生重复投递。
 func migrateNotifications(dst *gorm.DB) error {
+	// 回填可重复执行：先清空 v2 表，保证多次运行（含上次部分失败）后结果一致。
+	if err := dst.Exec("DELETE FROM `notification_inbox`").Error; err != nil {
+		return fmt.Errorf("清空 notification_inbox: %w", err)
+	}
+	if err := dst.Exec("DELETE FROM `notification_event`").Error; err != nil {
+		return fmt.Errorf("清空 notification_event: %w", err)
+	}
+
 	var messages []model.Message
 	if err := dst.Order("id").Find(&messages).Error; err != nil {
 		return fmt.Errorf("读取旧 message: %w", err)
@@ -118,14 +126,15 @@ func buildLegacyEvent(msg model.Message) (*model.NotificationEvent, error) {
 
 	actorID := msg.FromUserID
 	event := &model.NotificationEvent{
-		Type:           legacyEventType(msg.Type),
-		ActorUserID:    &actorID,
-		SourceType:     "legacy",
-		SourceID:       msg.TypeID,
-		RootType:       rootType,
-		RootID:         rootID,
-		Title:          strFromPtr(msg.Title),
-		ContentExcerpt: strFromPtr(msg.Content),
+		Type:        legacyEventType(msg.Type),
+		ActorUserID: &actorID,
+		SourceType:  "legacy",
+		SourceID:    msg.TypeID,
+		RootType:    rootType,
+		RootID:      rootID,
+		// 按列宽截断，历史垃圾数据可能远超快照列长度（title 120 / content_excerpt 500）。
+		Title:          truncateRunes(strFromPtr(msg.Title), 120),
+		ContentExcerpt: truncateRunes(strFromPtr(msg.Content), 500),
 		MetadataJSON:   metadata,
 		DispatchStatus: "done", // 历史数据视为已分发
 		NextProcessAt:  msg.CreatedAt,
@@ -176,4 +185,13 @@ func strFromPtr(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// truncateRunes 按 rune 截断字符串到 max 长度，避免在多字节字符中间截断。
+func truncateRunes(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max])
 }

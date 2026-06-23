@@ -44,8 +44,9 @@ import (
 // ─────────────────────────────────────────────
 
 type migrateOptions struct {
-	force      bool
-	skipGarage bool
+	force             bool
+	skipGarage        bool
+	onlyNotifications bool
 }
 
 func main() {
@@ -55,6 +56,12 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("配置加载失败（请确保 config/config.local.yaml 存在）: %v", err)
+	}
+
+	// 仅通知迁移模式：只连目标库，建新表、种子、转换旧消息并删旧表，跳过源库与其余步骤。
+	if opts.onlyNotifications {
+		runNotificationsOnly(cfg, opts)
+		return
 	}
 
 	// 2. 连接源库（原始 blog 库，只读）
@@ -245,8 +252,91 @@ func parseMigrateFlags() migrateOptions {
 	opts := migrateOptions{}
 	flag.BoolVar(&opts.force, "force", false, "强制重跑已有数据的迁移步骤")
 	flag.BoolVar(&opts.skipGarage, "skip-garage", false, "跳过 Garage 对象复制和路径更新")
+	flag.BoolVar(&opts.onlyNotifications, "only-notifications", false, "仅在目标库执行通知迁移：建新表、种子额度、转换旧消息并删除 message/user_message")
 	flag.Parse()
 	return opts
+}
+
+// runNotificationsOnly 仅对目标库执行通知系统迁移，不连接源库、不跑 Garage/defrag 等步骤。
+//
+// 适用于「当前 Go 库已迁移过、仅需补建并回填 v2 通知」的场景：
+//  1. 建通知相关新表（已存在则无操作）；
+//  2. 种子默认邮件额度与角色额度策略；
+//  3. 把现有 message/user_message 转换为 notification_event/notification_inbox（notification_event 已有数据则跳过，--force 强制）；
+//  4. 删除当前库的 message/user_message（原始数据仍在源库）。
+func runNotificationsOnly(cfg *config.Config, opts migrateOptions) {
+	dst, err := database.NewMySQL(&cfg.DB)
+	if err != nil {
+		log.Fatalf("目标库连接失败: %v", err)
+	}
+	log.Printf("✓ 目标库连接成功（%s/%s）", cfg.DB.Host, cfg.DB.Name)
+
+	log.Println("→ AutoMigrate 通知相关表...")
+	if err := autoMigrateNotifications(dst); err != nil {
+		log.Fatalf("AutoMigrate 失败: %v", err)
+	}
+	log.Println("✓ 建表完成")
+
+	log.Println("→ 种子邮件额度策略")
+	if err := seedNotificationPolicies(dst); err != nil {
+		log.Fatalf("  ✗ 种子额度策略失败: %v", err)
+	}
+	log.Println("  ✓ 完成")
+
+	log.Println("→ 旧消息 → 通知事件/收件箱")
+	if !opts.force && hasData(dst, "notification_event") {
+		log.Println("  跳过（notification_event 已有数据，使用 --force 强制重跑）")
+	} else if err := migrateNotifications(dst); err != nil {
+		log.Fatalf("  ✗ 通知迁移失败: %v", err)
+	} else {
+		log.Println("  ✓ 完成")
+	}
+
+	log.Println("→ 校验数量")
+	logNotificationCounts(dst)
+
+	log.Println("→ 删除旧 message/user_message")
+	if err := dst.Exec("DROP TABLE IF EXISTS `user_message`, `message`").Error; err != nil {
+		log.Fatalf("  ✗ 删除旧消息表失败: %v", err)
+	}
+	log.Println("  ✓ 完成")
+
+	log.Println("\n✓ 通知迁移完成")
+}
+
+// autoMigrateNotifications 只建通知系统相关表，不影响其它业务表。
+func autoMigrateNotifications(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&model.NotificationEvent{},
+		&model.NotificationInbox{},
+		&model.NotificationPreference{},
+		&model.NotificationEmailTask{},
+		&model.NotificationEmailBatch{},
+		&model.NotificationEmailBatchItem{},
+		&model.EmailQuotaPolicy{},
+		&model.EmailRoleQuotaPolicy{},
+		&model.EmailQuotaUsage{},
+		&model.EmailSendLog{},
+	)
+}
+
+// logNotificationCounts 打印迁移前后的数量对比，便于核对。
+func logNotificationCounts(db *gorm.DB) {
+	count := func(table, where string) int64 {
+		var n int64
+		q := db.Table(table)
+		if where != "" {
+			q = q.Where(where)
+		}
+		q.Count(&n)
+		return n
+	}
+	log.Printf("  events=%d inbox=%d old_unread=%d new_unread=%d",
+		count("notification_event", ""),
+		count("notification_inbox", ""),
+		count("user_message", "is_read = 0"),
+		count("notification_inbox", "is_read = 0"),
+	)
 }
 
 func normalizeMomentMediaSchema(db *gorm.DB) error {
@@ -2184,7 +2274,9 @@ func replyLikeTypeFromLegacy(commentType uint8) uint8 {
 }
 
 func dropLegacyTables(dst *gorm.DB) error {
-	return dst.Exec("DROP TABLE IF EXISTS `comment_reply`, `media`").Error
+	// message/user_message 已在 Step 23c 转换为 v2 通知事件/收件箱，原始数据仍保留在源库，
+	// 此处直接删除当前库的旧消息表，使目标库只保留 v2 通知模型。
+	return dst.Exec("DROP TABLE IF EXISTS `comment_reply`, `media`, `user_message`, `message`").Error
 }
 
 // ─────────────────────────────────────────────
