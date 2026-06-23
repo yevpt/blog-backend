@@ -16,6 +16,12 @@ const (
 	defaultSendRetryDelay  = 5 * time.Minute // 发送失败后默认重试延迟
 )
 
+// RootSnapshotResolver 解析事件根对象的展示快照（文章标题/碎语摘要），
+// 供邮件正文中标识「哪篇文章/哪条碎语」时按需取用。返回空串不视作错误。
+type RootSnapshotResolver interface {
+	RootSnapshotOf(ctx context.Context, rootType string, rootID uint) (string, error)
+}
+
 // senderRepo 是 sender 依赖的仓储能力子集。
 type senderRepo interface {
 	notificationrepo.EmailBatchRepository
@@ -28,21 +34,27 @@ type EmailSender struct {
 	repo         senderRepo
 	quota        *QuotaService
 	roles        RoleResolver
+	roots        RootSnapshotResolver
 	mailer       email.MailSender
 	provider     string
+	siteURL      string
 	leaseSeconds int
 	retryDelay   time.Duration
 	now          func() time.Time
 }
 
 // NewEmailSender 创建邮件发送器。
-func NewEmailSender(repo senderRepo, quota *QuotaService, roles RoleResolver, mailer email.MailSender, provider string) *EmailSender {
+// roots 用于按事件根对象解析展示快照，可为 nil（此时退化为不展示根对象标题）。
+// siteURL 为站点前缀，用于文章跳转链接与 Footer；为空时邮件不渲染可点击链接。
+func NewEmailSender(repo senderRepo, quota *QuotaService, roles RoleResolver, roots RootSnapshotResolver, mailer email.MailSender, provider, siteURL string) *EmailSender {
 	return &EmailSender{
 		repo:         repo,
 		quota:        quota,
 		roles:        roles,
+		roots:        roots,
 		mailer:       mailer,
 		provider:     provider,
+		siteURL:      siteURL,
 		leaseSeconds: defaultSenderLeaseSecs,
 		retryDelay:   defaultSendRetryDelay,
 		now:          time.Now,
@@ -98,7 +110,11 @@ func (s *EmailSender) sendBatch(ctx context.Context, batch model.NotificationEma
 	if err != nil {
 		return false, err
 	}
-	htmlBody := renderDigestHTML(tasks, events)
+	rootLabels, err := s.resolveRootLabels(ctx, events)
+	if err != nil {
+		return false, err
+	}
+	htmlBody := renderDigestHTML(tasks, events, rootLabels, s.siteURL)
 	messageID := batchMessageID(batch.ID)
 
 	// 调用 SMTP；失败落日志并安排重试。
@@ -151,4 +167,29 @@ func eventIDsOf(tasks []model.NotificationEmailTask) []uint {
 // batchMessageID 由批次 ID 生成稳定 Message-ID，用于发送侧幂等与追踪。
 func batchMessageID(batchID uint) string {
 	return fmt.Sprintf("notify-batch-%d", batchID)
+}
+
+// resolveRootLabels 按事件 ID 收集根对象展示快照，仅对文章/碎语根做查询；
+// 解析器缺失或查询失败时返回空映射，让模板按「ID xx」回退，不阻断邮件发送。
+func (s *EmailSender) resolveRootLabels(ctx context.Context, events map[uint]model.NotificationEvent) (map[uint]string, error) {
+	if s.roots == nil {
+		return nil, nil
+	}
+	out := make(map[uint]string, len(events))
+	for id, event := range events {
+		if event.RootID == 0 {
+			continue
+		}
+		switch event.RootType {
+		case "article", "moment":
+		default:
+			continue
+		}
+		label, err := s.roots.RootSnapshotOf(ctx, event.RootType, event.RootID)
+		if err != nil {
+			return nil, err
+		}
+		out[id] = label
+	}
+	return out, nil
 }

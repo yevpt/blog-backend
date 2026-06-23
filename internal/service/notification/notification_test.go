@@ -113,6 +113,23 @@ func TestPublisher_TrimsAndSnapshotsContentExcerpt(t *testing.T) {
 	assert.Equal(t, notificationrepo.EventStatusPending, repo.created.DispatchStatus)
 }
 
+func TestPublisher_AllowsReplyLikedEvent(t *testing.T) {
+	repo := &fakeEventRepo{}
+	publisher := notificationservice.NewPublisher(repo)
+
+	event, err := publisher.Publish(context.Background(), notificationservice.PublishEvent{
+		Type:       notificationservice.EventTypeReplyLiked,
+		SourceType: "reply",
+		SourceID:   12,
+		RootType:   "guestbook",
+		RootID:     12,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, event)
+	assert.Equal(t, notificationservice.EventTypeReplyLiked, repo.created.Type)
+}
+
 // 非法事件类型应被拒绝，且不触达仓储。
 func TestPublisher_RejectsInvalidEventType(t *testing.T) {
 	repo := &fakeEventRepo{}

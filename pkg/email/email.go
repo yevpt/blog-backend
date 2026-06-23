@@ -21,6 +21,7 @@ type Config struct {
 	Port     int
 	From     string
 	Password string
+	FromName string // 发件人昵称，非空时格式化为 "昵称 <邮箱>"
 }
 
 // Mailer 是 MailSender 的 SMTP 实现
@@ -32,11 +33,20 @@ func NewMailer(cfg *Config) *Mailer {
 	return &Mailer{cfg: cfg}
 }
 
+// fromHeader 返回发件人地址，配置了昵称时格式化为 RFC 5322 的 "Name <addr>"，
+// 否则仅返回裸邮箱。
+func (m *Mailer) fromHeader(msg *gomail.Message) string {
+	if m.cfg.FromName == "" {
+		return m.cfg.From
+	}
+	return msg.FormatAddress(m.cfg.From, m.cfg.FromName)
+}
+
 // SendVerificationCode 向指定邮箱发送验证码邮件，有效期在邮件正文中已说明（5分钟）
 func (m *Mailer) SendVerificationCode(to, code string) error {
 	// 组装邮件头：发件人、收件人、主题
 	msg := gomail.NewMessage()
-	msg.SetHeader("From", m.cfg.From)
+	msg.SetHeader("From", m.fromHeader(msg))
 	msg.SetHeader("To", to)
 	msg.SetHeader("Subject", "【博客】邮箱验证码")
 	// 设置 HTML 正文，验证码大字号显示方便用户阅读
@@ -51,7 +61,7 @@ func (m *Mailer) SendVerificationCode(to, code string) error {
 // SendHTML 发送通用 HTML 邮件，供通知摘要等场景使用。
 func (m *Mailer) SendHTML(to string, subject string, htmlBody string, messageID string) error {
 	msg := gomail.NewMessage()
-	msg.SetHeader("From", m.cfg.From)
+	msg.SetHeader("From", m.fromHeader(msg))
 	msg.SetHeader("To", to)
 	msg.SetHeader("Subject", subject)
 	// 写入 Message-ID 便于追踪与发送侧幂等判断。

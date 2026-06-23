@@ -49,6 +49,51 @@ func (d *Directory) scalarOwner(ctx context.Context, table any, column string, i
 	return ownerID, true, nil
 }
 
+// maxRootLabelRunes 根对象快照的最大展示长度，超出以省略号收尾。
+const maxRootLabelRunes = 60
+
+// RootSnapshotOf 取根对象的展示快照文本：文章返回标题，碎语返回内容摘要，
+// 其余类型（留言板等）留空。用于通知邮件正文中标识「哪篇文章/哪条碎语」。
+// 对象不存在或被删除时返回空串，不视作错误，避免阻断邮件发送。
+func (d *Directory) RootSnapshotOf(ctx context.Context, objectType string, objectID uint) (string, error) {
+	switch objectType {
+	case "article":
+		return d.scalarString(ctx, &model.Article{}, "title", objectID)
+	case "moment":
+		return d.scalarString(ctx, &model.Moment{}, "content", objectID)
+	default:
+		return "", nil
+	}
+}
+
+// scalarString 取某表指定行的字符串列，不存在返回空串，并对结果按 rune 截断。
+func (d *Directory) scalarString(ctx context.Context, table any, column string, id uint) (string, error) {
+	var value string
+	err := d.db.WithContext(ctx).Model(table).
+		Select(column).
+		Where("id = ?", id).
+		Take(&value).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return truncateRunes(value, maxRootLabelRunes), nil
+}
+
+// truncateRunes 按 rune 截断字符串，超出 max 时尾部以「…」收尾。
+func truncateRunes(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
+}
+
 // MailProfile 返回用户邮箱与总邮件开关（user_setting.receive_mail）。
 // 邮箱缺失或未配置邮件开关时分别以空串、false 兜底。
 func (d *Directory) MailProfile(ctx context.Context, userID uint) (string, bool, error) {
