@@ -787,7 +787,7 @@ git commit -m "feat(notification): 新增通知 SSE 推送"
 - Generated: Swagger docs
 - Test: `internal/handler/notification/admin_test.go`
 
-- [ ] **Step 1: API Risk Pass**
+- [x] **Step 1: API Risk Pass**
 
 - Who can call: admin only.
 - Input bounds: pagination max 50; quota values must be non-negative and bounded.
@@ -795,7 +795,7 @@ git commit -m "feat(notification): 新增通知 SSE 推送"
 - Failure convergence: retry does not send immediately, only returns batch to pending.
 - Old state cleanup: no deletion endpoint in first version.
 
-- [ ] **Step 2: Write admin handler tests**
+- [x] **Step 2: Write admin handler tests**
 
 Cover:
 
@@ -808,7 +808,7 @@ Run: `go test ./internal/handler/notification -run Admin -count=1`
 
 Expected: FAIL until admin handler exists.
 
-- [ ] **Step 3: Implement admin handlers and routes**
+- [x] **Step 3: Implement admin handlers and routes**
 
 Routes:
 
@@ -821,13 +821,13 @@ admin.PUT("/notifications/role-quotas/:id", handlers.notificationAdmin.UpdateRol
 admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
 ```
 
-- [ ] **Step 4: Generate Swagger**
+- [x] **Step 4: Generate Swagger**
 
 Run: `make swag`
 
 Expected: generated docs contain `/notifications` and `/admin/notifications` paths.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run:
 
@@ -838,7 +838,7 @@ go test ./internal/router -count=1
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add internal/dto/admin_notification.go internal/handler/notification/admin.go internal/router/router.go docs

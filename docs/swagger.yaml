@@ -90,6 +90,115 @@ definitions:
         example: 100
         type: integer
     type: object
+  dto.AdminBatchRetryResp:
+    properties:
+      id:
+        example: 1
+        type: integer
+      status:
+        example: pending
+        type: string
+    type: object
+  dto.AdminEmailBatchPageResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.AdminEmailBatchResp'
+        type: array
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 10
+        type: integer
+      total:
+        example: 12
+        type: integer
+    type: object
+  dto.AdminEmailBatchResp:
+    properties:
+      attempts:
+        example: 0
+        type: integer
+      created_at:
+        type: string
+      id:
+        example: 1
+        type: integer
+      item_count:
+        example: 2
+        type: integer
+      purpose:
+        example: notification
+        type: string
+      recipient_user_id:
+        example: 5
+        type: integer
+      scheduled_at:
+        type: string
+      sent_at:
+        type: string
+      status:
+        example: pending
+        type: string
+      subject:
+        example: 你有 2 条新通知
+        type: string
+      to_email:
+        example: owner@example.com
+        type: string
+    type: object
+  dto.AdminEmailTaskPageResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.AdminEmailTaskResp'
+        type: array
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 10
+        type: integer
+      total:
+        example: 42
+        type: integer
+    type: object
+  dto.AdminEmailTaskResp:
+    properties:
+      actor_user_id:
+        example: 2
+        type: integer
+      attempts:
+        example: 0
+        type: integer
+      batch_id:
+        example: 3
+        type: integer
+      created_at:
+        type: string
+      event_id:
+        example: 10
+        type: integer
+      event_type:
+        example: comment_created
+        type: string
+      id:
+        example: 1
+        type: integer
+      purpose:
+        example: notification
+        type: string
+      recipient_user_id:
+        example: 5
+        type: integer
+      status:
+        example: pending
+        type: string
+      to_email:
+        example: owner@example.com
+        type: string
+    type: object
   dto.AdminLoginReq:
     properties:
       password:
@@ -99,6 +208,112 @@ definitions:
     required:
     - password
     - username
+    type: object
+  dto.AdminQuotaListResp:
+    properties:
+      purposes:
+        items:
+          $ref: '#/definitions/dto.AdminQuotaPolicyResp'
+        type: array
+      roles:
+        items:
+          $ref: '#/definitions/dto.AdminRoleQuotaPolicyResp'
+        type: array
+    type: object
+  dto.AdminQuotaPolicyResp:
+    properties:
+      daily_limit:
+        example: 150
+        type: integer
+      enabled:
+        example: true
+        type: boolean
+      id:
+        example: 1
+        type: integer
+      max_per_hour:
+        example: 80
+        type: integer
+      max_per_minute:
+        example: 5
+        type: integer
+      priority:
+        example: 100
+        type: integer
+      purpose:
+        example: notification
+        type: string
+      reserved_min:
+        example: 0
+        type: integer
+    type: object
+  dto.AdminRoleQuotaPolicyResp:
+    properties:
+      daily_limit:
+        example: 30
+        type: integer
+      enabled:
+        example: true
+        type: boolean
+      id:
+        example: 1
+        type: integer
+      max_per_hour:
+        example: 0
+        type: integer
+      role:
+        example: normal
+        type: string
+      scope_type:
+        example: actor
+        type: string
+    type: object
+  dto.AdminUpdateQuotaReq:
+    properties:
+      daily_limit:
+        example: 150
+        maximum: 100000
+        minimum: 0
+        type: integer
+      enabled:
+        example: true
+        type: boolean
+      max_per_hour:
+        example: 80
+        maximum: 100000
+        minimum: 0
+        type: integer
+      max_per_minute:
+        example: 5
+        maximum: 10000
+        minimum: 0
+        type: integer
+      priority:
+        example: 100
+        maximum: 1000
+        minimum: 0
+        type: integer
+      reserved_min:
+        example: 0
+        maximum: 100000
+        minimum: 0
+        type: integer
+    type: object
+  dto.AdminUpdateRoleQuotaReq:
+    properties:
+      daily_limit:
+        example: 30
+        maximum: 100000
+        minimum: 0
+        type: integer
+      enabled:
+        example: true
+        type: boolean
+      max_per_hour:
+        example: 0
+        maximum: 100000
+        minimum: 0
+        type: integer
     type: object
   dto.ArticleDeleteResp:
     properties:
@@ -1412,6 +1627,113 @@ definitions:
         example: 21
         type: integer
     type: object
+  dto.NotificationItemResp:
+    properties:
+      actor_user_id:
+        description: ActorUserID 操作人用户 ID，系统通知为空。
+        example: 2
+        type: integer
+      content_excerpt:
+        description: ContentExcerpt 内容摘要快照。
+        example: 写得真好
+        type: string
+      created_at:
+        description: CreatedAt 通知产生时间。
+        type: string
+      event_id:
+        description: EventID 关联事件 ID。
+        example: 10
+        type: integer
+      id:
+        description: ID 收件箱记录 ID。
+        example: 1
+        type: integer
+      is_read:
+        description: IsRead 是否已读。
+        example: false
+        type: boolean
+      metadata:
+        description: Metadata 跳转与扩展信息的原始 JSON，前端按需解析。
+        type: string
+      read_at:
+        description: ReadAt 已读时间，未读为空。
+        type: string
+      root_id:
+        description: RootID 根对象 ID。
+        example: 12
+        type: integer
+      root_type:
+        description: RootType 根对象类型，如 moment。
+        example: moment
+        type: string
+      source_id:
+        description: SourceID 直接对象 ID。
+        example: 99
+        type: integer
+      source_type:
+        description: SourceType 直接对象类型，如 comment。
+        example: comment
+        type: string
+      title:
+        description: Title 事件标题快照。
+        example: VPT 评论了你的碎语
+        type: string
+      type:
+        description: Type 事件类型，如 comment_created。
+        example: comment_created
+        type: string
+    type: object
+  dto.NotificationPageResp:
+    properties:
+      list:
+        description: List 当前页通知列表。
+        items:
+          $ref: '#/definitions/dto.NotificationItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      total:
+        description: Total 满足条件的通知总数。
+        example: 42
+        type: integer
+    type: object
+  dto.NotificationReadAllReq:
+    properties:
+      all:
+        description: All 为 true 且 ids 为空时表示将当前用户全部未读置为已读。
+        example: false
+        type: boolean
+      ids:
+        description: IDs 需置为已读的收件箱 ID 列表，最多 100 个。
+        example:
+        - 1
+        - 2
+        - 3
+        items:
+          type: integer
+        maxItems: 100
+        type: array
+    type: object
+  dto.NotificationReadResp:
+    properties:
+      updated:
+        description: Updated 实际被置为已读的通知数量。
+        example: 3
+        type: integer
+    type: object
+  dto.NotificationUnreadCountResp:
+    properties:
+      count:
+        description: Count 未读通知数量。
+        example: 3
+        type: integer
+    type: object
   dto.OAuthAuthorizeResp:
     properties:
       authorize_url:
@@ -1624,16 +1946,16 @@ definitions:
   dto.UpdateProfileReq:
     properties:
       description:
-        maxLength: 1000
-        type: string
-      mark:
         maxLength: 200
         type: string
+      mark:
+        maxLength: 30
+        type: string
       nickname:
-        maxLength: 150
+        maxLength: 30
         type: string
       site:
-        maxLength: 500
+        maxLength: 200
         type: string
     type: object
   dto.UpdateSocialLinkReq:
@@ -1837,11 +2159,11 @@ definitions:
         type: string
       mark:
         example: 博主
-        maxLength: 200
+        maxLength: 30
         type: string
       nickname:
         example: Yevpt
-        maxLength: 150
+        maxLength: 30
         type: string
     type: object
   response.Response:
@@ -2479,6 +2801,256 @@ paths:
       summary: 修改友情链接
       tags:
       - 友情链接
+  /admin/notifications/email-batches:
+    get:
+      consumes:
+      - application/json
+      description: 管理员按状态分页查询邮件批次。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 状态过滤，留空表示全部
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminEmailBatchPageResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询邮件批次（管理端）
+      tags:
+      - 通知管理
+  /admin/notifications/email-batches/{id}/retry:
+    post:
+      consumes:
+      - application/json
+      description: 管理员把失败/延后的批次重置为待发送，不立即发送，由 sender 在下次循环处理。
+      parameters:
+      - description: 邮件批次 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminBatchRetryResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 批次不存在或不可重试
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 重试失败邮件批次（管理端）
+      tags:
+      - 通知管理
+  /admin/notifications/email-quotas:
+    get:
+      consumes:
+      - application/json
+      description: 管理员查询 purpose 额度策略与角色额度策略。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminQuotaListResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询邮件额度策略（管理端）
+      tags:
+      - 通知管理
+  /admin/notifications/email-quotas/{id}:
+    put:
+      consumes:
+      - application/json
+      description: 管理员调整指定 purpose 的额度与频率，数值必须非负且不超过上限。
+      parameters:
+      - description: 额度策略 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 额度调整请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminUpdateQuotaReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功，code=400 表示参数越界
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 额度策略不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 调整邮件额度策略（管理端）
+      tags:
+      - 通知管理
+  /admin/notifications/email-tasks:
+    get:
+      consumes:
+      - application/json
+      description: 管理员按状态分页查询邮件任务队列。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 状态过滤，留空表示全部
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminEmailTaskPageResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询邮件任务（管理端）
+      tags:
+      - 通知管理
+  /admin/notifications/role-quotas/{id}:
+    put:
+      consumes:
+      - application/json
+      description: 管理员调整指定角色的 actor/recipient 额度，数值必须非负且不超过上限。
+      parameters:
+      - description: 角色额度策略 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 角色额度调整请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminUpdateRoleQuotaReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功，code=400 表示参数越界
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 额度策略不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 调整角色额度策略（管理端）
+      tags:
+      - 通知管理
   /admin/tags:
     post:
       consumes:
@@ -4629,6 +5201,197 @@ paths:
       summary: 切换碎语评论回复点赞
       tags:
       - 评论
+  /notifications:
+    get:
+      consumes:
+      - application/json
+      description: 登录用户分页查询自己的站内通知，支持 unread_only 只看未读。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 为 true 时只返回未读
+        in: query
+        name: unread_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NotificationPageResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询站内通知
+      tags:
+      - 通知
+  /notifications/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 登录用户删除自己名下的指定通知（软删除）；非本人或不存在返回 404。
+      parameters:
+      - description: 收件箱通知 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 通知不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除站内通知
+      tags:
+      - 通知
+  /notifications/{id}/read:
+    patch:
+      consumes:
+      - application/json
+      description: 登录用户将自己名下的指定通知置为已读；非本人或不存在返回 404。
+      parameters:
+      - description: 收件箱通知 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示已读成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 通知不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 单条通知已读
+      tags:
+      - 通知
+  /notifications/read:
+    patch:
+      consumes:
+      - application/json
+      description: 登录用户批量已读；传 ids 列表则只已读指定通知，ids 为空且 all=true 时已读全部未读。
+      parameters:
+      - description: 批量已读请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.NotificationReadAllReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功，code=400 表示未指定已读范围
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NotificationReadResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 批量通知已读
+      tags:
+      - 通知
+  /notifications/stream:
+    get:
+      description: 登录用户建立 SSE 长连接，dispatcher 写入收件箱后推送事件类型；断线后由列表接口补齐历史。
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE 事件流；每条事件 data 为事件类型
+          schema:
+            type: string
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 站内通知实时推送（SSE）
+      tags:
+      - 通知
+  /notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: 登录用户查询自己的未读站内通知数量，用于小红点展示。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NotificationUnreadCountResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询未读通知数量
+      tags:
+      - 通知
   /oauth/{source}/authorize:
     get:
       consumes:

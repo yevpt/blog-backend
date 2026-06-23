@@ -1014,6 +1014,403 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/notifications/email-batches": {
+            "get": {
+                "description": "管理员按状态分页查询邮件批次。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知管理"
+                ],
+                "summary": "查询邮件批次（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤，留空表示全部",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminEmailBatchPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/notifications/email-batches/{id}/retry": {
+            "post": {
+                "description": "管理员把失败/延后的批次重置为待发送，不立即发送，由 sender 在下次循环处理。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知管理"
+                ],
+                "summary": "重试失败邮件批次（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "邮件批次 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminBatchRetryResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "批次不存在或不可重试",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/notifications/email-quotas": {
+            "get": {
+                "description": "管理员查询 purpose 额度策略与角色额度策略。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知管理"
+                ],
+                "summary": "查询邮件额度策略（管理端）",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminQuotaListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/notifications/email-quotas/{id}": {
+            "put": {
+                "description": "管理员调整指定 purpose 的额度与频率，数值必须非负且不超过上限。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知管理"
+                ],
+                "summary": "调整邮件额度策略（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "额度策略 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "额度调整请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminUpdateQuotaReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功，code=400 表示参数越界",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "额度策略不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/notifications/email-tasks": {
+            "get": {
+                "description": "管理员按状态分页查询邮件任务队列。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知管理"
+                ],
+                "summary": "查询邮件任务（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态过滤，留空表示全部",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminEmailTaskPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/notifications/role-quotas/{id}": {
+            "put": {
+                "description": "管理员调整指定角色的 actor/recipient 额度，数值必须非负且不超过上限。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知管理"
+                ],
+                "summary": "调整角色额度策略（管理端）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "角色额度策略 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "角色额度调整请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminUpdateRoleQuotaReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功，code=400 表示参数越界",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "额度策略不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/tags": {
             "post": {
                 "description": "管理员新增标签。",
@@ -4497,6 +4894,310 @@ const docTemplate = `{
                 }
             }
         },
+        "/notifications": {
+            "get": {
+                "description": "登录用户分页查询自己的站内通知，支持 unread_only 只看未读。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知"
+                ],
+                "summary": "分页查询站内通知",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "为 true 时只返回未读",
+                        "name": "unread_only",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NotificationPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/read": {
+            "patch": {
+                "description": "登录用户批量已读；传 ids 列表则只已读指定通知，ids 为空且 all=true 时已读全部未读。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知"
+                ],
+                "summary": "批量通知已读",
+                "parameters": [
+                    {
+                        "description": "批量已读请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.NotificationReadAllReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示成功，code=400 表示未指定已读范围",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NotificationReadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/stream": {
+            "get": {
+                "description": "登录用户建立 SSE 长连接，dispatcher 写入收件箱后推送事件类型；断线后由列表接口补齐历史。",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "通知"
+                ],
+                "summary": "站内通知实时推送（SSE）",
+                "responses": {
+                    "200": {
+                        "description": "SSE 事件流；每条事件 data 为事件类型",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/unread-count": {
+            "get": {
+                "description": "登录用户查询自己的未读站内通知数量，用于小红点展示。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知"
+                ],
+                "summary": "查询未读通知数量",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NotificationUnreadCountResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}": {
+            "delete": {
+                "description": "登录用户删除自己名下的指定通知（软删除）；非本人或不存在返回 404。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知"
+                ],
+                "summary": "删除站内通知",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "收件箱通知 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "通知不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/notifications/{id}/read": {
+            "patch": {
+                "description": "登录用户将自己名下的指定通知置为已读；非本人或不存在返回 404。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "通知"
+                ],
+                "summary": "单条通知已读",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "收件箱通知 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示已读成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "通知不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/oauth/bindings": {
             "get": {
                 "description": "返回当前登录用户已绑定的第三方平台。",
@@ -5495,6 +6196,159 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.AdminBatchRetryResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "status": {
+                    "type": "string",
+                    "example": "pending"
+                }
+            }
+        },
+        "dto.AdminEmailBatchPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminEmailBatchResp"
+                    }
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
+        "dto.AdminEmailBatchResp": {
+            "type": "object",
+            "properties": {
+                "attempts": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "item_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "purpose": {
+                    "type": "string",
+                    "example": "notification"
+                },
+                "recipient_user_id": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "sent_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "pending"
+                },
+                "subject": {
+                    "type": "string",
+                    "example": "你有 2 条新通知"
+                },
+                "to_email": {
+                    "type": "string",
+                    "example": "owner@example.com"
+                }
+            }
+        },
+        "dto.AdminEmailTaskPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminEmailTaskResp"
+                    }
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "dto.AdminEmailTaskResp": {
+            "type": "object",
+            "properties": {
+                "actor_user_id": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "attempts": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "batch_id": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "event_id": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "comment_created"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "purpose": {
+                    "type": "string",
+                    "example": "notification"
+                },
+                "recipient_user_id": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "status": {
+                    "type": "string",
+                    "example": "pending"
+                },
+                "to_email": {
+                    "type": "string",
+                    "example": "owner@example.com"
+                }
+            }
+        },
         "dto.AdminLoginReq": {
             "type": "object",
             "required": [
@@ -5507,6 +6361,149 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.AdminQuotaListResp": {
+            "type": "object",
+            "properties": {
+                "purposes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminQuotaPolicyResp"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminRoleQuotaPolicyResp"
+                    }
+                }
+            }
+        },
+        "dto.AdminQuotaPolicyResp": {
+            "type": "object",
+            "properties": {
+                "daily_limit": {
+                    "type": "integer",
+                    "example": 150
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "max_per_hour": {
+                    "type": "integer",
+                    "example": 80
+                },
+                "max_per_minute": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "purpose": {
+                    "type": "string",
+                    "example": "notification"
+                },
+                "reserved_min": {
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "dto.AdminRoleQuotaPolicyResp": {
+            "type": "object",
+            "properties": {
+                "daily_limit": {
+                    "type": "integer",
+                    "example": 30
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "max_per_hour": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "role": {
+                    "type": "string",
+                    "example": "normal"
+                },
+                "scope_type": {
+                    "type": "string",
+                    "example": "actor"
+                }
+            }
+        },
+        "dto.AdminUpdateQuotaReq": {
+            "type": "object",
+            "properties": {
+                "daily_limit": {
+                    "type": "integer",
+                    "maximum": 100000,
+                    "minimum": 0,
+                    "example": 150
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "max_per_hour": {
+                    "type": "integer",
+                    "maximum": 100000,
+                    "minimum": 0,
+                    "example": 80
+                },
+                "max_per_minute": {
+                    "type": "integer",
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "example": 5
+                },
+                "priority": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 0,
+                    "example": 100
+                },
+                "reserved_min": {
+                    "type": "integer",
+                    "maximum": 100000,
+                    "minimum": 0,
+                    "example": 0
+                }
+            }
+        },
+        "dto.AdminUpdateRoleQuotaReq": {
+            "type": "object",
+            "properties": {
+                "daily_limit": {
+                    "type": "integer",
+                    "maximum": 100000,
+                    "minimum": 0,
+                    "example": 30
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "max_per_hour": {
+                    "type": "integer",
+                    "maximum": 100000,
+                    "minimum": 0,
+                    "example": 0
                 }
             }
         },
@@ -7273,6 +8270,148 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.NotificationItemResp": {
+            "type": "object",
+            "properties": {
+                "actor_user_id": {
+                    "description": "ActorUserID 操作人用户 ID，系统通知为空。",
+                    "type": "integer",
+                    "example": 2
+                },
+                "content_excerpt": {
+                    "description": "ContentExcerpt 内容摘要快照。",
+                    "type": "string",
+                    "example": "写得真好"
+                },
+                "created_at": {
+                    "description": "CreatedAt 通知产生时间。",
+                    "type": "string"
+                },
+                "event_id": {
+                    "description": "EventID 关联事件 ID。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "id": {
+                    "description": "ID 收件箱记录 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_read": {
+                    "description": "IsRead 是否已读。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "metadata": {
+                    "description": "Metadata 跳转与扩展信息的原始 JSON，前端按需解析。",
+                    "type": "string"
+                },
+                "read_at": {
+                    "description": "ReadAt 已读时间，未读为空。",
+                    "type": "string"
+                },
+                "root_id": {
+                    "description": "RootID 根对象 ID。",
+                    "type": "integer",
+                    "example": 12
+                },
+                "root_type": {
+                    "description": "RootType 根对象类型，如 moment。",
+                    "type": "string",
+                    "example": "moment"
+                },
+                "source_id": {
+                    "description": "SourceID 直接对象 ID。",
+                    "type": "integer",
+                    "example": 99
+                },
+                "source_type": {
+                    "description": "SourceType 直接对象类型，如 comment。",
+                    "type": "string",
+                    "example": "comment"
+                },
+                "title": {
+                    "description": "Title 事件标题快照。",
+                    "type": "string",
+                    "example": "VPT 评论了你的碎语"
+                },
+                "type": {
+                    "description": "Type 事件类型，如 comment_created。",
+                    "type": "string",
+                    "example": "comment_created"
+                }
+            }
+        },
+        "dto.NotificationPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 当前页通知列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.NotificationItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 满足条件的通知总数。",
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "dto.NotificationReadAllReq": {
+            "type": "object",
+            "properties": {
+                "all": {
+                    "description": "All 为 true 且 ids 为空时表示将当前用户全部未读置为已读。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "ids": {
+                    "description": "IDs 需置为已读的收件箱 ID 列表，最多 100 个。",
+                    "type": "array",
+                    "maxItems": 100,
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            }
+        },
+        "dto.NotificationReadResp": {
+            "type": "object",
+            "properties": {
+                "updated": {
+                    "description": "Updated 实际被置为已读的通知数量。",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "dto.NotificationUnreadCountResp": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "Count 未读通知数量。",
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
         "dto.OAuthAuthorizeResp": {
             "type": "object",
             "properties": {
@@ -7573,19 +8712,19 @@ const docTemplate = `{
             "properties": {
                 "description": {
                     "type": "string",
-                    "maxLength": 1000
+                    "maxLength": 200
                 },
                 "mark": {
                     "type": "string",
-                    "maxLength": 200
+                    "maxLength": 30
                 },
                 "nickname": {
                     "type": "string",
-                    "maxLength": 150
+                    "maxLength": 30
                 },
                 "site": {
                     "type": "string",
-                    "maxLength": 500
+                    "maxLength": 200
                 }
             }
         },
@@ -7888,12 +9027,12 @@ const docTemplate = `{
                 },
                 "mark": {
                     "type": "string",
-                    "maxLength": 200,
+                    "maxLength": 30,
                     "example": "博主"
                 },
                 "nickname": {
                     "type": "string",
-                    "maxLength": 150,
+                    "maxLength": 30,
                     "example": "Yevpt"
                 }
             }

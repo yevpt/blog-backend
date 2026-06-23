@@ -60,21 +60,22 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health       *handler.HealthHandler
-	test         *handler.TestHandler
-	auth         *authhandler.AuthHandler
-	oauth        *oauthhandler.OAuthHandler
-	captcha      *captchahandler.CaptchaHandler
-	article      *articlehandler.ArticleHandler
-	comment      *commenthandler.CommentHandler
-	guestbook    *guestbookhandler.GuestbookHandler
-	moment       *momenthandler.MomentHandler
-	notification *notificationhandler.NotificationHandler
-	user         *userhandler.UserHandler
-	category     *categoryhandler.CategoryHandler
-	tag          *taghandler.TagHandler
-	friendLink   *friendlinkhandler.FriendLinkHandler
-	userCache    userservice.UserCacheService
+	health            *handler.HealthHandler
+	test              *handler.TestHandler
+	auth              *authhandler.AuthHandler
+	oauth             *oauthhandler.OAuthHandler
+	captcha           *captchahandler.CaptchaHandler
+	article           *articlehandler.ArticleHandler
+	comment           *commenthandler.CommentHandler
+	guestbook         *guestbookhandler.GuestbookHandler
+	moment            *momenthandler.MomentHandler
+	notification      *notificationhandler.NotificationHandler
+	notificationAdmin *notificationhandler.NotificationAdminHandler
+	user              *userhandler.UserHandler
+	category          *categoryhandler.CategoryHandler
+	tag               *taghandler.TagHandler
+	friendLink        *friendlinkhandler.FriendLinkHandler
+	userCache         userservice.UserCacheService
 }
 
 // Setup 注册所有路由，是整个项目路由的唯一入口
@@ -193,6 +194,7 @@ func newRouteHandlers(
 	notificationRepo := notificationrepo.NewRepository(db)
 	notificationPublisher := notificationservice.NewPublisher(notificationRepo)
 	notificationInboxSvc := notificationservice.NewInboxService(notificationRepo)
+	notificationAdminSvc := notificationservice.NewAdminService(notificationrepo.NewAdminRepository(db))
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
@@ -217,21 +219,22 @@ func newRouteHandlers(
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher)
 
 	return routeHandlers{
-		health:       handler.NewHealthHandler(db, redisClient),
-		test:         handler.NewTestHandler(jwtManager),
-		auth:         authhandler.NewAuthHandler(authSvc),
-		oauth:        oauthhandler.NewOAuthHandler(oauthSvc),
-		captcha:      captchahandler.NewCaptchaHandler(captchaSvc),
-		article:      articlehandler.NewArticleHandler(articleSvc),
-		comment:      commenthandler.NewCommentHandler(commentSvc),
-		guestbook:    guestbookhandler.NewGuestbookHandler(guestbookSvc),
-		moment:       momenthandler.NewMomentHandler(momentSvc),
-		notification: notificationhandler.NewNotificationHandler(notificationInboxSvc, notificationHub),
-		user:         userhandler.NewUserHandler(userSvc),
-		category:     categoryhandler.NewCategoryHandler(categorySvc),
-		tag:          taghandler.NewTagHandler(tagSvc),
-		friendLink:   friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
-		userCache:    userCacheSvc,
+		health:            handler.NewHealthHandler(db, redisClient),
+		test:              handler.NewTestHandler(jwtManager),
+		auth:              authhandler.NewAuthHandler(authSvc),
+		oauth:             oauthhandler.NewOAuthHandler(oauthSvc),
+		captcha:           captchahandler.NewCaptchaHandler(captchaSvc),
+		article:           articlehandler.NewArticleHandler(articleSvc),
+		comment:           commenthandler.NewCommentHandler(commentSvc),
+		guestbook:         guestbookhandler.NewGuestbookHandler(guestbookSvc),
+		moment:            momenthandler.NewMomentHandler(momentSvc),
+		notification:      notificationhandler.NewNotificationHandler(notificationInboxSvc, notificationHub),
+		notificationAdmin: notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
+		user:              userhandler.NewUserHandler(userSvc),
+		category:          categoryhandler.NewCategoryHandler(categorySvc),
+		tag:               taghandler.NewTagHandler(tagSvc),
+		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
+		userCache:         userCacheSvc,
 	}
 }
 
@@ -389,4 +392,10 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/friend-links", handlers.friendLink.Create)
 	admin.PUT("/friend-links/:id", handlers.friendLink.Update)
 	admin.DELETE("/friend-links/:id", handlers.friendLink.Delete)
+	admin.GET("/notifications/email-tasks", handlers.notificationAdmin.ListEmailTasks)
+	admin.GET("/notifications/email-batches", handlers.notificationAdmin.ListEmailBatches)
+	admin.GET("/notifications/email-quotas", handlers.notificationAdmin.ListQuotas)
+	admin.PUT("/notifications/email-quotas/:id", handlers.notificationAdmin.UpdateQuota)
+	admin.PUT("/notifications/role-quotas/:id", handlers.notificationAdmin.UpdateRoleQuota)
+	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
 }
