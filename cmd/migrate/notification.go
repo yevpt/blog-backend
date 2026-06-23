@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
+	"sort"
 	"time"
 
 	"github.com/vpt/blog-backend/internal/model"
@@ -33,6 +35,25 @@ type legacyUserMessage struct {
 	UpdatedAt time.Time
 }
 
+type legacyNotificationRefs struct {
+	comments map[uint]legacyCommentRef
+	replies  map[uint]legacyReplyRef
+}
+
+type legacyCommentRef struct {
+	sourceType string
+	sourceID   uint
+	rootType   string
+	rootID     uint
+}
+
+type legacyReplyRef struct {
+	sourceType string
+	sourceID   uint
+	rootType   string
+	rootID     uint
+}
+
 // legacyEventType 把旧 message.type 规范化为 v2 事件类型，未知类型回退 legacy_notice。
 func legacyEventType(oldType string) string {
 	switch oldType {
@@ -44,12 +65,22 @@ func legacyEventType(oldType string) string {
 		return "comment_created"
 	case "moment_comment", "say":
 		return "comment_created"
+	case "comment_like":
+		return "comment_liked"
 	case "comment_reply":
 		return "reply_created"
+	case "comment_reply_like":
+		return "reply_liked"
 	case "guestBook":
 		return "guestbook_created"
+	case "guestBook_like":
+		return "guestbook_liked"
 	case "guestBook_reply":
 		return "reply_created"
+	case "guestBook_reply_like":
+		return "reply_liked"
+	case "system":
+		return "system_notice"
 	default:
 		return "legacy_notice"
 	}
@@ -97,6 +128,10 @@ func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
 	if err != nil {
 		return err
 	}
+	refs, err := buildLegacyNotificationRefs(src)
+	if err != nil {
+		return err
+	}
 
 	// 回填可重复执行：先清空 v2 表，保证多次运行（含上次部分失败）后结果一致。
 	if err := dst.Exec("DELETE FROM `notification_inbox`").Error; err != nil {
@@ -108,16 +143,21 @@ func migrateNotifications(src *sql.DB, dst *gorm.DB) error {
 
 	// 建立 旧 message_id → 新 event_id 映射，供 user_messages 关联。
 	eventIDByMessage := make(map[uint]uint, len(messages))
+	legacyNoticeTypes := make(map[string]int)
 	for _, msg := range messages {
-		event, err := buildLegacyEvent(msg)
+		event, err := buildLegacyEvent(msg, refs)
 		if err != nil {
 			return err
+		}
+		if event.Type == "legacy_notice" {
+			legacyNoticeTypes[msg.Type]++
 		}
 		if err := dst.Create(event).Error; err != nil {
 			return fmt.Errorf("insert notification_event legacy_message_id=%d: %w", msg.ID, err)
 		}
 		eventIDByMessage[msg.ID] = event.ID
 	}
+	logLegacyNoticeTypes(legacyNoticeTypes)
 
 	for _, um := range userMessages {
 		eventID, ok := eventIDByMessage[um.MessageID]
@@ -210,25 +250,95 @@ func listLegacyUserMessages(src *sql.DB) ([]legacyUserMessage, error) {
 	return userMessages, nil
 }
 
+func buildLegacyNotificationRefs(src *sql.DB) (legacyNotificationRefs, error) {
+	refs := legacyNotificationRefs{
+		comments: make(map[uint]legacyCommentRef),
+		replies:  make(map[uint]legacyReplyRef),
+	}
+	if err := loadLegacyCommentRefs(src, refs.comments); err != nil {
+		return legacyNotificationRefs{}, err
+	}
+	if err := loadLegacyReplyRefs(src, refs.replies); err != nil {
+		return legacyNotificationRefs{}, err
+	}
+	return refs, nil
+}
+
+func loadLegacyCommentRefs(src *sql.DB, refs map[uint]legacyCommentRef) error {
+	rows, err := src.Query("SELECT ID, type, owner_id FROM comment ORDER BY ID")
+	if err != nil {
+		return fmt.Errorf("构建旧 comment 通知引用: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id      uint
+			ctype   string
+			ownerID uint
+		)
+		if err := rows.Scan(&id, &ctype, &ownerID); err != nil {
+			return err
+		}
+		switch ctype {
+		case "post":
+			refs[id] = legacyCommentRef{sourceType: "comment", sourceID: id, rootType: "article", rootID: ownerID}
+		case "say":
+			refs[id] = legacyCommentRef{sourceType: "comment", sourceID: id, rootType: "moment", rootID: ownerID}
+		case "guestBook":
+			refs[id] = legacyCommentRef{sourceType: "guestbook", sourceID: id, rootType: "guestbook", rootID: id}
+		}
+	}
+	return rows.Err()
+}
+
+func loadLegacyReplyRefs(src *sql.DB, refs map[uint]legacyReplyRef) error {
+	rows, err := src.Query(`
+		SELECT cr.ID, cr.comment_id, c.type
+		FROM comment_reply cr
+		JOIN comment c ON c.ID = cr.comment_id
+		ORDER BY cr.ID`)
+	if err != nil {
+		return fmt.Errorf("构建旧 comment_reply 通知引用: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			id        uint
+			commentID uint
+			ctype     string
+		)
+		if err := rows.Scan(&id, &commentID, &ctype); err != nil {
+			return err
+		}
+		switch ctype {
+		case "post":
+			refs[id] = legacyReplyRef{sourceType: "reply", sourceID: id, rootType: "article", rootID: commentID}
+		case "say":
+			refs[id] = legacyReplyRef{sourceType: "reply", sourceID: id, rootType: "moment", rootID: commentID}
+		case "guestBook":
+			refs[id] = legacyReplyRef{sourceType: "reply", sourceID: id, rootType: "guestbook", rootID: commentID}
+		}
+	}
+	return rows.Err()
+}
+
 // buildLegacyEvent 把一条旧 message 映射为 notification_event。
-func buildLegacyEvent(msg legacyMessage) (*model.NotificationEvent, error) {
+func buildLegacyEvent(msg legacyMessage, refs legacyNotificationRefs) (*model.NotificationEvent, error) {
 	metadata, err := legacyEventMetadata(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	// 根对象优先取文章，否则回退到 legacy 维度，原始关系保留在 metadata。
-	rootType, rootID := "legacy", msg.TypeID
-	if msg.ArticleID != nil {
-		rootType, rootID = "article", *msg.ArticleID
-	}
+	sourceType, sourceID, rootType, rootID := legacyEventRelation(msg, refs)
 
 	actorID := msg.FromUserID
 	event := &model.NotificationEvent{
-		Type:        legacyEventType(msg.Type),
+		Type:        legacyEventTypeForMessage(msg, sourceType),
 		ActorUserID: &actorID,
-		SourceType:  "legacy",
-		SourceID:    msg.TypeID,
+		SourceType:  sourceType,
+		SourceID:    sourceID,
 		RootType:    rootType,
 		RootID:      rootID,
 		// 按列宽截断，历史垃圾数据可能远超快照列长度（title 120 / content_excerpt 500）。
@@ -241,6 +351,76 @@ func buildLegacyEvent(msg legacyMessage) (*model.NotificationEvent, error) {
 	event.CreatedAt = msg.CreatedAt
 	event.UpdatedAt = msg.UpdatedAt
 	return event, nil
+}
+
+func legacyEventTypeForMessage(msg legacyMessage, sourceType string) string {
+	if msg.Type == "comment_like" && sourceType == "guestbook" {
+		return "guestbook_liked"
+	}
+	return legacyEventType(msg.Type)
+}
+
+func legacyEventRelation(msg legacyMessage, refs legacyNotificationRefs) (string, uint, string, uint) {
+	switch msg.Type {
+	case "system":
+		return "system", msg.TypeID, "system", msg.TypeID
+	case "post_like", "article_like":
+		id := msg.TypeID
+		if msg.ArticleID != nil {
+			id = *msg.ArticleID
+		}
+		return "article", id, "article", id
+	case "say_like", "moment_like":
+		return "moment", msg.TypeID, "moment", msg.TypeID
+	case "comment", "moment_comment", "say", "comment_like":
+		if ref, ok := refs.comments[msg.TypeID]; ok {
+			return ref.sourceType, ref.sourceID, ref.rootType, ref.rootID
+		}
+		if msg.CommentID != nil {
+			if ref, ok := refs.comments[*msg.CommentID]; ok {
+				return ref.sourceType, ref.sourceID, ref.rootType, ref.rootID
+			}
+		}
+		if msg.ArticleID != nil {
+			return "comment", msg.TypeID, "article", *msg.ArticleID
+		}
+	case "guestBook", "guestBook_like":
+		if ref, ok := refs.comments[msg.TypeID]; ok {
+			return ref.sourceType, ref.sourceID, ref.rootType, ref.rootID
+		}
+		return "guestbook", msg.TypeID, "guestbook", msg.TypeID
+	case "comment_reply", "guestBook_reply", "comment_reply_like", "guestBook_reply_like":
+		if ref, ok := refs.replies[msg.TypeID]; ok {
+			return ref.sourceType, ref.sourceID, ref.rootType, ref.rootID
+		}
+		if msg.CommentID != nil {
+			if ref, ok := refs.comments[*msg.CommentID]; ok {
+				return "reply", msg.TypeID, ref.rootType, ref.sourceID
+			}
+		}
+		if msg.ArticleID != nil && msg.CommentID != nil {
+			return "reply", msg.TypeID, "article", *msg.CommentID
+		}
+		if msg.CommentID != nil && (msg.Type == "guestBook_reply" || msg.Type == "guestBook_reply_like") {
+			return "reply", msg.TypeID, "guestbook", *msg.CommentID
+		}
+	}
+	return "legacy", msg.TypeID, "legacy", msg.TypeID
+}
+
+func logLegacyNoticeTypes(types map[string]int) {
+	if len(types) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(types))
+	for key := range types {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	log.Printf("  警告: notification_event 仍存在 legacy_notice，请补充旧 message.type 映射：")
+	for _, key := range keys {
+		log.Printf("    legacy_type=%q count=%d", key, types[key])
+	}
 }
 
 // buildLegacyInbox 把一条旧 user_messages 映射为 notification_inbox。
@@ -269,6 +449,9 @@ func legacyEventMetadata(msg legacyMessage) (*string, error) {
 	}
 	if msg.CommentID != nil {
 		meta["legacy_comment_id"] = *msg.CommentID
+	}
+	if msg.ArticleID != nil {
+		meta["legacy_post_id"] = *msg.ArticleID
 	}
 	encoded, err := json.Marshal(meta)
 	if err != nil {
