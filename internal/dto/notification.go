@@ -52,7 +52,7 @@ type NotificationItemResp struct {
 	RootID uint `json:"root_id" example:"12"`
 	// RootTitle 根对象展示标题快照（文章标题/碎语摘要），无根对象或已删除时为空。
 	RootTitle *string `json:"root_title,omitempty" example:"我的第一篇文章"`
-	// RootExcerpt 文章正文摘录，仅 root_type=article 且无评论/回复内容时填充。
+	// RootExcerpt 文章正文摘录，仅 root_type=article 时填充；与 content_excerpt（评论/回复正文）并存。
 	RootExcerpt *string `json:"root_excerpt,omitempty"`
 	// LikeCount 来源对象当前点赞数；仅 comment/reply/guestbook 来源填充。
 	LikeCount *int64 `json:"like_count,omitempty" example:"3"`

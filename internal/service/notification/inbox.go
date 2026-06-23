@@ -124,7 +124,7 @@ func inboxAggregateToDTO(
 	if label, ok := labels[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && label != "" {
 		resp.RootTitle = &label
 	}
-	if aggregate.Event.RootType == "article" && aggregate.Event.ContentExcerpt == "" {
+	if aggregate.Event.RootType == "article" {
 		if excerpt, ok := excerpts[rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}]; ok && excerpt != "" {
 			resp.RootExcerpt = &excerpt
 		}
@@ -231,8 +231,8 @@ func (s *inboxService) rootLabels(ctx context.Context, items []notificationrepo.
 }
 
 // rootExcerpts 批量解析当前页文章根对象的正文摘录，按 rootID 去重。
-// 仅对 rootType=article 且事件 ContentExcerpt 为空（无评论/回复内容）的条目解析，
-// 避免与 content_excerpt 重复。roots 为 nil 时返回空 map。
+// content_excerpt 为评论/回复正文，与文章摘录互不重复，故评论类事件同样需要填充。
+// roots 为 nil 时返回空 map。
 func (s *inboxService) rootExcerpts(ctx context.Context, items []notificationrepo.InboxAggregate) (map[rootKey]string, error) {
 	if s.roots == nil {
 		return nil, nil
@@ -240,10 +240,6 @@ func (s *inboxService) rootExcerpts(ctx context.Context, items []notificationrep
 	out := make(map[rootKey]string, len(items))
 	for _, aggregate := range items {
 		if aggregate.Event.RootID == 0 || aggregate.Event.RootType != "article" {
-			continue
-		}
-		// 已有评论/回复内容的条目不再补正文摘录，避免重复。
-		if aggregate.Event.ContentExcerpt != "" {
 			continue
 		}
 		key := rootKey{rootType: aggregate.Event.RootType, rootID: aggregate.Event.RootID}

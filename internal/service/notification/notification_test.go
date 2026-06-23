@@ -373,8 +373,7 @@ func TestInboxService_List_PropagatesRootResolveError(t *testing.T) {
 	assert.Contains(t, err.Error(), "boom")
 }
 
-// 文章点赞通知（ContentExcerpt 为空）应填充 root_excerpt，且按 rootID 去重。
-// 同一篇文章的评论通知（ContentExcerpt 非空）不应填充 root_excerpt，避免重复。
+// 文章点赞与评论通知均应填充 root_excerpt；content_excerpt 为评论正文，与文章摘录不重复。
 func TestInboxService_List_FillsRootExcerptForArticleWithoutContentExcerpt(t *testing.T) {
 	repo := &fakeInboxRepo{
 		listResp: &notificationrepo.InboxPage{
@@ -393,7 +392,7 @@ func TestInboxService_List_FillsRootExcerptForArticleWithoutContentExcerpt(t *te
 					},
 				},
 				{
-					// 同一篇文章的评论通知：ContentExcerpt 非空，不应填充 root_excerpt。
+					// 同一篇文章的评论通知：ContentExcerpt 为评论正文，仍应填充 root_excerpt。
 					Inbox: model.NotificationInbox{Base: model.Base{ID: 2}, EventID: 11},
 					Event: model.NotificationEvent{
 						Base:           model.Base{ID: 11},
@@ -434,11 +433,12 @@ func TestInboxService_List_FillsRootExcerptForArticleWithoutContentExcerpt(t *te
 	// 文章点赞：填充 root_excerpt。
 	require.NotNil(t, resp.List[0].RootExcerpt)
 	assert.Equal(t, "这是文章正文的前面一部分内容", *resp.List[0].RootExcerpt)
-	// 文章评论：不填充 root_excerpt（已有 content_excerpt）。
-	assert.Nil(t, resp.List[1].RootExcerpt)
+	// 文章评论：同样填充 root_excerpt。
+	require.NotNil(t, resp.List[1].RootExcerpt)
+	assert.Equal(t, "这是文章正文的前面一部分内容", *resp.List[1].RootExcerpt)
 	// 碎语点赞：不填充 root_excerpt。
 	assert.Nil(t, resp.List[2].RootExcerpt)
-	// 去重：article:7 的正文摘录只解析一次（点赞条目解析，评论条目跳过）。
+	// 去重：article:7 的正文摘录只解析一次。
 	assert.Equal(t, 1, roots.excerptCalls)
 }
 
