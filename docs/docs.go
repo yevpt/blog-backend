@@ -2931,7 +2931,7 @@ const docTemplate = `{
         },
         "/auth/register": {
             "post": {
-                "description": "使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。",
+                "description": "使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。注册成功返回与登录相同的双 token 与用户信息。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -2979,7 +2979,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误",
+                        "description": "统一响应；code=0 表示注册成功并已登录，code=400 表示参数错误或业务错误",
                         "schema": {
                             "allOf": [
                                 {
@@ -2989,7 +2989,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/dto.UserResp"
+                                            "$ref": "#/definitions/dto.LoginResp"
                                         }
                                     }
                                 }
@@ -4456,6 +4456,81 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/moments/feed": {
+            "get": {
+                "description": "碎语独立页专用列表，支持全部/博主/朋友们范围与最新/最热排序；不考虑置顶，最新按 updated_at 倒序，最热按评论×10+点赞×3+阅读综合分倒序。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "碎语"
+                ],
+                "summary": "分页查询碎语广场流",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "范围：all、owner、friends",
+                        "name": "scope",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "排序：latest、hot",
+                        "name": "sort",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MomentPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Authorization header 存在但 token 非法或已过期",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6559,6 +6634,76 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/users/{id}/likes": {
+            "get": {
+                "description": "公开分页查询指定用户赞过的文章、评论、留言、碎语和回复；type=comment 包含评论与回复。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "获取用户点赞内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "每页数量，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "筛选类型：article/comment/guestbook/moment；comment 包含评论与回复",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserLikedContentPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -8270,6 +8415,16 @@ const docTemplate = `{
                     "type": "string",
                     "example": "VPT"
                 },
+                "roles": {
+                    "description": "Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "ROLE_VIP"
+                    ]
+                },
                 "site": {
                     "description": "Site 用户个人站点。",
                     "type": "string",
@@ -8644,6 +8799,16 @@ const docTemplate = `{
                     "type": "string",
                     "example": "VPT"
                 },
+                "roles": {
+                    "description": "Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "ROLE_VIP"
+                    ]
+                },
                 "site": {
                     "description": "Site 用户个人站点。",
                     "type": "string",
@@ -8901,6 +9066,16 @@ const docTemplate = `{
                     "description": "Nickname 用户昵称。",
                     "type": "string",
                     "example": "VPT"
+                },
+                "roles": {
+                    "description": "Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "ROLE_VIP"
+                    ]
                 },
                 "site": {
                     "description": "Site 用户个人站点。",
@@ -9612,6 +9787,9 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_verified": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -9656,6 +9834,145 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.UserLikedContentAuthorResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string",
+                    "example": "https://cdn.example.com/avatar.png"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "mark": {
+                    "type": "string",
+                    "example": "博主"
+                },
+                "nickname": {
+                    "type": "string",
+                    "example": "VPT"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "site": {
+                    "type": "string",
+                    "example": "https://yevpt.com"
+                },
+                "username": {
+                    "type": "string",
+                    "example": "vpt"
+                }
+            }
+        },
+        "dto.UserLikedContentItemResp": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/dto.UserLikedContentAuthorResp"
+                },
+                "content": {
+                    "$ref": "#/definitions/dto.UserLikedContentObjectResp"
+                },
+                "filter": {
+                    "type": "string",
+                    "example": "comment"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "kind": {
+                    "type": "string",
+                    "example": "reply"
+                },
+                "liked_at": {
+                    "type": "string"
+                },
+                "parent": {
+                    "$ref": "#/definitions/dto.UserLikedContentObjectResp"
+                },
+                "root": {
+                    "$ref": "#/definitions/dto.UserLikedContentObjectResp"
+                },
+                "stats": {
+                    "$ref": "#/definitions/dto.UserLikedContentStatsResp"
+                }
+            }
+        },
+        "dto.UserLikedContentObjectResp": {
+            "type": "object",
+            "properties": {
+                "cover_img_url": {
+                    "type": "string",
+                    "example": "https://cdn.example.com/cover.jpg"
+                },
+                "deleted": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "excerpt": {
+                    "type": "string",
+                    "example": "内容摘要"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "kind": {
+                    "type": "string",
+                    "example": "article"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "React Aria 组件实践"
+                }
+            }
+        },
+        "dto.UserLikedContentPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UserLikedContentItemResp"
+                    }
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "pages": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "dto.UserLikedContentStatsResp": {
+            "type": "object",
+            "properties": {
+                "comment_count": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "like_count": {
+                    "type": "integer",
+                    "example": 3
                 }
             }
         },
@@ -9718,6 +10035,9 @@ const docTemplate = `{
                 },
                 "sub_email": {
                     "type": "string"
+                },
+                "sub_email_verified": {
+                    "type": "boolean"
                 }
             }
         },
@@ -9806,6 +10126,9 @@ const docTemplate = `{
                 },
                 "email": {
                     "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"

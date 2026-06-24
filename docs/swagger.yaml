@@ -1257,6 +1257,13 @@ definitions:
         description: Nickname 用户昵称。
         example: VPT
         type: string
+      roles:
+        description: Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。
+        example:
+        - ROLE_VIP
+        items:
+          type: string
+        type: array
       site:
         description: Site 用户个人站点。
         example: https://yevpt.com
@@ -1540,6 +1547,13 @@ definitions:
         description: Nickname 用户昵称。
         example: VPT
         type: string
+      roles:
+        description: Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。
+        example:
+        - ROLE_VIP
+        items:
+          type: string
+        type: array
       site:
         description: Site 用户个人站点。
         example: https://yevpt.com
@@ -1731,6 +1745,13 @@ definitions:
         description: Nickname 用户昵称。
         example: VPT
         type: string
+      roles:
+        description: Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。
+        example:
+        - ROLE_VIP
+        items:
+          type: string
+        type: array
       site:
         description: Site 用户个人站点。
         example: https://yevpt.com
@@ -2242,6 +2263,8 @@ definitions:
         type: string
       email:
         type: string
+      email_verified:
+        type: boolean
       id:
         type: integer
       last_login_at:
@@ -2272,6 +2295,104 @@ definitions:
         type: integer
       username:
         type: string
+    type: object
+  dto.UserLikedContentAuthorResp:
+    properties:
+      avatar_url:
+        example: https://cdn.example.com/avatar.png
+        type: string
+      id:
+        example: 1
+        type: integer
+      mark:
+        example: 博主
+        type: string
+      nickname:
+        example: VPT
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      site:
+        example: https://yevpt.com
+        type: string
+      username:
+        example: vpt
+        type: string
+    type: object
+  dto.UserLikedContentItemResp:
+    properties:
+      author:
+        $ref: '#/definitions/dto.UserLikedContentAuthorResp'
+      content:
+        $ref: '#/definitions/dto.UserLikedContentObjectResp'
+      filter:
+        example: comment
+        type: string
+      id:
+        example: 1
+        type: integer
+      kind:
+        example: reply
+        type: string
+      liked_at:
+        type: string
+      parent:
+        $ref: '#/definitions/dto.UserLikedContentObjectResp'
+      root:
+        $ref: '#/definitions/dto.UserLikedContentObjectResp'
+      stats:
+        $ref: '#/definitions/dto.UserLikedContentStatsResp'
+    type: object
+  dto.UserLikedContentObjectResp:
+    properties:
+      cover_img_url:
+        example: https://cdn.example.com/cover.jpg
+        type: string
+      deleted:
+        example: false
+        type: boolean
+      excerpt:
+        example: 内容摘要
+        type: string
+      id:
+        example: 1
+        type: integer
+      kind:
+        example: article
+        type: string
+      title:
+        example: React Aria 组件实践
+        type: string
+    type: object
+  dto.UserLikedContentPageResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.UserLikedContentItemResp'
+        type: array
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 20
+        type: integer
+      pages:
+        example: 5
+        type: integer
+      total:
+        example: 100
+        type: integer
+    type: object
+  dto.UserLikedContentStatsResp:
+    properties:
+      comment_count:
+        example: 2
+        type: integer
+      like_count:
+        example: 3
+        type: integer
     type: object
   dto.UserListItemResp:
     properties:
@@ -2314,6 +2435,8 @@ definitions:
         type: string
       sub_email:
         type: string
+      sub_email_verified:
+        type: boolean
     type: object
   dto.UserPageResp:
     properties:
@@ -2373,6 +2496,8 @@ definitions:
         type: string
       email:
         type: string
+      email_verified:
+        type: boolean
       id:
         type: integer
       nickname:
@@ -4259,8 +4384,8 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。参数错误、验证码错误或邮箱已存在通过统一响应
-        code 表达。
+      description: 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。注册成功返回与登录相同的双
+        token 与用户信息。
       parameters:
       - description: 邮箱
         in: formData
@@ -4289,13 +4414,13 @@ paths:
       - application/json
       responses:
         "200":
-          description: 统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误
+          description: 统一响应；code=0 表示注册成功并已登录，code=400 表示参数错误或业务错误
           schema:
             allOf:
             - $ref: '#/definitions/response.Response'
             - properties:
                 data:
-                  $ref: '#/definitions/dto.UserResp'
+                  $ref: '#/definitions/dto.LoginResp'
               type: object
       summary: 邮箱注册
       tags:
@@ -5573,6 +5698,53 @@ paths:
       summary: 切换碎语评论回复点赞
       tags:
       - 评论
+  /moments/feed:
+    get:
+      consumes:
+      - application/json
+      description: 碎语独立页专用列表，支持全部/博主/朋友们范围与最新/最热排序；不考虑置顶，最新按 updated_at 倒序，最热按评论×10+点赞×3+阅读综合分倒序。
+      parameters:
+      - description: 范围：all、owner、friends
+        in: query
+        name: scope
+        required: true
+        type: string
+      - description: 排序：latest、hot
+        in: query
+        name: sort
+        required: true
+        type: string
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MomentPageResp'
+              type: object
+        "401":
+          description: Authorization header 存在但 token 非法或已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询碎语广场流
+      tags:
+      - 碎语
   /music:
     get:
       description: 返回所有未删除音乐，按 seq ASC、id ASC 排序；url 和 cover_img_url 返回前会解析为可访问 URL。
@@ -6129,6 +6301,50 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 获取用户公开详情
+      tags:
+      - 用户
+  /users/{id}/likes:
+    get:
+      consumes:
+      - application/json
+      description: 公开分页查询指定用户赞过的文章、评论、留言、碎语和回复；type=comment 包含评论与回复。
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 筛选类型：article/comment/guestbook/moment；comment 包含评论与回复
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserLikedContentPageResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 获取用户点赞内容
       tags:
       - 用户
   /users/me:
