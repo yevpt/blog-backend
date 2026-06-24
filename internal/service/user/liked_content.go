@@ -30,6 +30,15 @@ func (s *userService) ListLikedContent(userID uint, req dto.UserLikedContentList
 	return s.likedContentPageToDTO(result)
 }
 
+// CountLikedContent 返回用户赞过且当前公开可见的内容总数。
+func (s *userService) CountLikedContent(userID uint) (*dto.UserLikedContentCountResp, error) {
+	count, err := s.repo.CountLikedContent(userID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.UserLikedContentCountResp{Count: count}, nil
+}
+
 func normalizeLikedContentPage(page int) int {
 	if page < 1 {
 		return 1

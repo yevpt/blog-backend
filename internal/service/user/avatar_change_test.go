@@ -44,7 +44,8 @@ func (r *changeAvatarRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregat
 func (r *changeAvatarRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {
 	return nil, nil
 }
-func (r *changeAvatarRepo) ExistsByEmail(email string) (bool, error) { return false, nil }
+func (r *changeAvatarRepo) CountLikedContent(userID uint) (int64, error) { return 0, nil }
+func (r *changeAvatarRepo) ExistsByEmail(email string) (bool, error)     { return false, nil }
 func (r *changeAvatarRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
 	return false, nil
 }

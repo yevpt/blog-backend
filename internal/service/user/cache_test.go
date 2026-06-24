@@ -28,6 +28,7 @@ func (r *stubUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, e
 func (r *stubUserRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {
 	return nil, nil
 }
+func (r *stubUserRepo) CountLikedContent(userID uint) (int64, error) { return 0, nil }
 
 // 接口其余方法返回零值，测试中不会被调用
 func (r *stubUserRepo) FindByIdentifier(id string) (*model.User, error) { return nil, nil }

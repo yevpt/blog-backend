@@ -263,6 +263,19 @@ func TestUserService_ListLikedContent_MapsReplyAsCommentFilterWithContext(t *tes
 	assert.Equal(t, 20, resp.PageSize)
 }
 
+func TestUserService_CountLikedContent_ReturnsTotal(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := mock.NewMockUserRepository(ctrl)
+	svc := user.NewUserService(nil, repo, nil, nil)
+
+	repo.EXPECT().CountLikedContent(uint(7)).Return(int64(12), nil)
+
+	resp, err := svc.CountLikedContent(7)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(12), resp.Count)
+}
+
 func ptrString(value string) *string {
 	return &value
 }

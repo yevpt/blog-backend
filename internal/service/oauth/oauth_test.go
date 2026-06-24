@@ -105,7 +105,8 @@ func (r *fakeUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, e
 func (r *fakeUserRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {
 	return nil, nil
 }
-func (r *fakeUserRepo) ExistsByEmail(email string) (bool, error) { return r.emailExists, nil }
+func (r *fakeUserRepo) CountLikedContent(userID uint) (int64, error) { return 0, nil }
+func (r *fakeUserRepo) ExistsByEmail(email string) (bool, error)     { return r.emailExists, nil }
 func (r *fakeUserRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
 	return false, nil
 }
