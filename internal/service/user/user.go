@@ -24,6 +24,7 @@ var (
 type UserService interface {
 	GetDetail(userID uint) (*dto.UserDetailResp, error)
 	GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error)
+	ListLikedContent(userID uint, req dto.UserLikedContentListReq) (*dto.UserLikedContentPageResp, error)
 	ListRecent(req *dto.UserListReq) (*dto.UserPageResp, error)
 	ListAll(req *dto.UserListReq) (*dto.UserPageResp, error)
 	Update(userID uint, req *dto.UserUpdateReq) (*dto.UserDetailResp, error)
