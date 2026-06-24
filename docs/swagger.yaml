@@ -749,11 +749,12 @@ definitions:
         example: 摘要
         type: string
       status:
-        description: Status 文章状态：0 隐藏，1 公开，2 加密。
+        description: Status 文章状态：0 隐藏，1 公开，2 加密，3 草稿。
         enum:
         - 0
         - 1
         - 2
+        - 3
         example: 1
         type: integer
       tag_ids:
@@ -2403,7 +2404,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: 管理员按页码分页查询所有文章，包含隐藏、公开、加密和已软删除文章；软删除文章返回 deleted_at。
+      description: 管理员按页码分页查询所有文章，包含隐藏、公开、加密、草稿和已软删除文章；软删除文章返回 deleted_at。
       parameters:
       - description: 页码，从 1 开始
         in: query

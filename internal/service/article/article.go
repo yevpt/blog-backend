@@ -122,7 +122,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		return nil, ErrArticleCategoryRequired
 	}
 	password := cleanArticlePassword(req.Status, req.Password)
-	if req.Status == 2 && password == nil {
+	if req.Status == model.ArticleStatusEncrypted && password == nil {
 		return nil, ErrArticlePasswordRequired
 	}
 

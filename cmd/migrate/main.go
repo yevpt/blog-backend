@@ -404,6 +404,24 @@ func statusVarcharToUint8(s sql.NullString) uint8 {
 	}
 }
 
+// articleStatusVarcharToUint8 将源库文章状态转为当前文章枚举。
+// 兼容旧库开关值，同时保留后续迁移中可能出现的加密与草稿状态。
+func articleStatusVarcharToUint8(s sql.NullString) uint8 {
+	if !s.Valid {
+		return model.ArticleStatusPublic
+	}
+	switch strings.ToLower(strings.TrimSpace(s.String)) {
+	case "00", "off", "0", "hidden":
+		return model.ArticleStatusHidden
+	case "02", "2", "encrypted", "password", "private":
+		return model.ArticleStatusEncrypted
+	case "03", "3", "draft":
+		return model.ArticleStatusDraft
+	default:
+		return model.ArticleStatusPublic
+	}
+}
+
 // parseMusicDuration 将 "mm:ss" 格式的时长字符串转换为秒数
 // 例如 "3:45" → 225，"1:02:30" → 3750（小时:分:秒），无效格式返回 0
 func parseMusicDuration(s sql.NullString) uint16 {
@@ -1534,7 +1552,7 @@ func migrateArticle(src *sql.DB, dst *gorm.DB) error {
 			ShortContent:  nullStr(shortContent),
 			Content:       content.String,
 			UserID:        uint(userID.Int64),
-			Status:        statusVarcharToUint8(status),
+			Status:        articleStatusVarcharToUint8(status),
 			CommentStatus: statusVarcharToUint8(commentStatus),
 			Password:      nullStr(password),
 			ReadCount:     uint(readCount.Int32),

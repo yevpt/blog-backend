@@ -246,7 +246,7 @@ func (r *articleRepo) ToggleLike(articleID uint, userID uint) (*ArticleAggregate
 }
 
 func visibleArticleStatuses() []uint {
-	return []uint{1, 2}
+	return []uint{uint(model.ArticleStatusPublic), uint(model.ArticleStatusEncrypted)}
 }
 
 func articleUpdateFields(article model.Article) map[string]any {

@@ -193,7 +193,7 @@ func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleC
 	if err := resolveArticleUserAvatarURL(item.User, objectURLResolver); err != nil {
 		return nil, err
 	}
-	passworded := aggregate.Article.Status == 2
+	passworded := aggregate.Article.Status == model.ArticleStatusEncrypted
 	content := ""
 	if policy == articleContentAdmin || !passworded {
 		resolvedContent, err := resolveArticleContent(aggregate.Article.Content, objectURLResolver)

@@ -1,5 +1,16 @@
 package model
 
+const (
+	// ArticleStatusHidden 表示文章已隐藏，不在公开接口展示。
+	ArticleStatusHidden uint8 = 0
+	// ArticleStatusPublic 表示文章公开展示。
+	ArticleStatusPublic uint8 = 1
+	// ArticleStatusEncrypted 表示文章公开可见但正文需密码查看。
+	ArticleStatusEncrypted uint8 = 2
+	// ArticleStatusDraft 表示文章草稿，仅管理端可见。
+	ArticleStatusDraft uint8 = 3
+)
+
 type Article struct {
 	Base
 	Title         string  `gorm:"size:200;not null;comment:标题" json:"title"`
@@ -7,7 +18,7 @@ type Article struct {
 	ShortContent  *string `gorm:"size:1000;comment:摘要" json:"short_content"`
 	Content       string  `gorm:"type:longtext;comment:正文（Markdown）" json:"content"`
 	UserID        uint    `gorm:"not null;index;comment:作者ID" json:"user_id"`
-	Status        uint8   `gorm:"type:tinyint;default:1;comment:状态 0=隐藏 1=公开 2=加密" json:"status"`
+	Status        uint8   `gorm:"type:tinyint;default:1;comment:状态 0=隐藏 1=公开 2=加密 3=草稿" json:"status"`
 	CommentStatus uint8   `gorm:"type:tinyint;default:1;comment:评论状态 0=关闭 1=开启" json:"comment_status"`
 	Password      *string `gorm:"size:50;comment:阅读密码（Status=2 时生效）" json:"-"`
 	ReadCount     uint    `gorm:"type:int;default:0;comment:阅读数" json:"read_count"`

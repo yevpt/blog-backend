@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"database/sql/driver"
 	"regexp"
 	"testing"
@@ -12,6 +13,11 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
+
+func TestArticleStatusVarcharToUint8_PreservesDraftStatus(t *testing.T) {
+	assert.Equal(t, uint8(3), articleStatusVarcharToUint8(sql.NullString{String: "draft", Valid: true}))
+	assert.Equal(t, uint8(3), articleStatusVarcharToUint8(sql.NullString{String: "03", Valid: true}))
+}
 
 func TestBuildMomentMediaGaragePlan_RewritesSayPath(t *testing.T) {
 	plan := buildMomentMediaGaragePlan(momentMediaGarageRow{

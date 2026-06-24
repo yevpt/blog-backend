@@ -20,26 +20,26 @@ import (
 )
 
 type stubArticleService struct {
-	listReq       dto.ArticleListReq
-	listViewer    *uint
-	listResp      *dto.ArticlePageResp
-	listErr       error
-	adminListReq  dto.AdminArticleListReq
-	adminListResp *dto.AdminArticlePageResp
-	adminListErr  error
+	listReq         dto.ArticleListReq
+	listViewer      *uint
+	listResp        *dto.ArticlePageResp
+	listErr         error
+	adminListReq    dto.AdminArticleListReq
+	adminListResp   *dto.AdminArticlePageResp
+	adminListErr    error
 	detailResp      *dto.ArticleDetailResp
 	detailErr       error
 	adminDetailResp *dto.AdminArticleDetailResp
 	adminDetailID   uint
-	deleteResp    *dto.ArticleDeleteResp
-	deleteErr     error
-	deleteUserID  uint
-	saveReq       dto.ArticleSaveReq
-	saveUserID    uint
-	saveResp      *dto.ArticleDetailResp
-	saveErr       error
-	likeResp      *dto.ArticleLikeResp
-	likeErr       error
+	deleteResp      *dto.ArticleDeleteResp
+	deleteErr       error
+	deleteUserID    uint
+	saveReq         dto.ArticleSaveReq
+	saveUserID      uint
+	saveResp        *dto.ArticleDetailResp
+	saveErr         error
+	likeResp        *dto.ArticleLikeResp
+	likeErr         error
 }
 
 func (s *stubArticleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -237,6 +237,31 @@ func TestArticleHandler_Save_UsesClaimsUserID(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, uint(7), stub.saveUserID)
 	assert.Equal(t, "A", stub.saveReq.Title)
+}
+
+func TestArticleHandler_Save_AllowsDraftStatus(t *testing.T) {
+	stub := &stubArticleService{
+		saveResp: &dto.ArticleDetailResp{ArticleListItemResp: dto.ArticleListItemResp{ID: 9, Title: "Draft", Status: 3}},
+	}
+	r := newArticleRouter(stub)
+	body, _ := json.Marshal(dto.ArticleSaveReq{
+		Title:         "Draft",
+		Content:       "body",
+		Status:        3,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/articles", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint8(3), stub.saveReq.Status)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
 }
 
 func TestArticleHandler_Save_BadRequest(t *testing.T) {

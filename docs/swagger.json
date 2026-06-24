@@ -10,7 +10,7 @@
     "paths": {
         "/admin/articles": {
             "get": {
-                "description": "管理员按页码分页查询所有文章，包含隐藏、公开、加密和已软删除文章；软删除文章返回 deleted_at。",
+                "description": "管理员按页码分页查询所有文章，包含隐藏、公开、加密、草稿和已软删除文章；软删除文章返回 deleted_at。",
                 "consumes": [
                     "application/json"
                 ],
@@ -7268,12 +7268,13 @@
                     "example": "摘要"
                 },
                 "status": {
-                    "description": "Status 文章状态：0 隐藏，1 公开，2 加密。",
+                    "description": "Status 文章状态：0 隐藏，1 公开，2 加密，3 草稿。",
                     "type": "integer",
                     "enum": [
                         0,
                         1,
-                        2
+                        2,
+                        3
                     ],
                     "example": 1
                 },

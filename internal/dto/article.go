@@ -39,8 +39,8 @@ type ArticleSaveReq struct {
 	ShortContent *string `json:"short_content" example:"摘要"`
 	// Content Markdown 正文内容。
 	Content string `json:"content" binding:"required" example:"Markdown 正文"`
-	// Status 文章状态：0 隐藏，1 公开，2 加密。
-	Status uint8 `json:"status" binding:"oneof=0 1 2" example:"1"`
+	// Status 文章状态：0 隐藏，1 公开，2 加密，3 草稿。
+	Status uint8 `json:"status" binding:"oneof=0 1 2 3" example:"1"`
 	// CommentStatus 评论状态：0 关闭，1 开启。
 	CommentStatus uint8 `json:"comment_status" binding:"oneof=0 1" example:"1"`
 	// Password 加密文章密码。

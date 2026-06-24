@@ -79,7 +79,7 @@ func (r *articleRepo) ListAdmin(filter ArticleListFilter) (*ArticlePageResult, e
 func (r *articleRepo) ListPublicIDs() ([]uint, error) {
 	var ids []uint
 	err := r.db.Model(&model.Article{}).
-		Where("article.status = ?", uint8(1)).
+		Where("article.status = ?", model.ArticleStatusPublic).
 		Order("article.created_at DESC").
 		Order("article.id DESC").
 		Pluck("id", &ids).Error
@@ -133,7 +133,7 @@ func normalizeArticlePage(page int, pageSize int) (int, int) {
 }
 
 func (r *articleRepo) publicArticleQuery(filter ArticleListFilter) *gorm.DB {
-	query := r.db.Model(&model.Article{}).Where("article.status = ?", uint8(1))
+	query := r.db.Model(&model.Article{}).Where("article.status = ?", model.ArticleStatusPublic)
 	if filter.Recommend != nil && *filter.Recommend {
 		query = query.Joins("JOIN article_recommend ON article_recommend.article_id = article.id AND article_recommend.deleted_at IS NULL")
 	}

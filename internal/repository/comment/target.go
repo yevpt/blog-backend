@@ -53,7 +53,7 @@ func (r *commentRepo) ensureArticleReadable(articleID uint) error {
 }
 
 func readableArticleStatuses() []uint {
-	return []uint{1, 2}
+	return []uint{uint(model.ArticleStatusPublic), uint(model.ArticleStatusEncrypted)}
 }
 
 func (r *commentRepo) ensureMomentCommentable(momentID uint) (uint, error) {

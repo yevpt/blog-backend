@@ -63,7 +63,7 @@ func (h *ArticleHandler) ListPublic(c *gin.Context) {
 
 // ListAdmin 分页查询管理端文章。
 // @Summary 分页查询管理端文章
-// @Description 管理员按页码分页查询所有文章，包含隐藏、公开、加密和已软删除文章；软删除文章返回 deleted_at。
+// @Description 管理员按页码分页查询所有文章，包含隐藏、公开、加密、草稿和已软删除文章；软删除文章返回 deleted_at。
 // @Tags 文章管理
 // @Accept json
 // @Produce json
