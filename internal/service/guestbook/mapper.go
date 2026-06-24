@@ -1,11 +1,13 @@
 package guestbook
 
 import (
+	"context"
 	"math"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	"github.com/vpt/blog-backend/internal/service/commentasset"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -35,7 +37,7 @@ func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver sto
 		ID:          message.ID,
 		OwnerUserID: message.OwnerUserID,
 		FromUserID:  message.FromUserID,
-		Content:     message.Content,
+		Content:     commentasset.ResolveContent(context.Background(), resolver, message.Content),
 		User:        guestbookUserToDTO(aggregate.User, resolver),
 		ReplyCount:  aggregate.ReplyCount,
 		LikeCount:   aggregate.LikeCount,

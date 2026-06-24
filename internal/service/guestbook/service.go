@@ -1,12 +1,16 @@
 package guestbook
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	"github.com/vpt/blog-backend/internal/service/commentasset"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 func (s *guestbookService) List(req dto.GuestbookListReq, viewerID *uint) (*dto.GuestbookPageResp, error) {
@@ -24,13 +28,39 @@ func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (
 	}
 
 	ownerUserID := normalizeOwnerUserID(req.OwnerUserID)
+	normalized, store, err := s.normalizeGuestbookImages(content, fromUserID, guestbookImageTargetPrefix(ownerUserID))
+	if err != nil {
+		return nil, err
+	}
+	content = normalized.Content
 	aggregate, err := s.repo.Create(ownerUserID, fromUserID, content)
 	if err != nil {
+		_ = commentasset.DeleteKeys(context.Background(), store, normalized.CopiedKeys)
 		return nil, mapRepoError(err)
+	}
+	if err := commentasset.DeleteKeys(context.Background(), store, normalized.TempKeys); err != nil {
+		return nil, err
 	}
 	// 留言成功后发布 guestbook_created 事件，接收人为板主。
 	s.notifyGuestbookCreated(ownerUserID, fromUserID, aggregate)
 	return guestbookItemToDTO(*aggregate, s.objectURLResolver), nil
+}
+
+func (s *guestbookService) normalizeGuestbookImages(content string, userID uint, targetPrefix string) (*commentasset.NormalizeResult, storage.ObjectStore, error) {
+	store, _ := s.objectURLResolver.(storage.ObjectStore)
+	result, err := commentasset.Normalize(context.Background(), store, commentasset.NormalizeInput{
+		UserID:       userID,
+		Content:      content,
+		TargetPrefix: targetPrefix,
+	})
+	if err != nil {
+		return nil, store, mapGuestbookAssetError(err)
+	}
+	return result, store, nil
+}
+
+func guestbookImageTargetPrefix(ownerUserID uint) string {
+	return fmt.Sprintf("comments/guestbook/%d/images", ownerUserID)
 }
 
 func (s *guestbookService) ToggleLike(id uint, userID uint) (*dto.GuestbookLikeResp, error) {
@@ -101,6 +131,15 @@ func mapRepoError(err error) error {
 	}
 	if errors.Is(err, guestbookrepo.ErrNoDeletePermission) {
 		return ErrGuestbookNoDeletePermission
+	}
+	return err
+}
+
+func mapGuestbookAssetError(err error) error {
+	if errors.Is(err, commentasset.ErrImageInvalid) ||
+		errors.Is(err, commentasset.ErrImageExternal) ||
+		errors.Is(err, commentasset.ErrImageNotFound) {
+		return fmt.Errorf("%w：%s", ErrGuestbookImageInvalid, err.Error())
 	}
 	return err
 }

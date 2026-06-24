@@ -24,7 +24,8 @@ func writeGuestbookResponse(c *gin.Context, data any, err error) {
 		return
 	}
 	if errors.Is(err, guestbookservice.ErrGuestbookInvalid) ||
-		errors.Is(err, guestbookservice.ErrGuestbookContentRequired) {
+		errors.Is(err, guestbookservice.ErrGuestbookContentRequired) ||
+		errors.Is(err, guestbookservice.ErrGuestbookImageInvalid) {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}

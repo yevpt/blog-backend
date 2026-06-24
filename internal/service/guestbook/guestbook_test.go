@@ -3,6 +3,7 @@ package guestbook_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 type fakeGuestbookRepo struct {
@@ -55,6 +57,16 @@ func (f *fakeGuestbookRepo) Create(ownerUserID uint, fromUserID uint, content st
 	f.createOwnerID = ownerUserID
 	f.createFromID = fromUserID
 	f.createContent = content
+	if f.createResp == nil && f.createErr == nil {
+		f.createResp = &guestbookrepo.GuestbookAggregate{
+			Message: model.Guestbook{
+				Base:        model.Base{ID: 9},
+				OwnerUserID: ownerUserID,
+				FromUserID:  fromUserID,
+				Content:     content,
+			},
+		}
+	}
 	return f.createResp, f.createErr
 }
 
@@ -132,6 +144,44 @@ func TestGuestbookService_Create_TrimsContentAndDefaultsOwner(t *testing.T) {
 	assert.Equal(t, "你好", resp.Content)
 }
 
+func TestGuestbookService_Create_NormalizesTempCommentImagesBeforeCreate(t *testing.T) {
+	store := newGuestbookAssetStore()
+	store.keys["temp/comments/7/images/hello.jpg"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/hello.jpg?a=1"] = "temp/comments/7/images/hello.jpg"
+	repo := &fakeGuestbookRepo{}
+	svc := guestbookservice.NewGuestbookService(repo, store, nil)
+
+	resp, err := svc.Create(dto.GuestbookCreateReq{
+		OwnerUserID: 1,
+		Content:     ` 留言图 <img src="https://cdn.example.com/blog/temp/comments/7/images/hello.jpg?a=1"> `,
+	}, 7)
+
+	require.NoError(t, err)
+	assert.Equal(t, `留言图 <img src="comments/guestbook/1/images/hello.jpg">`, repo.createContent)
+	assert.Equal(t, []guestbookAssetCopy{{
+		source: "temp/comments/7/images/hello.jpg",
+		target: "comments/guestbook/1/images/hello.jpg",
+	}}, store.copies)
+	require.NotNil(t, resp)
+	assert.Equal(t, `留言图 <img src="https://cdn.example.com/blog/comments/guestbook/1/images/hello.jpg">`, resp.Content)
+}
+
+func TestGuestbookService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t *testing.T) {
+	store := newGuestbookAssetStore()
+	store.keys["temp/comments/7/images/hello.jpg"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/hello.jpg"] = "temp/comments/7/images/hello.jpg"
+	repo := &fakeGuestbookRepo{createErr: errors.New("db down")}
+	svc := guestbookservice.NewGuestbookService(repo, store, nil)
+
+	_, err := svc.Create(dto.GuestbookCreateReq{
+		OwnerUserID: 1,
+		Content:     "![hello](https://cdn.example.com/blog/temp/comments/7/images/hello.jpg)",
+	}, 7)
+
+	require.EqualError(t, err, "db down")
+	assert.Equal(t, []string{"comments/guestbook/1/images/hello.jpg"}, store.deleted)
+}
+
 func TestGuestbookService_Create_RejectsBlankContent(t *testing.T) {
 	svc := guestbookservice.NewGuestbookService(&fakeGuestbookRepo{}, nil, nil)
 
@@ -171,6 +221,64 @@ func TestGuestbookService_List_MapsUnknownError(t *testing.T) {
 	_, err := svc.List(dto.GuestbookListReq{}, nil)
 
 	require.EqualError(t, err, "db down")
+}
+
+type guestbookAssetStore struct {
+	keys    map[string]bool
+	keyMap  map[string]string
+	copies  []guestbookAssetCopy
+	deleted []string
+}
+
+type guestbookAssetCopy struct {
+	source string
+	target string
+}
+
+func newGuestbookAssetStore() *guestbookAssetStore {
+	return &guestbookAssetStore{
+		keys:   map[string]bool{},
+		keyMap: map[string]string{},
+	}
+}
+
+func (s *guestbookAssetStore) ObjectURL(_ context.Context, objectName string) (string, error) {
+	return "https://cdn.example.com/blog/" + objectName, nil
+}
+
+func (s *guestbookAssetStore) ObjectExists(_ context.Context, objectName string) (bool, error) {
+	return s.keys[objectName], nil
+}
+
+func (s *guestbookAssetStore) PutObject(context.Context, string, []byte, string) error {
+	return nil
+}
+
+func (s *guestbookAssetStore) DeleteObject(_ context.Context, objectName string) error {
+	s.deleted = append(s.deleted, objectName)
+	delete(s.keys, objectName)
+	return nil
+}
+
+func (s *guestbookAssetStore) MoveObject(context.Context, string, string) error {
+	return nil
+}
+
+func (s *guestbookAssetStore) CopyObject(_ context.Context, sourceName string, targetName string) error {
+	s.copies = append(s.copies, guestbookAssetCopy{source: sourceName, target: targetName})
+	s.keys[targetName] = true
+	return nil
+}
+
+func (s *guestbookAssetStore) ObjectKey(value string) (string, error) {
+	if key, ok := s.keyMap[value]; ok {
+		return key, nil
+	}
+	value = strings.TrimLeft(strings.TrimSpace(value), "/")
+	if strings.HasPrefix(value, "temp/comments/") || strings.HasPrefix(value, "comments/") {
+		return value, nil
+	}
+	return "", storage.ErrExternalObjectURL
 }
 
 // recordingPublisher 记录发布事件，用于断言是否发布通知。

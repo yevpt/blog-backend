@@ -22,6 +22,8 @@ var (
 	ErrGuestbookContentRequired = errors.New("留言内容不能为空")
 	// ErrGuestbookNoDeletePermission 表示当前用户无权删除留言。
 	ErrGuestbookNoDeletePermission = errors.New("无权删除留言")
+	// ErrGuestbookImageInvalid 表示留言正文中的图片不是当前用户上传的有效图片。
+	ErrGuestbookImageInvalid = errors.New("留言图片无效")
 )
 
 // GuestbookService 留言板业务接口，负责留言查询、发表、点赞和删除。
