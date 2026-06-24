@@ -1,6 +1,7 @@
 package user_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,12 @@ type stubUserService struct {
 	resp   *dto.UserDetailResp
 	err    error
 	userID uint
+
+	emailTarget  string
+	email        string
+	code         string
+	newPassword  string
+	captchaToken string
 }
 
 func (s *stubUserService) GetDetail(userID uint) (*dto.UserDetailResp, error) {
@@ -37,8 +44,12 @@ func (s *stubUserService) ListAll(req *dto.UserListReq) (*dto.UserPageResp, erro
 	return nil, nil
 }
 
-func (s *stubUserService) Update(userID uint, req *dto.UserUpdateReq) error {
-	return nil
+func (s *stubUserService) Update(userID uint, req *dto.UserUpdateReq) (*dto.UserDetailResp, error) {
+	return nil, nil
+}
+
+func (s *stubUserService) ChangeAvatar(userID uint, file *dto.UploadedImageFile) (*dto.UserDetailResp, error) {
+	return nil, nil
 }
 
 func (s *stubUserService) RecordLogin(userID uint) error {
@@ -69,6 +80,28 @@ func (s *stubUserService) UpdatePassword(userID uint, oldPwd, newPwd string) err
 	return nil
 }
 
+func (s *stubUserService) SetInitialPassword(userID uint, newPwd, code string) error {
+	s.userID = userID
+	s.newPassword = newPwd
+	s.code = code
+	return nil
+}
+
+func (s *stubUserService) SendEmailCode(userID uint, emailAddr, captchaToken, ip string) error {
+	s.userID = userID
+	s.email = emailAddr
+	s.captchaToken = captchaToken
+	return nil
+}
+
+func (s *stubUserService) UpdateEmail(userID uint, target, emailAddr, code string) error {
+	s.userID = userID
+	s.emailTarget = target
+	s.email = emailAddr
+	s.code = code
+	return nil
+}
+
 func (s *stubUserService) UpdateEmailDisplay(userID uint, display string) error {
 	return nil
 }
@@ -88,6 +121,9 @@ func newUserRouter(svc userservice.UserService, jwtManager *jwt.Manager, detail 
 		})
 	}
 	authed.GET("/users/me", h.GetDetail)
+	authed.POST("/users/me/email/code", h.SendEmailCode)
+	authed.PATCH("/users/me/email", h.UpdateEmail)
+	authed.PATCH("/users/me/password/initial", h.SetInitialPassword)
 	return r
 }
 
@@ -146,4 +182,63 @@ func TestUserHandler_GetDetail_NilDetail(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestUserHandler_SendEmailCode_Success(t *testing.T) {
+	jwtManager := jwt.NewManager("secret", 2, 168)
+	detail := &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1}
+	svc := &stubUserService{}
+	r := newUserRouter(svc, jwtManager, detail)
+	token, err := jwtManager.GenerateAccess(7)
+	require.NoError(t, err)
+
+	body := bytes.NewBufferString(`{"email":"new@example.com","captcha_token":"captcha-token"}`)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/users/me/email/code", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(7), svc.userID)
+	assert.Equal(t, "new@example.com", svc.email)
+	assert.Equal(t, "captcha-token", svc.captchaToken)
+}
+
+func TestUserHandler_UpdateEmail_Success(t *testing.T) {
+	jwtManager := jwt.NewManager("secret", 2, 168)
+	detail := &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1}
+	svc := &stubUserService{}
+	r := newUserRouter(svc, jwtManager, detail)
+	token, err := jwtManager.GenerateAccess(7)
+	require.NoError(t, err)
+
+	body := bytes.NewBufferString(`{"target":"main","email":"new@example.com","code":"123456"}`)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PATCH", "/users/me/email", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "main", svc.emailTarget)
+	assert.Equal(t, "new@example.com", svc.email)
+	assert.Equal(t, "123456", svc.code)
+}
+
+func TestUserHandler_SetInitialPassword_Success(t *testing.T) {
+	jwtManager := jwt.NewManager("secret", 2, 168)
+	detail := &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1}
+	svc := &stubUserService{}
+	r := newUserRouter(svc, jwtManager, detail)
+	token, err := jwtManager.GenerateAccess(7)
+	require.NoError(t, err)
+
+	body := bytes.NewBufferString(`{"new_password":"new-password","code":"123456"}`)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PATCH", "/users/me/password/initial", body)
+	req.Header.Set("Authorization", "Bearer "+token)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "new-password", svc.newPassword)
+	assert.Equal(t, "123456", svc.code)
 }

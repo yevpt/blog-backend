@@ -36,9 +36,9 @@ func TestUserRepository_FindByIdentifier_Found(t *testing.T) {
 	email := "test@example.com"
 	rows := sqlmock.NewRows([]string{
 		"id", "created_at", "updated_at", "deleted_at",
-		"username", "password", "nickname", "email", "phone",
+		"username", "password", "password_set", "nickname", "email", "phone",
 		"site", "avatar_url", "mark", "status", "last_login_at",
-	}).AddRow(1, nil, nil, nil, email, "hashed", nil, email, nil, nil, nil, nil, 1, nil)
+	}).AddRow(1, nil, nil, nil, email, "hashed", true, nil, email, nil, nil, nil, nil, 1, nil)
 
 	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
 		WithArgs(email, email, email, 1).
@@ -71,9 +71,9 @@ func TestUserRepository_FindByUsername_OnlyMatchesUsername(t *testing.T) {
 
 	rows := sqlmock.NewRows([]string{
 		"id", "created_at", "updated_at", "deleted_at",
-		"username", "password", "nickname", "email", "phone",
+		"username", "password", "password_set", "nickname", "email", "phone",
 		"site", "avatar_url", "mark", "status", "last_login_at",
-	}).AddRow(8, nil, nil, nil, "admin", "hashed", nil, "admin@example.com", nil, nil, nil, nil, 1, nil)
+	}).AddRow(8, nil, nil, nil, "admin", "hashed", true, nil, "admin@example.com", nil, nil, nil, nil, 1, nil)
 
 	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
 		WithArgs("admin", 1).
@@ -84,6 +84,29 @@ func TestUserRepository_FindByUsername_OnlyMatchesUsername(t *testing.T) {
 	require.NotNil(t, user)
 	assert.Equal(t, uint(8), user.ID)
 	assert.Equal(t, "admin", user.Username)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserRepository_FindByEmail_OnlyMatchesEmail(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at",
+		"username", "password", "password_set", "nickname", "email", "phone",
+		"site", "avatar_url", "mark", "status", "last_login_at",
+	}).AddRow(9, nil, nil, nil, "alice", "hashed", true, nil, "alice@example.com", nil, nil, nil, nil, 1, nil)
+
+	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
+		WithArgs("alice@example.com", 1).
+		WillReturnRows(rows)
+
+	user, err := repo.FindByEmail("alice@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	assert.Equal(t, uint(9), user.ID)
+	assert.Equal(t, "alice@example.com", *user.Email)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -98,6 +121,23 @@ func TestUserRepository_ExistsByEmail_True(t *testing.T) {
 		WillReturnRows(rows)
 
 	exists, err := repo.ExistsByEmail("taken@example.com")
+	require.NoError(t, err)
+	assert.True(t, exists)
+}
+
+func TestUserRepository_EmailInUseByOther_ChecksMainAndSubEmail(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	mock.ExpectQuery(`SELECT count\(\*\) FROM \x60user\x60`).
+		WithArgs("taken@example.com", uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery(`SELECT count\(\*\) FROM \x60user_meta\x60`).
+		WithArgs("taken@example.com", uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+
+	exists, err := repo.EmailInUseByOther("taken@example.com", 7)
 	require.NoError(t, err)
 	assert.True(t, exists)
 }
@@ -132,9 +172,9 @@ func TestUserRepository_FindDetailByID_Found(t *testing.T) {
 
 	userRows := sqlmock.NewRows([]string{
 		"id", "created_at", "updated_at", "deleted_at",
-		"username", "password", "nickname", "email", "phone",
+		"username", "password", "password_set", "nickname", "email", "phone",
 		"site", "avatar_url", "mark", "status", "last_login_at",
-	}).AddRow(7, nil, nil, nil, "alice", "hashed", nickname, email, nil, nil, avatar, "注册会员", 1, lastLogin)
+	}).AddRow(7, nil, nil, nil, "alice", "hashed", true, nickname, email, nil, nil, avatar, "注册会员", 1, lastLogin)
 	mock.ExpectQuery(`SELECT \* FROM \x60user\x60`).
 		WithArgs(uint(7), 1).
 		WillReturnRows(userRows)
@@ -145,9 +185,9 @@ func TestUserRepository_FindDetailByID_Found(t *testing.T) {
 		WillReturnRows(roleRows)
 
 	metaRows := sqlmock.NewRows([]string{
-		"user_id", "name", "description", "gender", "birthday", "id_card",
+		"user_id", "name", "description", "sub_email", "gender", "birthday", "id_card",
 		"country", "province", "city", "address", "created_at", "updated_at",
-	}).AddRow(7, "Alice Wang", description, 1, birthday, nil, "中国", "上海", "上海", "徐汇区", birthday, birthday)
+	}).AddRow(7, "Alice Wang", description, nil, 1, birthday, nil, "中国", "上海", "上海", "徐汇区", birthday, birthday)
 	mock.ExpectQuery(`SELECT \* FROM \x60user_meta\x60`).
 		WithArgs(uint(7), 1).
 		WillReturnRows(metaRows)
@@ -211,11 +251,12 @@ func TestUserRepository_Create_Success(t *testing.T) {
 	nickname := "alice"
 	email := "alice@example.com"
 	user := &model.User{
-		Username: email,
-		Password: "hashed",
-		Nickname: &nickname,
-		Email:    &email,
-		Status:   1,
+		Username:    email,
+		Password:    "hashed",
+		PasswordSet: true,
+		Nickname:    &nickname,
+		Email:       &email,
+		Status:      1,
 	}
 	err := repo.Create(user, 3)
 	require.NoError(t, err)

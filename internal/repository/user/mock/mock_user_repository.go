@@ -41,6 +41,21 @@ func (m *MockUserRepository) EXPECT() *MockUserRepositoryMockRecorder {
 	return m.recorder
 }
 
+// CountByAvatarURL mocks base method.
+func (m *MockUserRepository) CountByAvatarURL(avatarURL string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountByAvatarURL", avatarURL)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountByAvatarURL indicates an expected call of CountByAvatarURL.
+func (mr *MockUserRepositoryMockRecorder) CountByAvatarURL(avatarURL any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByAvatarURL", reflect.TypeOf((*MockUserRepository)(nil).CountByAvatarURL), avatarURL)
+}
+
 // Create mocks base method.
 func (m *MockUserRepository) Create(arg0 *model.User, roleID uint) error {
 	m.ctrl.T.Helper()
@@ -67,6 +82,21 @@ func (m *MockUserRepository) DeleteSocialLink(userID uint, platform string) erro
 func (mr *MockUserRepositoryMockRecorder) DeleteSocialLink(userID, platform any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSocialLink", reflect.TypeOf((*MockUserRepository)(nil).DeleteSocialLink), userID, platform)
+}
+
+// EmailInUseByOther mocks base method.
+func (m *MockUserRepository) EmailInUseByOther(email string, excludeID uint) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EmailInUseByOther", email, excludeID)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EmailInUseByOther indicates an expected call of EmailInUseByOther.
+func (mr *MockUserRepositoryMockRecorder) EmailInUseByOther(email, excludeID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EmailInUseByOther", reflect.TypeOf((*MockUserRepository)(nil).EmailInUseByOther), email, excludeID)
 }
 
 // ExistsByEmail mocks base method.
@@ -112,6 +142,21 @@ func (m *MockUserRepository) ExistsByUsername(username string, excludeID uint) (
 func (mr *MockUserRepositoryMockRecorder) ExistsByUsername(username, excludeID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExistsByUsername", reflect.TypeOf((*MockUserRepository)(nil).ExistsByUsername), username, excludeID)
+}
+
+// FindByEmail mocks base method.
+func (m *MockUserRepository) FindByEmail(email string) (*model.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindByEmail", email)
+	ret0, _ := ret[0].(*model.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindByEmail indicates an expected call of FindByEmail.
+func (mr *MockUserRepositoryMockRecorder) FindByEmail(email any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByEmail", reflect.TypeOf((*MockUserRepository)(nil).FindByEmail), email)
 }
 
 // FindByID mocks base method.

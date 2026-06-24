@@ -2796,6 +2796,80 @@
                 }
             }
         },
+        "/auth/password-reset": {
+            "post": {
+                "description": "使用邮箱验证码设置新密码；成功后旧密码失效，新密码可用于登录。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "忘记密码重置",
+                "parameters": [
+                    {
+                        "description": "忘记密码重置请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PasswordResetReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示重置成功，code=400 表示验证码无效或参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/password-reset/code": {
+            "post": {
+                "description": "消费 GoCaptcha 一次性票据后尝试向邮箱发送重置密码验证码；无论邮箱是否存在，成功响应都不暴露账号状态。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "认证"
+                ],
+                "summary": "发送忘记密码验证码",
+                "parameters": [
+                    {
+                        "description": "忘记密码验证码请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.PasswordResetCodeReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示请求已受理，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "发送频率超限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/refresh": {
             "post": {
                 "description": "使用 refresh token 换发新的 access token 和 refresh token；旧 refresh token 会在业务层失效。",
@@ -2850,9 +2924,9 @@
         },
         "/auth/register": {
             "post": {
-                "description": "使用邮箱、密码和验证码创建用户；参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。",
+                "description": "使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -2863,13 +2937,37 @@
                 "summary": "邮箱注册",
                 "parameters": [
                     {
-                        "description": "注册请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.RegisterReq"
-                        }
+                        "type": "string",
+                        "description": "邮箱",
+                        "name": "email",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "密码（至少 8 位）",
+                        "name": "password",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "6 位邮箱验证码",
+                        "name": "code",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "昵称",
+                        "name": "nickname",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "可选头像图片",
+                        "name": "avatar",
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -5695,7 +5793,7 @@
                 "tags": [
                     "上传"
                 ],
-                "summary": "上传文章临时图片",
+                "summary": "上传临时图片",
                 "parameters": [
                     {
                         "type": "string",
@@ -5850,7 +5948,7 @@
                 }
             },
             "put": {
-                "description": "更新当前登录用户的昵称、头像、标签等信息",
+                "description": "更新当前登录用户的昵称、标签等信息；头像请使用 POST /users/me/avatar。",
                 "consumes": [
                     "application/json"
                 ],
@@ -5874,7 +5972,179 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "成功",
+                        "description": "统一响应；code=0 表示更新成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/avatar": {
+            "post": {
+                "description": "登录用户上传头像图片，服务端校验后压缩到 120px 内、20KB 内 JPEG 并更新 avatar_url；不支持 GIF，原始文件最大 2MB。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "更换当前用户头像",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "头像图片（JPG、PNG、WebP）",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示更换成功，code=400 表示参数错误或业务错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "请求过于频繁",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/email": {
+            "patch": {
+                "description": "target=main 更新主邮箱，target=sub 更新副邮箱；邮箱验证码必须匹配目标邮箱。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "更新账号邮箱",
+                "parameters": [
+                    {
+                        "description": "邮箱更新信息",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateEmailReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功；code != 0 表示业务失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/email/code": {
+            "post": {
+                "description": "用于主邮箱/副邮箱绑定换绑，以及当前主邮箱校验后设置初始密码。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "发送账号邮箱验证码",
+                "parameters": [
+                    {
+                        "description": "目标邮箱和图形验证码票据",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SendAccountEmailCodeReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功；code != 0 表示业务失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "发送过于频繁",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6009,6 +6279,46 @@
                 "responses": {
                     "200": {
                         "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/password/initial": {
+            "patch": {
+                "description": "适用于 OAuth 注册等没有用户自设密码的账号；需先向当前主邮箱发送验证码。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "设置初始密码",
+                "parameters": [
+                    {
+                        "description": "密码和验证码",
+                        "name": "req",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.SetInitialPasswordReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功；code != 0 表示业务失败",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -8902,6 +9212,41 @@
                 }
             }
         },
+        "dto.PasswordResetCodeReq": {
+            "type": "object",
+            "required": [
+                "captcha_token",
+                "email"
+            ],
+            "properties": {
+                "captcha_token": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.PasswordResetReq": {
+            "type": "object",
+            "required": [
+                "code",
+                "email",
+                "new_password"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
         "dto.RefreshReq": {
             "type": "object",
             "required": [
@@ -8913,26 +9258,18 @@
                 }
             }
         },
-        "dto.RegisterReq": {
+        "dto.SendAccountEmailCodeReq": {
             "type": "object",
             "required": [
-                "code",
-                "email",
-                "password"
+                "captcha_token",
+                "email"
             ],
             "properties": {
-                "code": {
+                "captcha_token": {
                     "type": "string"
                 },
                 "email": {
                     "type": "string"
-                },
-                "nickname": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 8
                 }
             }
         },
@@ -8948,6 +9285,22 @@
                 },
                 "email": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.SetInitialPasswordReq": {
+            "type": "object",
+            "required": [
+                "code",
+                "new_password"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "new_password": {
+                    "type": "string",
+                    "minLength": 8
                 }
             }
         },
@@ -9146,6 +9499,29 @@
                 }
             }
         },
+        "dto.UpdateEmailReq": {
+            "type": "object",
+            "required": [
+                "code",
+                "email",
+                "target"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "string",
+                    "enum": [
+                        "main",
+                        "sub"
+                    ]
+                }
+            }
+        },
         "dto.UpdateMetaReq": {
             "type": "object",
             "properties": {
@@ -9244,6 +9620,9 @@
                 "nickname": {
                     "type": "string"
                 },
+                "password_set": {
+                    "type": "boolean"
+                },
                 "phone": {
                     "type": "string"
                 },
@@ -9329,6 +9708,9 @@
                 },
                 "province": {
                     "type": "string"
+                },
+                "sub_email": {
+                    "type": "string"
                 }
             }
         },
@@ -9412,6 +9794,9 @@
         "dto.UserResp": {
             "type": "object",
             "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
                 },
@@ -9490,11 +9875,6 @@
         "dto.UserUpdateReq": {
             "type": "object",
             "properties": {
-                "avatar_url": {
-                    "type": "string",
-                    "maxLength": 255,
-                    "example": "https://cdn.example.com/avatar.png"
-                },
                 "mark": {
                     "type": "string",
                     "maxLength": 30,

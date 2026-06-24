@@ -6,6 +6,7 @@ type User struct {
 	Base
 	Username    string     `gorm:"size:155;not null;uniqueIndex;comment:登录账号" json:"username"`
 	Password    string     `gorm:"size:255;not null;comment:密码（bcrypt）" json:"-"`
+	PasswordSet bool       `gorm:"type:tinyint;not null;default:1;comment:是否已由用户设置登录密码" json:"password_set"`
 	Nickname    *string    `gorm:"size:150;comment:用户昵称" json:"nickname"`
 	Email       *string    `gorm:"size:155;comment:绑定邮箱" json:"email"`
 	Phone       *string    `gorm:"size:50;comment:绑定手机号" json:"phone"`

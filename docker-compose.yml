@@ -8,10 +8,10 @@ name: blog-backend
 services:
   blog-server:
     image: ${BLOG_SERVER_IMAGE:-krccr.ccs.tencentyun.com/yevpt/blog-backend:latest}
-    container_name: blog-server
+    container_name: ${COMPOSE_CONTAINER_NAME:-blog-server}
     restart: unless-stopped
     environment:
-      APP_ENV: prod
+      APP_ENV: ${APP_ENV:-prod}
       # 宝塔管理的 MySQL 连接信息
       BLOG_DB_HOST: ${DB_HOST:-localhost}
       BLOG_DB_PORT: ${DB_PORT:-3306}
@@ -37,6 +37,8 @@ services:
       - ./config:/app/config:ro
     ports:
       - "${SERVER_PORT:-8080}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     logging:
       driver: json-file
       options:

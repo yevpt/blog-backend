@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -24,11 +25,15 @@ type UserRepository interface {
 	FindByIdentifier(identifier string) (*model.User, error)
 	// FindByUsername 仅按 username 查询；未找到时返回 nil, nil
 	FindByUsername(username string) (*model.User, error)
+	// FindByEmail 仅按主邮箱查询；未找到时返回 nil, nil。
+	FindByEmail(email string) (*model.User, error)
 	// FindByID 按主键查询；未找到时返回 nil, nil
 	FindByID(id uint) (*model.User, error)
 	// FindDetailByID 查询用户详情聚合，包含角色、扩展资料、偏好设置和社交链接。
 	FindDetailByID(id uint) (*UserDetailAggregate, error)
 	ExistsByEmail(email string) (bool, error)
+	// EmailInUseByOther 检查主邮箱或副邮箱是否已被其他用户占用。
+	EmailInUseByOther(email string, excludeID uint) (bool, error)
 	ExistsByNickname(nickname string) (bool, error)
 	// Create 在事务中同时插入用户记录和角色关联，保证数据一致性
 	Create(user *model.User, roleID uint) error
@@ -55,6 +60,8 @@ type UserRepository interface {
 	DeleteSocialLink(userID uint, platform string) error
 	// UpsertUserSetting 创建或更新用户偏好设置
 	UpsertUserSetting(userID uint, updates map[string]any) error
+	// CountByAvatarURL 统计使用指定头像 key 的用户数量。
+	CountByAvatarURL(avatarURL string) (int64, error)
 }
 
 type userRepo struct {
@@ -81,6 +88,15 @@ func (r *userRepo) FindByUsername(username string) (*model.User, error) {
 	var user model.User
 	// 管理后台入口只允许用户名登录，避免邮箱或手机号绕过入口语义。
 	err := r.db.Where("username = ?", username).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &user, err
+}
+
+func (r *userRepo) FindByEmail(email string) (*model.User, error) {
+	var user model.User
+	err := r.db.Where("email = ?", email).First(&user).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
@@ -138,6 +154,24 @@ func (r *userRepo) ExistsByEmail(email string) (bool, error) {
 	// Count 查询比 First 高效：只需走索引计数，无需回表读取完整行
 	err := r.db.Model(&model.User{}).Where("email = ?", email).Count(&count).Error
 	return count > 0, err
+}
+
+func (r *userRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
+	var mainCount int64
+	if err := r.db.Model(&model.User{}).
+		Where("email = ? AND id != ?", email, excludeID).
+		Count(&mainCount).Error; err != nil {
+		return false, err
+	}
+	if mainCount > 0 {
+		return true, nil
+	}
+
+	var subCount int64
+	err := r.db.Model(&model.UserMeta{}).
+		Where("sub_email = ? AND user_id != ?", email, excludeID).
+		Count(&subCount).Error
+	return subCount > 0, err
 }
 
 func (r *userRepo) ExistsByNickname(nickname string) (bool, error) {
@@ -265,7 +299,7 @@ func (r *userRepo) ExistsByUsername(username string, excludeID uint) (bool, erro
 
 func (r *userRepo) UpdatePassword(userID uint, hashedPassword string) error {
 	return r.db.Model(&model.User{}).Where("id = ?", userID).
-		Update("password", hashedPassword).Error
+		Updates(map[string]any{"password": hashedPassword, "password_set": true}).Error
 }
 
 func (r *userRepo) UpsertMeta(userID uint, updates map[string]any) error {
@@ -301,6 +335,16 @@ func (r *userRepo) UpsertUserSetting(userID uint, updates map[string]any) error 
 		return r.db.Model(&model.UserSetting{}).Create(updates).Error
 	}
 	return r.db.Model(&model.UserSetting{}).Where("user_id = ?", userID).Updates(updates).Error
+}
+
+func (r *userRepo) CountByAvatarURL(avatarURL string) (int64, error) {
+	avatarURL = strings.TrimSpace(avatarURL)
+	if avatarURL == "" {
+		return 0, nil
+	}
+	var count int64
+	err := r.db.Model(&model.User{}).Where("avatar_url = ?", avatarURL).Count(&count).Error
+	return count, err
 }
 
 func (r *userRepo) findUserMetaByUserID(userID uint) (*model.UserMeta, error) {

@@ -1964,6 +1964,30 @@ definitions:
       login:
         $ref: '#/definitions/dto.LoginResp'
     type: object
+  dto.PasswordResetCodeReq:
+    properties:
+      captcha_token:
+        type: string
+      email:
+        type: string
+    required:
+    - captcha_token
+    - email
+    type: object
+  dto.PasswordResetReq:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+    required:
+    - code
+    - email
+    - new_password
+    type: object
   dto.RefreshReq:
     properties:
       refresh_token:
@@ -1971,21 +1995,15 @@ definitions:
     required:
     - refresh_token
     type: object
-  dto.RegisterReq:
+  dto.SendAccountEmailCodeReq:
     properties:
-      code:
+      captcha_token:
         type: string
       email:
         type: string
-      nickname:
-        type: string
-      password:
-        minLength: 8
-        type: string
     required:
-    - code
+    - captcha_token
     - email
-    - password
     type: object
   dto.SendCodeReq:
     properties:
@@ -1996,6 +2014,17 @@ definitions:
     required:
     - captcha_token
     - email
+    type: object
+  dto.SetInitialPasswordReq:
+    properties:
+      code:
+        type: string
+      new_password:
+        minLength: 8
+        type: string
+    required:
+    - code
+    - new_password
     type: object
   dto.TagArticlesReq:
     properties:
@@ -2140,6 +2169,22 @@ definitions:
       refresh_token:
         type: string
     type: object
+  dto.UpdateEmailReq:
+    properties:
+      code:
+        type: string
+      email:
+        type: string
+      target:
+        enum:
+        - main
+        - sub
+        type: string
+    required:
+    - code
+    - email
+    - target
+    type: object
   dto.UpdateMetaReq:
     properties:
       birthday:
@@ -2207,6 +2252,8 @@ definitions:
         $ref: '#/definitions/dto.UserMetaResp'
       nickname:
         type: string
+      password_set:
+        type: boolean
       phone:
         type: string
       roles:
@@ -2265,6 +2312,8 @@ definitions:
         type: string
       province:
         type: string
+      sub_email:
+        type: string
     type: object
   dto.UserPageResp:
     properties:
@@ -2320,6 +2369,8 @@ definitions:
     type: object
   dto.UserResp:
     properties:
+      avatar_url:
+        type: string
       email:
         type: string
       id:
@@ -2371,10 +2422,6 @@ definitions:
     type: object
   dto.UserUpdateReq:
     properties:
-      avatar_url:
-        example: https://cdn.example.com/avatar.png
-        maxLength: 255
-        type: string
       mark:
         example: 博主
         maxLength: 30
@@ -4128,6 +4175,54 @@ paths:
       summary: 用户登录
       tags:
       - 认证
+  /auth/password-reset:
+    post:
+      consumes:
+      - application/json
+      description: 使用邮箱验证码设置新密码；成功后旧密码失效，新密码可用于登录。
+      parameters:
+      - description: 忘记密码重置请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PasswordResetReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示重置成功，code=400 表示验证码无效或参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 忘记密码重置
+      tags:
+      - 认证
+  /auth/password-reset/code:
+    post:
+      consumes:
+      - application/json
+      description: 消费 GoCaptcha 一次性票据后尝试向邮箱发送重置密码验证码；无论邮箱是否存在，成功响应都不暴露账号状态。
+      parameters:
+      - description: 忘记密码验证码请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.PasswordResetCodeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示请求已受理，code=400 表示参数错误或业务错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 发送频率超限
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 发送忘记密码验证码
+      tags:
+      - 认证
   /auth/refresh:
     post:
       consumes:
@@ -4163,15 +4258,33 @@ paths:
   /auth/register:
     post:
       consumes:
-      - application/json
-      description: 使用邮箱、密码和验证码创建用户；参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。
+      - multipart/form-data
+      description: 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。参数错误、验证码错误或邮箱已存在通过统一响应
+        code 表达。
       parameters:
-      - description: 注册请求
-        in: body
-        name: request
+      - description: 邮箱
+        in: formData
+        name: email
         required: true
-        schema:
-          $ref: '#/definitions/dto.RegisterReq'
+        type: string
+      - description: 密码（至少 8 位）
+        in: formData
+        name: password
+        required: true
+        type: string
+      - description: 6 位邮箱验证码
+        in: formData
+        name: code
+        required: true
+        type: string
+      - description: 昵称
+        in: formData
+        name: nickname
+        type: string
+      - description: 可选头像图片
+        in: formData
+        name: avatar
+        type: file
       produces:
       - application/json
       responses:
@@ -5957,7 +6070,7 @@ paths:
           description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Response'
-      summary: 上传文章临时图片
+      summary: 上传临时图片
       tags:
       - 上传
   /users:
@@ -6045,7 +6158,7 @@ paths:
     put:
       consumes:
       - application/json
-      description: 更新当前登录用户的昵称、头像、标签等信息
+      description: 更新当前登录用户的昵称、标签等信息；头像请使用 POST /users/me/avatar。
       parameters:
       - description: 更新信息
         in: body
@@ -6057,10 +6170,118 @@ paths:
       - application/json
       responses:
         "200":
-          description: 成功
+          description: 统一响应；code=0 表示更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserDetailResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Response'
       summary: 更新当前用户信息
+      tags:
+      - 用户
+  /users/me/avatar:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 登录用户上传头像图片，服务端校验后压缩到 120px 内、20KB 内 JPEG 并更新 avatar_url；不支持 GIF，原始文件最大
+        2MB。
+      parameters:
+      - description: 头像图片（JPG、PNG、WebP）
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示更换成功，code=400 表示参数错误或业务错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserDetailResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 请求过于频繁
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 更换当前用户头像
+      tags:
+      - 用户
+  /users/me/email:
+    patch:
+      consumes:
+      - application/json
+      description: target=main 更新主邮箱，target=sub 更新副邮箱；邮箱验证码必须匹配目标邮箱。
+      parameters:
+      - description: 邮箱更新信息
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateEmailReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功；code != 0 表示业务失败
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 更新账号邮箱
+      tags:
+      - 用户
+  /users/me/email/code:
+    post:
+      consumes:
+      - application/json
+      description: 用于主邮箱/副邮箱绑定换绑，以及当前主邮箱校验后设置初始密码。
+      parameters:
+      - description: 目标邮箱和图形验证码票据
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SendAccountEmailCodeReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功；code != 0 表示业务失败
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 发送过于频繁
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 发送账号邮箱验证码
       tags:
       - 用户
   /users/me/email/display:
@@ -6144,6 +6365,32 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 修改密码
+      tags:
+      - 用户
+  /users/me/password/initial:
+    patch:
+      consumes:
+      - application/json
+      description: 适用于 OAuth 注册等没有用户自设密码的账号；需先向当前主邮箱发送验证码。
+      parameters:
+      - description: 密码和验证码
+        in: body
+        name: req
+        required: true
+        schema:
+          $ref: '#/definitions/dto.SetInitialPasswordReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功；code != 0 表示业务失败
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 设置初始密码
       tags:
       - 用户
   /users/me/profile:

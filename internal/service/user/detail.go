@@ -24,6 +24,7 @@ func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *userrepo.
 		Nickname:    user.Nickname,
 		Email:       user.Email,
 		Phone:       user.Phone,
+		PasswordSet: user.PasswordSet,
 		Site:        user.Site,
 		AvatarUrl:   resolveUserAvatarURL(resolver, user.AvatarUrl),
 		Mark:        user.Mark,
@@ -44,6 +45,7 @@ func userMetaToDTO(meta *model.UserMeta) *dto.UserMetaResp {
 	return &dto.UserMetaResp{
 		Name:        meta.Name,
 		Description: meta.Description,
+		SubEmail:    meta.SubEmail,
 		Gender:      meta.Gender,
 		Birthday:    meta.Birthday,
 		Country:     meta.Country,
@@ -122,7 +124,10 @@ func buildPublicProfile(resolver storage.ObjectURLResolver, agg *userrepo.UserDe
 		switch agg.Setting.MailShow {
 		case 1:
 			resp.DisplayEmail = user.Email
-			// case 0: sub email（暂无字段，留空）
+		case 0:
+			if agg.Meta != nil {
+				resp.DisplayEmail = agg.Meta.SubEmail
+			}
 			// case 2: none（不展示）
 		}
 	}

@@ -1014,6 +1014,7 @@ func migrateUser(src *sql.DB, dst *gorm.DB) error {
 			Base:        migrationBase(id, registerTime, sql.NullTime{}),
 			Username:    username,
 			Password:    password,
+			PasswordSet: strings.TrimSpace(password) != "",
 			Nickname:    nullStr(name),
 			Email:       nullStr(email),
 			Phone:       nullStr(phone),

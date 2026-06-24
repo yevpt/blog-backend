@@ -4,9 +4,11 @@ on:
   pull_request:
     branches:
       - main
+      - dev
   push:
     branches:
       - main
+      - dev
   workflow_dispatch:
 
 permissions:
@@ -73,9 +75,13 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: image
-    if: github.event_name != 'pull_request'
-    environment: production
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
     env:
+      DEPLOY_TARGET: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+      APP_ENV_NAME: ${{ github.ref == 'refs/heads/main' && 'prod' || 'test' }}
+      CONFIG_OVERLAY: ${{ github.ref == 'refs/heads/main' && 'config.prod.yaml' || 'config.test.yaml' }}
+      CONTAINER_NAME: ${{ github.ref == 'refs/heads/main' && 'blog-server' || 'blog-server-test' }}
       REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
       REMOTE_USER: ${{ secrets.REMOTE_USER }}
       REMOTE_PORT: ${{ vars.REMOTE_PORT }}
@@ -104,7 +110,7 @@ jobs:
             "mkdir -p '$DEPLOY_DIR/config'"
           scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" docker-compose.yml \
             "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/docker-compose.yml"
-          scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" config/config.yaml config/config.prod.yaml \
+          scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" "config/config.yaml" "config/$CONFIG_OVERLAY" \
             "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/config/"
 
       - name: Deploy with Docker Compose
@@ -115,6 +121,9 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p "$REMOTE_PORT" "$REMOTE_USER@$REMOTE_HOST" \
             "DEPLOY_DIR='$DEPLOY_DIR' \
              IMAGE_REF='$IMAGE_REF' \
+             APP_ENV_NAME='$APP_ENV_NAME' \
+             CONTAINER_NAME='$CONTAINER_NAME' \
+             DEPLOY_TARGET='$DEPLOY_TARGET' \
              REGISTRY='${{ env.REGISTRY }}' \
              REGISTRY_USERNAME='${{ env.REGISTRY_USERNAME }}' \
              REGISTRY_PASSWORD='${{ secrets.TENCENT_REGISTRY_PASSWORD }}' \
@@ -123,19 +132,21 @@ jobs:
           cd "$DEPLOY_DIR"
 
           if [ ! -f .env ]; then
-            echo "缺少 $DEPLOY_DIR/.env，请先在服务器创建生产环境变量文件。"
+            echo "缺少 $DEPLOY_DIR/.env，请先在服务器创建 ${DEPLOY_TARGET} 环境变量文件。"
             exit 1
           fi
 
           # 镜像地址按 commit SHA 内联注入，compose 自动读取同目录 .env 中的密钥
           export BLOG_SERVER_IMAGE="$IMAGE_REF"
+          export APP_ENV="$APP_ENV_NAME"
+          export COMPOSE_CONTAINER_NAME="$CONTAINER_NAME"
           printf '%s\n' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
           docker compose pull blog-server
           # 正常 up；若因历史遗留容器（旧 compose 项目名）占用固定 container_name 而冲突，
           # 强制移除同名散落容器后重试一次，避免人工 SSH 清理
           if ! docker compose up -d --remove-orphans blog-server; then
             echo "up 失败，移除同名遗留容器后重试…"
-            docker rm -f blog-server 2>/dev/null || true
+            docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
             docker compose up -d --remove-orphans blog-server
           fi
           docker compose ps blog-server

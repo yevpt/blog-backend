@@ -9,6 +9,7 @@ type UserDetailResp struct {
 	Nickname    *string              `json:"nickname,omitempty"`
 	Email       *string              `json:"email,omitempty"`
 	Phone       *string              `json:"phone,omitempty"`
+	PasswordSet bool                 `json:"password_set"`
 	Site        *string              `json:"site,omitempty"`
 	AvatarUrl   *string              `json:"avatar_url,omitempty"`
 	Mark        *string              `json:"mark,omitempty"`
@@ -24,6 +25,7 @@ type UserDetailResp struct {
 type UserMetaResp struct {
 	Name        *string    `json:"name,omitempty"`
 	Description *string    `json:"description,omitempty"`
+	SubEmail    *string    `json:"sub_email,omitempty"`
 	Gender      *uint8     `json:"gender,omitempty"`
 	Birthday    *time.Time `json:"birthday,omitempty"`
 	Country     *string    `json:"country,omitempty"`
@@ -82,9 +84,8 @@ type UserPageResp struct {
 
 // UserUpdateReq 更新当前用户信息请求
 type UserUpdateReq struct {
-	Nickname  *string `json:"nickname,omitempty" binding:"omitempty,max=30" example:"Yevpt"`
-	AvatarUrl *string `json:"avatar_url,omitempty" binding:"omitempty,max=255" example:"https://cdn.example.com/avatar.png"`
-	Mark      *string `json:"mark,omitempty" binding:"omitempty,max=30" example:"博主"`
+	Nickname *string `json:"nickname,omitempty" binding:"omitempty,max=30" example:"Yevpt"`
+	Mark     *string `json:"mark,omitempty" binding:"omitempty,max=30" example:"博主"`
 }
 
 // UserPublicProfileResp GET /users/:id 某用户的公开详情
@@ -134,6 +135,25 @@ type UpdateUsernameReq struct {
 type UpdatePasswordReq struct {
 	OldPassword string `json:"old_password" binding:"required,min=6"`
 	NewPassword string `json:"new_password" binding:"required,min=6"`
+}
+
+// SetInitialPasswordReq PATCH /users/me/password/initial
+type SetInitialPasswordReq struct {
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+	Code        string `json:"code" binding:"required,len=6"`
+}
+
+// SendAccountEmailCodeReq POST /users/me/email/code
+type SendAccountEmailCodeReq struct {
+	Email        string `json:"email" binding:"required,email"`
+	CaptchaToken string `json:"captcha_token" binding:"required"`
+}
+
+// UpdateEmailReq PATCH /users/me/email
+type UpdateEmailReq struct {
+	Target string `json:"target" binding:"required,oneof=main sub"`
+	Email  string `json:"email" binding:"required,email"`
+	Code   string `json:"code" binding:"required,len=6"`
 }
 
 // EmailDisplayReq PATCH /users/me/email/display

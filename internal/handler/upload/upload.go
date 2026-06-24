@@ -18,8 +18,8 @@ func NewHandler(svc uploadservice.Service) *Handler {
 	return &Handler{svc: svc}
 }
 
-// TempImage 上传文章临时图片。
-// @Summary 上传文章临时图片
+// TempImage 上传临时图片。
+// @Summary 上传临时图片
 // @Description 登录用户上传临时图片。默认 scene=article，仅支持 images/covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。
 // @Tags 上传
 // @Accept multipart/form-data

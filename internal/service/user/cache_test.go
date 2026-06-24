@@ -31,9 +31,13 @@ func (r *stubUserRepo) FindByIdentifier(id string) (*model.User, error) { return
 func (r *stubUserRepo) FindByUsername(username string) (*model.User, error) {
 	return nil, nil
 }
-func (r *stubUserRepo) FindByID(id uint) (*model.User, error)       { return nil, nil }
-func (r *stubUserRepo) Create(u *model.User, roleID uint) error     { return nil }
-func (r *stubUserRepo) ExistsByEmail(email string) (bool, error)    { return false, nil }
+func (r *stubUserRepo) FindByEmail(email string) (*model.User, error) { return nil, nil }
+func (r *stubUserRepo) FindByID(id uint) (*model.User, error)         { return nil, nil }
+func (r *stubUserRepo) Create(u *model.User, roleID uint) error       { return nil }
+func (r *stubUserRepo) ExistsByEmail(email string) (bool, error)      { return false, nil }
+func (r *stubUserRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
+	return false, nil
+}
 func (r *stubUserRepo) ExistsByNickname(n string) (bool, error)     { return false, nil }
 func (r *stubUserRepo) FindRolesByUserID(id uint) ([]string, error) { return nil, nil }
 func (r *stubUserRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
@@ -57,6 +61,7 @@ func (r *stubUserRepo) UpsertSocialLink(userID uint, platform, url string) error
 func (r *stubUserRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
+func (r *stubUserRepo) CountByAvatarURL(avatarURL string) (int64, error) { return 0, nil }
 
 func newTestRedis(t *testing.T) *redis.Client {
 	t.Helper()
