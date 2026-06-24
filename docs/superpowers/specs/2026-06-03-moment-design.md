@@ -21,7 +21,7 @@
 
 - 主表使用 `model.Moment`，状态 `1=公开`、`0=隐藏`，删除使用 GORM 软删除。
 - 图片使用 `model.Media`，`owner_type=2` 表示碎语，`type=0` 表示图片。
-- 点赞使用 `model.UserLike`，`type=3` 表示碎语点赞。
+- 点赞使用 `model.UserLike`，`type=4` 表示碎语点赞。
 - 评论使用 `model.MomentComment`，回复使用现有 `comment_reply`。
 - 通知使用 `model.Message` 与 `model.UserMessage`。
 
