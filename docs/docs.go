@@ -5692,7 +5692,7 @@ const docTemplate = `{
         },
         "/uploads/temp": {
             "post": {
-                "description": "登录用户上传文章编辑阶段的临时图片，仅支持 images/covers 目录，服务端按内容哈希去重并返回对象 key 与访问 URL。",
+                "description": "登录用户上传临时图片。默认 scene=article，仅支持 images/covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -5706,6 +5706,12 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "description": "上传场景：article 或 comment；默认 article",
+                        "name": "scene",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
                         "description": "临时目录：images 或 covers",
                         "name": "dir",
                         "in": "formData",
@@ -5713,7 +5719,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "图片文件，最大 10MB",
+                        "description": "图片文件；article 最大 10MB，comment 普通图片最大 1MB、GIF 最大 300KB",
                         "name": "file",
                         "in": "formData",
                         "required": true

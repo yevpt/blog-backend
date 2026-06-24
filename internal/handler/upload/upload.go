@@ -20,12 +20,13 @@ func NewHandler(svc uploadservice.Service) *Handler {
 
 // TempImage 上传文章临时图片。
 // @Summary 上传文章临时图片
-// @Description 登录用户上传文章编辑阶段的临时图片，仅支持 images/covers 目录，服务端按内容哈希去重并返回对象 key 与访问 URL。
+// @Description 登录用户上传临时图片。默认 scene=article，仅支持 images/covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。
 // @Tags 上传
 // @Accept multipart/form-data
 // @Produce json
+// @Param scene formData string false "上传场景：article 或 comment；默认 article"
 // @Param dir formData string true "临时目录：images 或 covers"
-// @Param file formData file true "图片文件，最大 10MB"
+// @Param file formData file true "图片文件；article 最大 10MB，comment 普通图片最大 1MB、GIF 最大 300KB"
 // @Success 200 {object} response.Response{data=dto.TempUploadResp} "统一响应；code=0 表示上传成功，code=400 表示参数错误或业务错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 429 {object} response.Response "请求过于频繁"
@@ -38,6 +39,7 @@ func (h *Handler) TempImage(c *gin.Context) {
 		return
 	}
 
+	scene := c.PostForm("scene")
 	dir := c.PostForm("dir")
 	header, err := c.FormFile("file")
 	if err != nil {
@@ -51,27 +53,34 @@ func (h *Handler) TempImage(c *gin.Context) {
 	}
 	defer file.Close()
 
-	data, err := io.ReadAll(io.LimitReader(file, uploadservice.MaxTempImageBytes+1))
+	readLimit := uploadservice.MaxTempUploadReadBytes(scene)
+	data, err := io.ReadAll(io.LimitReader(file, int64(readLimit)+1))
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, "读取上传文件失败")
 		return
 	}
-	if len(data) > uploadservice.MaxTempImageBytes {
-		response.Fail(c, response.CodeBadRequest, uploadservice.ErrUploadTooLarge.Error())
+	if len(data) > readLimit {
+		response.Fail(c, response.CodeBadRequest, tempUploadTooLargeMessage(scene))
 		return
 	}
 
 	resp, err := h.svc.UploadTempImage(c.Request.Context(), uploadservice.TempImageInput{
 		UserID: uint(claims.UserId),
+		Scene:  scene,
 		Dir:    dir,
 		Name:   header.Filename,
 		Data:   data,
 	})
 	if err != nil {
 		switch {
-		case errors.Is(err, uploadservice.ErrUploadTooLarge):
+		case errors.Is(err, uploadservice.ErrUploadTooLarge),
+			errors.Is(err, uploadservice.ErrUploadCommentTooLarge),
+			errors.Is(err, uploadservice.ErrUploadCommentGIFLarge),
+			errors.Is(err, uploadservice.ErrUploadCompressedLarge):
 			response.Fail(c, response.CodeBadRequest, err.Error())
-		case errors.Is(err, uploadservice.ErrUploadDirInvalid), errors.Is(err, uploadservice.ErrUploadInvalid):
+		case errors.Is(err, uploadservice.ErrUploadDirInvalid),
+			errors.Is(err, uploadservice.ErrUploadSceneInvalid),
+			errors.Is(err, uploadservice.ErrUploadInvalid):
 			response.Fail(c, response.CodeBadRequest, err.Error())
 		default:
 			response.ServerError(c)
@@ -79,4 +88,11 @@ func (h *Handler) TempImage(c *gin.Context) {
 		return
 	}
 	response.Success(c, resp)
+}
+
+func tempUploadTooLargeMessage(scene string) string {
+	if uploadservice.MaxTempUploadReadBytes(scene) == uploadservice.MaxCommentTempImageBytes {
+		return uploadservice.ErrUploadCommentTooLarge.Error()
+	}
+	return uploadservice.ErrUploadTooLarge.Error()
 }

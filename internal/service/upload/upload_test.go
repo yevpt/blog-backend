@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,6 +134,27 @@ func TestService_UploadTempImage_SkipsUploadWhenObjectExists(t *testing.T) {
 	assert.Len(t, store.puts, 0)
 }
 
+func TestService_UploadTempImage_CommentSceneCompressesAndStoresCommentKey(t *testing.T) {
+	store := &fakeObjectStore{}
+	svc := uploadservice.NewService(store)
+
+	resp, err := svc.UploadTempImage(context.Background(), uploadservice.TempImageInput{
+		UserID: 7,
+		Scene:  "comment",
+		Dir:    "images",
+		Name:   "cat.png",
+		Data:   noisyPNG(t, 420, 420),
+	})
+
+	require.NoError(t, err)
+	assert.Regexp(t, `^temp/comments/7/images/[a-f0-9]{32}\.jpg$`, resp.Key)
+	assert.Equal(t, "https://cdn.example.com/blog/"+resp.Key, resp.URL)
+	require.Len(t, store.puts, 1)
+	assert.Equal(t, resp.Key, store.puts[0].key)
+	assert.Equal(t, "image/jpeg", store.puts[0].contentType)
+	assert.LessOrEqual(t, len(store.puts[0].data), 500*1024)
+}
+
 func TestService_UploadTempImage_ReturnsUnavailableWhenStoreFails(t *testing.T) {
 	store := &fakeObjectStore{putErr: errors.New("s3 down")}
 	svc := uploadservice.NewService(store)
@@ -153,6 +175,26 @@ func smallPNG(t *testing.T) []byte {
 	var buf bytes.Buffer
 	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
 	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
+}
+
+func noisyPNG(t *testing.T, width int, height int) []byte {
+	t.Helper()
+
+	var buf bytes.Buffer
+	rng := rand.New(rand.NewSource(1))
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8(rng.Intn(256)),
+				G: uint8(rng.Intn(256)),
+				B: uint8(rng.Intn(256)),
+				A: 255,
+			})
+		}
+	}
 	require.NoError(t, png.Encode(&buf, img))
 	return buf.Bytes()
 }
