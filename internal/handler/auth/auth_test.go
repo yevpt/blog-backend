@@ -26,7 +26,7 @@ type stubAuthService struct {
 	resetCodeErr   error
 	resetReq       *dto.PasswordResetReq
 	resetErr       error
-	registerResp   *dto.UserResp
+	registerResp   *dto.LoginResp
 	registerErr    error
 	loginResp      *dto.LoginResp
 	loginErr       error
@@ -49,7 +49,7 @@ func (s *stubAuthService) ResetPassword(req *dto.PasswordResetReq) error {
 	s.resetReq = req
 	return s.resetErr
 }
-func (s *stubAuthService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.UserResp, error) {
+func (s *stubAuthService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
 	return s.registerResp, s.registerErr
 }
 func (s *stubAuthService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
@@ -190,7 +190,12 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 	nick := "alice"
 	email := "alice@example.com"
 	stub := &stubAuthService{
-		registerResp: &dto.UserResp{ID: 1, Username: email, Email: &email, Nickname: &nick},
+		registerResp: &dto.LoginResp{
+			AccessToken:  "access",
+			RefreshToken: "refresh",
+			ExpiresIn:    7200,
+			User:         dto.UserResp{ID: 1, Username: email, Email: &email, Nickname: &nick},
+		},
 	}
 	r := newTestRouter(stub)
 

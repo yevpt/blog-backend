@@ -174,7 +174,12 @@ func TestAuthService_Register_Success(t *testing.T) {
 
 	repo.EXPECT().ExistsByEmail("new@example.com").Return(false, nil)
 	repo.EXPECT().ExistsByNickname(gomock.Any()).Return(false, nil).AnyTimes()
-	repo.EXPECT().Create(gomock.Any(), roles.NormalRoleId).Return(nil)
+	repo.EXPECT().Create(gomock.Any(), roles.NormalRoleId).DoAndReturn(func(user *model.User, _ uint) error {
+		user.ID = 1
+		return nil
+	})
+	repo.EXPECT().UpdateLastLoginAt(uint(1)).Return(nil)
+	repo.EXPECT().FindRolesByUserID(uint(1)).Return([]string{"ROLE_NORMAL"}, nil)
 
 	nickname := "mynick"
 	resp, err := svc.Register(&dto.RegisterReq{
@@ -184,7 +189,9 @@ func TestAuthService_Register_Success(t *testing.T) {
 		Nickname: &nickname,
 	}, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "new@example.com", resp.Username)
+	assert.Equal(t, "new@example.com", resp.User.Username)
+	assert.NotEmpty(t, resp.AccessToken)
+	assert.NotEmpty(t, resp.RefreshToken)
 }
 
 func TestAuthService_Register_WrongCode(t *testing.T) {

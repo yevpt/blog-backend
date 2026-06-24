@@ -103,9 +103,9 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	response.Success(c, nil)
 }
 
-// Register 邮箱注册，验证码一次性消费，注册成功后直接返回用户信息（无 token）。
+// Register 邮箱注册，验证码一次性消费，注册成功后签发 token 并返回登录态。
 // @Summary 邮箱注册
-// @Description 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。
+// @Description 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。注册成功返回与登录相同的双 token 与用户信息。
 // @Tags 认证
 // @Accept multipart/form-data
 // @Produce json
@@ -114,7 +114,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 // @Param code formData string true "6 位邮箱验证码"
 // @Param nickname formData string false "昵称"
 // @Param avatar formData file false "可选头像图片"
-// @Success 200 {object} response.Response{data=dto.UserResp} "统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误"
+// @Success 200 {object} response.Response{data=dto.LoginResp} "统一响应；code=0 表示注册成功并已登录，code=400 表示参数错误或业务错误"
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req dto.RegisterReq
@@ -128,13 +128,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svc.Register(&req, avatar)
+	loginResp, err := h.svc.Register(&req, avatar)
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}
 
-	response.Success(c, user)
+	response.Success(c, loginResp)
 }
 
 // Login 三合一登录（username / email / phone），按失败原因返回前端可展示文案。

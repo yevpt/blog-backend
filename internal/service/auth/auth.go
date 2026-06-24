@@ -48,8 +48,8 @@ var dummyHashForTimingProtection, _ = bcrypt.GenerateFromPassword(
 type AuthService interface {
 	// SendCode 向邮箱发送验证码，内置三层频率控制（冷却 / 10分钟 / 日限）
 	SendCode(email string, ip string, captchaToken string) error
-	// Register 校验验证码并创建用户，验证码一次性消费，邮箱全局唯一
-	Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.UserResp, error)
+	// Register 校验验证码并创建用户，验证码一次性消费，邮箱全局唯一；成功后签发登录 token
+	Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error)
 	// Login 三合一登录（username / email / phone），用户不存在时仍执行 bcrypt 防止时序攻击
 	Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error)
 	// AdminLogin 管理后台登录，仅允许 username + password，且用户必须持有管理员角色
@@ -226,7 +226,7 @@ func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
 	return nil
 }
 
-func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.UserResp, error) {
+func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
 	ctx := context.Background()
 
 	// 从 Redis 读取存储的验证码并与用户提交值对比
@@ -295,12 +295,45 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 		return nil, err
 	}
 
-	return &dto.UserResp{
-		ID:        user.ID,
-		Username:  user.Username,
-		Email:     user.Email,
-		Nickname:  user.Nickname,
-		AvatarUrl: storage.ResolvePtrURL(s.resolver, user.AvatarUrl),
+	return s.issueLoginResp(user)
+}
+
+func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
+	userId := int64(user.ID)
+	accessToken, err := s.jwt.GenerateAccess(userId)
+	if err != nil {
+		return nil, err
+	}
+	refreshToken, err := s.jwt.GenerateRefresh(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = s.repo.UpdateLastLoginAt(user.ID)
+
+	if s.cache != nil {
+		go func() {
+			_ = s.cache.Invalidate(context.Background(), userId)
+		}()
+	}
+
+	userRoles, err := s.repo.FindRolesByUserID(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.LoginResp{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresIn:    7200,
+		User: dto.UserResp{
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
+			Nickname:  user.Nickname,
+			AvatarUrl: storage.ResolvePtrURL(s.resolver, user.AvatarUrl),
+			Roles:     userRoles,
+		},
 	}, nil
 }
 
@@ -335,46 +368,7 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 		return nil, ErrUserDisabled
 	}
 
-	// 签发 access + refresh 双 token，JWT claims 只含 userId，角色由 Redis 缓存动态加载
-	userId := int64(user.ID)
-	accessToken, err := s.jwt.GenerateAccess(userId)
-	if err != nil {
-		return nil, err
-	}
-	refreshToken, err := s.jwt.GenerateRefresh(userId)
-	if err != nil {
-		return nil, err
-	}
-
-	// 登录成功后先刷新最后登录时间，保证紧接着查询用户列表时排序使用最新时间
-	_ = s.repo.UpdateLastLoginAt(user.ID)
-
-	// 让缓存失效，下次 /users/me 请求时自动从 DB 重建
-	if s.cache != nil {
-		go func() {
-			_ = s.cache.Invalidate(context.Background(), userId)
-		}()
-	}
-
-	// 查询角色用于响应 DTO（返回给客户端展示，不再写入 JWT）
-	userRoles, err := s.repo.FindRolesByUserID(user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 组装登录响应，含双 token 和用户基本信息
-	return &dto.LoginResp{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresIn:    7200,
-		User: dto.UserResp{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Nickname: user.Nickname,
-			Roles:    userRoles,
-		},
-	}, nil
+	return s.issueLoginResp(user)
 }
 
 func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
