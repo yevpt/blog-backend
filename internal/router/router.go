@@ -225,13 +225,13 @@ func newRouteHandlers(
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
 	commentRepo := commentrepo.NewCommentRepository(db)
-	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher)
+	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo)
 
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
-	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher)
+	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher, userRepo)
 
 	momentRepo := momentrepo.NewMomentRepository(db)
-	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher)
+	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo)
 	uploadSvc := uploadservice.NewService(objectStore)
 
 	return routeHandlers{
@@ -318,6 +318,7 @@ func registerPublicRoutes(
 	r.GET("/friend-links/:id", handlers.friendLink.GetPublic)
 	r.GET("/users", handlers.user.ListAll)
 	r.GET("/users/recent", handlers.user.ListRecent)
+	r.GET("/users/:id/likes", handlers.user.ListLikedContent)
 	r.GET("/users/:id", middleware.OptionalAuth(jwtManager), handlers.user.GetPublicProfile)
 	r.GET("/articles/ids", handlers.article.ListIDs)
 	r.GET("/articles", middleware.OptionalAuth(jwtManager), handlers.article.ListPublic)
@@ -327,6 +328,7 @@ func registerPublicRoutes(
 	r.GET("/guestbook", middleware.OptionalAuth(jwtManager), handlers.guestbook.List)
 	r.GET("/guestbook/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListGuestbookReplies)
 	r.GET("/moments", middleware.OptionalAuth(jwtManager), handlers.moment.List)
+	r.GET("/moments/feed", middleware.OptionalAuth(jwtManager), handlers.moment.Feed)
 	r.GET("/moments/:id", middleware.OptionalAuth(jwtManager), handlers.moment.GetDetail)
 	r.GET("/moments/:id/comments", middleware.OptionalAuth(jwtManager), handlers.comment.ListMoment)
 	r.GET("/moments/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListMomentReplies)
