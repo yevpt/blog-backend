@@ -113,7 +113,7 @@ func truncateRunes(s string, max int) string {
 // 邮箱缺失或未配置邮件开关时分别以空串、false 兜底。
 func (d *Directory) MailProfile(ctx context.Context, userID uint) (string, bool, error) {
 	var user model.User
-	err := d.db.WithContext(ctx).Select("id", "email").Take(&user, userID).Error
+	err := d.db.WithContext(ctx).Select("id", "email", "email_verified_at").Take(&user, userID).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", false, nil
 	}
@@ -121,7 +121,7 @@ func (d *Directory) MailProfile(ctx context.Context, userID uint) (string, bool,
 		return "", false, err
 	}
 	email := ""
-	if user.Email != nil {
+	if user.Email != nil && user.EmailVerifiedAt != nil {
 		email = *user.Email
 	}
 
