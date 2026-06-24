@@ -977,7 +977,7 @@ func migrateRole(src *sql.DB, dst *gorm.DB) error {
 //   status      → status（varchar 'on'/'off' → tinyint 1/0）
 //   login_time  → last_login_at
 //   register_time → created_at（注册时间即创建时间）
-//   email_check → 丢弃（功能已合并到 user_setting，迁移时默认不开启）
+//   email_check → 丢弃；旧账号邮箱验证时间统一为空，登录后重新验证
 //   avatar_img_url → avatar_url
 
 func migrateUser(src *sql.DB, dst *gorm.DB) error {
@@ -1011,18 +1011,19 @@ func migrateUser(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		u := model.User{
-			Base:        migrationBase(id, registerTime, sql.NullTime{}),
-			Username:    username,
-			Password:    password,
-			PasswordSet: strings.TrimSpace(password) != "",
-			Nickname:    nullStr(name),
-			Email:       nullStr(email),
-			Phone:       nullStr(phone),
-			Site:        nullStr(site),
-			AvatarUrl:   nullStr(avatarImgUrl),
-			Mark:        nullStr(mark),
-			Status:      statusVarcharToUint8(status),
-			LastLoginAt: nullTime(loginTime),
+			Base:            migrationBase(id, registerTime, sql.NullTime{}),
+			Username:        username,
+			Password:        password,
+			PasswordSet:     strings.TrimSpace(password) != "",
+			Nickname:        nullStr(name),
+			Email:           nullStr(email),
+			EmailVerifiedAt: nil,
+			Phone:           nullStr(phone),
+			Site:            nullStr(site),
+			AvatarUrl:       nullStr(avatarImgUrl),
+			Mark:            nullStr(mark),
+			Status:          statusVarcharToUint8(status),
+			LastLoginAt:     nullTime(loginTime),
 		}
 		if err := dst.Create(&u).Error; err != nil {
 			return fmt.Errorf("insert user id=%d: %w", id, err)
@@ -1059,7 +1060,7 @@ func migrateUserRole(src *sql.DB, dst *gorm.DB) error {
 // Step 04: user_meta → user_meta + user_social_link
 // ─────────────────────────────────────────────
 // 关键变更：
-//   1. email 字段丢弃（user 表已有，避免重复）
+//   1. email 字段丢弃（user 表已有，避免重复），副邮箱验证时间统一为空
 //   2. show_name 字段移至 user_setting（迁移时在 step05 处理）
 //   3. 9 个社交账号列（qq/wechat/bili/facebook/sina/github/gitee/zhihu）
 //      → 各自生成一行 user_social_link 记录
@@ -1119,16 +1120,17 @@ func migrateUserMeta(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		meta := model.UserMeta{
-			UserID:      id,
-			Name:        nullStr(name),
-			Description: nullStr(description),
-			Gender:      genderVal,
-			Birthday:    nullTime(birthday),
-			IdCard:      nullStr(idCard),
-			Country:     &countryStr,
-			Province:    nullStr(province),
-			City:        nullStr(city),
-			Address:     nullStr(address),
+			UserID:             id,
+			Name:               nullStr(name),
+			Description:        nullStr(description),
+			SubEmailVerifiedAt: nil,
+			Gender:             genderVal,
+			Birthday:           nullTime(birthday),
+			IdCard:             nullStr(idCard),
+			Country:            &countryStr,
+			Province:           nullStr(province),
+			City:               nullStr(city),
+			Address:            nullStr(address),
 		}
 		if err := dst.Create(&meta).Error; err != nil {
 			return fmt.Errorf("insert user_meta id=%d: %w", id, err)
@@ -2053,6 +2055,7 @@ func migrateCommentReply(src *sql.DB, dst *gorm.DB) error {
 //   '01' → 1（文章点赞）
 //   '02' → 按评论类型拆分为 2/6/5（文章评论/碎语评论/留言）
 //   '03' → 按回复类型拆分为 3/7/8（文章评论回复/碎语评论回复/留言回复）
+//   '04' → 4（碎语点赞）
 // is_use='00' → 软删除
 // 去重：相同 (user_id, target_id, type) 只保留最早一条
 
@@ -2090,16 +2093,7 @@ func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
 		}
 
 		var typeVal uint8
-		switch likeType.String {
-		case "01":
-			typeVal = 1
-		case "02":
-			typeVal = commentLikeTypeFromLegacy(commentTypeMap[postID])
-		case "03":
-			typeVal = replyTypeMap[postID]
-		default:
-			typeVal = 1
-		}
+		typeVal = userLikeTypeFromLegacy(likeType.String, postID, commentTypeMap, replyTypeMap)
 		if typeVal == 0 {
 			log.Printf("  跳过无法识别的点赞记录 id=%d type=%s target=%d", id, likeType.String, postID)
 			continue
@@ -2128,6 +2122,21 @@ func migrateUserLike(src *sql.DB, dst *gorm.DB) error {
 		}
 	}
 	return rows.Err()
+}
+
+func userLikeTypeFromLegacy(likeType string, targetID uint, commentTypeMap map[uint]uint8, replyTypeMap map[uint]uint8) uint8 {
+	switch likeType {
+	case "01":
+		return 1
+	case "02":
+		return commentLikeTypeFromLegacy(commentTypeMap[targetID])
+	case "03":
+		return replyTypeMap[targetID]
+	case "04":
+		return 4
+	default:
+		return 1
+	}
 }
 
 func legacyCommentTypeMap(src *sql.DB) (map[uint]uint8, error) {

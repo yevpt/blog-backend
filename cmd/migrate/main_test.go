@@ -120,6 +120,28 @@ func TestUpdateMomentMediaURL_DoesNotTouchUpdatedAt(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUserLikeTypeFromLegacy_MapsMomentLikeToType4(t *testing.T) {
+	commentTypeMap := map[uint]uint8{
+		11: 1,
+		12: 2,
+		13: 3,
+	}
+	replyTypeMap := map[uint]uint8{
+		21: 3,
+		22: 7,
+		23: 8,
+	}
+
+	assert.Equal(t, uint8(1), userLikeTypeFromLegacy("01", 10, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(2), userLikeTypeFromLegacy("02", 11, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(6), userLikeTypeFromLegacy("02", 12, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(5), userLikeTypeFromLegacy("02", 13, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(3), userLikeTypeFromLegacy("03", 21, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(7), userLikeTypeFromLegacy("03", 22, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(8), userLikeTypeFromLegacy("03", 23, commentTypeMap, replyTypeMap))
+	assert.Equal(t, uint8(4), userLikeTypeFromLegacy("04", 30, commentTypeMap, replyTypeMap))
+}
+
 func TestMigrateArticleTag_AssignsSeqByArticleInLegacyOrder(t *testing.T) {
 	srcDB, srcMock, err := sqlmock.New()
 	require.NoError(t, err)
