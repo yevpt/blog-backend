@@ -16,6 +16,7 @@ import (
 	friendlinkhandler "github.com/vpt/blog-backend/internal/handler/friendlink"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
+	musichandler "github.com/vpt/blog-backend/internal/handler/music"
 	notificationhandler "github.com/vpt/blog-backend/internal/handler/notification"
 	oauthhandler "github.com/vpt/blog-backend/internal/handler/oauth"
 	taghandler "github.com/vpt/blog-backend/internal/handler/tag"
@@ -30,6 +31,7 @@ import (
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	musicrepo "github.com/vpt/blog-backend/internal/repository/music"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
@@ -43,6 +45,7 @@ import (
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
+	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
 	tagservice "github.com/vpt/blog-backend/internal/service/tag"
@@ -76,6 +79,7 @@ type routeHandlers struct {
 	user              *userhandler.UserHandler
 	category          *categoryhandler.CategoryHandler
 	tag               *taghandler.TagHandler
+	music             *musichandler.MusicHandler
 	friendLink        *friendlinkhandler.FriendLinkHandler
 	upload            *uploadhandler.Handler
 	userCache         userservice.UserCacheService
@@ -210,6 +214,9 @@ func newRouteHandlers(
 	tagRepo := tagrepo.NewTagRepository(db)
 	tagSvc := tagservice.NewTagService(tagRepo, articleSvc)
 
+	musicRepo := musicrepo.NewMusicRepository(db)
+	musicSvc := musicservice.NewMusicService(musicRepo, objectStore)
+
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
@@ -238,6 +245,7 @@ func newRouteHandlers(
 		user:              userhandler.NewUserHandler(userSvc),
 		category:          categoryhandler.NewCategoryHandler(categorySvc),
 		tag:               taghandler.NewTagHandler(tagSvc),
+		music:             musichandler.NewMusicHandler(musicSvc),
 		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
 		upload:            uploadhandler.NewHandler(uploadSvc),
 		userCache:         userCacheSvc,
@@ -299,6 +307,7 @@ func registerPublicRoutes(
 	r.GET("/tags", handlers.tag.List)
 	r.GET("/tags/:id", handlers.tag.Get)
 	r.GET("/tags/:id/articles", handlers.tag.ListArticles)
+	r.GET("/music", handlers.music.List)
 	r.GET("/friend-links", handlers.friendLink.ListPublic)
 	r.GET("/friend-links/:id", handlers.friendLink.GetPublic)
 	r.GET("/users", handlers.user.ListAll)

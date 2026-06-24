@@ -1750,6 +1750,47 @@ definitions:
         example: 21
         type: integer
     type: object
+  dto.MusicItemResp:
+    properties:
+      album:
+        description: Album 专辑名称。
+        example: Album
+        type: string
+      cover_img_url:
+        description: CoverImgUrl 音乐封面图地址。
+        type: string
+      duration:
+        description: Duration 音乐时长，单位为秒。
+        example: 240
+        type: integer
+      id:
+        description: ID 音乐 ID。
+        example: 1
+        type: integer
+      name:
+        description: Name 音乐名称。
+        example: Song
+        type: string
+      seq:
+        description: Seq 排序值，越小越靠前。
+        example: 0
+        type: integer
+      singer:
+        description: Singer 歌手名称。
+        example: Singer
+        type: string
+      url:
+        description: URL 音乐播放地址。
+        type: string
+    type: object
+  dto.MusicListResp:
+    properties:
+      list:
+        description: List 音乐列表，按 seq ASC、id ASC 排序。
+        items:
+          $ref: '#/definitions/dto.MusicItemResp'
+        type: array
+    type: object
   dto.NotificationActorUserResp:
     properties:
       avatar_url:
@@ -5418,6 +5459,28 @@ paths:
       summary: 切换碎语评论回复点赞
       tags:
       - 评论
+  /music:
+    get:
+      description: 返回所有未删除音乐，按 seq ASC、id ASC 排序；url 和 cover_img_url 返回前会解析为可访问 URL。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicListResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询音乐列表
+      tags:
+      - 音乐
   /notifications:
     get:
       consumes:

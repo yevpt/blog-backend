@@ -4953,6 +4953,44 @@
                 }
             }
         },
+        "/music": {
+            "get": {
+                "description": "返回所有未删除音乐，按 seq ASC、id ASC 排序；url 和 cover_img_url 返回前会解析为可访问 URL。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询音乐列表",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/notifications": {
             "get": {
                 "description": "登录用户分页查询自己的站内通知，支持 unread_only 只看未读。",
@@ -8564,6 +8602,61 @@
                     "description": "ViewCount 阅读数量。",
                     "type": "integer",
                     "example": 21
+                }
+            }
+        },
+        "dto.MusicItemResp": {
+            "type": "object",
+            "properties": {
+                "album": {
+                    "description": "Album 专辑名称。",
+                    "type": "string",
+                    "example": "Album"
+                },
+                "cover_img_url": {
+                    "description": "CoverImgUrl 音乐封面图地址。",
+                    "type": "string"
+                },
+                "duration": {
+                    "description": "Duration 音乐时长，单位为秒。",
+                    "type": "integer",
+                    "example": 240
+                },
+                "id": {
+                    "description": "ID 音乐 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "description": "Name 音乐名称。",
+                    "type": "string",
+                    "example": "Song"
+                },
+                "seq": {
+                    "description": "Seq 排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "singer": {
+                    "description": "Singer 歌手名称。",
+                    "type": "string",
+                    "example": "Singer"
+                },
+                "url": {
+                    "description": "URL 音乐播放地址。",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MusicListResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 音乐列表，按 seq ASC、id ASC 排序。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MusicItemResp"
+                    }
                 }
             }
         },
