@@ -8,13 +8,14 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	"github.com/vpt/blog-backend/internal/service/commentasset"
+	"github.com/vpt/blog-backend/internal/service/userrole"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
-func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver) *dto.GuestbookPageResp {
+func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookPageResp {
 	items := make([]dto.GuestbookItemResp, 0, len(result.Messages))
 	for _, message := range result.Messages {
-		items = append(items, *guestbookItemToDTO(message, resolver))
+		items = append(items, *guestbookItemToDTO(message, resolver, rolesMap))
 	}
 
 	pages := 0
@@ -31,14 +32,14 @@ func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.Objec
 	}
 }
 
-func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver storage.ObjectURLResolver) *dto.GuestbookItemResp {
+func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookItemResp {
 	message := aggregate.Message
 	return &dto.GuestbookItemResp{
 		ID:          message.ID,
 		OwnerUserID: message.OwnerUserID,
 		FromUserID:  message.FromUserID,
 		Content:     commentasset.ResolveContent(context.Background(), resolver, message.Content),
-		User:        guestbookUserToDTO(aggregate.User, resolver),
+		User:        guestbookUserToDTO(aggregate.User, resolver, rolesMap),
 		ReplyCount:  aggregate.ReplyCount,
 		LikeCount:   aggregate.LikeCount,
 		IsLiked:     aggregate.IsLiked,
@@ -47,7 +48,7 @@ func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver sto
 	}
 }
 
-func guestbookUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.GuestbookUserResp {
+func guestbookUserToDTO(user *model.User, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookUserResp {
 	if user == nil {
 		return nil
 	}
@@ -58,5 +59,26 @@ func guestbookUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *d
 		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
 		Site:      user.Site,
 		Mark:      user.Mark,
+		Roles:     userrole.ForUser(rolesMap, user.ID),
 	}
+}
+
+func collectGuestbookPageUserIDs(result *guestbookrepo.PageResult) []uint {
+	if result == nil {
+		return nil
+	}
+	ids := make([]uint, 0, len(result.Messages))
+	for _, aggregate := range result.Messages {
+		if aggregate.User != nil {
+			ids = append(ids, aggregate.User.ID)
+		}
+	}
+	return ids
+}
+
+func collectGuestbookAggregateUserIDs(aggregate *guestbookrepo.GuestbookAggregate) []uint {
+	if aggregate == nil || aggregate.User == nil {
+		return nil
+	}
+	return []uint{aggregate.User.ID}
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 	"github.com/vpt/blog-backend/internal/service/commentasset"
+	"github.com/vpt/blog-backend/internal/service/userrole"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -23,7 +24,11 @@ func (s *commentService) List(targetType string, targetID uint, req dto.CommentL
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return commentPageToDTO(result, target.Type, s.objectURLResolver), nil
+	rolesMap, err := s.lookupRoles(collectCommentPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+	return commentPageToDTO(result, target.Type, s.objectURLResolver, rolesMap), nil
 }
 
 func (s *commentService) Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
@@ -51,7 +56,11 @@ func (s *commentService) Create(targetType string, targetID uint, req dto.Commen
 	}
 	// 评论落库成功后发布通知事件，失败不影响评论本身。
 	s.notifyCommentCreated(targetType, targetID, aggregate)
-	return commentToDTO(*aggregate, target.Type, s.objectURLResolver), nil
+	rolesMap, err := s.lookupRoles(collectCommentAggregateUserIDs(aggregate))
+	if err != nil {
+		return nil, err
+	}
+	return commentToDTO(*aggregate, target.Type, s.objectURLResolver, rolesMap), nil
 }
 
 func (s *commentService) ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error) {
@@ -64,7 +73,11 @@ func (s *commentService) ListReplies(targetType string, commentID uint, req dto.
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return replyPageToDTO(result, target.Type, s.objectURLResolver), nil
+	rolesMap, err := s.lookupRoles(collectReplyPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+	return replyPageToDTO(result, target.Type, s.objectURLResolver, rolesMap), nil
 }
 
 func (s *commentService) Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
@@ -98,7 +111,11 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 	}
 	// 回复落库成功后发布通知事件，接收人为被回复人。
 	s.notifyReplyCreated(targetType, aggregate)
-	return replyToDTO(*aggregate, s.objectURLResolver), nil
+	rolesMap, err := s.lookupRoles(collectReplyAggregateUserIDs(aggregate))
+	if err != nil {
+		return nil, err
+	}
+	return replyToDTO(*aggregate, s.objectURLResolver, rolesMap), nil
 }
 
 func (s *commentService) normalizeCommentImages(content string, userID uint, targetPrefix string) (*commentasset.NormalizeResult, storage.ObjectStore, error) {
@@ -228,4 +245,11 @@ func mapCommentAssetError(err error) error {
 		return fmt.Errorf("%w：%s", ErrCommentImageInvalid, err.Error())
 	}
 	return err
+}
+
+func (s *commentService) lookupRoles(userIDs []uint) (map[uint][]string, error) {
+	if s.userRepo == nil {
+		return map[uint][]string{}, nil
+	}
+	return userrole.LookupByUserIDs(s.userRepo, userIDs)
 }

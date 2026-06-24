@@ -52,6 +52,8 @@ type CommentUserResp struct {
 	Site *string `json:"site,omitempty" example:"https://yevpt.com"`
 	// Mark 用户身份标签。
 	Mark *string `json:"mark,omitempty" example:"注册会员"`
+	// Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。
+	Roles []string `json:"roles,omitempty" example:"ROLE_VIP"`
 }
 
 // CommentReplyResp 评论回复响应。

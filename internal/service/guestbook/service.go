@@ -18,7 +18,11 @@ func (s *guestbookService) List(req dto.GuestbookListReq, viewerID *uint) (*dto.
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return guestbookPageToDTO(result, s.objectURLResolver), nil
+	rolesMap, err := s.lookupRoles(collectGuestbookPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+	return guestbookPageToDTO(result, s.objectURLResolver, rolesMap), nil
 }
 
 func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error) {
@@ -43,7 +47,11 @@ func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (
 	}
 	// 留言成功后发布 guestbook_created 事件，接收人为板主。
 	s.notifyGuestbookCreated(ownerUserID, fromUserID, aggregate)
-	return guestbookItemToDTO(*aggregate, s.objectURLResolver), nil
+	rolesMap, err := s.lookupRoles(collectGuestbookAggregateUserIDs(aggregate))
+	if err != nil {
+		return nil, err
+	}
+	return guestbookItemToDTO(*aggregate, s.objectURLResolver, rolesMap), nil
 }
 
 func (s *guestbookService) normalizeGuestbookImages(content string, userID uint, targetPrefix string) (*commentasset.NormalizeResult, storage.ObjectStore, error) {

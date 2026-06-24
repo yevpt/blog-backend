@@ -103,7 +103,7 @@ func TestGuestbookService_List_DefaultsOwnerAndPagination(t *testing.T) {
 			},
 		},
 	}
-	svc := guestbookservice.NewGuestbookService(repo, nil, nil)
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil)
 
 	resp, err := svc.List(dto.GuestbookListReq{Page: 0, PageSize: 99}, &viewerID)
 
@@ -132,7 +132,7 @@ func TestGuestbookService_Create_TrimsContentAndDefaultsOwner(t *testing.T) {
 			IsLiked:   false,
 		},
 	}
-	svc := guestbookservice.NewGuestbookService(repo, nil, nil)
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil)
 
 	resp, err := svc.Create(dto.GuestbookCreateReq{Content: "  你好  "}, 7)
 
@@ -149,7 +149,7 @@ func TestGuestbookService_Create_NormalizesTempCommentImagesBeforeCreate(t *test
 	store.keys["temp/comments/7/images/hello.jpg"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/hello.jpg?a=1"] = "temp/comments/7/images/hello.jpg"
 	repo := &fakeGuestbookRepo{}
-	svc := guestbookservice.NewGuestbookService(repo, store, nil)
+	svc := guestbookservice.NewGuestbookService(repo, store, nil, nil)
 
 	resp, err := svc.Create(dto.GuestbookCreateReq{
 		OwnerUserID: 1,
@@ -171,7 +171,7 @@ func TestGuestbookService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t 
 	store.keys["temp/comments/7/images/hello.jpg"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/hello.jpg"] = "temp/comments/7/images/hello.jpg"
 	repo := &fakeGuestbookRepo{createErr: errors.New("db down")}
-	svc := guestbookservice.NewGuestbookService(repo, store, nil)
+	svc := guestbookservice.NewGuestbookService(repo, store, nil, nil)
 
 	_, err := svc.Create(dto.GuestbookCreateReq{
 		OwnerUserID: 1,
@@ -183,7 +183,7 @@ func TestGuestbookService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t 
 }
 
 func TestGuestbookService_Create_RejectsBlankContent(t *testing.T) {
-	svc := guestbookservice.NewGuestbookService(&fakeGuestbookRepo{}, nil, nil)
+	svc := guestbookservice.NewGuestbookService(&fakeGuestbookRepo{}, nil, nil, nil)
 
 	_, err := svc.Create(dto.GuestbookCreateReq{Content: "  "}, 7)
 
@@ -194,7 +194,7 @@ func TestGuestbookService_Delete_AllowsAdminForceDelete(t *testing.T) {
 	repo := &fakeGuestbookRepo{
 		deleteResp: &model.Guestbook{Base: model.Base{ID: 9}},
 	}
-	svc := guestbookservice.NewGuestbookService(repo, nil, nil)
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil)
 
 	resp, err := svc.Delete(9, 7, []string{roles.AdminRole})
 
@@ -207,7 +207,7 @@ func TestGuestbookService_Delete_AllowsAdminForceDelete(t *testing.T) {
 
 func TestGuestbookService_ToggleLike_MapsNotFound(t *testing.T) {
 	repo := &fakeGuestbookRepo{toggleErr: guestbookrepo.ErrGuestbookNotFound}
-	svc := guestbookservice.NewGuestbookService(repo, nil, nil)
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil)
 
 	_, err := svc.ToggleLike(9, 7)
 
@@ -216,7 +216,7 @@ func TestGuestbookService_ToggleLike_MapsNotFound(t *testing.T) {
 
 func TestGuestbookService_List_MapsUnknownError(t *testing.T) {
 	repo := &fakeGuestbookRepo{listErr: errors.New("db down")}
-	svc := guestbookservice.NewGuestbookService(repo, nil, nil)
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil)
 
 	_, err := svc.List(dto.GuestbookListReq{}, nil)
 
@@ -299,7 +299,7 @@ func TestGuestbookService_Create_SelfMessageDoesNotPublish(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub, nil)
 
 	_, err := svc.Create(dto.GuestbookCreateReq{OwnerUserID: 7, Content: "自言自语"}, 7)
 
@@ -315,7 +315,7 @@ func TestGuestbookService_Create_PublishesForOtherOwner(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub, nil)
 
 	_, err := svc.Create(dto.GuestbookCreateReq{OwnerUserID: 1, Content: "你好"}, 7)
 
@@ -330,7 +330,7 @@ func TestGuestbookService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
 		toggleResp: &guestbookrepo.LikeResult{ID: 9, IsLiked: true, LikeCount: 2, OwnerUserID: 7},
 	}
 	pub := &recordingPublisher{}
-	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub, nil)
 
 	_, err := svc.ToggleLike(9, 7)
 
@@ -344,7 +344,7 @@ func TestGuestbookService_ToggleLike_PublishesForOtherOwner(t *testing.T) {
 		toggleResp: &guestbookrepo.LikeResult{ID: 9, IsLiked: true, LikeCount: 2, OwnerUserID: 1, Content: "留言正文"},
 	}
 	pub := &recordingPublisher{}
-	svc := guestbookservice.NewGuestbookService(repo, nil, pub)
+	svc := guestbookservice.NewGuestbookService(repo, nil, pub, nil)
 
 	_, err := svc.ToggleLike(9, 7)
 

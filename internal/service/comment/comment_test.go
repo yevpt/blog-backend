@@ -142,7 +142,7 @@ func TestCommentService_List_UsesViewerAndPaging(t *testing.T) {
 	repo := &fakeCommentRepo{
 		listResp: &commentrepo.PageResult{Page: 2, PageSize: 50},
 	}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	resp, err := svc.List("article", 3, dto.CommentListReq{Page: 0, PageSize: 99}, &viewerID)
 
@@ -170,7 +170,7 @@ func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	resp, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "  好文章  ",
@@ -190,7 +190,7 @@ func TestCommentService_Create_NormalizesTempCommentImagesBeforeCreate(t *testin
 	store.keys["temp/comments/7/images/cat.jpg"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/cat.jpg?a=1"] = "temp/comments/7/images/cat.jpg"
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo, store, nil)
+	svc := commentservice.NewCommentService(repo, store, nil, nil)
 
 	resp, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: " 看图 ![cat](https://cdn.example.com/blog/temp/comments/7/images/cat.jpg?a=1) ",
@@ -229,7 +229,7 @@ func TestCommentService_ListReplies_UsesViewerAndPaging(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	resp, err := svc.ListReplies("article", 9, dto.CommentReplyListReq{Page: 2, PageSize: 5}, &viewerID)
 
@@ -260,7 +260,7 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 			},
 		},
 	}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	resp, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{
 		ParentReplyID: 11,
@@ -280,7 +280,7 @@ func TestCommentService_Reply_NormalizesTempCommentImagesBeforeCreate(t *testing
 	store.keys["temp/comments/7/images/reply.jpg"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/reply.jpg"] = "temp/comments/7/images/reply.jpg"
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo, store, nil)
+	svc := commentservice.NewCommentService(repo, store, nil, nil)
 
 	resp, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{
 		Content: `<img src="https://cdn.example.com/blog/temp/comments/7/images/reply.jpg">`,
@@ -301,7 +301,7 @@ func TestCommentService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t *t
 	store.keys["temp/comments/7/images/cat.jpg"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/cat.jpg"] = "temp/comments/7/images/cat.jpg"
 	repo := &fakeCommentRepo{createErr: errors.New("db down")}
-	svc := commentservice.NewCommentService(repo, store, nil)
+	svc := commentservice.NewCommentService(repo, store, nil, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "![cat](https://cdn.example.com/blog/temp/comments/7/images/cat.jpg)",
@@ -312,7 +312,7 @@ func TestCommentService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t *t
 }
 
 func TestCommentService_ToggleLike_InvalidID(t *testing.T) {
-	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil)
+	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil)
 
 	_, err := svc.ToggleLike("article", 0, 7)
 
@@ -323,7 +323,7 @@ func TestCommentService_ToggleLike_ReturnsLatestState(t *testing.T) {
 	repo := &fakeCommentRepo{
 		toggleLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 3},
 	}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	resp, err := svc.ToggleLike("article", 9, 7)
 
@@ -345,7 +345,7 @@ func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	resp, err := svc.ToggleReplyLike("article", 12, 7)
 
@@ -372,7 +372,7 @@ func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
 }
 
 func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
-	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil)
+	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "  ",
@@ -383,7 +383,7 @@ func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
 
 func TestCommentService_Create_MapsClosedTarget(t *testing.T) {
 	repo := &fakeCommentRepo{createErr: commentrepo.ErrTargetCommentClosed}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{
 		Content: "好文章",
@@ -394,7 +394,7 @@ func TestCommentService_Create_MapsClosedTarget(t *testing.T) {
 
 func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	_, err := svc.DeleteComment("article", 9, 7, []string{roles.AdminRole})
 
@@ -404,7 +404,7 @@ func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 
 func TestCommentService_DeleteReply_UsesTargetPrefix(t *testing.T) {
 	repo := &fakeCommentRepo{}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	_, err := svc.DeleteReply("article", 12, 7, []string{roles.AdminRole})
 
@@ -416,7 +416,7 @@ func TestCommentService_DeleteReply_UsesTargetPrefix(t *testing.T) {
 
 func TestCommentService_List_MapsRepositoryErrors(t *testing.T) {
 	repo := &fakeCommentRepo{listErr: errors.New("boom")}
-	svc := commentservice.NewCommentService(repo, nil, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
 
 	_, err := svc.List("article", 3, dto.CommentListReq{Page: 1, PageSize: 10}, nil)
 
@@ -497,7 +497,7 @@ func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {
 		RootSnapshot: commentrepo.RootSnapshot{Type: "article", ID: 3, Title: "文章标题", Excerpt: "文章摘要"},
 	}}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "好文章"}, 7)
 
@@ -522,7 +522,7 @@ func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
 		Comment: commentrepo.CommentRecord{ID: 9, UserID: 7, Content: "留言"},
 	}}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	// 留言板评论 target.ID 即板主用户 ID，应写入显式接收人 metadata。
 	_, err := svc.Create("guestbook", 1, dto.CommentCreateReq{Content: "留言"}, 7)
@@ -544,7 +544,7 @@ func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 		RootSnapshot:  commentrepo.RootSnapshot{Type: "article", ID: 3, Title: "文章标题", Excerpt: "文章摘要"},
 	}}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
 
@@ -571,7 +571,7 @@ func TestCommentService_Reply_RootIDIsTargetIDNotCommentID(t *testing.T) {
 		TargetID: 3,
 	}}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
 
@@ -587,7 +587,7 @@ func TestCommentService_Create_SelfCommentDoesNotPublish(t *testing.T) {
 		OwnerUserID: 7,
 	}}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "自评"}, 7)
 
@@ -601,7 +601,7 @@ func TestCommentService_Reply_SelfReplyDoesNotPublish(t *testing.T) {
 		Reply: commentrepo.ReplyRecord{ID: 12, CommentID: 9, FromUserID: 7, ToUserID: 7, Content: "自回"},
 	}}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "自回"}, 7)
 
@@ -617,7 +617,7 @@ func TestCommentService_ToggleReplyLike_SelfLikeDoesNotPublish(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.ToggleReplyLike("article", 12, 7)
 
@@ -635,7 +635,7 @@ func TestCommentService_ToggleLike_PublishesCommentLikedEvent(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	resp, err := svc.ToggleLike("moment", 12, 7)
 
@@ -666,7 +666,7 @@ func TestCommentService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
 		toggleLikeResp: &commentrepo.LikeResult{IsLiked: true, LikeCount: 2, RootID: 5, TargetUserID: 7},
 	}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.ToggleLike("moment", 12, 7)
 
@@ -680,7 +680,7 @@ func TestCommentService_ToggleLike_DoesNotPublishOnUnlike(t *testing.T) {
 		toggleLikeResp: &commentrepo.LikeResult{IsLiked: false, LikeCount: 1, TargetUserID: 8, RootID: 5},
 	}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.ToggleLike("moment", 12, 7)
 
@@ -700,7 +700,7 @@ func TestCommentService_ToggleLike_SelfMomentSelfCommentOtherLike_Publishes(t *t
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := commentservice.NewCommentService(repo, nil, pub)
+	svc := commentservice.NewCommentService(repo, nil, pub, nil)
 
 	_, err := svc.ToggleLike("moment", 20, 2) // C(2) 点赞
 
