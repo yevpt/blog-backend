@@ -178,6 +178,31 @@ func (h *UserHandler) ListLikedContent(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// CountLikedContent 按用户 ID 返回其公开点赞内容总数。
+// @Summary 获取用户点赞总数
+// @Description 公开查询指定用户赞过且当前仍公开可见的内容总数，统计口径与 GET /users/{id}/likes 一致。
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param id path int true "用户 ID"
+// @Success 200 {object} response.Response{data=dto.UserLikedContentCountResp} "统一响应；code=0 表示查询成功"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /users/{id}/likes/count [get]
+func (h *UserHandler) CountLikedContent(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Fail(c, response.CodeBadRequest, "无效的用户 ID")
+		return
+	}
+
+	resp, err := h.svc.CountLikedContent(uint(id))
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
 // UpdateProfile 更新当前用户昵称、身份标签、个人简介。
 // @Summary 更新用户基本资料
 // @Tags 用户

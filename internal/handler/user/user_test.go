@@ -30,6 +30,7 @@ type stubUserService struct {
 	newPassword  string
 	captchaToken string
 	likedReq     dto.UserLikedContentListReq
+	likedCount   int64
 }
 
 func (s *stubUserService) GetDetail(userID uint) (*dto.UserDetailResp, error) {
@@ -78,6 +79,11 @@ func (s *stubUserService) ListLikedContent(userID uint, req dto.UserLikedContent
 			},
 		},
 	}, nil
+}
+
+func (s *stubUserService) CountLikedContent(userID uint) (*dto.UserLikedContentCountResp, error) {
+	s.userID = userID
+	return &dto.UserLikedContentCountResp{Count: s.likedCount}, nil
 }
 
 func (s *stubUserService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error) {
@@ -152,6 +158,7 @@ func newPublicUserRouter(svc userservice.UserService) *gin.Engine {
 	r := gin.New()
 	h := user.NewUserHandler(svc)
 	r.GET("/users/:id/likes", h.ListLikedContent)
+	r.GET("/users/:id/likes/count", h.CountLikedContent)
 	return r
 }
 
@@ -293,6 +300,26 @@ func TestUserHandler_ListLikedContent_PublicBindsQuery(t *testing.T) {
 	assert.Equal(t, response.CodeOK, resp.Code)
 	require.Len(t, resp.Data.List, 1)
 	assert.Equal(t, dto.UserLikedContentKindArticle, resp.Data.List[0].Kind)
+}
+
+func TestUserHandler_CountLikedContent_Public(t *testing.T) {
+	svc := &stubUserService{likedCount: 12}
+	r := newPublicUserRouter(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/users/7/likes/count", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(7), svc.userID)
+
+	var resp struct {
+		Code int                           `json:"code"`
+		Data dto.UserLikedContentCountResp `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
+	assert.Equal(t, int64(12), resp.Data.Count)
 }
 
 func ptrString(value string) *string {

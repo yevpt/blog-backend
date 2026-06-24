@@ -318,6 +318,7 @@ func registerPublicRoutes(
 	r.GET("/friend-links/:id", handlers.friendLink.GetPublic)
 	r.GET("/users", handlers.user.ListAll)
 	r.GET("/users/recent", handlers.user.ListRecent)
+	r.GET("/users/:id/likes/count", handlers.user.CountLikedContent)
 	r.GET("/users/:id/likes", handlers.user.ListLikedContent)
 	r.GET("/users/:id", middleware.OptionalAuth(jwtManager), handlers.user.GetPublicProfile)
 	r.GET("/articles/ids", handlers.article.ListIDs)
