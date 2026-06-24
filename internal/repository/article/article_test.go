@@ -475,7 +475,7 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 		WithArgs(uint(7)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("INSERT INTO `article_tag`").
-		WithArgs(uint(7), uint(5)).
+		WithArgs(uint(7), uint(5), uint(20), uint(7), uint(6), uint(10)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("DELETE FROM `article_music` WHERE article_id = \\?").
 		WithArgs(uint(7)).
@@ -505,8 +505,11 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 			Status:        1,
 			CommentStatus: 1,
 		},
-		CategoryIDs:  []uint{3},
-		TagIDs:       []uint{5},
+		CategoryIDs: []uint{3},
+		Tags: []article.ArticleTagSaveData{
+			{TagID: 5, Seq: 20},
+			{TagID: 6, Seq: 10},
+		},
 		MusicIDs:     []uint{9},
 		Recommend:    true,
 		RecommendSeq: 10,

@@ -73,7 +73,7 @@ func TestTagRepository_AddArticles_SkipsExistingRelations(t *testing.T) {
 		WithArgs(uint(8), uint(9)).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 	mock.ExpectExec("INSERT INTO `article_tag`").
-		WithArgs(uint(8), uint(5), uint(9), uint(5)).
+		WithArgs(uint(8), uint(5), uint(0), uint(9), uint(5), uint(0)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 

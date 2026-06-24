@@ -473,6 +473,8 @@ func (r *articleRepo) articleTags(ids []uint) (map[uint][]model.Tag, error) {
 		Select("article_tag.article_id, tag.*").
 		Joins("JOIN tag ON tag.id = article_tag.tag_id AND tag.deleted_at IS NULL").
 		Where("article_tag.article_id IN ?", ids).
+		Order("article_tag.seq ASC").
+		Order("article_tag.id ASC").
 		Order("tag.seq ASC").
 		Order("tag.id ASC").
 		Scan(&rows).Error

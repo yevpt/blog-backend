@@ -16,6 +16,7 @@ type ArticleTag struct {
 	ID        uint `gorm:"primarykey" json:"id"`
 	ArticleID uint `gorm:"not null;uniqueIndex:idx_article_tag,priority:1;index;comment:文章ID" json:"article_id"`
 	TagID     uint `gorm:"not null;uniqueIndex:idx_article_tag,priority:2;comment:标签ID" json:"tag_id"`
+	Seq       uint `gorm:"type:int;not null;comment:排序" json:"seq"`
 }
 
 func (ArticleTag) TableName() string { return "article_tag" }

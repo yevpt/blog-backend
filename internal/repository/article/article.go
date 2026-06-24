@@ -54,11 +54,17 @@ type ArticleAggregate struct {
 type ArticleSaveData struct {
 	Article        model.Article
 	CategoryIDs    []uint
-	TagIDs         []uint
+	Tags           []ArticleTagSaveData
 	MusicIDs       []uint
 	Recommend      bool
 	RecommendSeq   uint
 	PrepareArticle func(article model.Article) (model.Article, error)
+}
+
+// ArticleTagSaveData 表示待保存的文章标签关联。
+type ArticleTagSaveData struct {
+	TagID uint
+	Seq   uint
 }
 
 // ArticleRepository 文章数据访问接口，只返回 model 或聚合模型。

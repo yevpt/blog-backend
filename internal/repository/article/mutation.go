@@ -39,7 +39,7 @@ func (r *articleRepo) Save(data ArticleSaveData) (*ArticleAggregate, error) {
 		if err := replaceArticleCategories(tx, articleID, data.CategoryIDs); err != nil {
 			return err
 		}
-		if err := replaceArticleTags(tx, articleID, data.TagIDs); err != nil {
+		if err := replaceArticleTags(tx, articleID, data.Tags); err != nil {
 			return err
 		}
 		if err := replaceArticleMusic(tx, articleID, data.MusicIDs); err != nil {
@@ -276,13 +276,13 @@ func replaceArticleCategories(tx *gorm.DB, articleID uint, categoryIDs []uint) e
 	return tx.Create(&rows).Error
 }
 
-func replaceArticleTags(tx *gorm.DB, articleID uint, tagIDs []uint) error {
+func replaceArticleTags(tx *gorm.DB, articleID uint, tags []ArticleTagSaveData) error {
 	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleTag{}).Error; err != nil {
 		return err
 	}
-	rows := make([]model.ArticleTag, 0, len(tagIDs))
-	for _, tagID := range tagIDs {
-		rows = append(rows, model.ArticleTag{ArticleID: articleID, TagID: tagID})
+	rows := make([]model.ArticleTag, 0, len(tags))
+	for _, tag := range tags {
+		rows = append(rows, model.ArticleTag{ArticleID: articleID, TagID: tag.TagID, Seq: tag.Seq})
 	}
 	if len(rows) == 0 {
 		return nil
