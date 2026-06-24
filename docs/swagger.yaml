@@ -2321,6 +2321,13 @@ definitions:
         example: vpt
         type: string
     type: object
+  dto.UserLikedContentCountResp:
+    properties:
+      count:
+        description: Count 用户赞过且当前公开可见的内容总数。
+        example: 12
+        type: integer
+    type: object
   dto.UserLikedContentItemResp:
     properties:
       author:
@@ -2344,6 +2351,8 @@ definitions:
         $ref: '#/definitions/dto.UserLikedContentObjectResp'
       stats:
         $ref: '#/definitions/dto.UserLikedContentStatsResp'
+      to_user:
+        $ref: '#/definitions/dto.UserLikedContentAuthorResp'
     type: object
   dto.UserLikedContentObjectResp:
     properties:
@@ -6345,6 +6354,36 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 获取用户点赞内容
+      tags:
+      - 用户
+  /users/{id}/likes/count:
+    get:
+      consumes:
+      - application/json
+      description: 公开查询指定用户赞过且当前仍公开可见的内容总数，统计口径与 GET /users/{id}/likes 一致。
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserLikedContentCountResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 获取用户点赞总数
       tags:
       - 用户
   /users/me:

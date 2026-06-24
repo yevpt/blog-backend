@@ -6697,6 +6697,56 @@
                     }
                 }
             }
+        },
+        "/users/{id}/likes/count": {
+            "get": {
+                "description": "公开查询指定用户赞过且当前仍公开可见的内容总数，统计口径与 GET /users/{id}/likes 一致。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "获取用户点赞总数",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserLikedContentCountResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -9865,6 +9915,16 @@
                 }
             }
         },
+        "dto.UserLikedContentCountResp": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "Count 用户赞过且当前公开可见的内容总数。",
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
         "dto.UserLikedContentItemResp": {
             "type": "object",
             "properties": {
@@ -9897,6 +9957,9 @@
                 },
                 "stats": {
                     "$ref": "#/definitions/dto.UserLikedContentStatsResp"
+                },
+                "to_user": {
+                    "$ref": "#/definitions/dto.UserLikedContentAuthorResp"
                 }
             }
         },
