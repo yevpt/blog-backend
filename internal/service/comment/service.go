@@ -1,12 +1,16 @@
 package comment
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	"github.com/vpt/blog-backend/internal/service/commentasset"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 func (s *commentService) List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error) {
@@ -31,10 +35,19 @@ func (s *commentService) Create(targetType string, targetID uint, req dto.Commen
 	if err != nil {
 		return nil, err
 	}
+	normalized, store, err := s.normalizeCommentImages(content, userID, commentImageTargetPrefix(targetType, targetID))
+	if err != nil {
+		return nil, err
+	}
+	content = normalized.Content
 
 	aggregate, err := s.repo.Create(target, userID, content)
 	if err != nil {
+		_ = commentasset.DeleteKeys(context.Background(), store, normalized.CopiedKeys)
 		return nil, mapRepoError(err)
+	}
+	if err := commentasset.DeleteKeys(context.Background(), store, normalized.TempKeys); err != nil {
+		return nil, err
 	}
 	// 评论落库成功后发布通知事件，失败不影响评论本身。
 	s.notifyCommentCreated(targetType, targetID, aggregate)
@@ -63,6 +76,11 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 	if err != nil {
 		return nil, err
 	}
+	normalized, store, err := s.normalizeCommentImages(content, userID, replyImageTargetPrefix(targetType, commentID))
+	if err != nil {
+		return nil, err
+	}
+	content = normalized.Content
 
 	aggregate, err := s.repo.Reply(commentrepo.ReplyData{
 		Target:        commentrepo.Target{Type: commentType},
@@ -72,11 +90,36 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 		Content:       content,
 	})
 	if err != nil {
+		_ = commentasset.DeleteKeys(context.Background(), store, normalized.CopiedKeys)
 		return nil, mapRepoError(err)
+	}
+	if err := commentasset.DeleteKeys(context.Background(), store, normalized.TempKeys); err != nil {
+		return nil, err
 	}
 	// 回复落库成功后发布通知事件，接收人为被回复人。
 	s.notifyReplyCreated(targetType, aggregate)
 	return replyToDTO(*aggregate, s.objectURLResolver), nil
+}
+
+func (s *commentService) normalizeCommentImages(content string, userID uint, targetPrefix string) (*commentasset.NormalizeResult, storage.ObjectStore, error) {
+	store, _ := s.objectURLResolver.(storage.ObjectStore)
+	result, err := commentasset.Normalize(context.Background(), store, commentasset.NormalizeInput{
+		UserID:       userID,
+		Content:      content,
+		TargetPrefix: targetPrefix,
+	})
+	if err != nil {
+		return nil, store, mapCommentAssetError(err)
+	}
+	return result, store, nil
+}
+
+func commentImageTargetPrefix(targetType string, targetID uint) string {
+	return fmt.Sprintf("comments/%s/%d/images", targetType, targetID)
+}
+
+func replyImageTargetPrefix(targetType string, commentID uint) string {
+	return fmt.Sprintf("comments/%s/replies/%d/images", targetType, commentID)
 }
 
 func (s *commentService) ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error) {
@@ -174,6 +217,15 @@ func mapRepoError(err error) error {
 	}
 	if errors.Is(err, commentrepo.ErrNoDeletePermission) {
 		return ErrCommentNoDeletePermission
+	}
+	return err
+}
+
+func mapCommentAssetError(err error) error {
+	if errors.Is(err, commentasset.ErrImageInvalid) ||
+		errors.Is(err, commentasset.ErrImageExternal) ||
+		errors.Is(err, commentasset.ErrImageNotFound) {
+		return fmt.Errorf("%w：%s", ErrCommentImageInvalid, err.Error())
 	}
 	return err
 }

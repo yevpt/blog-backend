@@ -3,6 +3,7 @@ package comment_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 type fakeCommentRepo struct {
@@ -68,6 +70,16 @@ func (f *fakeCommentRepo) Create(target commentrepo.Target, userID uint, content
 	f.createTarget = target
 	f.createUserID = userID
 	f.createContent = content
+	if f.createResp == nil && f.createErr == nil {
+		f.createResp = &commentrepo.CommentAggregate{
+			Comment: commentrepo.CommentRecord{
+				ID:       9,
+				TargetID: target.ID,
+				UserID:   userID,
+				Content:  content,
+			},
+		}
+	}
 	return f.createResp, f.createErr
 }
 
@@ -82,6 +94,17 @@ func (f *fakeCommentRepo) ListReplies(target commentrepo.Target, commentID uint,
 
 func (f *fakeCommentRepo) Reply(data commentrepo.ReplyData) (*commentrepo.ReplyAggregate, error) {
 	f.replyData = data
+	if f.replyResp == nil && f.replyErr == nil {
+		f.replyResp = &commentrepo.ReplyAggregate{
+			Reply: commentrepo.ReplyRecord{
+				ID:            12,
+				CommentID:     data.CommentID,
+				FromUserID:    data.FromUserID,
+				ParentReplyID: data.ParentReplyID,
+				Content:       data.Content,
+			},
+		}
+	}
 	return f.replyResp, f.replyErr
 }
 
@@ -162,6 +185,27 @@ func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {
 	assert.Equal(t, "好文章", resp.Content)
 }
 
+func TestCommentService_Create_NormalizesTempCommentImagesBeforeCreate(t *testing.T) {
+	store := newCommentAssetStore()
+	store.keys["temp/comments/7/images/cat.jpg"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/cat.jpg?a=1"] = "temp/comments/7/images/cat.jpg"
+	repo := &fakeCommentRepo{}
+	svc := commentservice.NewCommentService(repo, store, nil)
+
+	resp, err := svc.Create("article", 3, dto.CommentCreateReq{
+		Content: " 看图 ![cat](https://cdn.example.com/blog/temp/comments/7/images/cat.jpg?a=1) ",
+	}, 7)
+
+	require.NoError(t, err)
+	assert.Equal(t, "看图 ![cat](comments/article/3/images/cat.jpg)", repo.createContent)
+	assert.Equal(t, []commentAssetCopy{{
+		source: "temp/comments/7/images/cat.jpg",
+		target: "comments/article/3/images/cat.jpg",
+	}}, store.copies)
+	require.NotNil(t, resp)
+	assert.Equal(t, "看图 ![cat](https://cdn.example.com/blog/comments/article/3/images/cat.jpg)", resp.Content)
+}
+
 func TestCommentService_ListReplies_UsesViewerAndPaging(t *testing.T) {
 	now := time.Now()
 	viewerID := uint(9)
@@ -229,6 +273,42 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 	assert.Equal(t, uint(11), repo.replyData.ParentReplyID)
 	assert.Equal(t, "收到", repo.replyData.Content)
 	assert.Equal(t, uint(12), resp.ID)
+}
+
+func TestCommentService_Reply_NormalizesTempCommentImagesBeforeCreate(t *testing.T) {
+	store := newCommentAssetStore()
+	store.keys["temp/comments/7/images/reply.jpg"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/reply.jpg"] = "temp/comments/7/images/reply.jpg"
+	repo := &fakeCommentRepo{}
+	svc := commentservice.NewCommentService(repo, store, nil)
+
+	resp, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{
+		Content: `<img src="https://cdn.example.com/blog/temp/comments/7/images/reply.jpg">`,
+	}, 7)
+
+	require.NoError(t, err)
+	assert.Equal(t, `<img src="comments/article/replies/9/images/reply.jpg">`, repo.replyData.Content)
+	assert.Equal(t, []commentAssetCopy{{
+		source: "temp/comments/7/images/reply.jpg",
+		target: "comments/article/replies/9/images/reply.jpg",
+	}}, store.copies)
+	require.NotNil(t, resp)
+	assert.Equal(t, `<img src="https://cdn.example.com/blog/comments/article/replies/9/images/reply.jpg">`, resp.Content)
+}
+
+func TestCommentService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t *testing.T) {
+	store := newCommentAssetStore()
+	store.keys["temp/comments/7/images/cat.jpg"] = true
+	store.keyMap["https://cdn.example.com/blog/temp/comments/7/images/cat.jpg"] = "temp/comments/7/images/cat.jpg"
+	repo := &fakeCommentRepo{createErr: errors.New("db down")}
+	svc := commentservice.NewCommentService(repo, store, nil)
+
+	_, err := svc.Create("article", 3, dto.CommentCreateReq{
+		Content: "![cat](https://cdn.example.com/blog/temp/comments/7/images/cat.jpg)",
+	}, 7)
+
+	require.EqualError(t, err, "db down")
+	assert.Equal(t, []string{"comments/article/3/images/cat.jpg"}, store.deleted)
 }
 
 func TestCommentService_ToggleLike_InvalidID(t *testing.T) {
@@ -351,6 +431,64 @@ type recordingPublisher struct {
 func (p *recordingPublisher) Publish(_ context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
 	p.events = append(p.events, e)
 	return &model.NotificationEvent{}, nil
+}
+
+type commentAssetStore struct {
+	keys    map[string]bool
+	keyMap  map[string]string
+	copies  []commentAssetCopy
+	deleted []string
+}
+
+type commentAssetCopy struct {
+	source string
+	target string
+}
+
+func newCommentAssetStore() *commentAssetStore {
+	return &commentAssetStore{
+		keys:   map[string]bool{},
+		keyMap: map[string]string{},
+	}
+}
+
+func (s *commentAssetStore) ObjectURL(_ context.Context, objectName string) (string, error) {
+	return "https://cdn.example.com/blog/" + objectName, nil
+}
+
+func (s *commentAssetStore) ObjectExists(_ context.Context, objectName string) (bool, error) {
+	return s.keys[objectName], nil
+}
+
+func (s *commentAssetStore) PutObject(context.Context, string, []byte, string) error {
+	return nil
+}
+
+func (s *commentAssetStore) DeleteObject(_ context.Context, objectName string) error {
+	s.deleted = append(s.deleted, objectName)
+	delete(s.keys, objectName)
+	return nil
+}
+
+func (s *commentAssetStore) MoveObject(context.Context, string, string) error {
+	return nil
+}
+
+func (s *commentAssetStore) CopyObject(_ context.Context, sourceName string, targetName string) error {
+	s.copies = append(s.copies, commentAssetCopy{source: sourceName, target: targetName})
+	s.keys[targetName] = true
+	return nil
+}
+
+func (s *commentAssetStore) ObjectKey(value string) (string, error) {
+	if key, ok := s.keyMap[value]; ok {
+		return key, nil
+	}
+	value = strings.TrimLeft(strings.TrimSpace(value), "/")
+	if strings.HasPrefix(value, "temp/comments/") || strings.HasPrefix(value, "comments/") {
+		return value, nil
+	}
+	return "", storage.ErrExternalObjectURL
 }
 
 func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {

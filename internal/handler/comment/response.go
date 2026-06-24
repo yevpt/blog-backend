@@ -34,5 +34,6 @@ func writeCommentResponse(c *gin.Context, data any, err error) {
 func isCommentBadRequest(err error) bool {
 	return errors.Is(err, commentservice.ErrCommentTargetInvalid) ||
 		errors.Is(err, commentservice.ErrCommentContentRequired) ||
+		errors.Is(err, commentservice.ErrCommentImageInvalid) ||
 		errors.Is(err, commentservice.ErrCommentClosed)
 }

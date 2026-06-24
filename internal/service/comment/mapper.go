@@ -1,9 +1,12 @@
 package comment
 
 import (
+	"context"
+
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	"github.com/vpt/blog-backend/internal/service/commentasset"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
@@ -32,7 +35,7 @@ func commentToDTO(aggregate commentrepo.CommentAggregate, commentType uint8, res
 		TargetType: targetTypeName(commentType),
 		TargetID:   aggregate.Comment.TargetID,
 		UserID:     aggregate.Comment.UserID,
-		Content:    aggregate.Comment.Content,
+		Content:    commentasset.ResolveContent(context.Background(), resolver, aggregate.Comment.Content),
 		User:       userToDTO(aggregate.User, resolver),
 		ReplyCount: aggregate.ReplyCount,
 		LikeCount:  aggregate.LikeCount,
@@ -51,7 +54,7 @@ func replyToDTO(aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURL
 		FromUserID:    reply.FromUserID,
 		ToUserID:      reply.ToUserID,
 		ParentReplyID: reply.ParentReplyID,
-		Content:       reply.Content,
+		Content:       commentasset.ResolveContent(context.Background(), resolver, reply.Content),
 		FromUser:      userToDTO(aggregate.FromUser, resolver),
 		ToUser:        userToDTO(aggregate.ToUser, resolver),
 		LikeCount:     aggregate.LikeCount,

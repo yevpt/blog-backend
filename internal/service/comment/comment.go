@@ -24,6 +24,8 @@ var (
 	ErrCommentContentRequired = errors.New("评论内容不能为空")
 	// ErrCommentNoDeletePermission 表示当前用户无权删除评论。
 	ErrCommentNoDeletePermission = errors.New("无权删除评论")
+	// ErrCommentImageInvalid 表示评论正文中的图片不是当前用户上传的有效图片。
+	ErrCommentImageInvalid = errors.New("评论图片无效")
 )
 
 // CommentService 评论业务接口，负责评论、回复的查询、创建和删除。
