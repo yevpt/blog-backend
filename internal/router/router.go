@@ -188,11 +188,15 @@ func newRouteHandlers(
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := userrepo.NewUserRepository(db)
 	userCacheSvc := userservice.NewUserCacheService(userRepo, objectStore, redisClient)
-	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc)
-	userSvc := userservice.NewUserService(userCacheSvc, userRepo, objectStore)
+	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
+	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc, avatarSvc, objectStore)
+	userSvc := userservice.NewUserService(userCacheSvc, userRepo, objectStore, avatarSvc, userservice.SecurityDeps{
+		Redis:   redisClient,
+		Mailer:  mailer,
+		Captcha: captchaSvc,
+	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
-	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
 	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc)
 
 	uvSvc := uv.NewService(redisClient)
@@ -296,6 +300,8 @@ func registerPublicRoutes(
 	r.POST("/captcha/register/challenge", handlers.captcha.GenerateRegistrationChallenge)
 	r.POST("/captcha/register/verify", handlers.captcha.VerifyRegistrationChallenge)
 	r.POST("/auth/send-code", middleware.RateLimitStrict(redisClient), handlers.auth.SendCode)
+	r.POST("/auth/password-reset/code", middleware.RateLimitStrict(redisClient), handlers.auth.SendPasswordResetCode)
+	r.POST("/auth/password-reset", middleware.RateLimitStrict(redisClient), handlers.auth.ResetPassword)
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
 	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
 	r.POST("/admin/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.AdminLogin)
@@ -334,12 +340,16 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.GET("/test/authed", handlers.test.Authed)
 	authed.GET("/users/me", handlers.user.GetDetail)
 	authed.PUT("/users/me", handlers.user.Update)
+	authed.POST("/users/me/avatar", middleware.RateLimitAvatarUpload(redisClient), handlers.user.UploadAvatar)
 	authed.POST("/users/me/login-time", handlers.user.RecordLogin)
 	authed.PATCH("/users/me/profile", handlers.user.UpdateProfile)
 	authed.PATCH("/users/me/meta", handlers.user.UpdateMeta)
 	authed.PATCH("/users/me/social/:platform", handlers.user.UpdateSocialLink)
 	authed.PATCH("/users/me/username", handlers.user.UpdateUsername)
 	authed.PATCH("/users/me/password", handlers.user.UpdatePassword)
+	authed.PATCH("/users/me/password/initial", handlers.user.SetInitialPassword)
+	authed.POST("/users/me/email/code", middleware.RateLimitStrict(redisClient), handlers.user.SendEmailCode)
+	authed.PATCH("/users/me/email", handlers.user.UpdateEmail)
 	authed.PATCH("/users/me/email/display", handlers.user.UpdateEmailDisplay)
 	authed.GET("/users/me/oauth-bindings", handlers.oauth.ListBindings)
 	authed.GET("/oauth/bindings", handlers.oauth.ListBindings)

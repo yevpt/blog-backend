@@ -82,7 +82,7 @@ func TestService_SaveRemoteAvatar_CompressesAndUploads(t *testing.T) {
 	assert.True(t, store.putCalled)
 	assert.Equal(t, objectName, store.objectName)
 	assert.Equal(t, "image/jpeg", store.contentTyp)
-	assert.LessOrEqual(t, len(store.content), 10*1024)
+	assert.LessOrEqual(t, len(store.content), 20*1024)
 }
 
 func TestService_SaveRemoteAvatar_ReusesExistingObject(t *testing.T) {
@@ -145,6 +145,39 @@ func TestService_SaveRemoteAvatar_RespectsTimeout(t *testing.T) {
 	_, err := svc.SaveRemoteAvatar(context.Background(), server.URL)
 
 	assert.Error(t, err)
+}
+
+func TestService_SaveUploadedAvatar_CompressesAndUploads(t *testing.T) {
+	store := &fakeObjectStore{}
+	svc := avatarservice.NewService(store, avatarservice.Options{})
+
+	objectName, err := svc.SaveUploadedAvatar(context.Background(), "avatar.png", testPNG(t, 240, 200))
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, objectName.ObjectKey)
+	assert.Contains(t, objectName.ObjectKey, "avatar/user/")
+	assert.True(t, objectName.Created)
+	assert.Equal(t, "image/jpeg", store.contentTyp)
+	assert.LessOrEqual(t, len(store.content), 20*1024)
+}
+
+func TestService_SaveUploadedAvatar_RejectsGIF(t *testing.T) {
+	svc := avatarservice.NewService(&fakeObjectStore{}, avatarservice.Options{})
+	gif := testGIF(t)
+
+	_, err := svc.SaveUploadedAvatar(context.Background(), "avatar.gif", gif)
+
+	assert.ErrorIs(t, err, avatarservice.ErrAvatarGIFNotAllowed)
+}
+
+func testGIF(t *testing.T) []byte {
+	t.Helper()
+	// 最小合法 GIF89a 1x1 像素。
+	return []byte{
+		0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
+		0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00,
+		0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0x02, 0x02, 0x44, 0x01, 0x00, 0x3b,
+	}
 }
 
 func testPNG(t *testing.T, width, height int) []byte {

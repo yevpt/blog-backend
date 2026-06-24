@@ -26,28 +26,48 @@ type UserService interface {
 	GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error)
 	ListRecent(req *dto.UserListReq) (*dto.UserPageResp, error)
 	ListAll(req *dto.UserListReq) (*dto.UserPageResp, error)
-	Update(userID uint, req *dto.UserUpdateReq) error
+	Update(userID uint, req *dto.UserUpdateReq) (*dto.UserDetailResp, error)
 	UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error)
 	UpdateMeta(userID uint, req *dto.UpdateMetaReq) (*dto.UserDetailResp, error)
 	UpdateSocialLink(userID uint, platform string, url *string) (*dto.UserDetailResp, error)
 	UpdateUsername(userID uint, username string) error
 	UpdatePassword(userID uint, oldPwd, newPwd string) error
+	SetInitialPassword(userID uint, newPwd, code string) error
+	SendEmailCode(userID uint, emailAddr, captchaToken, ip string) error
+	UpdateEmail(userID uint, target, emailAddr, code string) error
 	UpdateEmailDisplay(userID uint, display string) error
 	RecordLogin(userID uint) error
+	ChangeAvatar(userID uint, file *dto.UploadedImageFile) (*dto.UserDetailResp, error)
 }
 
 type userService struct {
 	cache    UserCacheService
 	repo     userrepo.UserRepository
+	store    storage.ObjectStore
 	resolver storage.ObjectURLResolver
+	avatar   AvatarUploader
+	security SecurityDeps
 }
 
 // NewUserService 创建用户资料服务。
-func NewUserService(cache UserCacheService, repo userrepo.UserRepository, resolver storage.ObjectURLResolver) UserService {
+func NewUserService(
+	cache UserCacheService,
+	repo userrepo.UserRepository,
+	store storage.ObjectStore,
+	avatar AvatarUploader,
+	security ...SecurityDeps,
+) UserService {
+	deps := SecurityDeps{}
+	if len(security) > 0 {
+		deps = security[0]
+	}
 	return &userService{
 		cache:    cache,
 		repo:     repo,
-		resolver: resolver,
+		store:    store,
+		resolver: store,
+		avatar:   avatar,
+		security: deps,
 	}
 }
 
@@ -152,13 +172,10 @@ func (s *userService) buildUserPageResp(users []model.User, total int64, page, p
 	}, nil
 }
 
-func (s *userService) Update(userID uint, req *dto.UserUpdateReq) error {
+func (s *userService) Update(userID uint, req *dto.UserUpdateReq) (*dto.UserDetailResp, error) {
 	updates := make(map[string]any)
 	if req.Nickname != nil {
 		updates["nickname"] = *req.Nickname
-	}
-	if req.AvatarUrl != nil {
-		updates["avatar_url"] = *req.AvatarUrl
 	}
 	if req.Mark != nil {
 		updates["mark"] = *req.Mark
@@ -166,12 +183,11 @@ func (s *userService) Update(userID uint, req *dto.UserUpdateReq) error {
 
 	if len(updates) > 0 {
 		if err := s.repo.Update(userID, updates); err != nil {
-			return err
+			return nil, err
 		}
-		// 使缓存失效
 		_ = s.cache.Invalidate(context.Background(), int64(userID))
 	}
-	return nil
+	return s.cache.Get(context.Background(), int64(userID))
 }
 
 func (s *userService) RecordLogin(userID uint) error {

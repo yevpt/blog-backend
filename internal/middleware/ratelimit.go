@@ -72,6 +72,32 @@ func RateLimitTempUpload(rdb *redis.Client) gin.HandlerFunc {
 	}
 }
 
+// RateLimitAvatarUpload 按登录用户限制头像更换频率。
+func RateLimitAvatarUpload(rdb *redis.Client) gin.HandlerFunc {
+	return newPrincipalRateLimiter(rdb, RateLimitConfig{
+		Window:      60 * time.Second,
+		SoftLimit:   5,
+		HardLimit:   20,
+		BanDuration: 15 * time.Minute,
+	}, avatarUploadRateLimitPrincipal, avatarUploadRateLimitBanKey)
+}
+
+func avatarUploadRateLimitPrincipal(c *gin.Context) string {
+	detail := GetUserDetail(c)
+	if detail != nil && detail.ID > 0 {
+		return fmt.Sprintf("user:%d", detail.ID)
+	}
+	claims := jwt.GetClaims(c)
+	if claims != nil && claims.UserId > 0 {
+		return fmt.Sprintf("user:%d", claims.UserId)
+	}
+	return "ip:" + c.ClientIP()
+}
+
+func avatarUploadRateLimitBanKey(principal string) string {
+	return "ban:avatar-upload:" + principal
+}
+
 func newIPRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
 	return newPrincipalRateLimiter(
 		rdb,

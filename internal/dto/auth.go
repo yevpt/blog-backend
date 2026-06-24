@@ -6,12 +6,12 @@ type SendCodeReq struct {
 	CaptchaToken string `json:"captcha_token" binding:"required"`
 }
 
-// RegisterReq 注册请求
+// RegisterReq 注册请求（multipart/form-data）
 type RegisterReq struct {
-	Email    string  `json:"email" binding:"required,email"`
-	Password string  `json:"password" binding:"required,min=8"`
-	Code     string  `json:"code" binding:"required,len=6"`
-	Nickname *string `json:"nickname"`
+	Email    string  `form:"email" binding:"required,email"`
+	Password string  `form:"password" binding:"required,min=8"`
+	Code     string  `form:"code" binding:"required,len=6"`
+	Nickname *string `form:"nickname"`
 }
 
 // LoginReq 登录请求，identifier 可为 username / email / phone
@@ -31,13 +31,27 @@ type RefreshReq struct {
 	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
+// PasswordResetCodeReq 发送忘记密码验证码请求
+type PasswordResetCodeReq struct {
+	Email        string `json:"email" binding:"required,email"`
+	CaptchaToken string `json:"captcha_token" binding:"required"`
+}
+
+// PasswordResetReq 忘记密码重置请求
+type PasswordResetReq struct {
+	Email       string `json:"email" binding:"required,email"`
+	Code        string `json:"code" binding:"required,len=6"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
 // UserResp 用户信息响应（注册/登录均返回）
 type UserResp struct {
-	ID       uint     `json:"id"`
-	Username string   `json:"username"`
-	Email    *string  `json:"email"`
-	Nickname *string  `json:"nickname"`
-	Roles    []string `json:"roles,omitempty"`
+	ID        uint     `json:"id"`
+	Username  string   `json:"username"`
+	Email     *string  `json:"email"`
+	Nickname  *string  `json:"nickname"`
+	AvatarUrl *string  `json:"avatar_url,omitempty"`
+	Roles     []string `json:"roles,omitempty"`
 }
 
 // LoginResp 登录成功响应

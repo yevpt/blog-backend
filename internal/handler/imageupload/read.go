@@ -1,0 +1,45 @@
+package imageupload
+
+import (
+	"errors"
+	"io"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+)
+
+// ReadSingleImageFile 从 multipart 表单读取单张图片，并限制读取大小。
+func ReadSingleImageFile(c *gin.Context, field string, maxBytes int, rejectGIF bool) (name string, data []byte, err error) {
+	header, err := c.FormFile(field)
+	if err != nil {
+		if errors.Is(err, http.ErrMissingFile) {
+			return "", nil, nil
+		}
+		return "", nil, err
+	}
+
+	file, err := header.Open()
+	if err != nil {
+		return "", nil, err
+	}
+	defer file.Close()
+
+	data, err = io.ReadAll(io.LimitReader(file, int64(maxBytes)+1))
+	if err != nil {
+		return "", nil, err
+	}
+	if len(data) > maxBytes {
+		return "", nil, errors.New("头像不能超过 2MB")
+	}
+	if rejectGIF && isGIFUpload(header.Header.Get("Content-Type"), header.Filename) {
+		return "", nil, errors.New("不支持 GIF 头像")
+	}
+	return header.Filename, data, nil
+}
+
+func isGIFUpload(contentType string, fileName string) bool {
+	mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	return mediaType == "image/gif" || strings.EqualFold(filepath.Ext(fileName), ".gif")
+}

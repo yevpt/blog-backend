@@ -90,12 +90,14 @@ func (h *UserHandler) ListAll(c *gin.Context) {
 
 // Update 更新当前用户信息
 // @Summary 更新当前用户信息
-// @Description 更新当前登录用户的昵称、头像、标签等信息
+// @Description 更新当前登录用户的昵称、标签等信息；头像请使用 POST /users/me/avatar。
 // @Tags 用户
 // @Accept json
 // @Produce json
 // @Param req body dto.UserUpdateReq true "更新信息"
-// @Success 200 {object} response.Response "成功"
+// @Success 200 {object} response.Response{data=dto.UserDetailResp} "统一响应；code=0 表示更新成功"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /users/me [put]
 func (h *UserHandler) Update(c *gin.Context) {
 	var req dto.UserUpdateReq
@@ -108,11 +110,12 @@ func (h *UserHandler) Update(c *gin.Context) {
 		response.Unauthorized(c)
 		return
 	}
-	if err := h.svc.Update(detail.ID, &req); err != nil {
+	resp, err := h.svc.Update(detail.ID, &req)
+	if err != nil {
 		response.ServerError(c)
 		return
 	}
-	response.Success(c, nil)
+	response.Success(c, resp)
 }
 
 // GetPublicProfile 按 ID 返回某用户的公开详情。
@@ -289,6 +292,91 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// SetInitialPassword 使用当前主邮箱验证码设置登录密码。
+// @Summary 设置初始密码
+// @Description 适用于 OAuth 注册等没有用户自设密码的账号；需先向当前主邮箱发送验证码。
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.SetInitialPasswordReq true "密码和验证码"
+// @Success 200 {object} response.Response "成功；code != 0 表示业务失败"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Router /users/me/password/initial [patch]
+func (h *UserHandler) SetInitialPassword(c *gin.Context) {
+	var req dto.SetInitialPasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.SetInitialPassword(detail.ID, req.NewPassword, req.Code); err != nil {
+		writeUserSecurityError(c, err)
+		return
+	}
+	response.Success(c, nil)
+}
+
+// SendEmailCode 向账号安全场景的目标邮箱发送验证码。
+// @Summary 发送账号邮箱验证码
+// @Description 用于主邮箱/副邮箱绑定换绑，以及当前主邮箱校验后设置初始密码。
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.SendAccountEmailCodeReq true "目标邮箱和图形验证码票据"
+// @Success 200 {object} response.Response "成功；code != 0 表示业务失败"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 429 {object} response.Response "发送过于频繁"
+// @Router /users/me/email/code [post]
+func (h *UserHandler) SendEmailCode(c *gin.Context) {
+	var req dto.SendAccountEmailCodeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.SendEmailCode(detail.ID, req.Email, req.CaptchaToken, c.ClientIP()); err != nil {
+		writeUserSecurityError(c, err)
+		return
+	}
+	response.Success(c, nil)
+}
+
+// UpdateEmail 绑定或换绑当前用户的主邮箱/副邮箱。
+// @Summary 更新账号邮箱
+// @Description target=main 更新主邮箱，target=sub 更新副邮箱；邮箱验证码必须匹配目标邮箱。
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param req body dto.UpdateEmailReq true "邮箱更新信息"
+// @Success 200 {object} response.Response "成功；code != 0 表示业务失败"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Router /users/me/email [patch]
+func (h *UserHandler) UpdateEmail(c *gin.Context) {
+	var req dto.UpdateEmailReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, "参数错误")
+		return
+	}
+	detail := middleware.GetUserDetail(c)
+	if detail == nil {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.UpdateEmail(detail.ID, req.Target, req.Email, req.Code); err != nil {
+		writeUserSecurityError(c, err)
+		return
+	}
+	response.Success(c, nil)
+}
+
 // UpdateEmailDisplay 设置对外展示邮箱（主邮箱/副邮箱/不展示）。
 // @Summary 设置展示邮箱
 // @Tags 用户
@@ -313,6 +401,23 @@ func (h *UserHandler) UpdateEmailDisplay(c *gin.Context) {
 		return
 	}
 	response.Success(c, nil)
+}
+
+func writeUserSecurityError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, userservice.ErrWrongPassword),
+		errors.Is(err, userservice.ErrUsernameExists),
+		errors.Is(err, userservice.ErrEmailTaken),
+		errors.Is(err, userservice.ErrInvalidEmailCode),
+		errors.Is(err, userservice.ErrEmailRequired),
+		errors.Is(err, userservice.ErrSecurityDisabled),
+		errors.Is(err, userservice.ErrPasswordAlreadySet):
+		response.Fail(c, response.CodeBadRequest, err.Error())
+	case errors.Is(err, userservice.ErrTooManyEmailCodeRequests):
+		response.TooManyRequests(c, err.Error(), 60)
+	default:
+		response.ServerError(c)
+	}
 }
 
 // RecordLogin 记录当前用户登录时间

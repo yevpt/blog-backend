@@ -52,30 +52,88 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	response.Success(c, nil)
 }
 
-// Register 邮箱注册，验证码一次性消费，注册成功后直接返回用户信息（无 token）。
-// @Summary 邮箱注册
-// @Description 使用邮箱、密码和验证码创建用户；参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。
+// SendPasswordResetCode 发送忘记密码验证码，不暴露目标邮箱是否存在。
+// @Summary 发送忘记密码验证码
+// @Description 消费 GoCaptcha 一次性票据后尝试向邮箱发送重置密码验证码；无论邮箱是否存在，成功响应都不暴露账号状态。
 // @Tags 认证
 // @Accept json
 // @Produce json
-// @Param request body dto.RegisterReq true "注册请求"
-// @Success 200 {object} response.Response{data=dto.UserResp} "统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误"
-// @Router /auth/register [post]
-func (h *AuthHandler) Register(c *gin.Context) {
-	// 绑定并校验请求参数（email、password、code 均为 required）
-	var req dto.RegisterReq
+// @Param request body dto.PasswordResetCodeReq true "忘记密码验证码请求"
+// @Success 200 {object} response.Response "统一响应；code=0 表示请求已受理，code=400 表示参数错误或业务错误"
+// @Failure 429 {object} response.Response "发送频率超限"
+// @Router /auth/password-reset/code [post]
+func (h *AuthHandler) SendPasswordResetCode(c *gin.Context) {
+	var req dto.PasswordResetCodeReq
 	if !reqbind.JSON(c, &req) {
 		return
 	}
 
-	// 调用 service 完成注册流程：验证码校验 → 邮箱唯一性检查 → 创建用户
-	user, err := h.svc.Register(&req)
+	if err := h.svc.SendPasswordResetCode(req.Email, c.ClientIP(), req.CaptchaToken); err != nil {
+		if isTooManyRequests(err) {
+			response.TooManyRequests(c, err.Error(), 0)
+			return
+		}
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+
+	response.Success(c, nil)
+}
+
+// ResetPassword 使用邮箱验证码重置登录密码。
+// @Summary 忘记密码重置
+// @Description 使用邮箱验证码设置新密码；成功后旧密码失效，新密码可用于登录。
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body dto.PasswordResetReq true "忘记密码重置请求"
+// @Success 200 {object} response.Response "统一响应；code=0 表示重置成功，code=400 表示验证码无效或参数错误"
+// @Router /auth/password-reset [post]
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req dto.PasswordResetReq
+	if !reqbind.JSON(c, &req) {
+		return
+	}
+
+	if err := h.svc.ResetPassword(&req); err != nil {
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+
+	response.Success(c, nil)
+}
+
+// Register 邮箱注册，验证码一次性消费，注册成功后直接返回用户信息（无 token）。
+// @Summary 邮箱注册
+// @Description 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。参数错误、验证码错误或邮箱已存在通过统一响应 code 表达。
+// @Tags 认证
+// @Accept multipart/form-data
+// @Produce json
+// @Param email formData string true "邮箱"
+// @Param password formData string true "密码（至少 8 位）"
+// @Param code formData string true "6 位邮箱验证码"
+// @Param nickname formData string false "昵称"
+// @Param avatar formData file false "可选头像图片"
+// @Success 200 {object} response.Response{data=dto.UserResp} "统一响应；code=0 表示注册成功，code=400 表示参数错误或业务错误"
+// @Router /auth/register [post]
+func (h *AuthHandler) Register(c *gin.Context) {
+	var req dto.RegisterReq
+	if !reqbind.Form(c, &req) {
+		return
+	}
+
+	avatar, err := readRegisterAvatar(c)
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}
 
-	// 注册成功返回用户信息，不含 token，用户需单独调用登录接口获取
+	user, err := h.svc.Register(&req, avatar)
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+
 	response.Success(c, user)
 }
 
