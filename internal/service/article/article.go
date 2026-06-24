@@ -187,7 +187,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 	aggregate, err := s.repo.Save(articlerepo.ArticleSaveData{
 		Article:        article,
 		CategoryIDs:    categoryIDs,
-		TagIDs:         uniqueUintIDs(req.TagIDs),
+		Tags:           normalizeArticleTagRelations(req),
 		MusicIDs:       uniqueUintIDs(req.MusicIDs),
 		Recommend:      req.Recommend,
 		RecommendSeq:   req.RecommendSeq,

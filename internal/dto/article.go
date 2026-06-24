@@ -49,12 +49,22 @@ type ArticleSaveReq struct {
 	CategoryIDs []uint `json:"category_ids" binding:"required,min=1" example:"1"`
 	// TagIDs 标签 ID 列表。
 	TagIDs []uint `json:"tag_ids" example:"1"`
+	// Tags 标签关联列表；需要维护文章内标签排序时使用，优先级高于 tag_ids。
+	Tags []ArticleTagSaveReq `json:"tags"`
 	// MusicIDs 音乐 ID 列表。
 	MusicIDs []uint `json:"music_ids" example:"1"`
 	// Recommend 是否推荐文章。
 	Recommend bool `json:"recommend" example:"false"`
 	// RecommendSeq 推荐排序值。
 	RecommendSeq uint `json:"recommend_seq" example:"10"`
+}
+
+// ArticleTagSaveReq 文章标签关联保存请求。
+type ArticleTagSaveReq struct {
+	// TagID 标签 ID。
+	TagID uint `json:"tag_id" example:"1"`
+	// Seq 文章内标签排序值，越小越靠前。
+	Seq uint `json:"seq" example:"0"`
 }
 
 // ArticleRelationResp 文章分类、标签、音乐等轻量关联响应。

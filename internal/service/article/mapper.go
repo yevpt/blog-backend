@@ -435,6 +435,31 @@ func uniqueUintIDs(ids []uint) []uint {
 	return unique
 }
 
+func normalizeArticleTagRelations(req dto.ArticleSaveReq) []articlerepo.ArticleTagSaveData {
+	if len(req.Tags) > 0 {
+		seen := make(map[uint]struct{}, len(req.Tags))
+		tags := make([]articlerepo.ArticleTagSaveData, 0, len(req.Tags))
+		for _, tag := range req.Tags {
+			if tag.TagID == 0 {
+				continue
+			}
+			if _, ok := seen[tag.TagID]; ok {
+				continue
+			}
+			seen[tag.TagID] = struct{}{}
+			tags = append(tags, articlerepo.ArticleTagSaveData{TagID: tag.TagID, Seq: tag.Seq})
+		}
+		return tags
+	}
+
+	tagIDs := uniqueUintIDs(req.TagIDs)
+	tags := make([]articlerepo.ArticleTagSaveData, 0, len(tagIDs))
+	for _, tagID := range tagIDs {
+		tags = append(tags, articlerepo.ArticleTagSaveData{TagID: tagID})
+	}
+	return tags
+}
+
 func firstCategoryID(ids []uint) []uint {
 	for _, id := range ids {
 		if id != 0 {

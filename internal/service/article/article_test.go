@@ -287,7 +287,7 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 	require.ErrorIs(t, err, articleservice.ErrArticlePasswordRequired)
 }
 
-func TestArticleService_SaveKeepsFirstCategoryAndDeduplicatesOtherRelationIDs(t *testing.T) {
+func TestArticleService_SaveKeepsFirstCategoryAndNormalizesRelations(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
@@ -298,7 +298,10 @@ func TestArticleService_SaveKeepsFirstCategoryAndDeduplicatesOtherRelationIDs(t 
 		Save(gomock.Any()).
 		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
 			assert.Equal(t, []uint{1}, data.CategoryIDs)
-			assert.Equal(t, []uint{3, 4}, data.TagIDs)
+			assert.Equal(t, []articlerepo.ArticleTagSaveData{
+				{TagID: 3, Seq: 20},
+				{TagID: 4, Seq: 10},
+			}, data.Tags)
 			assert.Equal(t, []uint{5, 6}, data.MusicIDs)
 			return &articlerepo.ArticleAggregate{
 				Article: model.Article{
@@ -318,9 +321,53 @@ func TestArticleService_SaveKeepsFirstCategoryAndDeduplicatesOtherRelationIDs(t 
 		Status:        1,
 		CommentStatus: 1,
 		CategoryIDs:   []uint{1, 1, 2},
-		TagIDs:        []uint{3, 3, 4},
-		MusicIDs:      []uint{5, 5, 6},
+		TagIDs:        []uint{99},
+		Tags: []dto.ArticleTagSaveReq{
+			{TagID: 3, Seq: 20},
+			{TagID: 3, Seq: 30},
+			{TagID: 4, Seq: 10},
+		},
+		MusicIDs: []uint{5, 5, 6},
 	}, 7)
+	require.NoError(t, err)
+	assert.Equal(t, uint(9), resp.ID)
+}
+
+func TestArticleService_SaveUsesLegacyTagIDsWithDefaultSeq(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+
+	now := time.Now()
+	repo.EXPECT().
+		Save(gomock.Any()).
+		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
+			assert.Equal(t, []articlerepo.ArticleTagSaveData{
+				{TagID: 3, Seq: 0},
+				{TagID: 4, Seq: 0},
+			}, data.Tags)
+			return &articlerepo.ArticleAggregate{
+				Article: model.Article{
+					Base:          model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
+					Title:         data.Article.Title,
+					Content:       data.Article.Content,
+					UserID:        data.Article.UserID,
+					Status:        data.Article.Status,
+					CommentStatus: data.Article.CommentStatus,
+				},
+			}, nil
+		})
+
+	resp, err := svc.Save(dto.ArticleSaveReq{
+		Title:         "A",
+		Content:       "body",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+		TagIDs:        []uint{3, 3, 4},
+	}, 7)
+
 	require.NoError(t, err)
 	assert.Equal(t, uint(9), resp.ID)
 }
