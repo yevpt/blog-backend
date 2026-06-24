@@ -27,6 +27,11 @@ type stubMomentService struct {
 	listResp     *dto.MomentPageResp
 	listErr      error
 
+	feedReq      dto.MomentFeedReq
+	feedViewerID *uint
+	feedResp     *dto.MomentPageResp
+	feedErr      error
+
 	saveReq    dto.MomentSaveReq
 	saveUserID uint
 	saveRoles  []string
@@ -49,6 +54,12 @@ func (s *stubMomentService) List(req dto.MomentListReq, viewerID *uint) (*dto.Mo
 	s.listReq = req
 	s.listViewerID = viewerID
 	return s.listResp, s.listErr
+}
+
+func (s *stubMomentService) FeedList(req dto.MomentFeedReq, viewerID *uint) (*dto.MomentPageResp, error) {
+	s.feedReq = req
+	s.feedViewerID = viewerID
+	return s.feedResp, s.feedErr
 }
 
 func (s *stubMomentService) GetDetail(uint, *uint) (*dto.MomentItemResp, error) {
@@ -96,6 +107,7 @@ func newMomentRouter(svc momentservice.MomentService) *gin.Engine {
 	r := gin.New()
 	h := momenthandler.NewMomentHandler(svc)
 	r.GET("/moments", h.List)
+	r.GET("/moments/feed", h.Feed)
 	r.POST("/moments", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1, Roles: []string{roles.AdminRole}})
@@ -128,6 +140,35 @@ func TestMomentHandler_List_AllowsOptionalAuth(t *testing.T) {
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestMomentHandler_Feed_BindsScopeAndSort(t *testing.T) {
+	stub := &stubMomentService{feedResp: &dto.MomentPageResp{Page: 1, PageSize: 10}}
+	r := newMomentRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/moments/feed?scope=friends&sort=hot&page=2&page_size=20", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "friends", stub.feedReq.Scope)
+	assert.Equal(t, "hot", stub.feedReq.Sort)
+	assert.Equal(t, 2, stub.feedReq.Page)
+	assert.Equal(t, 20, stub.feedReq.PageSize)
+}
+
+func TestMomentHandler_Feed_RejectsMissingScope(t *testing.T) {
+	stub := &stubMomentService{}
+	r := newMomentRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/moments/feed?sort=latest", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
 }
 
 func TestMomentHandler_Save_UsesClaimsUserAndRoles(t *testing.T) {

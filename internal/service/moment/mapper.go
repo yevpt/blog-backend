@@ -6,13 +6,19 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	"github.com/vpt/blog-backend/internal/service/userrole"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 func (s *momentService) momentPageToDTO(result *momentrepo.PageResult) (*dto.MomentPageResp, error) {
+	rolesMap, err := s.lookupRoles(collectMomentPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+
 	items := make([]dto.MomentItemResp, 0, len(result.Moments))
 	for _, aggregate := range result.Moments {
-		item, err := s.momentToDTO(aggregate)
+		item, err := s.momentToDTO(aggregate, rolesMap)
 		if err != nil {
 			return nil, err
 		}
@@ -32,9 +38,17 @@ func (s *momentService) momentPageToDTO(result *momentrepo.PageResult) (*dto.Mom
 	}, nil
 }
 
-func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate) (*dto.MomentItemResp, error) {
+func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate, rolesMap map[uint][]string) (*dto.MomentItemResp, error) {
+	if rolesMap == nil {
+		var err error
+		rolesMap, err = s.lookupRoles(collectMomentAggregateUserIDs(aggregate))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	moment := aggregate.Moment
-	user := momentUserToDTO(aggregate.User, s.objectURLResolver)
+	user := momentUserToDTO(aggregate.User, s.objectURLResolver, rolesMap)
 	resp := &dto.MomentItemResp{
 		ID:            moment.ID,
 		UserID:        moment.UserID,
@@ -70,7 +84,7 @@ func (s *momentService) mediaToDTO(images []model.Media) []dto.MomentMediaResp {
 	return rows
 }
 
-func momentUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.MomentUserResp {
+func momentUserToDTO(user *model.User, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.MomentUserResp {
 	if user == nil {
 		return nil
 	}
@@ -81,9 +95,30 @@ func momentUserToDTO(user *model.User, resolver storage.ObjectURLResolver) *dto.
 		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
 		Site:      user.Site,
 		Mark:      user.Mark,
+		Roles:     userrole.ForUser(rolesMap, user.ID),
 	}
 }
 
 func (s *momentService) resolveImageURL(url string) string {
 	return storage.ResolveURL(s.objectURLResolver, url)
+}
+
+func collectMomentPageUserIDs(result *momentrepo.PageResult) []uint {
+	if result == nil {
+		return nil
+	}
+	ids := make([]uint, 0, len(result.Moments))
+	for _, aggregate := range result.Moments {
+		if aggregate.User != nil {
+			ids = append(ids, aggregate.User.ID)
+		}
+	}
+	return ids
+}
+
+func collectMomentAggregateUserIDs(aggregate momentrepo.MomentAggregate) []uint {
+	if aggregate.User == nil {
+		return nil
+	}
+	return []uint{aggregate.User.ID}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -34,6 +35,7 @@ var (
 // MomentService 碎语业务接口，负责查询、发布、删除、置顶、点赞和阅读计数。
 type MomentService interface {
 	List(req dto.MomentListReq, viewerID *uint) (*dto.MomentPageResp, error)
+	FeedList(req dto.MomentFeedReq, viewerID *uint) (*dto.MomentPageResp, error)
 	GetDetail(id uint, viewerID *uint) (*dto.MomentItemResp, error)
 	Save(req dto.MomentSaveReq, operatorID uint, roleNames []string) (*dto.MomentItemResp, error)
 	Delete(id uint, operatorID uint, roleNames []string) (*dto.MomentDeleteResp, error)
@@ -46,6 +48,7 @@ type MomentService interface {
 
 type momentService struct {
 	repo              momentrepo.MomentRepository
+	userRepo          userrepo.UserRepository
 	objectURLResolver storage.ObjectURLResolver
 	uvSvc             uv.UVService
 	publisher         notificationservice.Publisher
@@ -53,6 +56,6 @@ type momentService struct {
 
 // NewMomentService 创建碎语业务服务实例。
 // publisher 用于点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher) MomentService {
-	return &momentService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc, publisher: publisher}
+func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher, userRepo userrepo.UserRepository) MomentService {
+	return &momentService{repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver, uvSvc: uvSvc, publisher: publisher}
 }

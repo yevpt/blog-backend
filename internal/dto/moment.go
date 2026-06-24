@@ -2,6 +2,18 @@ package dto
 
 import "time"
 
+// MomentFeedReq 碎语独立页广场流查询参数。
+type MomentFeedReq struct {
+	// Scope 范围：all 全部、owner 博主、friends 朋友们（除博主外）。
+	Scope string `form:"scope" binding:"required,oneof=all owner friends" example:"all"`
+	// Sort 排序：latest 按更新时间、hot 按综合热度（评论×10 + 点赞×3 + 阅读×1）。
+	Sort string `form:"sort" binding:"required,oneof=latest hot" example:"latest"`
+	// Page 页码，从 1 开始。
+	Page int `form:"page" binding:"omitempty,min=1" example:"1"`
+	// PageSize 每页数量，默认 10，最大 50。
+	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
+}
+
 // MomentListReq 碎语分页查询参数。
 type MomentListReq struct {
 	// UserID 作者用户 ID；省略时查询所有公开碎语。
@@ -58,6 +70,8 @@ type MomentUserResp struct {
 	Site *string `json:"site,omitempty" example:"https://yevpt.com"`
 	// Mark 用户身份标签。
 	Mark *string `json:"mark,omitempty" example:"博主"`
+	// Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。
+	Roles []string `json:"roles,omitempty" example:"ROLE_VIP"`
 }
 
 // MomentMediaResp 碎语图片响应。

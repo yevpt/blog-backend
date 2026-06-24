@@ -80,6 +80,38 @@ func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestMomentRepository_ListFeed_FriendsLatestOrdersByUpdatedAt(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	ownerID := uint(1)
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
+		WithArgs(uint8(1), ownerID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint8(1), ownerID, 10).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(12, now, now, nil, 2, "朋友碎语", 1, 1, 0, false))
+	expectEmptyRelations(mock, now, uint(12), uint(2))
+
+	resp, err := repo.ListFeed(momentrepo.FeedFilter{
+		Scope:       momentrepo.FeedScopeFriends,
+		Sort:        momentrepo.FeedSortLatest,
+		OwnerUserID: ownerID,
+		Page:        1,
+		PageSize:    10,
+	}, nil)
+
+	require.NoError(t, err)
+	require.Len(t, resp.Moments, 1)
+	assert.Equal(t, uint(2), resp.Moments[0].Moment.UserID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMomentRepository_Save_ReplacesImages(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()

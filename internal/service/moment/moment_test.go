@@ -29,6 +29,11 @@ type fakeMomentRepo struct {
 	listResp     *momentrepo.PageResult
 	listErr      error
 
+	feedFilter   momentrepo.FeedFilter
+	feedViewerID *uint
+	feedResp     *momentrepo.PageResult
+	feedErr      error
+
 	saveData momentrepo.SaveData
 	saveResp *momentrepo.MomentAggregate
 	saveErr  error
@@ -65,6 +70,12 @@ func (f *fakeMomentRepo) List(filter momentrepo.ListFilter, viewerID *uint) (*mo
 	f.listFilter = filter
 	f.listViewerID = viewerID
 	return f.listResp, f.listErr
+}
+
+func (f *fakeMomentRepo) ListFeed(filter momentrepo.FeedFilter, viewerID *uint) (*momentrepo.PageResult, error) {
+	f.feedFilter = filter
+	f.feedViewerID = viewerID
+	return f.feedResp, f.feedErr
 }
 
 func (f *fakeMomentRepo) FindPublicDetail(uint, *uint) (*momentrepo.MomentAggregate, error) {
@@ -210,7 +221,7 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 		},
 	}
 	resolver := &fakeURLResolver{}
-	svc := momentservice.NewMomentService(repo, resolver, nil, nil)
+	svc := momentservice.NewMomentService(repo, resolver, nil, nil, nil)
 
 	resp, err := svc.List(dto.MomentListReq{Page: 0, PageSize: 99}, &viewerID)
 
@@ -221,6 +232,27 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 	require.Len(t, resp.List, 1)
 	assert.Equal(t, "https://cdn.example.com/moments/cat.jpg", resp.List[0].Images[0].AccessURL)
 	assert.Equal(t, []string{"moments/cat.jpg"}, resolver.objects)
+}
+
+func TestMomentService_FeedList_NormalizesFilter(t *testing.T) {
+	repo := &fakeMomentRepo{
+		feedResp: &momentrepo.PageResult{
+			Total:    0,
+			Page:     1,
+			PageSize: 10,
+			Moments:  nil,
+		},
+	}
+	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil)
+
+	_, err := svc.FeedList(dto.MomentFeedReq{Scope: "owner", Sort: "hot", Page: 0, PageSize: 99}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, momentrepo.FeedScopeOwner, repo.feedFilter.Scope)
+	assert.Equal(t, momentrepo.FeedSortHot, repo.feedFilter.Sort)
+	assert.Equal(t, uint(1), repo.feedFilter.OwnerUserID)
+	assert.Equal(t, 1, repo.feedFilter.Page)
+	assert.Equal(t, 50, repo.feedFilter.PageSize)
 }
 
 func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testing.T) {
@@ -234,7 +266,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 			Moment: model.Moment{Base: model.Base{ID: 9, CreatedAt: now, UpdatedAt: now}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	resp, err := svc.Save(dto.MomentSaveReq{
 		UserID:        &requestUserID,
@@ -265,7 +297,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 
 func TestMomentService_Save_RejectsIncompleteImageOrder(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/old.jpg": true}}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -281,7 +313,7 @@ func TestMomentService_Save_RejectsIncompleteImageOrder(t *testing.T) {
 
 func TestMomentService_Save_RejectsMissingExistingImage(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/missing.jpg": false}}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -296,7 +328,7 @@ func TestMomentService_Save_RejectsMissingExistingImage(t *testing.T) {
 
 func TestMomentService_Save_RejectsMoreThanNineImages(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 	files := make([]dto.MomentImageFileReq, 10)
 	for i := range files {
 		files[i] = dto.MomentImageFileReq{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}
@@ -315,7 +347,7 @@ func TestMomentService_Save_RejectsMoreThanNineImages(t *testing.T) {
 
 func TestMomentService_Save_RejectsImageLargerThanOneMB(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -334,7 +366,7 @@ func TestMomentService_Save_RejectsImageLargerThanOneMB(t *testing.T) {
 
 func TestMomentService_Save_ReturnsReadableMessageForBrokenImage(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -354,7 +386,7 @@ func TestMomentService_Save_ReturnsReadableMessageForBrokenImage(t *testing.T) {
 
 func TestMomentService_Save_ReturnsReadableMessageForOversizedGif(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -379,7 +411,7 @@ func TestMomentService_Save_CompressesLargeImageToFiveHundredKB(t *testing.T) {
 			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -407,7 +439,7 @@ func TestMomentService_Save_KeepsSmallGifOriginal(t *testing.T) {
 			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 	gif := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 128)...)
 
 	_, err := svc.Save(dto.MomentSaveReq{
@@ -438,7 +470,7 @@ func TestMomentService_Save_AcceptsWebP(t *testing.T) {
 			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -469,7 +501,7 @@ func TestMomentService_Save_DeletesRemovedOldImagesAfterSuccessfulSave(t *testin
 			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		ID:            ptrUint(9),
@@ -486,7 +518,7 @@ func TestMomentService_Save_DeletesRemovedOldImagesAfterSuccessfulSave(t *testin
 func TestMomentService_Save_DeletesUploadedImagesWhenRepositoryFails(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
 	repo := &fakeMomentRepo{saveErr: errors.New("db down")}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -506,7 +538,7 @@ func ptrUint(value uint) *uint {
 
 func TestMomentService_Save_DeletesUploadedImagesWhenLaterUploadFails(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}, putErrOnCall: 2}
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -532,7 +564,7 @@ func TestMomentService_Delete_RemovesMediaFilesFromGarage(t *testing.T) {
 			{Base: model.Base{ID: 4}, MomentID: 9, URL: "moments/7/9/b.jpg"},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	resp, err := svc.Delete(9, 7, nil)
 
@@ -549,7 +581,7 @@ func TestMomentService_Delete_ReturnsErrorWhenGarageDeleteFails(t *testing.T) {
 			{Base: model.Base{ID: 3}, MomentID: 9, URL: "moments/7/9/a.jpg"},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	_, err := svc.Delete(9, 7, nil)
 
@@ -561,7 +593,7 @@ func TestMomentService_Delete_SucceedsWithNoMedia(t *testing.T) {
 	repo := &fakeMomentRepo{
 		deleteResp: &model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风"},
 	}
-	svc := momentservice.NewMomentService(repo, store, nil, nil)
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
 
 	resp, err := svc.Delete(9, 7, nil)
 
@@ -612,7 +644,7 @@ func TestMomentService_Save_AllowsAdminManagedAuthor(t *testing.T) {
 			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 99, Content: "风", Status: 1, CommentStatus: 1},
 		},
 	}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil)
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{UserID: &authorID, Content: "风", Status: 1, CommentStatus: 1}, 7, []string{roles.AdminRole})
 
@@ -622,7 +654,7 @@ func TestMomentService_Save_AllowsAdminManagedAuthor(t *testing.T) {
 }
 
 func TestMomentService_Save_RejectsBlankContent(t *testing.T) {
-	svc := momentservice.NewMomentService(&fakeMomentRepo{}, &fakeURLResolver{}, nil, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, &fakeURLResolver{}, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{Content: "  ", Status: 1, CommentStatus: 1}, 7, nil)
 
@@ -631,7 +663,7 @@ func TestMomentService_Save_RejectsBlankContent(t *testing.T) {
 
 func TestMomentService_SetTop_MapsLimitError(t *testing.T) {
 	repo := &fakeMomentRepo{topErr: momentrepo.ErrTopLimitExceeded}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil)
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil, nil)
 
 	_, err := svc.SetTop(9, 7, nil)
 
@@ -640,7 +672,7 @@ func TestMomentService_SetTop_MapsLimitError(t *testing.T) {
 
 func TestMomentService_List_ReturnsUnknownError(t *testing.T) {
 	repo := &fakeMomentRepo{listErr: errors.New("db down")}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil)
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil, nil)
 
 	_, err := svc.List(dto.MomentListReq{}, nil)
 
@@ -665,7 +697,7 @@ func TestMomentService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, pub)
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, pub, nil)
 
 	// 碎语作者与点赞者同为 userID=5。
 	repo.likeID = 0
@@ -685,7 +717,7 @@ func TestMomentService_ToggleLike_PublishesForOtherAuthor(t *testing.T) {
 		},
 	}
 	pub := &recordingPublisher{}
-	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, pub)
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, pub, nil)
 
 	_, err := svc.ToggleLike(8, 5)
 

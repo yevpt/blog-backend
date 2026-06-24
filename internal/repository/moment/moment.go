@@ -9,7 +9,7 @@ import (
 
 const (
 	// MomentLikeType 表示 user_like 中的碎语点赞类型。
-	MomentLikeType uint8 = 3
+	MomentLikeType uint8 = 4
 	// MomentCommentLikeType 表示 user_like 中的碎语评论点赞类型。
 	MomentCommentLikeType uint8 = 6
 	// MomentCommentReplyLikeType 表示 user_like 中的碎语评论回复点赞类型。
@@ -30,6 +30,42 @@ var (
 	// ErrTopLimitExceeded 表示用户置顶碎语数量已达上限。
 	ErrTopLimitExceeded = errors.New("最多置顶三条碎语")
 )
+
+// FeedScope 碎语独立页范围过滤。
+type FeedScope string
+
+const (
+	// FeedScopeAll 全部公开碎语。
+	FeedScopeAll FeedScope = "all"
+	// FeedScopeOwner 仅博主碎语。
+	FeedScopeOwner FeedScope = "owner"
+	// FeedScopeFriends 除博主外的碎语。
+	FeedScopeFriends FeedScope = "friends"
+)
+
+// FeedSort 碎语独立页排序方式。
+type FeedSort string
+
+const (
+	// FeedSortLatest 按更新时间倒序。
+	FeedSortLatest FeedSort = "latest"
+	// FeedSortHot 按综合热度倒序。
+	FeedSortHot FeedSort = "hot"
+)
+
+const (
+	feedHotCommentWeight = 10
+	feedHotLikeWeight    = 3
+)
+
+// FeedFilter 碎语独立页广场流查询条件。
+type FeedFilter struct {
+	Page        int
+	PageSize    int
+	Scope       FeedScope
+	Sort        FeedSort
+	OwnerUserID uint
+}
 
 // ListFilter 碎语分页查询过滤条件。
 type ListFilter struct {
@@ -70,6 +106,7 @@ type PageResult struct {
 // MomentRepository 碎语数据访问接口。
 type MomentRepository interface {
 	List(filter ListFilter, viewerID *uint) (*PageResult, error)
+	ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, error)
 	FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate, error)
 	Save(data SaveData) (*MomentAggregate, error)
 	Delete(id uint, operatorID uint, force bool) (*model.Moment, []model.Media, error)
