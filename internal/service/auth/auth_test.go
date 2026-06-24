@@ -61,7 +61,7 @@ func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserReposito
 	captchaConsumer := &mockCaptchaTokenConsumer{}
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 
-	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil)
+	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil, nil, nil)
 	return svc, repo, rdb, mr, mailer, captchaConsumer
 }
 
@@ -106,6 +106,65 @@ func TestAuthService_SendCode_InvalidCaptchaToken(t *testing.T) {
 	assert.Equal(t, int64(0), exists)
 }
 
+func TestAuthService_SendPasswordResetCode_ExistingEmailWritesScopedCode(t *testing.T) {
+	svc, repo, rdb, mr, mailer, captchaConsumer := setupService(t)
+	defer mr.Close()
+
+	email := "user@example.com"
+	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &email}, nil)
+
+	err := svc.SendPasswordResetCode("user@example.com", "127.0.0.1", "captcha-token")
+
+	require.NoError(t, err)
+	assert.Equal(t, "user@example.com", mailer.sentTo)
+	assert.Equal(t, "captcha-token", captchaConsumer.consumedToken)
+	code, redisErr := rdb.Get(context.Background(), "password:reset:code:user@example.com").Result()
+	require.NoError(t, redisErr)
+	assert.Len(t, code, 6)
+}
+
+func TestAuthService_SendPasswordResetCode_UnknownEmailDoesNotRevealAccount(t *testing.T) {
+	svc, repo, rdb, mr, mailer, captchaConsumer := setupService(t)
+	defer mr.Close()
+
+	repo.EXPECT().FindByEmail("missing@example.com").Return(nil, nil)
+
+	err := svc.SendPasswordResetCode("missing@example.com", "127.0.0.1", "captcha-token")
+
+	require.NoError(t, err)
+	assert.Empty(t, mailer.sentTo)
+	assert.Equal(t, "captcha-token", captchaConsumer.consumedToken)
+	exists, redisErr := rdb.Exists(context.Background(), "password:reset:code:missing@example.com").Result()
+	require.NoError(t, redisErr)
+	assert.Equal(t, int64(0), exists)
+}
+
+func TestAuthService_ResetPassword_ValidCodeUpdatesPassword(t *testing.T) {
+	svc, repo, rdb, mr, _, _ := setupService(t)
+	defer mr.Close()
+	rdb.Set(context.Background(), "password:reset:code:user@example.com", "123456", 0)
+
+	email := "user@example.com"
+	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{
+		Base:  model.Base{ID: 7},
+		Email: &email,
+	}, nil)
+	repo.EXPECT().UpdatePassword(uint(7), gomock.Any()).DoAndReturn(func(_ uint, hash string) error {
+		return bcrypt.CompareHashAndPassword([]byte(hash), []byte("new-password"))
+	})
+
+	err := svc.ResetPassword(&dto.PasswordResetReq{
+		Email:       "user@example.com",
+		Code:        "123456",
+		NewPassword: "new-password",
+	})
+
+	require.NoError(t, err)
+	exists, redisErr := rdb.Exists(context.Background(), "password:reset:code:user@example.com").Result()
+	require.NoError(t, redisErr)
+	assert.Equal(t, int64(0), exists)
+}
+
 func TestAuthService_Register_Success(t *testing.T) {
 	svc, repo, rdb, mr, _, _ := setupService(t)
 	defer mr.Close()
@@ -123,7 +182,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 		Password: "password123",
 		Code:     "123456",
 		Nickname: &nickname,
-	})
+	}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "new@example.com", resp.Username)
 }
@@ -138,7 +197,7 @@ func TestAuthService_Register_WrongCode(t *testing.T) {
 		Email:    "x@example.com",
 		Password: "password123",
 		Code:     "111111",
-	})
+	}, nil)
 	assert.Error(t, err)
 }
 

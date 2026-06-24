@@ -19,6 +19,7 @@ import (
 	"github.com/vpt/blog-backend/pkg/email"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 var (
@@ -48,13 +49,17 @@ type AuthService interface {
 	// SendCode 向邮箱发送验证码，内置三层频率控制（冷却 / 10分钟 / 日限）
 	SendCode(email string, ip string, captchaToken string) error
 	// Register 校验验证码并创建用户，验证码一次性消费，邮箱全局唯一
-	Register(req *dto.RegisterReq) (*dto.UserResp, error)
+	Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.UserResp, error)
 	// Login 三合一登录（username / email / phone），用户不存在时仍执行 bcrypt 防止时序攻击
 	Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error)
 	// AdminLogin 管理后台登录，仅允许 username + password，且用户必须持有管理员角色
 	AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error)
 	// Refresh 用 refresh token 同时换发新的 access + refresh token（token rotation）
 	Refresh(refreshToken string) (*dto.TokenResp, error)
+	// SendPasswordResetCode 发送忘记密码验证码，不向调用方暴露邮箱是否存在。
+	SendPasswordResetCode(email string, ip string, captchaToken string) error
+	// ResetPassword 使用邮箱验证码重置登录密码。
+	ResetPassword(req *dto.PasswordResetReq) error
 }
 
 type authService struct {
@@ -64,6 +69,9 @@ type authService struct {
 	mailer          email.MailSender
 	captchaConsumer CaptchaTokenConsumer
 	cache           userservice.UserCacheService
+	avatar          userservice.AvatarUploader
+	store           storage.ObjectStore
+	resolver        storage.ObjectURLResolver
 }
 
 // CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
@@ -78,6 +86,8 @@ func NewAuthService(
 	mailer email.MailSender,
 	captchaConsumer CaptchaTokenConsumer,
 	cache userservice.UserCacheService,
+	avatar userservice.AvatarUploader,
+	store storage.ObjectStore,
 ) AuthService {
 	return &authService{
 		repo:            repo,
@@ -86,6 +96,9 @@ func NewAuthService(
 		mailer:          mailer,
 		captchaConsumer: captchaConsumer,
 		cache:           cache,
+		avatar:          avatar,
+		store:           store,
+		resolver:        store,
 	}
 }
 
@@ -138,7 +151,82 @@ func (s *authService) SendCode(to string, ip string, captchaToken string) error 
 	return s.mailer.SendVerificationCode(to, code)
 }
 
-func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
+func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken string) error {
+	ctx := context.Background()
+	emailAddr := normalizeEmail(to)
+
+	cdKey := fmt.Sprintf("password:reset:cd:%s", emailAddr)
+	if n, _ := s.rdb.Exists(ctx, cdKey).Result(); n > 0 {
+		return ErrTooManyRequests
+	}
+
+	if err := s.captchaConsumer.ConsumeRegistrationToken(captchaToken, ip); err != nil {
+		return err
+	}
+
+	key10m := fmt.Sprintf("password:reset:10m:%s", emailAddr)
+	c10m, _ := s.rdb.Incr(ctx, key10m).Result()
+	if c10m == 1 {
+		s.rdb.Expire(ctx, key10m, 10*time.Minute)
+	}
+	if c10m > 2 {
+		return ErrTooManyRequests
+	}
+
+	s.rdb.Set(ctx, cdKey, 1, 60*time.Second)
+
+	user, err := s.repo.FindByEmail(emailAddr)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return nil
+	}
+
+	code, err := generateNumericCode(6)
+	if err != nil {
+		return err
+	}
+
+	codeKey := passwordResetCodeKey(emailAddr)
+	s.rdb.Set(ctx, codeKey, code, 5*time.Minute)
+	return s.mailer.SendVerificationCode(emailAddr, code)
+}
+
+func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
+	ctx := context.Background()
+	emailAddr := normalizeEmail(req.Email)
+	codeKey := passwordResetCodeKey(emailAddr)
+
+	stored, err := s.rdb.Get(ctx, codeKey).Result()
+	if err != nil || stored != req.Code {
+		return ErrInvalidCode
+	}
+
+	user, err := s.repo.FindByEmail(emailAddr)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return ErrInvalidCode
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), 12)
+	if err != nil {
+		return err
+	}
+	if err := s.repo.UpdatePassword(user.ID, string(hash)); err != nil {
+		return err
+	}
+
+	s.rdb.Del(ctx, codeKey)
+	if s.cache != nil {
+		_ = s.cache.Invalidate(ctx, int64(user.ID))
+	}
+	return nil
+}
+
+func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.UserResp, error) {
 	ctx := context.Background()
 
 	// 从 Redis 读取存储的验证码并与用户提交值对比
@@ -165,33 +253,63 @@ func (s *authService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
 		return nil, err
 	}
 
+	var avatarKey *string
+	var avatarCreated bool
+	if avatar != nil && len(avatar.Data) > 0 {
+		if s.avatar == nil {
+			return nil, fmt.Errorf("头像上传不可用")
+		}
+		saved, saveErr := s.avatar.SaveUploadedAvatar(ctx, avatar.Name, avatar.Data)
+		if saveErr != nil {
+			return nil, saveErr
+		}
+		avatarKey = &saved.ObjectKey
+		avatarCreated = saved.Created
+	}
+
 	// cost=12 高于默认值 10，在安全性和性能间取平衡
 	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 12)
 	if err != nil {
+		if avatarCreated && avatarKey != nil {
+			_ = s.store.DeleteObject(ctx, *avatarKey)
+		}
 		return nil, err
 	}
 
 	user := &model.User{
 		// 邮箱注册时 username 初始值等于 email，用户后续可自行修改
-		Username: req.Email,
-		Password: string(hash),
-		Email:    &req.Email,
-		Nickname: &nickname,
-		Status:   1,
+		Username:    req.Email,
+		Password:    string(hash),
+		PasswordSet: true,
+		Email:       &req.Email,
+		Nickname:    &nickname,
+		AvatarUrl:   avatarKey,
+		Status:      1,
 	}
 
 	// 在事务中同时写入用户记录和角色关联，保证两张表数据一致
 	if err := s.repo.Create(user, roles.NormalRoleId); err != nil {
+		if avatarCreated && avatarKey != nil && s.store != nil {
+			_ = s.store.DeleteObject(ctx, *avatarKey)
+		}
 		return nil, err
 	}
 
-	// 组装响应 DTO，不暴露密码等敏感字段
 	return &dto.UserResp{
-		ID:       user.ID,
-		Username: user.Username,
-		Email:    user.Email,
-		Nickname: user.Nickname,
+		ID:        user.ID,
+		Username:  user.Username,
+		Email:     user.Email,
+		Nickname:  user.Nickname,
+		AvatarUrl: storage.ResolvePtrURL(s.resolver, user.AvatarUrl),
 	}, nil
+}
+
+func passwordResetCodeKey(emailAddr string) string {
+	return fmt.Sprintf("password:reset:code:%s", emailAddr)
+}
+
+func normalizeEmail(emailAddr string) string {
+	return strings.ToLower(strings.TrimSpace(emailAddr))
 }
 
 func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {

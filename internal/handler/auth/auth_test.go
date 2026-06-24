@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,11 @@ import (
 // stubAuthService 测试用 stub
 type stubAuthService struct {
 	sendCodeErr    error
+	resetCodeEmail string
+	resetCodeToken string
+	resetCodeErr   error
+	resetReq       *dto.PasswordResetReq
+	resetErr       error
 	registerResp   *dto.UserResp
 	registerErr    error
 	loginResp      *dto.LoginResp
@@ -34,7 +40,16 @@ type stubAuthService struct {
 func (s *stubAuthService) SendCode(email, ip string, captchaToken string) error {
 	return s.sendCodeErr
 }
-func (s *stubAuthService) Register(req *dto.RegisterReq) (*dto.UserResp, error) {
+func (s *stubAuthService) SendPasswordResetCode(email, ip string, captchaToken string) error {
+	s.resetCodeEmail = email
+	s.resetCodeToken = captchaToken
+	return s.resetCodeErr
+}
+func (s *stubAuthService) ResetPassword(req *dto.PasswordResetReq) error {
+	s.resetReq = req
+	return s.resetErr
+}
+func (s *stubAuthService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.UserResp, error) {
 	return s.registerResp, s.registerErr
 }
 func (s *stubAuthService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
@@ -53,6 +68,8 @@ func newTestRouter(svc authservice.AuthService) *gin.Engine {
 	r := gin.New()
 	h := authhandler.NewAuthHandler(svc)
 	r.POST("/auth/send-code", h.SendCode)
+	r.POST("/auth/password-reset/code", h.SendPasswordResetCode)
+	r.POST("/auth/password-reset", h.ResetPassword)
 	r.POST("/auth/register", h.Register)
 	r.POST("/auth/login", h.Login)
 	r.POST("/admin/auth/login", h.AdminLogin)
@@ -126,6 +143,49 @@ func TestAuthHandler_SendCode_TooManyRequests(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
+func TestAuthHandler_SendPasswordResetCode_Success(t *testing.T) {
+	stub := &stubAuthService{}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"email":         "user@example.com",
+		"captcha_token": "captcha-token",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/password-reset/code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeOK, resp.Code)
+	assert.Equal(t, "user@example.com", stub.resetCodeEmail)
+	assert.Equal(t, "captcha-token", stub.resetCodeToken)
+}
+
+func TestAuthHandler_ResetPassword_Success(t *testing.T) {
+	stub := &stubAuthService{}
+	r := newTestRouter(stub)
+	body, _ := json.Marshal(map[string]string{
+		"email":        "user@example.com",
+		"code":         "123456",
+		"new_password": "new-password",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/password-reset", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, response.CodeOK, resp.Code)
+	assert.Equal(t, "user@example.com", stub.resetReq.Email)
+	assert.Equal(t, "123456", stub.resetReq.Code)
+}
+
 func TestAuthHandler_Register_Success(t *testing.T) {
 	nick := "alice"
 	email := "alice@example.com"
@@ -133,13 +193,12 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 		registerResp: &dto.UserResp{ID: 1, Username: email, Email: &email, Nickname: &nick},
 	}
 	r := newTestRouter(stub)
-	body, _ := json.Marshal(map[string]string{
-		"email": email, "password": "password123", "code": "123456",
-	})
+
+	body, contentType := newRegisterMultipartBody(email, "password123", "123456", &nick, nil)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("POST", "/auth/register", body)
+	req.Header.Set("Content-Type", contentType)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -150,13 +209,11 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 
 func TestAuthHandler_Register_ShortPasswordReturnsReadableMessage(t *testing.T) {
 	r := newTestRouter(&stubAuthService{})
-	body, _ := json.Marshal(map[string]string{
-		"email": "alice@example.com", "password": "123456", "code": "123456",
-	})
+	body, contentType := newRegisterMultipartBody("alice@example.com", "123456", "123456", nil, nil)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/auth/register", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("POST", "/auth/register", body)
+	req.Header.Set("Content-Type", contentType)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -330,4 +387,21 @@ func TestAuthHandler_Refresh_InvalidToken(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func newRegisterMultipartBody(email, password, code string, nickname *string, avatar []byte) (*bytes.Buffer, string) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	_ = writer.WriteField("email", email)
+	_ = writer.WriteField("password", password)
+	_ = writer.WriteField("code", code)
+	if nickname != nil {
+		_ = writer.WriteField("nickname", *nickname)
+	}
+	if len(avatar) > 0 {
+		part, _ := writer.CreateFormFile("avatar", "avatar.png")
+		_, _ = part.Write(avatar)
+	}
+	_ = writer.Close()
+	return body, writer.FormDataContentType()
 }

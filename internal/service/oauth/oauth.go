@@ -2,13 +2,9 @@ package oauth
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
-
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
@@ -281,10 +277,6 @@ func (s *service) newOAuthUser(ctx context.Context, result *domain.CallbackResul
 		}
 	}
 
-	password, err := randomPasswordHash()
-	if err != nil {
-		return nil, nil, err
-	}
 	nickname := result.Profile.Nickname
 	if nickname == nil {
 		fallback := username
@@ -292,12 +284,13 @@ func (s *service) newOAuthUser(ctx context.Context, result *domain.CallbackResul
 	}
 
 	user := &model.User{
-		Username: username,
-		Password: password,
-		Nickname: nickname,
-		Email:    email,
-		Site:     result.Profile.BlogURL,
-		Status:   1,
+		Username:    username,
+		Password:    "",
+		PasswordSet: false,
+		Nickname:    nickname,
+		Email:       email,
+		Site:        result.Profile.BlogURL,
+		Status:      1,
 	}
 	// 第三方头像只在首次注册时同步短超时处理；失败不影响注册，也不保存第三方原始 URL。
 	if avatarURL := s.saveAvatarIfPossible(ctx, result.Profile.AvatarURL); avatarURL != nil {
@@ -333,17 +326,4 @@ func socialUserFromCallback(result *domain.CallbackResult) *model.SocialUser {
 
 func oauthUsername(profile *domain.Profile) string {
 	return fmt.Sprintf("%s_%s", profile.Source, profile.UUID)
-}
-
-func randomPasswordHash() (string, error) {
-	buf := make([]byte, 32)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
-	}
-	raw := base64.RawURLEncoding.EncodeToString(buf)
-	hashed, err := bcrypt.GenerateFromPassword([]byte(raw), 12)
-	if err != nil {
-		return "", err
-	}
-	return string(hashed), nil
 }

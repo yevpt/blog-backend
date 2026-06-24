@@ -97,11 +97,15 @@ type fakeUserRepo struct {
 
 func (r *fakeUserRepo) FindByIdentifier(identifier string) (*model.User, error) { return r.user, nil }
 func (r *fakeUserRepo) FindByUsername(username string) (*model.User, error)     { return r.user, nil }
+func (r *fakeUserRepo) FindByEmail(email string) (*model.User, error)           { return r.user, nil }
 func (r *fakeUserRepo) FindByID(id uint) (*model.User, error)                   { return r.user, nil }
 func (r *fakeUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
-func (r *fakeUserRepo) ExistsByEmail(email string) (bool, error)       { return r.emailExists, nil }
+func (r *fakeUserRepo) ExistsByEmail(email string) (bool, error) { return r.emailExists, nil }
+func (r *fakeUserRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
+	return false, nil
+}
 func (r *fakeUserRepo) ExistsByNickname(nickname string) (bool, error) { return false, nil }
 func (r *fakeUserRepo) Create(user *model.User, roleID uint) error     { return nil }
 func (r *fakeUserRepo) FindRolesByUserID(userID uint) ([]string, error) {
@@ -128,6 +132,7 @@ func (r *fakeUserRepo) UpsertSocialLink(userID uint, platform, url string) error
 func (r *fakeUserRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
+func (r *fakeUserRepo) CountByAvatarURL(avatarURL string) (int64, error) { return 0, nil }
 
 type fakeAvatarSaver struct {
 	objectName string
