@@ -251,12 +251,14 @@ func TestUserRepository_ListLikedContent_ReturnsReplyContext(t *testing.T) {
 			"parent_kind", "parent_id", "parent_excerpt",
 			"root_kind", "root_id", "root_title", "root_excerpt",
 			"author_id", "author_username", "author_nickname", "author_avatar_url", "author_site", "author_mark",
+			"to_user_id", "to_user_username", "to_user_nickname",
 		}).AddRow(
 			99, now, user.LikedContentKindReply, user.LikedContentFilterComment,
-			88, nil, "@VPT 对，这里用乐观更新会更顺手", nil,
+			88, nil, "对，这里用乐观更新会更顺手", nil,
 			user.LikedContentKindComment, 66, "点赞状态最好由服务端返回最终计数",
 			user.LikedContentRootArticle, 5, "React Aria 组件实践", "文章摘要",
 			12, "ache", "阿澈", "avatars/a.png", nil, "博主",
+			2, "vpt", "VPT",
 		))
 
 	resp, err := repo.ListLikedContent(user.LikedContentFilter{
@@ -276,6 +278,9 @@ func TestUserRepository_ListLikedContent_ReturnsReplyContext(t *testing.T) {
 	require.NotNil(t, item.Parent)
 	assert.Equal(t, uint(66), item.Parent.ID)
 	assert.Equal(t, "点赞状态最好由服务端返回最终计数", item.Parent.Excerpt)
+	require.NotNil(t, item.ToUser)
+	assert.Equal(t, uint(2), item.ToUser.ID)
+	assert.Equal(t, "VPT", *item.ToUser.Nickname)
 	require.NotNil(t, item.Root)
 	assert.Equal(t, user.LikedContentRootArticle, item.Root.Kind)
 	assert.Equal(t, "React Aria 组件实践", *item.Root.Title)

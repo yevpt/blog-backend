@@ -11,6 +11,11 @@ import (
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 )
 
+const (
+	likedContentToUserNullSelect = "NULL AS to_user_id, NULL AS to_user_username, NULL AS to_user_nickname"
+	likedContentToUserSelect     = "to_user.id AS to_user_id, to_user.username AS to_user_username, to_user.nickname AS to_user_nickname"
+)
+
 type likedContentSQLPart struct {
 	query string
 	args  []any
@@ -38,6 +43,9 @@ type likedContentRow struct {
 	AuthorAvatarURL    *string   `gorm:"column:author_avatar_url"`
 	AuthorSite         *string   `gorm:"column:author_site"`
 	AuthorMark         *string   `gorm:"column:author_mark"`
+	ToUserID           *uint     `gorm:"column:to_user_id"`
+	ToUserUsername     *string   `gorm:"column:to_user_username"`
+	ToUserNickname     *string   `gorm:"column:to_user_nickname"`
 }
 
 // ListLikedContent 分页查询某个用户赞过的公开内容。
@@ -122,6 +130,7 @@ func articleLikeSQLPart(userID uint) likedContentSQLPart {
 			"NULL AS parent_kind, NULL AS parent_id, NULL AS parent_excerpt",
 			"NULL AS root_kind, NULL AS root_id, NULL AS root_title, NULL AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
+			likedContentToUserNullSelect,
 			"JOIN article a ON a.id = ul.target_id AND a.deleted_at IS NULL AND a.status IN (?, ?) LEFT JOIN user author ON author.id = a.user_id AND author.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
@@ -137,6 +146,7 @@ func momentLikeSQLPart(userID uint) likedContentSQLPart {
 			"NULL AS parent_kind, NULL AS parent_id, NULL AS parent_excerpt",
 			"NULL AS root_kind, NULL AS root_id, NULL AS root_title, NULL AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
+			likedContentToUserNullSelect,
 			"JOIN moment m ON m.id = ul.target_id AND m.deleted_at IS NULL AND m.status = 1 LEFT JOIN user author ON author.id = m.user_id AND author.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
@@ -152,6 +162,7 @@ func guestbookLikeSQLPart(userID uint) likedContentSQLPart {
 			"NULL AS parent_kind, NULL AS parent_id, NULL AS parent_excerpt",
 			"? AS root_kind, g.id AS root_id, NULL AS root_title, g.content AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
+			likedContentToUserNullSelect,
 			"JOIN guestbook g ON g.id = ul.target_id AND g.deleted_at IS NULL LEFT JOIN user author ON author.id = g.from_user_id AND author.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
@@ -167,6 +178,7 @@ func articleCommentLikeSQLPart(userID uint) likedContentSQLPart {
 			"NULL AS parent_kind, NULL AS parent_id, NULL AS parent_excerpt",
 			"? AS root_kind, a.id AS root_id, a.title AS root_title, COALESCE(NULLIF(a.short_content, ''), LEFT(a.content, 200), '') AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
+			likedContentToUserNullSelect,
 			"JOIN article_comment c ON c.id = ul.target_id AND c.deleted_at IS NULL JOIN article a ON a.id = c.article_id AND a.deleted_at IS NULL AND a.status IN (?, ?) LEFT JOIN user author ON author.id = c.user_id AND author.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
@@ -182,7 +194,8 @@ func articleReplyLikeSQLPart(userID uint) likedContentSQLPart {
 			"? AS parent_kind, c.id AS parent_id, c.content AS parent_excerpt",
 			"? AS root_kind, a.id AS root_id, a.title AS root_title, COALESCE(NULLIF(a.short_content, ''), LEFT(a.content, 200), '') AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
-			"JOIN article_comment_reply r ON r.id = ul.target_id AND r.deleted_at IS NULL JOIN article_comment c ON c.id = r.comment_id AND c.deleted_at IS NULL JOIN article a ON a.id = c.article_id AND a.deleted_at IS NULL AND a.status IN (?, ?) LEFT JOIN user author ON author.id = r.from_user_id AND author.deleted_at IS NULL",
+			likedContentToUserSelect,
+			"JOIN article_comment_reply r ON r.id = ul.target_id AND r.deleted_at IS NULL JOIN article_comment c ON c.id = r.comment_id AND c.deleted_at IS NULL JOIN article a ON a.id = c.article_id AND a.deleted_at IS NULL AND a.status IN (?, ?) LEFT JOIN user author ON author.id = r.from_user_id AND author.deleted_at IS NULL LEFT JOIN user to_user ON to_user.id = r.to_user_id AND to_user.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
 		args: []any{LikedContentKindReply, LikedContentFilterComment, LikedContentKindComment, LikedContentRootArticle, model.ArticleStatusPublic, model.ArticleStatusEncrypted, userID, commentrepo.ArticleCommentReplyLikeType},
@@ -197,6 +210,7 @@ func momentCommentLikeSQLPart(userID uint) likedContentSQLPart {
 			"NULL AS parent_kind, NULL AS parent_id, NULL AS parent_excerpt",
 			"? AS root_kind, m.id AS root_id, NULL AS root_title, m.content AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
+			likedContentToUserNullSelect,
 			"JOIN moment_comment c ON c.id = ul.target_id AND c.deleted_at IS NULL JOIN moment m ON m.id = c.moment_id AND m.deleted_at IS NULL AND m.status = 1 LEFT JOIN user author ON author.id = c.user_id AND author.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
@@ -212,7 +226,8 @@ func momentReplyLikeSQLPart(userID uint) likedContentSQLPart {
 			"? AS parent_kind, c.id AS parent_id, c.content AS parent_excerpt",
 			"? AS root_kind, m.id AS root_id, NULL AS root_title, m.content AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
-			"JOIN moment_comment_reply r ON r.id = ul.target_id AND r.deleted_at IS NULL JOIN moment_comment c ON c.id = r.comment_id AND c.deleted_at IS NULL JOIN moment m ON m.id = c.moment_id AND m.deleted_at IS NULL AND m.status = 1 LEFT JOIN user author ON author.id = r.from_user_id AND author.deleted_at IS NULL",
+			likedContentToUserSelect,
+			"JOIN moment_comment_reply r ON r.id = ul.target_id AND r.deleted_at IS NULL JOIN moment_comment c ON c.id = r.comment_id AND c.deleted_at IS NULL JOIN moment m ON m.id = c.moment_id AND m.deleted_at IS NULL AND m.status = 1 LEFT JOIN user author ON author.id = r.from_user_id AND author.deleted_at IS NULL LEFT JOIN user to_user ON to_user.id = r.to_user_id AND to_user.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
 		args: []any{LikedContentKindReply, LikedContentFilterComment, LikedContentKindComment, LikedContentRootMoment, userID, commentrepo.MomentCommentReplyLikeType},
@@ -227,20 +242,22 @@ func guestbookReplyLikeSQLPart(userID uint) likedContentSQLPart {
 			"? AS parent_kind, g.id AS parent_id, g.content AS parent_excerpt",
 			"? AS root_kind, g.id AS root_id, NULL AS root_title, g.content AS root_excerpt",
 			"author.id AS author_id, author.username AS author_username, author.nickname AS author_nickname, author.avatar_url AS author_avatar_url, author.site AS author_site, author.mark AS author_mark",
-			"JOIN guestbook_reply r ON r.id = ul.target_id AND r.deleted_at IS NULL JOIN guestbook g ON g.id = r.comment_id AND g.deleted_at IS NULL LEFT JOIN user author ON author.id = r.from_user_id AND author.deleted_at IS NULL",
+			likedContentToUserSelect,
+			"JOIN guestbook_reply r ON r.id = ul.target_id AND r.deleted_at IS NULL JOIN guestbook g ON g.id = r.comment_id AND g.deleted_at IS NULL LEFT JOIN user author ON author.id = r.from_user_id AND author.deleted_at IS NULL LEFT JOIN user to_user ON to_user.id = r.to_user_id AND to_user.deleted_at IS NULL",
 			"ul.user_id = ? AND ul.type = ? AND ul.deleted_at IS NULL",
 		),
 		args: []any{LikedContentKindReply, LikedContentFilterComment, LikedContentKindGuestbook, LikedContentRootGuestbook, userID, commentrepo.GuestbookReplyLikeType},
 	}
 }
 
-func likedContentBaseSelect(kindExpr, contentExpr, parentExpr, rootExpr, authorExpr, joinExpr, whereExpr string) string {
+func likedContentBaseSelect(kindExpr, contentExpr, parentExpr, rootExpr, authorExpr, toUserExpr, joinExpr, whereExpr string) string {
 	return "SELECT ul.id AS like_id, ul.created_at AS liked_at, " +
 		kindExpr + ", " +
 		contentExpr + ", " +
 		parentExpr + ", " +
 		rootExpr + ", " +
-		authorExpr +
+		authorExpr + ", " +
+		toUserExpr +
 		" FROM user_like ul " + joinExpr +
 		" WHERE " + whereExpr
 }
@@ -261,6 +278,7 @@ func likedContentRowToAggregate(row likedContentRow) LikedContentAggregate {
 		},
 		Parent: likedContentParentFromRow(row),
 		Root:   likedContentRootFromRow(row),
+		ToUser: likedContentToUserFromRow(row),
 	}
 }
 
@@ -277,6 +295,20 @@ func likedContentAuthorFromRow(row likedContentRow) *model.User {
 	}
 	if row.AuthorUsername != nil {
 		user.Username = *row.AuthorUsername
+	}
+	return user
+}
+
+func likedContentToUserFromRow(row likedContentRow) *model.User {
+	if row.ToUserID == nil {
+		return nil
+	}
+	user := &model.User{
+		Base:     model.Base{ID: *row.ToUserID},
+		Nickname: row.ToUserNickname,
+	}
+	if row.ToUserUsername != nil {
+		user.Username = *row.ToUserUsername
 	}
 	return user
 }

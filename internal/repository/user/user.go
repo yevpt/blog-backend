@@ -83,6 +83,7 @@ type LikedContentAggregate struct {
 	Content LikedContentObject
 	Parent  *LikedContentObject
 	Root    *LikedContentObject
+	ToUser  *model.User
 	Stats   *LikedContentStats
 }
 
