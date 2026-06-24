@@ -1768,12 +1768,15 @@ func migrateArticleTag(src *sql.DB, dst *gorm.DB) error {
 	}
 	defer rows.Close()
 
+	articleSeq := make(map[uint]uint)
 	for rows.Next() {
 		var id, tagID, postID uint
 		if err := rows.Scan(&id, &tagID, &postID); err != nil {
 			return err
 		}
-		at := model.ArticleTag{ID: id, ArticleID: postID, TagID: tagID}
+		seq := articleSeq[postID]
+		articleSeq[postID] = seq + 1
+		at := model.ArticleTag{ID: id, ArticleID: postID, TagID: tagID, Seq: seq}
 		if err := dst.Create(&at).Error; err != nil {
 			return fmt.Errorf("insert article_tag id=%d: %w", id, err)
 		}

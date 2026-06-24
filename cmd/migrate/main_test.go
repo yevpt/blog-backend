@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql/driver"
 	"regexp"
 	"testing"
 
@@ -111,6 +112,46 @@ func TestUpdateMomentMediaURL_DoesNotTouchUpdatedAt(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMigrateArticleTag_AssignsSeqByArticleInLegacyOrder(t *testing.T) {
+	srcDB, srcMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer srcDB.Close()
+
+	dstDB, dstMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer dstDB.Close()
+
+	gormDB, err := gorm.Open(mysql.New(mysql.Config{
+		Conn:                      dstDB,
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{})
+	require.NoError(t, err)
+
+	srcMock.ExpectQuery(regexp.QuoteMeta("SELECT ID, tag_id, post_id FROM tag_post ORDER BY ID")).
+		WillReturnRows(sqlmock.NewRows([]string{"ID", "tag_id", "post_id"}).
+			AddRow(10, 5, 7).
+			AddRow(11, 6, 7).
+			AddRow(12, 9, 8))
+
+	for _, args := range [][]driver.Value{
+		{uint(7), uint(5), uint(0), uint(10)},
+		{uint(7), uint(6), uint(1), uint(11)},
+		{uint(8), uint(9), uint(0), uint(12)},
+	} {
+		dstMock.ExpectBegin()
+		dstMock.ExpectExec("INSERT INTO `article_tag`").
+			WithArgs(args...).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		dstMock.ExpectCommit()
+	}
+
+	err = migrateArticleTag(srcDB, gormDB)
+
+	require.NoError(t, err)
+	require.NoError(t, srcMock.ExpectationsWereMet())
+	require.NoError(t, dstMock.ExpectationsWereMet())
 }
 
 func TestCleanOrphans_CleansNotificationTablesInsteadOfLegacyMessages(t *testing.T) {
