@@ -56,6 +56,21 @@ func (mr *MockUserRepositoryMockRecorder) CountByAvatarURL(avatarURL any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByAvatarURL", reflect.TypeOf((*MockUserRepository)(nil).CountByAvatarURL), avatarURL)
 }
 
+// CountLikedContent mocks base method.
+func (m *MockUserRepository) CountLikedContent(userID uint) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountLikedContent", userID)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountLikedContent indicates an expected call of CountLikedContent.
+func (mr *MockUserRepositoryMockRecorder) CountLikedContent(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountLikedContent", reflect.TypeOf((*MockUserRepository)(nil).CountLikedContent), userID)
+}
+
 // Create mocks base method.
 func (m *MockUserRepository) Create(arg0 *model.User, roleID uint) error {
 	m.ctrl.T.Helper()

@@ -109,6 +109,8 @@ type UserRepository interface {
 	FindDetailByID(id uint) (*UserDetailAggregate, error)
 	// ListLikedContent 分页查询某个用户赞过的公开内容。
 	ListLikedContent(filter LikedContentFilter) (*LikedContentPageResult, error)
+	// CountLikedContent 统计某个用户赞过的公开内容总数。
+	CountLikedContent(userID uint) (int64, error)
 	ExistsByEmail(email string) (bool, error)
 	// EmailInUseByOther 检查主邮箱或副邮箱是否已被其他用户占用。
 	EmailInUseByOther(email string, excludeID uint) (bool, error)

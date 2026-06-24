@@ -89,6 +89,21 @@ func (r *userRepo) ListLikedContent(filter LikedContentFilter) (*LikedContentPag
 	}, nil
 }
 
+// CountLikedContent 统计某个用户赞过且当前公开可见的内容总数。
+func (r *userRepo) CountLikedContent(userID uint) (int64, error) {
+	parts := likedContentSQLParts(userID, "")
+	if len(parts) == 0 {
+		return 0, nil
+	}
+
+	unionSQL, args := likedContentUnionSQL(parts)
+	var total int64
+	if err := r.db.Raw("SELECT count(*) FROM ("+unionSQL+") AS liked", args...).Scan(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func likedContentUnionSQL(parts []likedContentSQLPart) (string, []any) {
 	queries := make([]string, 0, len(parts))
 	args := make([]any, 0, len(parts)*4)

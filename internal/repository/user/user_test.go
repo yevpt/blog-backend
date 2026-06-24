@@ -287,6 +287,21 @@ func TestUserRepository_ListLikedContent_ReturnsReplyContext(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUserRepository_CountLikedContent_UsesVisibleTargets(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	mock.ExpectQuery(`SELECT count\(\*\) FROM \(`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(9))
+
+	count, err := repo.CountLikedContent(7)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(9), count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserRepository_Create_Success(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()
