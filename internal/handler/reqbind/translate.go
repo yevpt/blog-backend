@@ -39,6 +39,8 @@ var (
 		"refresh_token":   "刷新令牌",
 		"role_id":         "角色 ID",
 		"seq":             "排序值",
+		"scope":           "范围",
+		"sort":            "排序",
 		"sort_by":         "排序字段",
 		"sort_order":      "排序方向",
 		"status":          "状态",
