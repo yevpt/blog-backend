@@ -763,6 +763,11 @@ definitions:
         items:
           type: integer
         type: array
+      tags:
+        description: Tags 标签关联列表；需要维护文章内标签排序时使用，优先级高于 tag_ids。
+        items:
+          $ref: '#/definitions/dto.ArticleTagSaveReq'
+        type: array
       title:
         description: Title 文章标题。
         example: 文章标题
@@ -771,6 +776,17 @@ definitions:
     - category_ids
     - content
     - title
+    type: object
+  dto.ArticleTagSaveReq:
+    properties:
+      seq:
+        description: Seq 文章内标签排序值，越小越靠前。
+        example: 0
+        type: integer
+      tag_id:
+        description: TagID 标签 ID。
+        example: 1
+        type: integer
     type: object
   dto.ArticleUserResp:
     properties:

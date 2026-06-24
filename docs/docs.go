@@ -7256,10 +7256,32 @@ const docTemplate = `{
                         1
                     ]
                 },
+                "tags": {
+                    "description": "Tags 标签关联列表；需要维护文章内标签排序时使用，优先级高于 tag_ids。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleTagSaveReq"
+                    }
+                },
                 "title": {
                     "description": "Title 文章标题。",
                     "type": "string",
                     "example": "文章标题"
+                }
+            }
+        },
+        "dto.ArticleTagSaveReq": {
+            "type": "object",
+            "properties": {
+                "seq": {
+                    "description": "Seq 文章内标签排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "tag_id": {
+                    "description": "TagID 标签 ID。",
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },
