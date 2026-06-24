@@ -219,7 +219,12 @@ func TestUserService_ListLikedContent_MapsReplyAsCommentFilterWithContext(t *tes
 				},
 				Content: userrepo.LikedContentObject{
 					ID:      88,
-					Excerpt: "@VPT 对，这里用乐观更新会更顺手",
+					Excerpt: "对，这里用乐观更新会更顺手",
+				},
+				ToUser: &model.User{
+					Base:     model.Base{ID: 2},
+					Username: "vpt",
+					Nickname: ptrString("VPT"),
 				},
 				Parent: &userrepo.LikedContentObject{
 					Kind:    userrepo.LikedContentKindComment,
@@ -250,6 +255,9 @@ func TestUserService_ListLikedContent_MapsReplyAsCommentFilterWithContext(t *tes
 	assert.Equal(t, "阿澈", *item.Author.Nickname)
 	assert.Equal(t, []string{"ROLE_VIP"}, item.Author.Roles)
 	assert.Equal(t, "点赞状态最好由服务端返回最终计数", item.Parent.Excerpt)
+	require.NotNil(t, item.ToUser)
+	assert.Equal(t, uint(2), item.ToUser.ID)
+	assert.Equal(t, "VPT", *item.ToUser.Nickname)
 	assert.Equal(t, "article", item.Root.Kind)
 	assert.Equal(t, "React Aria 组件实践", *item.Root.Title)
 	assert.Equal(t, 20, resp.PageSize)

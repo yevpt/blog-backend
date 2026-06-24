@@ -119,6 +119,7 @@ func likedContentItemToDTO(
 		Content: likedContentObjectToDTO(aggregate.Content, resolver),
 		Parent:  likedContentObjectPtrToDTO(aggregate.Parent, resolver),
 		Root:    likedContentObjectPtrToDTO(aggregate.Root, resolver),
+		ToUser:  likedContentAuthorToDTO(aggregate.ToUser, nil, resolver),
 		Stats:   likedContentStatsToDTO(aggregate.Stats),
 	}
 }
