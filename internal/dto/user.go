@@ -147,6 +147,12 @@ type UserLikedContentPageResp struct {
 	List     []UserLikedContentItemResp `json:"list"`
 }
 
+// UserLikedContentCountResp 用户点赞内容总数响应。
+type UserLikedContentCountResp struct {
+	// Count 用户赞过且当前公开可见的内容总数。
+	Count int64 `json:"count" example:"12"`
+}
+
 // UserListItemResp 用户列表项响应
 type UserListItemResp struct {
 	ID          uint       `json:"id" example:"1"`
