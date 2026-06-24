@@ -182,6 +182,9 @@ func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken s
 	if user == nil {
 		return nil
 	}
+	if user.EmailVerifiedAt == nil {
+		return nil
+	}
 
 	code, err := generateNumericCode(6)
 	if err != nil {
@@ -208,6 +211,9 @@ func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
 		return err
 	}
 	if user == nil {
+		return ErrInvalidCode
+	}
+	if user.EmailVerifiedAt == nil {
 		return ErrInvalidCode
 	}
 
@@ -278,13 +284,14 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 
 	user := &model.User{
 		// 邮箱注册时 username 初始值等于 email，用户后续可自行修改
-		Username:    req.Email,
-		Password:    string(hash),
-		PasswordSet: true,
-		Email:       &req.Email,
-		Nickname:    &nickname,
-		AvatarUrl:   avatarKey,
-		Status:      1,
+		Username:        req.Email,
+		Password:        string(hash),
+		PasswordSet:     true,
+		Email:           &req.Email,
+		EmailVerifiedAt: ptrTime(time.Now()),
+		Nickname:        &nickname,
+		AvatarUrl:       avatarKey,
+		Status:          1,
 	}
 
 	// 在事务中同时写入用户记录和角色关联，保证两张表数据一致
@@ -327,12 +334,13 @@ func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
 		RefreshToken: refreshToken,
 		ExpiresIn:    7200,
 		User: dto.UserResp{
-			ID:        user.ID,
-			Username:  user.Username,
-			Email:     user.Email,
-			Nickname:  user.Nickname,
-			AvatarUrl: storage.ResolvePtrURL(s.resolver, user.AvatarUrl),
-			Roles:     userRoles,
+			ID:            user.ID,
+			Username:      user.Username,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerifiedAt != nil,
+			Nickname:      user.Nickname,
+			AvatarUrl:     storage.ResolvePtrURL(s.resolver, user.AvatarUrl),
+			Roles:         userRoles,
 		},
 	}, nil
 }
@@ -420,13 +428,18 @@ func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginR
 		RefreshToken: refreshToken,
 		ExpiresIn:    7200,
 		User: dto.UserResp{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Nickname: user.Nickname,
-			Roles:    userRoles,
+			ID:            user.ID,
+			Username:      user.Username,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerifiedAt != nil,
+			Nickname:      user.Nickname,
+			Roles:         userRoles,
 		},
 	}, nil
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
 }
 
 func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {

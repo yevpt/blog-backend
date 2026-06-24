@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -111,7 +112,8 @@ func TestAuthService_SendPasswordResetCode_ExistingEmailWritesScopedCode(t *test
 	defer mr.Close()
 
 	email := "user@example.com"
-	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &email}, nil)
+	verifiedAt := time.Now()
+	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &email, EmailVerifiedAt: &verifiedAt}, nil)
 
 	err := svc.SendPasswordResetCode("user@example.com", "127.0.0.1", "captcha-token")
 
@@ -121,6 +123,22 @@ func TestAuthService_SendPasswordResetCode_ExistingEmailWritesScopedCode(t *test
 	code, redisErr := rdb.Get(context.Background(), "password:reset:code:user@example.com").Result()
 	require.NoError(t, redisErr)
 	assert.Len(t, code, 6)
+}
+
+func TestAuthService_SendPasswordResetCode_UnverifiedEmailDoesNotSendCode(t *testing.T) {
+	svc, repo, rdb, mr, mailer, _ := setupService(t)
+	defer mr.Close()
+
+	email := "user@example.com"
+	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &email}, nil)
+
+	err := svc.SendPasswordResetCode("user@example.com", "127.0.0.1", "captcha-token")
+
+	require.NoError(t, err)
+	assert.Empty(t, mailer.sentTo)
+	exists, redisErr := rdb.Exists(context.Background(), "password:reset:code:user@example.com").Result()
+	require.NoError(t, redisErr)
+	assert.Equal(t, int64(0), exists)
 }
 
 func TestAuthService_SendPasswordResetCode_UnknownEmailDoesNotRevealAccount(t *testing.T) {
@@ -145,9 +163,11 @@ func TestAuthService_ResetPassword_ValidCodeUpdatesPassword(t *testing.T) {
 	rdb.Set(context.Background(), "password:reset:code:user@example.com", "123456", 0)
 
 	email := "user@example.com"
+	verifiedAt := time.Now()
 	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{
-		Base:  model.Base{ID: 7},
-		Email: &email,
+		Base:            model.Base{ID: 7},
+		Email:           &email,
+		EmailVerifiedAt: &verifiedAt,
 	}, nil)
 	repo.EXPECT().UpdatePassword(uint(7), gomock.Any()).DoAndReturn(func(_ uint, hash string) error {
 		return bcrypt.CompareHashAndPassword([]byte(hash), []byte("new-password"))
@@ -176,6 +196,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 	repo.EXPECT().ExistsByNickname(gomock.Any()).Return(false, nil).AnyTimes()
 	repo.EXPECT().Create(gomock.Any(), roles.NormalRoleId).DoAndReturn(func(user *model.User, _ uint) error {
 		user.ID = 1
+		require.NotNil(t, user.EmailVerifiedAt)
 		return nil
 	})
 	repo.EXPECT().UpdateLastLoginAt(uint(1)).Return(nil)

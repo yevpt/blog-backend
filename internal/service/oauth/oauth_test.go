@@ -102,6 +102,9 @@ func (r *fakeUserRepo) FindByID(id uint) (*model.User, error)                   
 func (r *fakeUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
+func (r *fakeUserRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {
+	return nil, nil
+}
 func (r *fakeUserRepo) ExistsByEmail(email string) (bool, error) { return r.emailExists, nil }
 func (r *fakeUserRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
 	return false, nil
@@ -284,13 +287,35 @@ func TestOAuthService_CallbackBindRejectsAlreadyBoundIdentity(t *testing.T) {
 }
 
 func TestOAuthService_UnbindProtectsLastLoginMethod(t *testing.T) {
-	user := &fakeUserRepo{user: &model.User{Base: model.Base{ID: 7}, Username: "oauth-only", Status: 1}}
+	user := &fakeUserRepo{user: &model.User{
+		Base:        model.Base{ID: 7},
+		Username:    "oauth-only",
+		Status:      1,
+		PasswordSet: false,
+	}}
 	social := &fakeSocialRepo{bindingCount: 1}
 	svc := newTestService(&fakeFlowManager{}, social, user)
 
 	err := svc.Unbind(context.Background(), 7, "github")
 
 	assert.ErrorIs(t, err, serviceoauth.ErrLastLoginMethod)
+}
+
+func TestOAuthService_UnbindAllowsWhenPasswordSet(t *testing.T) {
+	user := &fakeUserRepo{user: &model.User{
+		Base:        model.Base{ID: 7},
+		Username:    "hybrid",
+		Status:      1,
+		PasswordSet: true,
+	}}
+	social := &fakeSocialRepo{bindingCount: 1}
+	svc := newTestService(&fakeFlowManager{}, social, user)
+
+	err := svc.Unbind(context.Background(), 7, "github")
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(7), social.unboundUserID)
+	assert.Equal(t, "github", social.unboundSource)
 }
 
 var _ = dto.OAuthCallbackResp{}

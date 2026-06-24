@@ -147,8 +147,8 @@ func (s *service) Unbind(ctx context.Context, userID uint, source string) error 
 	if err != nil {
 		return err
 	}
-	// 当前模型里 OAuth 用户会写入随机密码；这里仍保留保护，避免未来支持无密码账号时解绑到无法登录。
-	if strings.TrimSpace(user.Password) == "" && count <= 1 {
+	// 用户未设置可用密码且只剩一个 OAuth 绑定时，解绑会导致无法登录。
+	if !user.PasswordSet && count <= 1 {
 		return ErrLastLoginMethod
 	}
 	if err := s.socialRepo.Unbind(userID, source); err != nil {
@@ -253,11 +253,12 @@ func (s *service) issueLogin(ctx context.Context, user *model.User) (*dto.LoginR
 		RefreshToken: refreshToken,
 		ExpiresIn:    7200,
 		User: dto.UserResp{
-			ID:       user.ID,
-			Username: user.Username,
-			Email:    user.Email,
-			Nickname: user.Nickname,
-			Roles:    roles,
+			ID:            user.ID,
+			Username:      user.Username,
+			Email:         user.Email,
+			EmailVerified: user.EmailVerifiedAt != nil,
+			Nickname:      user.Nickname,
+			Roles:         roles,
 		},
 	}, nil
 }

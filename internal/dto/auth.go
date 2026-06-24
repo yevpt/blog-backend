@@ -46,12 +46,13 @@ type PasswordResetReq struct {
 
 // UserResp 用户信息响应（注册/登录均返回）
 type UserResp struct {
-	ID        uint     `json:"id"`
-	Username  string   `json:"username"`
-	Email     *string  `json:"email"`
-	Nickname  *string  `json:"nickname"`
-	AvatarUrl *string  `json:"avatar_url,omitempty"`
-	Roles     []string `json:"roles,omitempty"`
+	ID            uint     `json:"id"`
+	Username      string   `json:"username"`
+	Email         *string  `json:"email"`
+	EmailVerified bool     `json:"email_verified"`
+	Nickname      *string  `json:"nickname"`
+	AvatarUrl     *string  `json:"avatar_url,omitempty"`
+	Roles         []string `json:"roles,omitempty"`
 }
 
 // LoginResp 登录成功响应
