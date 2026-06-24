@@ -236,6 +236,52 @@ func TestUserRepository_FindDetailByID_NotFound(t *testing.T) {
 	assert.Nil(t, detail)
 }
 
+func TestUserRepository_ListLikedContent_ReturnsReplyContext(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	now := time.Date(2026, 6, 25, 10, 24, 0, 0, time.UTC)
+	mock.ExpectQuery(`SELECT count\(\*\) FROM \(`).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery(`SELECT \* FROM \(`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"like_id", "liked_at", "kind", "filter_type",
+			"content_id", "content_title", "content_excerpt", "content_cover_img_url",
+			"parent_kind", "parent_id", "parent_excerpt",
+			"root_kind", "root_id", "root_title", "root_excerpt",
+			"author_id", "author_username", "author_nickname", "author_avatar_url", "author_site", "author_mark",
+		}).AddRow(
+			99, now, user.LikedContentKindReply, user.LikedContentFilterComment,
+			88, nil, "@VPT 对，这里用乐观更新会更顺手", nil,
+			user.LikedContentKindComment, 66, "点赞状态最好由服务端返回最终计数",
+			user.LikedContentRootArticle, 5, "React Aria 组件实践", "文章摘要",
+			12, "ache", "阿澈", "avatars/a.png", nil, "博主",
+		))
+
+	resp, err := repo.ListLikedContent(user.LikedContentFilter{
+		UserID:   7,
+		Type:     user.LikedContentFilterComment,
+		Page:     1,
+		PageSize: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, resp.Items, 1)
+	item := resp.Items[0]
+	assert.Equal(t, user.LikedContentKindReply, item.Kind)
+	assert.Equal(t, user.LikedContentFilterComment, item.Filter)
+	assert.Equal(t, uint(12), item.Author.ID)
+	assert.Equal(t, "阿澈", *item.Author.Nickname)
+	require.NotNil(t, item.Parent)
+	assert.Equal(t, uint(66), item.Parent.ID)
+	assert.Equal(t, "点赞状态最好由服务端返回最终计数", item.Parent.Excerpt)
+	require.NotNil(t, item.Root)
+	assert.Equal(t, user.LikedContentRootArticle, item.Root.Kind)
+	assert.Equal(t, "React Aria 组件实践", *item.Root.Title)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserRepository_Create_Success(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()

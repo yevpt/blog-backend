@@ -85,9 +85,15 @@ func (s *userService) UpdateEmail(userID uint, target, emailAddr, code string) e
 
 	switch target {
 	case "main":
-		err = s.repo.Update(userID, map[string]any{"email": normalized})
+		err = s.repo.Update(userID, map[string]any{
+			"email":             normalized,
+			"email_verified_at": time.Now(),
+		})
 	case "sub":
-		err = s.repo.UpsertMeta(userID, map[string]any{"sub_email": normalized})
+		err = s.repo.UpsertMeta(userID, map[string]any{
+			"sub_email":             normalized,
+			"sub_email_verified_at": time.Now(),
+		})
 	default:
 		return fmt.Errorf("邮箱目标无效")
 	}
@@ -130,6 +136,11 @@ func (s *userService) SetInitialPassword(userID uint, newPwd, code string) error
 	}
 	if err := s.repo.UpdatePassword(userID, string(hash)); err != nil {
 		return err
+	}
+	if user.EmailVerifiedAt == nil {
+		if err := s.repo.Update(userID, map[string]any{"email_verified_at": time.Now()}); err != nil {
+			return err
+		}
 	}
 
 	s.consumeEmailCode(userID, emailAddr)

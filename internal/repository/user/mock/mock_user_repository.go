@@ -265,6 +265,21 @@ func (mr *MockUserRepositoryMockRecorder) ListAll(offset, limit any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockUserRepository)(nil).ListAll), offset, limit)
 }
 
+// ListLikedContent mocks base method.
+func (m *MockUserRepository) ListLikedContent(filter user.LikedContentFilter) (*user.LikedContentPageResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListLikedContent", filter)
+	ret0, _ := ret[0].(*user.LikedContentPageResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListLikedContent indicates an expected call of ListLikedContent.
+func (mr *MockUserRepositoryMockRecorder) ListLikedContent(filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListLikedContent", reflect.TypeOf((*MockUserRepository)(nil).ListLikedContent), filter)
+}
+
 // ListRecent mocks base method.
 func (m *MockUserRepository) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	m.ctrl.T.Helper()

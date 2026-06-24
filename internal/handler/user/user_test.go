@@ -29,6 +29,7 @@ type stubUserService struct {
 	code         string
 	newPassword  string
 	captchaToken string
+	likedReq     dto.UserLikedContentListReq
 }
 
 func (s *stubUserService) GetDetail(userID uint) (*dto.UserDetailResp, error) {
@@ -58,6 +59,25 @@ func (s *stubUserService) RecordLogin(userID uint) error {
 
 func (s *stubUserService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error) {
 	return nil, nil
+}
+
+func (s *stubUserService) ListLikedContent(userID uint, req dto.UserLikedContentListReq) (*dto.UserLikedContentPageResp, error) {
+	s.userID = userID
+	s.likedReq = req
+	return &dto.UserLikedContentPageResp{
+		Total:    1,
+		Pages:    1,
+		Page:     2,
+		PageSize: 5,
+		List: []dto.UserLikedContentItemResp{
+			{
+				ID:      9,
+				Kind:    dto.UserLikedContentKindArticle,
+				Filter:  dto.UserLikedContentFilterArticle,
+				Content: dto.UserLikedContentObjectResp{ID: 3, Title: ptrString("文章")},
+			},
+		},
+	}, nil
 }
 
 func (s *stubUserService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error) {
@@ -124,6 +144,14 @@ func newUserRouter(svc userservice.UserService, jwtManager *jwt.Manager, detail 
 	authed.POST("/users/me/email/code", h.SendEmailCode)
 	authed.PATCH("/users/me/email", h.UpdateEmail)
 	authed.PATCH("/users/me/password/initial", h.SetInitialPassword)
+	return r
+}
+
+func newPublicUserRouter(svc userservice.UserService) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := user.NewUserHandler(svc)
+	r.GET("/users/:id/likes", h.ListLikedContent)
 	return r
 }
 
@@ -241,4 +269,32 @@ func TestUserHandler_SetInitialPassword_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "new-password", svc.newPassword)
 	assert.Equal(t, "123456", svc.code)
+}
+
+func TestUserHandler_ListLikedContent_PublicBindsQuery(t *testing.T) {
+	svc := &stubUserService{}
+	r := newPublicUserRouter(svc)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/users/7/likes?page=2&page_size=5&type=comment", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(7), svc.userID)
+	assert.Equal(t, 2, svc.likedReq.Page)
+	assert.Equal(t, 5, svc.likedReq.PageSize)
+	assert.Equal(t, dto.UserLikedContentFilterComment, svc.likedReq.Type)
+
+	var resp struct {
+		Code int                          `json:"code"`
+		Data dto.UserLikedContentPageResp `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
+	require.Len(t, resp.Data.List, 1)
+	assert.Equal(t, dto.UserLikedContentKindArticle, resp.Data.List[0].Kind)
+}
+
+func ptrString(value string) *string {
+	return &value
 }

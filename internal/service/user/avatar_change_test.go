@@ -41,6 +41,9 @@ func (r *changeAvatarRepo) FindByEmail(email string) (*model.User, error) { retu
 func (r *changeAvatarRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
+func (r *changeAvatarRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {
+	return nil, nil
+}
 func (r *changeAvatarRepo) ExistsByEmail(email string) (bool, error) { return false, nil }
 func (r *changeAvatarRepo) EmailInUseByOther(email string, excludeID uint) (bool, error) {
 	return false, nil

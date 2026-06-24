@@ -25,6 +25,9 @@ type stubUserRepo struct {
 func (r *stubUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
 	return r.aggregate, r.err
 }
+func (r *stubUserRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {
+	return nil, nil
+}
 
 // 接口其余方法返回零值，测试中不会被调用
 func (r *stubUserRepo) FindByIdentifier(id string) (*model.User, error) { return nil, nil }

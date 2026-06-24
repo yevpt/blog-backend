@@ -4,19 +4,20 @@ import "time"
 
 // UserMeta 用户扩展信息，与 user 1:1，以 user_id 为主键
 type UserMeta struct {
-	UserID      uint       `gorm:"primarykey;comment:用户ID" json:"user_id"`
-	Name        *string    `gorm:"size:155;comment:真实姓名" json:"name"`
-	Description *string    `gorm:"size:1000;comment:个人简介" json:"description"`
-	SubEmail    *string    `gorm:"size:155;comment:副邮箱" json:"sub_email"`
-	Gender      *uint8     `gorm:"type:tinyint;comment:性别 0=男 1=女" json:"gender"`
-	Birthday    *time.Time `gorm:"type:date;comment:生日" json:"birthday"`
-	IdCard      *string    `gorm:"size:60;comment:身份证号" json:"id_card"`
-	Country     *string    `gorm:"size:40;default:中国;comment:国家" json:"country"`
-	Province    *string    `gorm:"size:20;comment:省份" json:"province"`
-	City        *string    `gorm:"size:50;comment:城市" json:"city"`
-	Address     *string    `gorm:"size:200;comment:详细地址" json:"address"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	UserID             uint       `gorm:"primarykey;comment:用户ID" json:"user_id"`
+	Name               *string    `gorm:"size:155;comment:真实姓名" json:"name"`
+	Description        *string    `gorm:"size:1000;comment:个人简介" json:"description"`
+	SubEmail           *string    `gorm:"size:155;comment:副邮箱" json:"sub_email"`
+	SubEmailVerifiedAt *time.Time `gorm:"comment:副邮箱验证时间" json:"sub_email_verified_at"`
+	Gender             *uint8     `gorm:"type:tinyint;comment:性别 0=男 1=女" json:"gender"`
+	Birthday           *time.Time `gorm:"type:date;comment:生日" json:"birthday"`
+	IdCard             *string    `gorm:"size:60;comment:身份证号" json:"id_card"`
+	Country            *string    `gorm:"size:40;default:中国;comment:国家" json:"country"`
+	Province           *string    `gorm:"size:20;comment:省份" json:"province"`
+	City               *string    `gorm:"size:50;comment:城市" json:"city"`
+	Address            *string    `gorm:"size:200;comment:详细地址" json:"address"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 func (UserMeta) TableName() string { return "user_meta" }

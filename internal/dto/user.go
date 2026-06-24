@@ -4,34 +4,36 @@ import "time"
 
 // UserDetailResp 当前登录用户详情响应
 type UserDetailResp struct {
-	ID          uint                 `json:"id"`
-	Username    string               `json:"username"`
-	Nickname    *string              `json:"nickname,omitempty"`
-	Email       *string              `json:"email,omitempty"`
-	Phone       *string              `json:"phone,omitempty"`
-	PasswordSet bool                 `json:"password_set"`
-	Site        *string              `json:"site,omitempty"`
-	AvatarUrl   *string              `json:"avatar_url,omitempty"`
-	Mark        *string              `json:"mark,omitempty"`
-	Status      uint8                `json:"status"`
-	LastLoginAt *time.Time           `json:"last_login_at,omitempty"`
-	Roles       []string             `json:"roles"`
-	Meta        *UserMetaResp        `json:"meta,omitempty"`
-	Setting     *UserSettingResp     `json:"setting,omitempty"`
-	SocialLinks []UserSocialLinkResp `json:"social_links,omitempty"`
+	ID            uint                 `json:"id"`
+	Username      string               `json:"username"`
+	Nickname      *string              `json:"nickname,omitempty"`
+	Email         *string              `json:"email,omitempty"`
+	EmailVerified bool                 `json:"email_verified"`
+	Phone         *string              `json:"phone,omitempty"`
+	PasswordSet   bool                 `json:"password_set"`
+	Site          *string              `json:"site,omitempty"`
+	AvatarUrl     *string              `json:"avatar_url,omitempty"`
+	Mark          *string              `json:"mark,omitempty"`
+	Status        uint8                `json:"status"`
+	LastLoginAt   *time.Time           `json:"last_login_at,omitempty"`
+	Roles         []string             `json:"roles"`
+	Meta          *UserMetaResp        `json:"meta,omitempty"`
+	Setting       *UserSettingResp     `json:"setting,omitempty"`
+	SocialLinks   []UserSocialLinkResp `json:"social_links,omitempty"`
 }
 
 // UserMetaResp 用户扩展资料响应
 type UserMetaResp struct {
-	Name        *string    `json:"name,omitempty"`
-	Description *string    `json:"description,omitempty"`
-	SubEmail    *string    `json:"sub_email,omitempty"`
-	Gender      *uint8     `json:"gender,omitempty"`
-	Birthday    *time.Time `json:"birthday,omitempty"`
-	Country     *string    `json:"country,omitempty"`
-	Province    *string    `json:"province,omitempty"`
-	City        *string    `json:"city,omitempty"`
-	Address     *string    `json:"address,omitempty"`
+	Name             *string    `json:"name,omitempty"`
+	Description      *string    `json:"description,omitempty"`
+	SubEmail         *string    `json:"sub_email,omitempty"`
+	SubEmailVerified bool       `json:"sub_email_verified"`
+	Gender           *uint8     `json:"gender,omitempty"`
+	Birthday         *time.Time `json:"birthday,omitempty"`
+	Country          *string    `json:"country,omitempty"`
+	Province         *string    `json:"province,omitempty"`
+	City             *string    `json:"city,omitempty"`
+	Address          *string    `json:"address,omitempty"`
 }
 
 // UserSettingResp 用户偏好设置响应
@@ -61,6 +63,87 @@ type UserSocialLinkResp struct {
 type UserListReq struct {
 	Page     int `form:"page" binding:"omitempty,min=1" example:"1"`
 	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
+}
+
+const (
+	// UserLikedContentFilterArticle 表示只查询文章点赞。
+	UserLikedContentFilterArticle = "article"
+	// UserLikedContentFilterComment 表示查询评论与回复点赞。
+	UserLikedContentFilterComment = "comment"
+	// UserLikedContentFilterGuestbook 表示只查询留言点赞。
+	UserLikedContentFilterGuestbook = "guestbook"
+	// UserLikedContentFilterMoment 表示只查询碎语点赞。
+	UserLikedContentFilterMoment = "moment"
+
+	// UserLikedContentKindArticle 表示点赞目标为文章。
+	UserLikedContentKindArticle = "article"
+	// UserLikedContentKindComment 表示点赞目标为一级评论。
+	UserLikedContentKindComment = "comment"
+	// UserLikedContentKindReply 表示点赞目标为回复。
+	UserLikedContentKindReply = "reply"
+	// UserLikedContentKindGuestbook 表示点赞目标为留言。
+	UserLikedContentKindGuestbook = "guestbook"
+	// UserLikedContentKindMoment 表示点赞目标为碎语。
+	UserLikedContentKindMoment = "moment"
+)
+
+// UserLikedContentListReq 用户点赞内容分页查询参数。
+type UserLikedContentListReq struct {
+	// Page 页码，从 1 开始。
+	Page int `form:"page" binding:"omitempty,min=1" example:"1"`
+	// PageSize 每页数量，默认 20，最大 50。
+	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"20"`
+	// Type 筛选类型；comment 包含评论与回复。
+	Type string `form:"type" binding:"omitempty,oneof=article comment guestbook moment" example:"comment"`
+}
+
+// UserLikedContentAuthorResp 点赞内容原作者摘要。
+type UserLikedContentAuthorResp struct {
+	ID        uint     `json:"id" example:"1"`
+	Username  string   `json:"username,omitempty" example:"vpt"`
+	Nickname  *string  `json:"nickname,omitempty" example:"VPT"`
+	AvatarUrl *string  `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
+	Site      *string  `json:"site,omitempty" example:"https://yevpt.com"`
+	Mark      *string  `json:"mark,omitempty" example:"博主"`
+	Roles     []string `json:"roles"`
+}
+
+// UserLikedContentObjectResp 点赞内容、父级或根对象摘要。
+type UserLikedContentObjectResp struct {
+	ID          uint    `json:"id" example:"1"`
+	Kind        string  `json:"kind,omitempty" example:"article"`
+	Title       *string `json:"title,omitempty" example:"React Aria 组件实践"`
+	Excerpt     string  `json:"excerpt,omitempty" example:"内容摘要"`
+	CoverImgUrl *string `json:"cover_img_url,omitempty" example:"https://cdn.example.com/cover.jpg"`
+	Deleted     bool    `json:"deleted" example:"false"`
+}
+
+// UserLikedContentStatsResp 点赞内容的轻量互动统计。
+type UserLikedContentStatsResp struct {
+	LikeCount    *int64 `json:"like_count,omitempty" example:"3"`
+	CommentCount *int64 `json:"comment_count,omitempty" example:"2"`
+}
+
+// UserLikedContentItemResp 用户点赞内容列表项。
+type UserLikedContentItemResp struct {
+	ID      uint                        `json:"id" example:"1"`
+	LikedAt time.Time                   `json:"liked_at"`
+	Kind    string                      `json:"kind" example:"reply"`
+	Filter  string                      `json:"filter" example:"comment"`
+	Author  *UserLikedContentAuthorResp `json:"author,omitempty"`
+	Content UserLikedContentObjectResp  `json:"content"`
+	Parent  *UserLikedContentObjectResp `json:"parent,omitempty"`
+	Root    *UserLikedContentObjectResp `json:"root,omitempty"`
+	Stats   *UserLikedContentStatsResp  `json:"stats,omitempty"`
+}
+
+// UserLikedContentPageResp 用户点赞内容分页响应。
+type UserLikedContentPageResp struct {
+	Total    int64                      `json:"total" example:"100"`
+	Pages    int                        `json:"pages" example:"5"`
+	Page     int                        `json:"page" example:"1"`
+	PageSize int                        `json:"page_size" example:"20"`
+	List     []UserLikedContentItemResp `json:"list"`
 }
 
 // UserListItemResp 用户列表项响应

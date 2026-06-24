@@ -3,6 +3,7 @@ package user
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -19,6 +20,80 @@ type UserDetailAggregate struct {
 	SocialLinks []model.UserSocialLink
 }
 
+const (
+	// LikedContentFilterArticle 表示文章筛选。
+	LikedContentFilterArticle = "article"
+	// LikedContentFilterComment 表示评论筛选，包含评论与回复。
+	LikedContentFilterComment = "comment"
+	// LikedContentFilterGuestbook 表示留言筛选。
+	LikedContentFilterGuestbook = "guestbook"
+	// LikedContentFilterMoment 表示碎语筛选。
+	LikedContentFilterMoment = "moment"
+
+	// LikedContentKindArticle 表示点赞目标为文章。
+	LikedContentKindArticle = "article"
+	// LikedContentKindComment 表示点赞目标为一级评论。
+	LikedContentKindComment = "comment"
+	// LikedContentKindReply 表示点赞目标为回复。
+	LikedContentKindReply = "reply"
+	// LikedContentKindGuestbook 表示点赞目标为留言。
+	LikedContentKindGuestbook = "guestbook"
+	// LikedContentKindMoment 表示点赞目标为碎语。
+	LikedContentKindMoment = "moment"
+
+	// LikedContentRootArticle 表示根对象为文章。
+	LikedContentRootArticle = "article"
+	// LikedContentRootMoment 表示根对象为碎语。
+	LikedContentRootMoment = "moment"
+	// LikedContentRootGuestbook 表示根对象为留言板。
+	LikedContentRootGuestbook = "guestbook"
+)
+
+// LikedContentFilter 用户点赞内容查询过滤条件。
+type LikedContentFilter struct {
+	UserID   uint
+	Type     string
+	Page     int
+	PageSize int
+}
+
+// LikedContentObject 点赞内容、父级或根对象摘要，供 service 转 DTO。
+type LikedContentObject struct {
+	ID          uint
+	Kind        string
+	Title       *string
+	Excerpt     string
+	CoverImgURL *string
+	Deleted     bool
+}
+
+// LikedContentStats 点赞内容的轻量统计。
+type LikedContentStats struct {
+	LikeCount    *int64
+	CommentCount *int64
+}
+
+// LikedContentAggregate 用户点赞内容聚合。
+type LikedContentAggregate struct {
+	ID      uint
+	LikedAt time.Time
+	Kind    string
+	Filter  string
+	Author  *model.User
+	Content LikedContentObject
+	Parent  *LikedContentObject
+	Root    *LikedContentObject
+	Stats   *LikedContentStats
+}
+
+// LikedContentPageResult 用户点赞内容分页查询结果。
+type LikedContentPageResult struct {
+	Total    int64
+	Page     int
+	PageSize int
+	Items    []LikedContentAggregate
+}
+
 // UserRepository 用户数据访问接口，所有方法返回 model 而非 dto，转换由上层负责
 type UserRepository interface {
 	// FindByIdentifier 支持 username / email / phone 三合一查询；未找到时返回 nil, nil
@@ -31,6 +106,8 @@ type UserRepository interface {
 	FindByID(id uint) (*model.User, error)
 	// FindDetailByID 查询用户详情聚合，包含角色、扩展资料、偏好设置和社交链接。
 	FindDetailByID(id uint) (*UserDetailAggregate, error)
+	// ListLikedContent 分页查询某个用户赞过的公开内容。
+	ListLikedContent(filter LikedContentFilter) (*LikedContentPageResult, error)
 	ExistsByEmail(email string) (bool, error)
 	// EmailInUseByOther 检查主邮箱或副邮箱是否已被其他用户占用。
 	EmailInUseByOther(email string, excludeID uint) (bool, error)

@@ -19,21 +19,22 @@ var ErrUserNotFound = errors.New("用户不存在")
 func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *userrepo.UserDetailAggregate) *dto.UserDetailResp {
 	user := aggregate.User
 	resp := &dto.UserDetailResp{
-		ID:          user.ID,
-		Username:    user.Username,
-		Nickname:    user.Nickname,
-		Email:       user.Email,
-		Phone:       user.Phone,
-		PasswordSet: user.PasswordSet,
-		Site:        user.Site,
-		AvatarUrl:   resolveUserAvatarURL(resolver, user.AvatarUrl),
-		Mark:        user.Mark,
-		Status:      user.Status,
-		LastLoginAt: user.LastLoginAt,
-		Roles:       append([]string(nil), aggregate.Roles...),
-		Meta:        userMetaToDTO(aggregate.Meta),
-		Setting:     userSettingToDTO(aggregate.Setting),
-		SocialLinks: userSocialLinksToDTO(aggregate.SocialLinks),
+		ID:            user.ID,
+		Username:      user.Username,
+		Nickname:      user.Nickname,
+		Email:         user.Email,
+		EmailVerified: user.EmailVerifiedAt != nil,
+		Phone:         user.Phone,
+		PasswordSet:   user.PasswordSet,
+		Site:          user.Site,
+		AvatarUrl:     resolveUserAvatarURL(resolver, user.AvatarUrl),
+		Mark:          user.Mark,
+		Status:        user.Status,
+		LastLoginAt:   user.LastLoginAt,
+		Roles:         append([]string(nil), aggregate.Roles...),
+		Meta:          userMetaToDTO(aggregate.Meta),
+		Setting:       userSettingToDTO(aggregate.Setting),
+		SocialLinks:   userSocialLinksToDTO(aggregate.SocialLinks),
 	}
 	return resp
 }
@@ -43,15 +44,16 @@ func userMetaToDTO(meta *model.UserMeta) *dto.UserMetaResp {
 		return nil
 	}
 	return &dto.UserMetaResp{
-		Name:        meta.Name,
-		Description: meta.Description,
-		SubEmail:    meta.SubEmail,
-		Gender:      meta.Gender,
-		Birthday:    meta.Birthday,
-		Country:     meta.Country,
-		Province:    meta.Province,
-		City:        meta.City,
-		Address:     meta.Address,
+		Name:             meta.Name,
+		Description:      meta.Description,
+		SubEmail:         meta.SubEmail,
+		SubEmailVerified: meta.SubEmailVerifiedAt != nil,
+		Gender:           meta.Gender,
+		Birthday:         meta.Birthday,
+		Country:          meta.Country,
+		Province:         meta.Province,
+		City:             meta.City,
+		Address:          meta.Address,
 	}
 }
 
@@ -123,9 +125,11 @@ func buildPublicProfile(resolver storage.ObjectURLResolver, agg *userrepo.UserDe
 	if agg.Setting != nil {
 		switch agg.Setting.MailShow {
 		case 1:
-			resp.DisplayEmail = user.Email
+			if user.EmailVerifiedAt != nil {
+				resp.DisplayEmail = user.Email
+			}
 		case 0:
-			if agg.Meta != nil {
+			if agg.Meta != nil && agg.Meta.SubEmailVerifiedAt != nil {
 				resp.DisplayEmail = agg.Meta.SubEmail
 			}
 			// case 2: none（不展示）

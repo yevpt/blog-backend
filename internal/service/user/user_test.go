@@ -3,6 +3,7 @@ package user_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
+	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/internal/repository/user/mock"
 	user "github.com/vpt/blog-backend/internal/service/user"
 )
@@ -122,7 +124,11 @@ func TestUserService_UpdateEmail_MainConsumesCodeAndUpdatesUserEmail(t *testing.
 	rdb.Set(context.Background(), "user:email:code:7:new@example.com", "123456", 0)
 
 	repo.EXPECT().EmailInUseByOther("new@example.com", uint(7)).Return(false, nil)
-	repo.EXPECT().Update(uint(7), map[string]any{"email": "new@example.com"}).Return(nil)
+	repo.EXPECT().Update(uint(7), gomock.Any()).DoAndReturn(func(_ uint, updates map[string]any) error {
+		assert.Equal(t, "new@example.com", updates["email"])
+		assert.IsType(t, time.Time{}, updates["email_verified_at"])
+		return nil
+	})
 
 	err := svc.UpdateEmail(7, "main", "new@example.com", "123456")
 
@@ -138,7 +144,11 @@ func TestUserService_UpdateEmail_SubConsumesCodeAndUpdatesMeta(t *testing.T) {
 	rdb.Set(context.Background(), "user:email:code:7:sub@example.com", "123456", 0)
 
 	repo.EXPECT().EmailInUseByOther("sub@example.com", uint(7)).Return(false, nil)
-	repo.EXPECT().UpsertMeta(uint(7), map[string]any{"sub_email": "sub@example.com"}).Return(nil)
+	repo.EXPECT().UpsertMeta(uint(7), gomock.Any()).DoAndReturn(func(_ uint, updates map[string]any) error {
+		assert.Equal(t, "sub@example.com", updates["sub_email"])
+		assert.IsType(t, time.Time{}, updates["sub_email_verified_at"])
+		return nil
+	})
 
 	err := svc.UpdateEmail(7, "sub", "sub@example.com", "123456")
 
@@ -154,6 +164,10 @@ func TestUserService_SetInitialPassword_UsesCurrentEmailCode(t *testing.T) {
 	repo.EXPECT().FindByID(uint(7)).Return(&model.User{Email: &email}, nil)
 	repo.EXPECT().UpdatePassword(uint(7), gomock.Any()).DoAndReturn(func(_ uint, hash string) error {
 		return bcrypt.CompareHashAndPassword([]byte(hash), []byte("new-password"))
+	})
+	repo.EXPECT().Update(uint(7), gomock.Any()).DoAndReturn(func(_ uint, updates map[string]any) error {
+		assert.IsType(t, time.Time{}, updates["email_verified_at"])
+		return nil
 	})
 
 	err := svc.SetInitialPassword(7, "new-password", "123456")
@@ -172,4 +186,75 @@ func TestUserService_SetInitialPassword_RejectsExistingPassword(t *testing.T) {
 	err := svc.SetInitialPassword(7, "new-password", "123456")
 
 	assert.ErrorIs(t, err, user.ErrPasswordAlreadySet)
+}
+
+func TestUserService_ListLikedContent_MapsReplyAsCommentFilterWithContext(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := mock.NewMockUserRepository(ctrl)
+	svc := user.NewUserService(nil, repo, nil, nil)
+	now := time.Date(2026, 6, 25, 10, 24, 0, 0, time.UTC)
+	nickname := "阿澈"
+	avatar := "avatars/a.png"
+
+	repo.EXPECT().ListLikedContent(userrepo.LikedContentFilter{
+		UserID:   7,
+		Type:     dto.UserLikedContentFilterComment,
+		Page:     1,
+		PageSize: 20,
+	}).Return(&userrepo.LikedContentPageResult{
+		Total:    1,
+		Page:     1,
+		PageSize: 20,
+		Items: []userrepo.LikedContentAggregate{
+			{
+				ID:      99,
+				LikedAt: now,
+				Kind:    userrepo.LikedContentKindReply,
+				Filter:  userrepo.LikedContentFilterComment,
+				Author: &model.User{
+					Base:      model.Base{ID: 12},
+					Username:  "ache",
+					Nickname:  &nickname,
+					AvatarUrl: &avatar,
+				},
+				Content: userrepo.LikedContentObject{
+					ID:      88,
+					Excerpt: "@VPT 对，这里用乐观更新会更顺手",
+				},
+				Parent: &userrepo.LikedContentObject{
+					Kind:    userrepo.LikedContentKindComment,
+					ID:      66,
+					Excerpt: "点赞状态最好由服务端返回最终计数",
+				},
+				Root: &userrepo.LikedContentObject{
+					Kind:  userrepo.LikedContentRootArticle,
+					ID:    5,
+					Title: ptrString("React Aria 组件实践"),
+				},
+			},
+		},
+	}, nil)
+	repo.EXPECT().FindRolesByUserIDs([]uint{12}).Return(map[uint][]string{12: []string{"ROLE_VIP"}}, nil)
+
+	resp, err := svc.ListLikedContent(7, dto.UserLikedContentListReq{
+		Type:     dto.UserLikedContentFilterComment,
+		Page:     1,
+		PageSize: 200,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	item := resp.List[0]
+	assert.Equal(t, dto.UserLikedContentKindReply, item.Kind)
+	assert.Equal(t, dto.UserLikedContentFilterComment, item.Filter)
+	assert.Equal(t, "阿澈", *item.Author.Nickname)
+	assert.Equal(t, []string{"ROLE_VIP"}, item.Author.Roles)
+	assert.Equal(t, "点赞状态最好由服务端返回最终计数", item.Parent.Excerpt)
+	assert.Equal(t, "article", item.Root.Kind)
+	assert.Equal(t, "React Aria 组件实践", *item.Root.Title)
+	assert.Equal(t, 20, resp.PageSize)
+}
+
+func ptrString(value string) *string {
+	return &value
 }
