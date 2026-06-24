@@ -134,6 +134,7 @@ type UserLikedContentItemResp struct {
 	Content UserLikedContentObjectResp  `json:"content"`
 	Parent  *UserLikedContentObjectResp `json:"parent,omitempty"`
 	Root    *UserLikedContentObjectResp `json:"root,omitempty"`
+	ToUser  *UserLikedContentAuthorResp `json:"to_user,omitempty"`
 	Stats   *UserLikedContentStatsResp  `json:"stats,omitempty"`
 }
 
