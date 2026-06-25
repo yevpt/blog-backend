@@ -422,6 +422,19 @@ definitions:
         minimum: 0
         type: integer
     type: object
+  dto.AdminUserRolesResp:
+    properties:
+      roles:
+        example:
+        - ROLE_NORMAL
+        - ROLE_VIP
+        items:
+          type: string
+        type: array
+      user_id:
+        example: 42
+        type: integer
+    type: object
   dto.ArticleDeleteResp:
     properties:
       id:
@@ -1578,7 +1591,7 @@ definitions:
       access_token:
         type: string
       expires_in:
-        description: 单位：秒，固定 7200（2h）
+        description: 单位：秒，跟随 JWT access token 配置
         type: integer
       refresh_token:
         type: string
@@ -3712,6 +3725,89 @@ paths:
       summary: 给文章添加标签
       tags:
       - 标签
+  /admin/users/{id}/roles/vip:
+    delete:
+      consumes:
+      - application/json
+      description: 管理员移除目标用户的 ROLE_VIP；本就不是 VIP 时幂等成功。
+      parameters:
+      - description: 目标用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminUserRolesResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 目标用户不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 取消用户 VIP 角色
+      tags:
+      - 用户管理
+    post:
+      consumes:
+      - application/json
+      description: 管理员为目标用户追加 ROLE_VIP，保留 ROLE_NORMAL；已是 VIP 时幂等成功。
+      parameters:
+      - description: 目标用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminUserRolesResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 目标用户不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 赋予用户 VIP 角色
+      tags:
+      - 用户管理
   /articles:
     get:
       consumes:
