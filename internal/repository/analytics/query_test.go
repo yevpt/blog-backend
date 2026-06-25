@@ -135,3 +135,32 @@ func TestAggregateDay(t *testing.T) {
 	assert.Equal(t, 0.25, got.Daily.BounceRate)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestAggregateDay_EmptyEventDay(t *testing.T) {
+	r, mock := newRepo(t)
+
+	dailyCols := []string{"pv", "uv", "registered_pv", "registered_uv", "anonymous_pv", "anonymous_uv", "sessions", "new_visitors"}
+	mock.ExpectQuery("COALESCE\\(SUM\\(is_authenticated\\), ?0\\).*COALESCE\\(SUM\\(NOT is_authenticated\\), ?0\\).*FROM `analytics_events`").
+		WillReturnRows(sqlmock.NewRows(dailyCols).AddRow(0, 0, 0, 0, 0, 0, 0, 0))
+
+	dimCols := []string{"dim_value", "pv", "uv"}
+	for i := 0; i < 6; i++ {
+		mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
+			WillReturnRows(sqlmock.NewRows(dimCols))
+	}
+
+	pageCols := []string{"path", "title", "pv", "uv"}
+	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
+		WillReturnRows(sqlmock.NewRows(pageCols))
+
+	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_sessions`")).
+		WillReturnRows(sqlmock.NewRows([]string{"avg_duration", "bounce_rate"}).AddRow(0.0, 0.0))
+
+	got, err := r.AggregateDay(context.Background(), "2026-06-24")
+	require.NoError(t, err)
+	assert.Equal(t, "2026-06-24", got.Daily.Date)
+	assert.Zero(t, got.Daily.PV)
+	assert.Empty(t, got.Dims)
+	assert.Empty(t, got.Pages)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

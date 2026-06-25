@@ -134,11 +134,12 @@ func (r *repository) AggregateDay(ctx context.Context, date string) (DayAggregat
 		Sessions     int
 		NewVisitors  int
 	}
+	// MySQL bool 表达式在 SUM 中按 0/1 计算；COALESCE 避免空日 SUM 返回 NULL。
 	dailySelect := "COUNT(*) as pv, " +
 		"COUNT(DISTINCT COALESCE(user_id, visitor_id)) as uv, " +
-		"SUM(is_authenticated) as registered_pv, " +
+		"COALESCE(SUM(is_authenticated), 0) as registered_pv, " +
 		"COUNT(DISTINCT CASE WHEN is_authenticated THEN user_id END) as registered_uv, " +
-		"SUM(NOT is_authenticated) as anonymous_pv, " +
+		"COALESCE(SUM(NOT is_authenticated), 0) as anonymous_pv, " +
 		"COUNT(DISTINCT CASE WHEN NOT is_authenticated THEN visitor_id END) as anonymous_uv, " +
 		"COUNT(DISTINCT session_id) as sessions, " +
 		"COUNT(DISTINCT CASE WHEN is_new_visitor THEN visitor_id END) as new_visitors"
