@@ -250,3 +250,9 @@ type UpdateEmailReq struct {
 type EmailDisplayReq struct {
 	Display string `json:"display" binding:"required,oneof=main sub none"`
 }
+
+// AdminUserRolesResp 管理端用户角色调整响应。
+type AdminUserRolesResp struct {
+	UserID uint     `json:"user_id" example:"42"`
+	Roles  []string `json:"roles" example:"ROLE_NORMAL,ROLE_VIP"`
+}
