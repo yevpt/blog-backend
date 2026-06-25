@@ -9,6 +9,8 @@
 
 采集口径为「完整档」：站点 PV/UV、来源分类、设备/浏览器/OS、地理、新老访客、会话/停留时长、跳出率、访问路径、实时在线人数。
 
+数据需按**全部 / 注册用户 / 匿名用户**三档细分，用于后台分析与前台展示。
+
 ## 范围与约束
 
 - 被监控对象：前台 `web`（Next.js App Router，SSR 首屏 + 客户端路由），域名 `https://www.yevpt.com` / `https://yevpt.com`。
@@ -30,13 +32,18 @@
 - IP 隐私：**不存明文 IP**，解析地理后仅存截断哈希 `ip_hash`。
 - Origin 反伪造：`/collect` 使用**专用环境变量** `ANALYTICS_ALLOWED_ORIGINS`（含 www/apex，不含 admin），与全局 CORS 解耦，避免影响 admin 跨域；CORS 现状不动，仍由 Nginx 管理。
 - 三期全部实现，分期仅作为实现顺序与里程碑。
+- 用户身份识别走**方案 A（BFF 中转）**：token 锁在 web BFF 的服务端 HttpOnly cookie，浏览器读不到，故 tracker 发到 web BFF，由 BFF 用 cookie 解析登录态、附 `Authorization: Bearer` 转发给后端，后端 `OptionalAuth` 解析 `user_id`。client 永不自报 user_id（不可信）。
+- 细分口径：身份键 `identity = COALESCE(user_id, visitor_id)`。**全部 UV** = distinct `identity`；**注册 UV** = distinct `user_id`（同一人多设备算一个）；**匿名 UV** = distinct `visitor_id`（user_id 为空）。PV 三档按 `is_authenticated` 切分。
 
 ---
 
 ## 架构总览
 
 ```
-[web tracker JS] --sendBeacon--> POST /collect
+[web tracker JS] --fetch(keepalive)--> web BFF /api/collect
+                                    │ BFF：读 HttpOnly cookie → 附 Authorization: Bearer，透传 visitor_id
+                                    ▼
+                                  POST /collect (后端，挂 OptionalAuth → 解析 user_id)
                                     │ 同步：Origin/限频/字段校验 → UA/IP-geo/referer 富化 → botfilter
                                     ├─ Redis 实时层：ZADD online、INCR 今日 PV、SADD 今日 UV
                                     └─ 有界 channel ──> [ingest batch worker] ──> 原始表
@@ -64,6 +71,8 @@
 | `id` | 主键 |
 | `event_type` | `page_view` |
 | `visitor_id` | 访客标识（复用 Cookie） |
+| `user_id` | 登录用户 ID（可空，由后端 `OptionalAuth` 解析，不信前端） |
+| `is_authenticated` | 是否登录态（派生） |
 | `session_id` | 会话标识（前端生成） |
 | `path` | 页面路径（脱敏：剥离敏感 query，长度截断） |
 | `title` | 页面标题（长度截断） |
@@ -86,6 +95,8 @@
 |---|---|
 | `session_id` | 主键 |
 | `visitor_id` | 访客标识 |
+| `user_id` | 登录用户 ID（可空；会话内登录则回填） |
+| `is_authenticated` | 会话是否含登录态 |
 | `first_seen` / `last_seen` | 会话起止（服务器时间） |
 | `pv_count` | 会话内 PV 数 |
 | `entry_path` / `exit_path` | 入口/出口路径 |
@@ -98,11 +109,14 @@
 
 ### 聚合层（永久保留）
 
-**`analytics_daily`** — 每天一行站点总览：
+**`analytics_daily`** — 每天一行站点总览（含三档细分）：
 `date` / `pv` / `uv` / `sessions` / `new_visitors` / `avg_duration` / `bounce_rate`
+/ `registered_pv` / `registered_uv` / `anonymous_pv` / `anonymous_uv`
+（`uv` = 全部 UV = distinct `identity`；注册/匿名 UV 各按身份键去重）
 
 **`analytics_daily_dim`** — 长表，每天每维度每取值一行：
-`date` / `dimension`（`referer_type`·`device`·`browser`·`os`·`country`）/ `dim_value` / `pv` / `uv`
+`date` / `dimension`（`referer_type`·`device`·`browser`·`os`·`country`·`user_type`）/ `dim_value` / `pv` / `uv`
+其中 `user_type` 取值 `registered` / `anonymous`，对应 UV 按各自身份键去重（registered 按 `user_id`，anonymous 按 `visitor_id`）。
 唯一键：`(date, dimension, dim_value)`。
 
 **`analytics_page_daily`** — 每天每路径一行，支撑热门页面排行：
@@ -113,8 +127,8 @@
 
 - **在线人数**：`ZSET analytics:online`，member=`visitor_id`，score=最后心跳时间戳；在线数 = 近 ~90s 内成员计数，过期剔除。
 - **今日热计数器**（非 bot 才计，TTL 到次日 + 缓冲，Asia/Shanghai 切天）：
-  - `analytics:pv:{yyyymmdd}` — `INCR` 累加今日 PV；
-  - `analytics:uv:{yyyymmdd}` — `SET` 存 `visitor_id`，`SCARD` 取今日 UV（博客量级精确且省，不上 HLL）。
+  - `analytics:pv:{yyyymmdd}` — `INCR` 累加今日 PV；另含 `:registered` / `:anonymous` 两个分档 key；
+  - `analytics:uv:{yyyymmdd}` — `SET` 存身份键 `identity`，`SCARD` 取今日全部 UV；另 `:registered`（存 user_id）/ `:anonymous`（存 visitor_id）两个 SET 取分档 UV（博客量级精确且省，不上 HLL）。
 - 公开 summary 结果缓存：`analytics:public:summary`，短 TTL（60s）。
 
 ### 与现有计数的关系
@@ -129,20 +143,28 @@
 
 - **PV 上报**：绑定 App Router **真实导航**（`usePathname` 变化）+ 页面可见，**不绑组件挂载**，避免 Next.js `<Link>` 预取造成幽灵 PV。
 - **心跳**：页面可见时每 ~15s 发 `heartbeat`；`visibilitychange` 隐藏即停；`pagehide`/隐藏时补发一次 beacon 以减少时长低估。
-- **标识**：`visitor_id` 复用 Cookie；`session_id` 前端生成存 `sessionStorage`，30 分钟无心跳视为新会话。
-- **传输**：`navigator.sendBeacon` 直发后端 `POST /collect`。
+- **标识**：`visitor_id` 复用 Cookie；`session_id` 前端生成存 `sessionStorage`，30 分钟无心跳视为新会话。**不传 user_id**（由服务端解析）。
+- **传输**：`fetch(url, { keepalive: true, credentials: 'include' })` 发到 **web BFF `/api/collect`**（同源，HttpOnly cookie 自动带上；`keepalive` 保证卸载时也能发出）。
 - **载荷**（仅可信字段）：`event_type` / `path` / `title` / `referer` / `session_id` / `screen`。UA、IP、地理一律后端解析。
 
-### 后端 `POST /collect`（公开、无需登录）
+### web BFF 中转 `/api/collect`（方案 A）
+
+- 读服务端 HttpOnly cookie 解析登录态；登录则附 `Authorization: Bearer <token>` 转发给 Go 后端 `POST /collect`，匿名则不附。
+- 透传 `visitor_id` cookie，并把后端的 `Set-Cookie`（首次下发 visitor_id）回写浏览器。
+- 透传 `Origin`、真实客户端 IP（`X-Forwarded-For`）等富化所需头。
+- 薄代理，不做业务逻辑。
+
+### 后端 `POST /collect`（公开、挂 `OptionalAuth`）
 
 同步处理（快）：
-1. CORS + `RateLimitNormal`（按 IP/visitor 限频）。
-2. Origin 校验：命中 `ANALYTICS_ALLOWED_ORIGINS` 正常；缺失/不匹配（生产）标 `is_suspect`；开发环境名单为空则放行。
-3. 字段校验：缺 `session_id`/`visitor_id`、referer 与 path 不自洽、必填缺失 → 丢弃。
-4. 富化：UA→device/browser/os；IP→country/region 并生成 `ip_hash`；referer→分类；path/referer 脱敏。
-5. botfilter 判定 `is_bot`/`bot_reason`。
-6. 更新 Redis 实时层（非 bot 才计今日计数；online 始终更新）。
-7. 事件投入**有界 channel**（满则丢弃 + 记 drop 计数指标）。
+1. `OptionalAuth`：有合法 Bearer → 解析 `user_id` 并置 `is_authenticated=true`；无则匿名。
+2. CORS + `RateLimitNormal`（按 IP/visitor 限频）。
+3. Origin 校验：命中 `ANALYTICS_ALLOWED_ORIGINS` 正常；缺失/不匹配（生产）标 `is_suspect`；开发环境名单为空则放行。
+4. 字段校验：缺 `session_id`/`visitor_id`、referer 与 path 不自洽、必填缺失 → 丢弃。
+5. 富化：UA→device/browser/os；IP→country/region 并生成 `ip_hash`；referer→分类；path/referer 脱敏。
+6. botfilter 判定 `is_bot`/`bot_reason`。
+7. 更新 Redis 实时层（非 bot 才计今日计数，并按 `is_authenticated` 分别累加注册/匿名今日计数；online 始终更新）。
+8. 事件投入**有界 channel**（满则丢弃 + 记 drop 计数指标）。
 
 异步处理（ingest batch worker）：
 - 批量从 channel 取事件 → page_view 插 `analytics_events` + upsert `analytics_sessions`；heartbeat 仅 upsert session 的 `last_seen`/`pv 不变`。
@@ -163,7 +185,8 @@
 
 1. **日滚动聚合**：每天 Asia/Shanghai **00:30** 聚合**昨天**：
    - 过滤 `is_bot=false` 且 `is_suspect=false`；
-   - 写 `analytics_daily` / `analytics_daily_dim` / `analytics_page_daily`，全程 **upsert（幂等）**；
+   - 写 `analytics_daily`（含 registered/anonymous 分档 PV/UV）/ `analytics_daily_dim`（含 `user_type` 维度）/ `analytics_page_daily`，全程 **upsert（幂等）**；
+   - 分档 UV 按各自身份键去重：全部 UV 用 `COALESCE(user_id, visitor_id)`、注册 UV 用 `user_id`、匿名 UV 用 `visitor_id`；
    - 支持指定日期**回填重算**（bot 规则调整后重刷历史）；
    - MySQL 租约确保某天只被一个实例聚合一次。
 2. **原始数据清理**：每天删除超过保留期（默认 90 天，可配）的 `analytics_events` / `analytics_sessions`。
@@ -179,8 +202,8 @@
 
 | 接口 | 用途 |
 |---|---|
-| `GET /admin/analytics/overview` | 今日 PV/UV、当前在线、累计 PV/UV、较昨日环比 |
-| `GET /admin/analytics/trend?from&to&metric=pv\|uv\|sessions` | 按天趋势序列 |
+| `GET /admin/analytics/overview` | 今日 PV/UV、当前在线、累计 PV/UV、较昨日环比；均含全部/注册/匿名三档 |
+| `GET /admin/analytics/trend?from&to&metric=pv\|uv\|sessions&segment=all\|registered\|anonymous` | 按天趋势序列，可按用户类型细分 |
 | `GET /admin/analytics/dimensions?dimension=referer_type\|device\|browser\|os\|country&from&to` | 维度分布 |
 | `GET /admin/analytics/pages?from&to&limit` | 热门页面排行 |
 | `GET /admin/analytics/realtime` | 当前在线数 +（可选）最近活跃路径 |
@@ -191,11 +214,11 @@
 
 | 接口 | 用途 |
 |---|---|
-| `GET /analytics/public/summary` | 站点累计访问、今日访问、当前在线 |
+| `GET /analytics/public/summary` | 站点累计访问、今日访问、当前在线；可含「注册用户数 / 访客数」聚合占比 |
 | `GET /analytics/public/popular?limit` | 热门文章/页面榜（小 limit） |
 
 公开侧硬规矩：
-1. **脱敏**：只出聚合数字；不暴露单访客、IP、`country` 以下细粒度、`/admin/*` 路径（聚合时即排除）。
+1. **脱敏**：只出聚合数字；不暴露单访客、`user_id`、具体用户用了什么设备/行为、IP、`country` 以下细粒度、`/admin/*` 路径（聚合时即排除）。注册/匿名仅出**人数聚合**，不出名单。
 2. **缓存**：结果进 Redis 短 TTL（60s），扛刷且避免每次打库。
 3. **限频**：`RateLimitNormal` 兜底。
 
@@ -209,8 +232,12 @@
 - `internal/worker/analytics/` — 日聚合 / 清理 / 在线清理。
 - `internal/model/` — 上述表的 GORM 模型。
 - `internal/dto/analytics/` — 出入参。
-- `internal/middleware/` — 复用 `VisitorID`；新增 Origin 校验逻辑（或并入 collect handler）。
+- `internal/middleware/` — 复用 `VisitorID`、`OptionalAuth`；新增 Origin 校验逻辑（或并入 collect handler）。
 - 对外接口暴露 interface 以便 gomock。
+
+前端侧（`blog-frontend`）：
+- `packages/tracker/` — tracker SDK（PV/心跳、fetch keepalive、session_id 管理），web 引入、admin 不引入。
+- `apps/web/app/api/collect/route.ts` — BFF 中转路由（方案 A）：读 HttpOnly cookie、附 Bearer、透传 visitor_id 与 Set-Cookie，转发后端 `/collect`。
 
 ---
 
@@ -224,13 +251,14 @@
 - [ ] 异步 channel 有界，满则丢弃 + drop 计数，不拖垮主流程。
 - [ ] 公开 API 仅出聚合、短 TTL 缓存、限频、排除 `/admin/*`。
 - [ ] 聚合 upsert 幂等、支持指定日期回填重算。
+- [ ] `user_id` 由后端 `OptionalAuth` 解析，client 不自报；`user_id` 及用户设备/行为仅后台可见，公开 API 不暴露。
 
 ---
 
 ## 实现分期（三期全做，作为实现顺序）
 
-**Phase 1 — 采集与基础报表（核心闭环）**
-tracker（PV + 心跳）→ `/collect`（校验/富化/botfilter/Origin）→ 原始表 + 有界 channel + ingest worker → Redis 在线/今日计数 → 日聚合 job（daily/dim/page）→ 后台 overview/trend/pages → 保留期清理。交付后后台即可看趋势与排行。
+**Phase 1 — 采集与基础报表（核心闭环，含注册/匿名细分）**
+tracker（PV + 心跳，fetch keepalive）→ web BFF `/api/collect` 中转（解析登录态、透传 visitor_id）→ 后端 `/collect`（`OptionalAuth` 解析 user_id + 校验/富化/botfilter/Origin）→ 原始表（含 `user_id`/`is_authenticated`）+ 有界 channel + ingest worker → Redis 在线/今日计数（含注册/匿名分档）→ 日聚合 job（daily/dim/page，含 user_type 与三档 UV）→ 后台 overview/trend/pages（可按 segment 细分）→ 保留期清理。交付后后台即可看全部/注册/匿名的趋势与排行。
 
 **Phase 2 — 会话指标与公开展示**
 会话时长/跳出率精化 → dimensions 维度接口 → 前台公开 summary/popular + 缓存脱敏 → 回填工具。
