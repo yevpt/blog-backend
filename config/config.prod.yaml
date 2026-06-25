@@ -7,3 +7,9 @@ server:
 log:
   level: info
   format: json
+
+analytics:
+  # 生产容器内 ip2region xdb 路径，可经 env BLOG_ANALYTICS_GEOIP_PATH 覆盖；为空则关闭地理解析
+  geoip_path: "/app/geoip/ip2region.xdb"
+  # IP 哈希盐必须经 env BLOG_ANALYTICS_IP_SALT 注入随机串，此处占位值仅兜底
+  ip_salt: "change_me"

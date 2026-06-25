@@ -7,3 +7,15 @@ server:
 log:
   level: debug
   format: console
+
+analytics:
+  timezone: "Asia/Shanghai"
+  retention_days: 90
+  online_window: 90s
+  session_timeout: 30m
+  bounce_duration: 10s
+  channel_buffer: 4096
+  public_cache_ttl: 60s
+  geoip_path: ""
+  site_host: "yevpt.com"
+  ip_salt: "change_me"

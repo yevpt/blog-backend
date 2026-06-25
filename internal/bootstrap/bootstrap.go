@@ -141,7 +141,7 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 // 关键约束：ingestor 必须是 router 里 collect handler 投递的同一个实例（经 AnalyticsRuntime 透传），
 // 否则消费者会从一个空实例 Run，而生产事件全部堆在另一个实例上被丢弃。
 // 本函数全程只调用一次，保证「单 ingestor、单 scheduler」。
-// TODO(Task 16): retentionDays / 时区 / onlineWindow 字面量迁移到 cfg.Analytics。
+// retentionDays / onlineWindow 来自 cfg.Analytics，tz 经 AnalyticsRuntime 透传。
 func StartAnalyticsWorker(
 	ctx context.Context,
 	redisClient *redis.Client,
@@ -149,6 +149,8 @@ func StartAnalyticsWorker(
 	ingestor analyticsworker.Ingestor,
 	repo analyticsrepo.Repository,
 	tz *time.Location,
+	retentionDays int,
+	onlineWindow time.Duration,
 ) {
 	if tz == nil {
 		tz = time.UTC
@@ -162,8 +164,8 @@ func StartAnalyticsWorker(
 	scheduler := analyticsworker.NewScheduler(rollup, redisClient, analyticsworker.SchedulerConfig{
 		WorkerID:      notificationWorkerID(),
 		TZ:            tz,
-		RetentionDays: 90,
-		OnlineWindow:  90 * time.Second,
+		RetentionDays: retentionDays,
+		OnlineWindow:  onlineWindow,
 		Tick:          time.Minute,
 		AfterMinute:   30,
 		LeaseTTL:      2 * time.Hour,

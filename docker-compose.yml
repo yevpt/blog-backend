@@ -33,8 +33,14 @@ services:
       BLOG_CDN_SECRET: ${CDN_SECRET:-}
       BLOG_CDN_SIGN_QUERY_NAME: ${CDN_SIGN_QUERY_NAME:-a}
       BLOG_CDN_TIMESTAMP_QUERY_NAME: ${CDN_TIMESTAMP_QUERY_NAME:-b}
+      # 站点统计：允许的上报来源、地理库路径与 IP 哈希盐
+      ANALYTICS_ALLOWED_ORIGINS: ${ANALYTICS_ALLOWED_ORIGINS:-}
+      BLOG_ANALYTICS_GEOIP_PATH: ${ANALYTICS_GEOIP_PATH:-}
+      BLOG_ANALYTICS_IP_SALT: ${ANALYTICS_IP_SALT:-}
     volumes:
       - ./config:/app/config:ro
+      # 地理解析库目录（放 ip2region.xdb），并把 geoip_path 设为 /app/geoip/ip2region.xdb
+      - ./geoip:/app/geoip:ro
     ports:
       - "${SERVER_PORT:-8080}:8080"
     extra_hosts:

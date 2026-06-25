@@ -68,6 +68,28 @@ email:
   # worker 任务租约秒数，超期后任务可被其他实例重新领取
   lease_seconds: 300
 
+analytics:
+  # 切天时区，统计聚合与在线判定均按此时区计算
+  timezone: "Asia/Shanghai"
+  # 原始事件保留天数，超期由调度器清理
+  retention_days: 90
+  # 在线判定窗口，超过该时长无心跳视为离线
+  online_window: 90s
+  # 会话超时时长，超过则归为新会话
+  session_timeout: 30m
+  # 跳出判定停留阈值，停留低于该时长记为跳出
+  bounce_duration: 10s
+  # 异步落库 channel 缓冲大小
+  channel_buffer: 4096
+  # 公开统计接口缓存 TTL
+  public_cache_ttl: 60s
+  # 容器内 ip2region xdb 路径，空则关闭地理解析
+  geoip_path: ""
+  # 站点主域名，用于来源与外链判定
+  site_host: "yevpt.com"
+  # IP 哈希盐，生产用随机串经 env BLOG_ANALYTICS_IP_SALT 覆盖
+  ip_salt: "change_me"
+
 oauth:
   # state 同时承载 CSRF 防护和 PKCE verifier 关联，过期后 callback 会被拒绝
   state_ttl_minutes: 10

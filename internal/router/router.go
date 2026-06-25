@@ -257,8 +257,7 @@ func newRouteHandlers(
 	uploadSvc := uploadservice.NewService(objectStore)
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
-	// TODO(Task 16): 迁移到 cfg.Analytics，下列字面量改为读配置块。
-	analyticsCollectHandler, analyticsAdminHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc)
+	analyticsCollectHandler, analyticsAdminHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics)
 
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
@@ -291,27 +290,26 @@ const analyticsAllowedOriginsEnv = "ANALYTICS_ALLOWED_ORIGINS"
 // newAnalyticsCollectHandler 组装 /collect 上报所需依赖图，并返回供 worker 复用的运行时实例。
 // 这里构造的 ingestor 是「唯一」实例：collect handler 经 sessionIng 向它投递，
 // worker.Run 也消费同一个，二者不可分裂为两个实例。
-// TODO(Task 16): 下列临时字面量（时区/在线窗口/缓冲/批量/站点/盐/GeoIP 路径）迁移到 cfg.Analytics。
+// 采集相关参数全部来自 cfg.Analytics（敏感值经 BLOG_ 前缀 env 覆盖）。
 func newAnalyticsCollectHandler(
 	log *zap.Logger,
 	db *gorm.DB,
 	redisClient *redis.Client,
 	uvSvc uv.UVService,
+	analyticsCfg config.AnalyticsConfig,
 ) (*analyticshandler.CollectHandler, *analyticshandler.AdminHandler, AnalyticsRuntime) {
-	tz, err := time.LoadLocation("Asia/Shanghai")
+	tz, err := time.LoadLocation(analyticsCfg.Timezone)
 	if err != nil {
-		tz = time.UTC
-	}
-	ipSalt := os.Getenv("BLOG_ANALYTICS_IP_SALT")
-	if ipSalt == "" {
-		ipSalt = "change_me"
+		// 与 repository 层 dayRangeUTC 兜底一致：时区解析失败回退东八区。
+		log.Warn("统计时区解析失败，回退东八区", zap.String("timezone", analyticsCfg.Timezone), zap.Error(err))
+		tz = time.FixedZone("CST", 8*3600)
 	}
 
-	geo := analyticsservice.NewGeoResolver(os.Getenv("BLOG_ANALYTICS_GEOIP_PATH"), log)
-	enricher := analyticsservice.NewEnricher(geo, "yevpt.com", ipSalt)
+	geo := analyticsservice.NewGeoResolver(analyticsCfg.GeoIPPath, log)
+	enricher := analyticsservice.NewEnricher(geo, analyticsCfg.SiteHost, analyticsCfg.IPSalt)
 	analyticsRepo := analyticsrepo.NewRepository(db)
-	realtime := analyticsservice.NewRealtime(redisClient, tz, 90*time.Second)
-	ingestor := analyticsworker.NewIngestor(analyticsRepo, 4096, 100, 2*time.Second, log)
+	realtime := analyticsservice.NewRealtime(redisClient, tz, analyticsCfg.OnlineWindow)
+	ingestor := analyticsworker.NewIngestor(analyticsRepo, analyticsCfg.ChannelBuffer, 100, 2*time.Second, log)
 	sessionIng := analyticsworker.NewSessionIngestor(ingestor, analyticsRepo)
 	dedup := analyticsservice.NewDedupChecker(uvSvc)
 	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, log)

@@ -53,7 +53,8 @@ func main() {
 
 	// 启动统计后台 worker：唯一事件落库消费 + 日聚合/清理调度，与 collect handler 共享同一 ingestor。
 	bootstrap.StartAnalyticsWorker(context.Background(), redisClient, zapLogger,
-		analyticsRuntime.Ingestor, analyticsRuntime.Repo, analyticsRuntime.TZ)
+		analyticsRuntime.Ingestor, analyticsRuntime.Repo, analyticsRuntime.TZ,
+		cfg.Analytics.RetentionDays, cfg.Analytics.OnlineWindow)
 
 	// 启动服务：监听配置端口，启动失败时终止进程。
 	bootstrap.MustRunHTTP(r, cfg, zapLogger)

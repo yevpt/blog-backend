@@ -9,7 +9,6 @@ import (
 )
 
 // SchedulerConfig 调度器运行参数。
-// TODO(Task 16): 迁移到 cfg.Analytics，下列字段改由配置块注入。
 type SchedulerConfig struct {
 	WorkerID      string         // 实例标识，用于租约 value，便于多实例区分
 	TZ            *time.Location // 切天时区（Asia/Shanghai）

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -19,6 +20,8 @@ type Config struct {
 	CDN    CDNConfig    `mapstructure:"cdn"`    // CDN 私有读签名配置
 	Email  EmailConfig  `mapstructure:"email"`  // 邮件发送配置
 	OAuth  OAuthConfig  `mapstructure:"oauth"`  // 第三方 OAuth 登录配置
+
+	Analytics AnalyticsConfig `mapstructure:"analytics"` // 站点统计采集与聚合配置
 }
 
 type ServerConfig struct {
@@ -117,6 +120,20 @@ type OAuthProviderConfig struct {
 	OpenIDURL    string   `mapstructure:"openid_url"`    // 获取 OpenID 的端点，仅 QQ 等两段式平台使用
 }
 
+// AnalyticsConfig 是站点统计的采集、实时与聚合配置。
+type AnalyticsConfig struct {
+	Timezone       string        `mapstructure:"timezone"`         // 切天时区，如 Asia/Shanghai
+	RetentionDays  int           `mapstructure:"retention_days"`   // 原始事件保留天数，超期清理
+	OnlineWindow   time.Duration `mapstructure:"online_window"`    // 在线判定窗口，如 90s
+	SessionTimeout time.Duration `mapstructure:"session_timeout"`  // 会话超时时长，如 30m
+	BounceDuration time.Duration `mapstructure:"bounce_duration"`  // 跳出判定停留阈值，如 10s
+	ChannelBuffer  int           `mapstructure:"channel_buffer"`   // 异步落库 channel 缓冲大小
+	PublicCacheTTL time.Duration `mapstructure:"public_cache_ttl"` // 公开统计接口缓存 TTL，如 60s
+	GeoIPPath      string        `mapstructure:"geoip_path"`       // ip2region xdb 路径，空则关闭地理解析
+	SiteHost       string        `mapstructure:"site_host"`        // 站点主域名，用于来源/外链判定
+	IPSalt         string        `mapstructure:"ip_salt"`          // IP 哈希盐，生产经 env 覆盖为随机串
+}
+
 // Load 按优先级叠加加载配置：config.yaml → config.{APP_ENV}.yaml → config.local.yaml → 环境变量（BLOG_ 前缀）
 func Load() (*Config, error) {
 	v := viper.New()
@@ -203,6 +220,8 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"email.worker_batch_size",
 		"email.lease_seconds",
 		"oauth.state_ttl_minutes",
+		"analytics.ip_salt",
+		"analytics.geoip_path",
 	}
 
 	for _, key := range keys {

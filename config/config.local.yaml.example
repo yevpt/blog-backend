@@ -49,6 +49,12 @@ email:
   # 站点公网访问前缀，用于通知邮件中的跳转链接
   site_url: "https://www.example.com"
 
+analytics:
+  # 本地默认关闭地理解析；如需调试可指向本地 ip2region.xdb 路径
+  geoip_path: ""
+  # 本地开发盐值，无需随机
+  ip_salt: "local_dev_salt"
+
 oauth:
   providers:
     github:
