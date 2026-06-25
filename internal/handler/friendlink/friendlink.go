@@ -24,7 +24,7 @@ func NewFriendLinkHandler(svc friendlinkservice.FriendLinkService) *FriendLinkHa
 
 // ListPublic 查询公开友情链接列表。
 // @Summary 查询公开友情链接列表
-// @Description 分页返回显示中的友情链接，按 seq ASC、id DESC 排序；avatar_url 返回前会解析为可访问 URL。
+// @Description 分页返回显示中的友情链接；正常友链按 seq ASC、id DESC 排序，失联友链排在最后；avatar_url 返回前会解析为可访问 URL。
 // @Tags 友情链接
 // @Produce json
 // @Param page query int false "页码，从 1 开始"
