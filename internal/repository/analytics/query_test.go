@@ -89,6 +89,10 @@ func TestAggregateDay(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 		WillReturnRows(sqlmock.NewRows(pageCols).AddRow("/x", "X", 9, 4))
 
+	// 会话级指标查询（最后一条）
+	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_sessions`")).
+		WillReturnRows(sqlmock.NewRows([]string{"avg_duration", "bounce_rate"}).AddRow(42.0, 0.25))
+
 	got, err := r.AggregateDay(context.Background(), "2026-06-24")
 	require.NoError(t, err)
 	assert.Equal(t, "2026-06-24", got.Daily.Date)
@@ -102,5 +106,7 @@ func TestAggregateDay(t *testing.T) {
 	assert.Len(t, got.Pages, 1)
 	assert.Equal(t, "/x", got.Pages[0].Path)
 	assert.Equal(t, "2026-06-24", got.Pages[0].Date)
+	assert.Equal(t, 42, got.Daily.AvgDuration)
+	assert.Equal(t, 0.25, got.Daily.BounceRate)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

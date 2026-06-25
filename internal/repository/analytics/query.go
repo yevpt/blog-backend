@@ -85,7 +85,7 @@ var aggregateDims = []struct {
 
 // AggregateDay 读取指定日（Asia/Shanghai）的原始事件，聚合成 DayAggregate。
 // 过滤 is_bot=0 AND is_suspect=0，identity 为 COALESCE(user_id, visitor_id)。
-// TODO(Phase2): avg_duration / bounce_rate 需从 analytics_sessions 计算，当前置 0。
+// avg_duration / bounce_rate 由当天开始的真人会话（analytics_sessions）计算。
 func (r *repository) AggregateDay(ctx context.Context, date string) (DayAggregate, error) {
 	start, end, err := dayRangeUTC(date)
 	if err != nil {
@@ -167,7 +167,28 @@ func (r *repository) AggregateDay(ctx context.Context, date string) (DayAggregat
 		})
 	}
 
+	// 4) 会话级指标：平均停留时长与跳出率（来自 analytics_sessions，当天开始的真人会话）。
+	var sess struct {
+		AvgDuration float64
+		BounceRate  float64
+	}
+	sessSelect := "COALESCE(AVG(duration), 0) as avg_duration, " +
+		"COALESCE(SUM(CASE WHEN is_bounce THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 0) as bounce_rate"
+	if e := r.sessionScope(ctx, start, end).Select(sessSelect).Scan(&sess).Error; e != nil {
+		return DayAggregate{}, fmt.Errorf("聚合会话指标失败: %w", e)
+	}
+	agg.Daily.AvgDuration = int(sess.AvgDuration + 0.5) // 四舍五入到秒
+	agg.Daily.BounceRate = sess.BounceRate
+
 	return agg, nil
+}
+
+// sessionScope 返回「当日开始的真人会话」过滤 builder（first_seen 落在 [start,end)，非 bot）。
+func (r *repository) sessionScope(ctx context.Context, start, end time.Time) *gorm.DB {
+	return r.db.WithContext(ctx).
+		Model(&model.AnalyticsSession{}).
+		Where("first_seen >= ? AND first_seen < ?", start, end).
+		Where("is_bot = ?", false)
 }
 
 // eventScope 返回带「当日有效事件」过滤条件的查询 builder。
