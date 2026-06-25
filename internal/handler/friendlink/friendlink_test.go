@@ -3,6 +3,7 @@ package friendlink_test
 import (
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -84,14 +85,69 @@ func TestFriendLinkHandler_Create_InvalidJSONReturnsBadRequest(t *testing.T) {
 	r := newFriendLinkRouter(stub)
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "/admin/friend-links", bytes.NewReader([]byte(`{}`)))
-	req.Header.Set("Content-Type", "application/json")
+	body, contentType := friendLinkMultipartBody(t, map[string]string{
+		"name": "友站",
+		"site": "https://friend.example.com",
+		"seq":  "1",
+	}, "", nil)
+	req := httptest.NewRequest("POST", "/admin/friend-links", body)
+	req.Header.Set("Content-Type", contentType)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "缺少友链 Logo", resp.Message)
+}
+
+func TestFriendLinkHandler_Create_BindsMultipartLogoAndFields(t *testing.T) {
+	stub := &stubFriendLinkService{}
+	r := newFriendLinkRouter(stub)
+	body, contentType := friendLinkMultipartBody(t, map[string]string{
+		"name":        "友站",
+		"description": "描述",
+		"site":        "https://friend.example.com",
+		"seq":         "2",
+		"status":      "1",
+	}, "logo.png", []byte("fake-image"))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/friend-links", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "友站", stub.createReq.Name)
+	assert.Equal(t, "https://friend.example.com", stub.createReq.Site)
+	require.NotNil(t, stub.createReq.Seq)
+	assert.Equal(t, uint(2), *stub.createReq.Seq)
+	require.NotNil(t, stub.createReq.Logo)
+	assert.Equal(t, "logo.png", stub.createReq.Logo.Name)
+	assert.Equal(t, []byte("fake-image"), stub.createReq.Logo.Data)
+}
+
+func TestFriendLinkHandler_Create_RejectsTooLargeLogo(t *testing.T) {
+	stub := &stubFriendLinkService{}
+	r := newFriendLinkRouter(stub)
+	body, contentType := friendLinkMultipartBody(t, map[string]string{
+		"name": "友站",
+		"site": "https://friend.example.com",
+		"seq":  "1",
+	}, "logo.png", bytes.Repeat([]byte("x"), friendlinkservice.MaxFriendLinkLogoBytes+1))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/friend-links", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Empty(t, stub.createReq.Name)
+
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, friendlinkservice.ErrFriendLinkLogoTooLarge.Error(), resp.Message)
 }
 
 func TestFriendLinkHandler_GetPublic_NotFoundReturns404(t *testing.T) {
@@ -108,16 +164,59 @@ func TestFriendLinkHandler_GetPublic_NotFoundReturns404(t *testing.T) {
 func TestFriendLinkHandler_Update_BindsPathAndBody(t *testing.T) {
 	stub := &stubFriendLinkService{}
 	r := newFriendLinkRouter(stub)
-	name := "友站"
-	body, _ := json.Marshal(dto.FriendLinkUpdateReq{Name: &name})
+	body, contentType := friendLinkMultipartBody(t, map[string]string{
+		"name": "友站",
+	}, "logo.png", []byte("fake-image"))
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("PUT", "/admin/friend-links/7", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest("PUT", "/admin/friend-links/7", body)
+	req.Header.Set("Content-Type", contentType)
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, uint(7), stub.updateID)
 	require.NotNil(t, stub.updateReq.Name)
-	assert.Equal(t, name, *stub.updateReq.Name)
+	assert.Equal(t, "友站", *stub.updateReq.Name)
+	require.NotNil(t, stub.updateReq.Logo)
+	assert.Equal(t, "logo.png", stub.updateReq.Logo.Name)
+	assert.Equal(t, []byte("fake-image"), stub.updateReq.Logo.Data)
+}
+
+func TestFriendLinkHandler_Update_RejectsMissingLogo(t *testing.T) {
+	stub := &stubFriendLinkService{}
+	r := newFriendLinkRouter(stub)
+	body, contentType := friendLinkMultipartBody(t, map[string]string{
+		"name": "友站",
+	}, "", nil)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/admin/friend-links/7", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Zero(t, stub.updateID)
+
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "缺少友链 Logo", resp.Message)
+}
+
+func friendLinkMultipartBody(t *testing.T, fields map[string]string, fileName string, fileData []byte) (*bytes.Buffer, string) {
+	t.Helper()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	for key, value := range fields {
+		require.NoError(t, writer.WriteField(key, value))
+	}
+	if fileName != "" {
+		fileWriter, err := writer.CreateFormFile("logo", fileName)
+		require.NoError(t, err)
+		_, err = fileWriter.Write(fileData)
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Close())
+	return body, writer.FormDataContentType()
 }

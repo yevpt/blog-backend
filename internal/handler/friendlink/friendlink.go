@@ -2,6 +2,8 @@ package friendlink
 
 import (
 	"errors"
+	"io"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
@@ -82,37 +84,53 @@ func (h *FriendLinkHandler) ListAdmin(c *gin.Context) {
 
 // Create 新增友情链接。
 // @Summary 新增友情链接
-// @Description 管理员新增友情链接；avatar_url 可传外链或对象存储 key。
+// @Description 管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并写入 avatar_url。
 // @Tags 友情链接
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
-// @Param request body dto.FriendLinkCreateReq true "友情链接新增请求"
+// @Param name formData string true "网站名称"
+// @Param description formData string false "网站描述"
+// @Param email formData string false "站长邮箱"
+// @Param phone formData string false "联系电话"
+// @Param site formData string true "网站 URL"
+// @Param seq formData int true "排序值，越小越靠前"
+// @Param status formData int false "状态：0 隐藏，1 显示，2 失联；未传默认显示"
+// @Param logo formData file true "友链 Logo 图片（JPG、PNG、WebP），最大 2MB"
 // @Success 200 {object} response.Response{data=dto.FriendLinkItemResp} "统一响应；code=0 表示新增成功，code=400 表示参数错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 403 {object} response.Response "权限不足"
+// @Failure 429 {object} response.Response "请求过于频繁"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /admin/friend-links [post]
 func (h *FriendLinkHandler) Create(c *gin.Context) {
-	var req dto.FriendLinkCreateReq
-	if !reqbind.JSON(c, &req) {
+	req, ok := bindFriendLinkCreateReq(c)
+	if !ok {
 		return
 	}
-	resp, err := h.svc.Create(req)
+	resp, err := h.svc.Create(*req)
 	writeFriendLinkResponse(c, resp, err)
 }
 
 // Update 修改友情链接。
 // @Summary 修改友情链接
-// @Description 管理员修改友情链接；未传字段保持原值，可选字符串传空字符串表示清空。
+// @Description 管理员修改友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并替换 avatar_url；未传文本字段保持原值，可选字符串传空字符串表示清空。
 // @Tags 友情链接
-// @Accept json
+// @Accept multipart/form-data
 // @Produce json
 // @Param id path int true "友情链接 ID"
-// @Param request body dto.FriendLinkUpdateReq true "友情链接修改请求"
+// @Param name formData string false "网站名称"
+// @Param description formData string false "网站描述；传空字符串表示清空"
+// @Param email formData string false "站长邮箱；传空字符串表示清空"
+// @Param phone formData string false "联系电话；传空字符串表示清空"
+// @Param site formData string false "网站 URL"
+// @Param seq formData int false "排序值，越小越靠前"
+// @Param status formData int false "状态：0 隐藏，1 显示，2 失联"
+// @Param logo formData file true "友链 Logo 图片（JPG、PNG、WebP），最大 2MB"
 // @Success 200 {object} response.Response{data=dto.FriendLinkItemResp} "统一响应；code=0 表示修改成功，code=400 表示参数错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 403 {object} response.Response "权限不足"
 // @Failure 404 {object} response.Response "友情链接不存在"
+// @Failure 429 {object} response.Response "请求过于频繁"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /admin/friend-links/{id} [put]
 func (h *FriendLinkHandler) Update(c *gin.Context) {
@@ -120,11 +138,11 @@ func (h *FriendLinkHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
-	var req dto.FriendLinkUpdateReq
-	if !reqbind.JSON(c, &req) {
+	req, ok := bindFriendLinkUpdateReq(c)
+	if !ok {
 		return
 	}
-	resp, err := h.svc.Update(id, req)
+	resp, err := h.svc.Update(id, *req)
 	writeFriendLinkResponse(c, resp, err)
 }
 
@@ -153,6 +171,62 @@ func bindFriendLinkID(c *gin.Context) (uint, bool) {
 	return reqbind.PathUint(c, "id", "友情链接 ID")
 }
 
+func bindFriendLinkCreateReq(c *gin.Context) (*dto.FriendLinkCreateReq, bool) {
+	var req dto.FriendLinkCreateReq
+	if !reqbind.Form(c, &req) {
+		return nil, false
+	}
+	logo, ok := readFriendLinkLogo(c)
+	if !ok {
+		return nil, false
+	}
+	req.Logo = logo
+	return &req, true
+}
+
+func bindFriendLinkUpdateReq(c *gin.Context) (*dto.FriendLinkUpdateReq, bool) {
+	var req dto.FriendLinkUpdateReq
+	if !reqbind.Form(c, &req) {
+		return nil, false
+	}
+	logo, ok := readFriendLinkLogo(c)
+	if !ok {
+		return nil, false
+	}
+	req.Logo = logo
+	return &req, true
+}
+
+func readFriendLinkLogo(c *gin.Context) (*dto.UploadedImageFile, bool) {
+	header, err := c.FormFile("logo")
+	if err != nil {
+		if errors.Is(err, http.ErrMissingFile) {
+			response.Fail(c, response.CodeBadRequest, friendlinkservice.ErrFriendLinkLogoRequired.Error())
+			return nil, false
+		}
+		response.Fail(c, response.CodeBadRequest, "读取友链 Logo 失败")
+		return nil, false
+	}
+
+	file, err := header.Open()
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, "读取友链 Logo 失败")
+		return nil, false
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, int64(friendlinkservice.MaxFriendLinkLogoBytes)+1))
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, "读取友链 Logo 失败")
+		return nil, false
+	}
+	if len(data) > friendlinkservice.MaxFriendLinkLogoBytes {
+		response.Fail(c, response.CodeBadRequest, friendlinkservice.ErrFriendLinkLogoTooLarge.Error())
+		return nil, false
+	}
+	return &dto.UploadedImageFile{Name: header.Filename, Data: data}, true
+}
+
 func writeFriendLinkResponse(c *gin.Context, data any, err error) {
 	if err == nil {
 		response.Success(c, data)
@@ -173,5 +247,10 @@ func isFriendLinkBadRequest(err error) bool {
 	return errors.Is(err, friendlinkservice.ErrFriendLinkNameRequired) ||
 		errors.Is(err, friendlinkservice.ErrFriendLinkSiteRequired) ||
 		errors.Is(err, friendlinkservice.ErrFriendLinkSeqRequired) ||
-		errors.Is(err, friendlinkservice.ErrFriendLinkStatusInvalid)
+		errors.Is(err, friendlinkservice.ErrFriendLinkStatusInvalid) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkLogoRequired) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkLogoInvalid) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkLogoTooLarge) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkLogoGIF) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkLogoStoredBig)
 }
