@@ -778,17 +778,18 @@ func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageC
 	var albums []model.MusicAlbum
 	if err := db.Model(&model.MusicAlbum{}).
 		Select("id", "cover_key").
-		Where("cover_key IS NOT NULL AND cover_key <> ''").
 		Order("id ASC").
 		Find(&albums).Error; err != nil {
 		return stats, err
 	}
 
+	albumCoverByID, err := listMusicAlbumLegacyCoverByID(db)
+	if err != nil {
+		return stats, err
+	}
+
 	for _, album := range albums {
-		if album.CoverKey == nil {
-			continue
-		}
-		coverRaw := strings.TrimSpace(*album.CoverKey)
+		coverRaw := musicAlbumCoverRaw(album.CoverKey, albumCoverByID[album.ID])
 		if coverRaw == "" {
 			continue
 		}
@@ -833,6 +834,33 @@ func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageC
 	}
 
 	return stats, nil
+}
+
+type musicAlbumLegacyCoverRow struct {
+	AlbumID     uint
+	CoverImgURL *string
+}
+
+func listMusicAlbumLegacyCoverByID(db *gorm.DB) (map[uint]*string, error) {
+	var rows []musicAlbumLegacyCoverRow
+	if err := db.Model(&model.Music{}).
+		Select("album_id", "cover_img_url").
+		Where("album_id IS NOT NULL AND cover_img_url IS NOT NULL AND cover_img_url <> ''").
+		Order("id ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	byAlbumID := make(map[uint]*string, len(rows))
+	for _, row := range rows {
+		if row.AlbumID == 0 {
+			continue
+		}
+		if byAlbumID[row.AlbumID] != nil {
+			continue
+		}
+		byAlbumID[row.AlbumID] = row.CoverImgURL
+	}
+	return byAlbumID, nil
 }
 
 func listMomentMediaGarageRows(src *sql.DB, db *gorm.DB) ([]momentMediaGarageRow, error) {
@@ -993,6 +1021,18 @@ func musicGarageAudioRaw(song model.Music) string {
 	}
 	if song.URL != nil {
 		return strings.TrimSpace(*song.URL)
+	}
+	return ""
+}
+
+func musicAlbumCoverRaw(albumCoverKey, legacySongCoverURL *string) string {
+	if albumCoverKey != nil {
+		if value := strings.TrimSpace(*albumCoverKey); value != "" {
+			return value
+		}
+	}
+	if legacySongCoverURL != nil {
+		return strings.TrimSpace(*legacySongCoverURL)
 	}
 	return ""
 }

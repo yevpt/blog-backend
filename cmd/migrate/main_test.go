@@ -47,6 +47,23 @@ func TestBuildMusicGaragePlan_RewritesAudioAndCover(t *testing.T) {
 	assert.Contains(t, plan.TargetCoverKey, "music/albums/8/cover/")
 }
 
+func TestMusicAlbumCoverRaw_PrefersAlbumCoverKey(t *testing.T) {
+	albumCover := "music/albums/8/cover/current.jpg"
+	legacyCover := "old/cover.jpg"
+
+	got := musicAlbumCoverRaw(&albumCover, &legacyCover)
+
+	assert.Equal(t, "music/albums/8/cover/current.jpg", got)
+}
+
+func TestMusicAlbumCoverRaw_FallbackToLegacySongCover(t *testing.T) {
+	legacyCover := "old/cover.jpg"
+
+	got := musicAlbumCoverRaw(nil, &legacyCover)
+
+	assert.Equal(t, "old/cover.jpg", got)
+}
+
 func TestBuildMomentMediaGaragePlan_RewritesSayPath(t *testing.T) {
 	plan := buildMomentMediaGaragePlan(momentMediaGarageRow{
 		ID:       5,
