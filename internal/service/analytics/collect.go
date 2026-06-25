@@ -1,0 +1,109 @@
+package analytics
+
+import (
+	"context"
+	"time"
+
+	"github.com/vpt/blog-backend/internal/model"
+	"go.uber.org/zap"
+)
+
+// SessionIngestor 抽象事件落库与会话维护（由 worker + repo 适配）。
+type SessionIngestor interface {
+	Submit(ev model.AnalyticsEvent) bool
+	UpsertSession(ctx context.Context, s model.AnalyticsSession) error
+	TouchSession(ctx context.Context, sessionID string, lastSeen time.Time) error
+}
+
+// DedupChecker 判断同一访客/会话/路径短窗口内是否重复 PV。
+type DedupChecker interface {
+	IsDuplicatePV(ctx context.Context, visitorID, sessionID, path string) (bool, error)
+}
+
+// CollectService 编排上报：富化 → 实时层 → 去重 → 入库/会话。
+type CollectService interface {
+	Handle(ctx context.Context, raw RawEvent) error
+}
+
+type collectService struct {
+	enricher Enricher
+	realtime Realtime
+	ingestor SessionIngestor
+	dedup    DedupChecker
+	logger   *zap.Logger
+}
+
+// NewCollectService 注入富化、实时、入库、去重依赖，构造编排服务。
+func NewCollectService(enricher Enricher, realtime Realtime, ingestor SessionIngestor, dedup DedupChecker, logger *zap.Logger) CollectService {
+	return &collectService{enricher: enricher, realtime: realtime, ingestor: ingestor, dedup: dedup, logger: logger}
+}
+
+// Handle 编排单次上报：富化 → 刷新在线 → 按事件类型分支处理。
+// 非关键路径（实时层、入库、会话）失败仅 Warn，不阻断上报。
+func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
+	ev := s.enricher.Enrich(raw)
+	now := time.Now()
+	ev.CreatedAt = now
+
+	// bot 不计在线，仅真人刷新在线表。
+	if !ev.IsBot {
+		if err := s.realtime.TouchOnline(ctx, ev.VisitorID); err != nil {
+			s.logger.Warn("刷新在线失败", zap.Error(err))
+		}
+	}
+
+	// 心跳：仅刷新会话 last_seen，不入事件表、不计今日。
+	if ev.EventType == "heartbeat" {
+		if err := s.ingestor.TouchSession(ctx, ev.SessionID, now); err != nil {
+			s.logger.Warn("心跳更新会话失败", zap.Error(err))
+		}
+		return nil
+	}
+
+	// page_view：去重命中则跳过入库与计数（在线已刷新）。
+	dup := false
+	if d, err := s.dedup.IsDuplicatePV(ctx, ev.VisitorID, ev.SessionID, ev.Path); err != nil {
+		s.logger.Warn("去重判定失败", zap.Error(err))
+	} else {
+		dup = d
+	}
+	if dup {
+		return nil
+	}
+
+	// 入库与会话 upsert（bot 也入库，带 is_bot 标记便于审计）。
+	s.ingestor.Submit(ev)
+	if err := s.ingestor.UpsertSession(ctx, sessionFrom(ev, now)); err != nil {
+		s.logger.Warn("会话 upsert 失败", zap.Error(err))
+	}
+
+	// 今日计数仅非 bot 且非重复（dup 已早返回，此处恒为非重复）。
+	if !ev.IsBot && !dup {
+		if err := s.realtime.IncrToday(ctx, ev); err != nil {
+			s.logger.Warn("今日计数失败", zap.Error(err))
+		}
+	}
+	return nil
+}
+
+// sessionFrom 由富化后的事件构造一次会话快照（首末路径同一、PV 计 1）。
+func sessionFrom(ev model.AnalyticsEvent, now time.Time) model.AnalyticsSession {
+	return model.AnalyticsSession{
+		SessionID:       ev.SessionID,
+		VisitorID:       ev.VisitorID,
+		UserID:          ev.UserID,
+		IsAuthenticated: ev.IsAuthenticated,
+		FirstSeen:       now,
+		LastSeen:        now,
+		PVCount:         1,
+		EntryPath:       ev.Path,
+		ExitPath:        ev.Path,
+		DeviceType:      ev.DeviceType,
+		Browser:         ev.Browser,
+		OS:              ev.OS,
+		Country:         ev.Country,
+		Region:          ev.Region,
+		RefererType:     ev.RefererType,
+		IsBot:           ev.IsBot,
+	}
+}
