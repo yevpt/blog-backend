@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/migration/garagearticles"
+	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -62,6 +63,85 @@ func TestMusicAlbumCoverRaw_FallbackToLegacySongCover(t *testing.T) {
 	got := musicAlbumCoverRaw(nil, &legacyCover)
 
 	assert.Equal(t, "old/cover.jpg", got)
+}
+
+func TestMusicAlbumGarageCoverCandidates_PrefersAlbumThenLegacy(t *testing.T) {
+	albumCover := "album/cover.jpg"
+	legacyCover := "legacy/cover.jpg"
+
+	candidates := musicAlbumGarageCoverCandidates(model.MusicAlbum{
+		Base:     model.Base{ID: 8},
+		CoverKey: &albumCover,
+	}, &legacyCover, nil)
+
+	require.Equal(t, []string{"album/cover.jpg", "legacy/cover.jpg"}, candidates)
+}
+
+func TestMusicAlbumGarageCoverCandidates_DeduplicatesSameValue(t *testing.T) {
+	value := "same/cover.jpg"
+
+	candidates := musicAlbumGarageCoverCandidates(model.MusicAlbum{
+		Base:     model.Base{ID: 8},
+		CoverKey: &value,
+	}, &value, nil)
+
+	require.Equal(t, []string{"same/cover.jpg"}, candidates)
+}
+
+func TestMusicAlbumGarageCoverCandidates_IncludesSourceIcons(t *testing.T) {
+	srcCover := "legacy/icon.jpg"
+
+	candidates := musicAlbumGarageCoverCandidates(model.MusicAlbum{
+		Base: model.Base{ID: 8},
+	}, nil, []string{srcCover})
+
+	require.Equal(t, []string{"legacy/icon.jpg"}, candidates)
+}
+
+func TestFindLegacyMusicBackgroundImage_ReadsSourceRow(t *testing.T) {
+	src, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer src.Close()
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT background_img_url FROM music WHERE ID = ?")).
+		WithArgs(uint(3)).
+		WillReturnRows(sqlmock.NewRows([]string{"background_img_url"}).AddRow("covers/bg.jpg"))
+
+	cover, found, err := findLegacyMusicBackgroundImage(src, 3)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, "covers/bg.jpg", cover)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListLegacyMusicCoverByAlbumID_UsesSourceBackgroundImage(t *testing.T) {
+	src, srcMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer src.Close()
+
+	db, dstMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer db.Close()
+
+	gormDB, err := gorm.Open(mysql.New(mysql.Config{
+		Conn:                      db,
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{})
+	require.NoError(t, err)
+
+	dstMock.ExpectQuery(regexp.QuoteMeta("SELECT `id`,`album_id` FROM `music`")).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "album_id"}).AddRow(3, 8))
+	srcMock.ExpectQuery(regexp.QuoteMeta("SELECT background_img_url FROM music WHERE ID = ?")).
+		WithArgs(uint(3)).
+		WillReturnRows(sqlmock.NewRows([]string{"background_img_url"}).AddRow("covers/bg.jpg"))
+	dstMock.ExpectQuery(regexp.QuoteMeta("SELECT `id`,`name` FROM `music_album`")).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name"}).AddRow(8, "Album A"))
+
+	byAlbum, err := listLegacyMusicCoverByAlbumID(src, gormDB)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"covers/bg.jpg"}, byAlbum[8])
+	require.NoError(t, srcMock.ExpectationsWereMet())
+	require.NoError(t, dstMock.ExpectationsWereMet())
 }
 
 func TestBuildMomentMediaGaragePlan_RewritesSayPath(t *testing.T) {

@@ -240,6 +240,9 @@ func autoMigrate(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
+	if err := normalizeMusicSchema(db); err != nil {
+		return err
+	}
 	return normalizeMomentMediaSchema(db)
 }
 
@@ -303,6 +306,29 @@ func tableColumnExists(db *gorm.DB, table string, column string) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func normalizeMusicSchema(db *gorm.DB) error {
+	hasURL, err := tableColumnExists(db, "music", "url")
+	if err != nil {
+		return err
+	}
+	if !hasURL {
+		return nil
+	}
+	if err := db.Exec(`
+		UPDATE music
+		SET audio_key = url
+		WHERE (audio_key IS NULL OR audio_key = '')
+		  AND url IS NOT NULL
+		  AND url <> ''
+	`).Error; err != nil {
+		return fmt.Errorf("迁移 music.url 到 audio_key 失败: %w", err)
+	}
+	if err := db.Exec("ALTER TABLE `music` DROP COLUMN `url`").Error; err != nil {
+		return fmt.Errorf("删除 music.url 失败: %w", err)
+	}
+	return nil
 }
 
 // hasData 检查目标表是否已有数据（幂等保护）
@@ -582,7 +608,7 @@ func migrateGarageObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier 
 	if err != nil {
 		return err
 	}
-	musicStats, err := migrateGarageMusicObjects(ctx, db, copier, bucket)
+	musicStats, err := migrateGarageMusicObjects(ctx, src, db, copier, bucket)
 	if err != nil {
 		return err
 	}
@@ -720,12 +746,12 @@ func migrateGarageMomentMediaObjects(ctx context.Context, src *sql.DB, db *gorm.
 	return stats, nil
 }
 
-func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageCopier, bucket string) (garageRunStats, error) {
+func migrateGarageMusicObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier *garageCopier, bucket string) (garageRunStats, error) {
 	stats := garageRunStats{}
 
 	var songs []model.Music
 	if err := db.Model(&model.Music{}).
-		Select("id", "album_id", "audio_key", "url").
+		Select("id", "album_id", "audio_key").
 		Order("id ASC").
 		Find(&songs).Error; err != nil {
 		return garageRunStats{}, err
@@ -777,7 +803,7 @@ func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageC
 
 	var albums []model.MusicAlbum
 	if err := db.Model(&model.MusicAlbum{}).
-		Select("id", "cover_key").
+		Select("id", "name", "cover_key").
 		Order("id ASC").
 		Find(&albums).Error; err != nil {
 		return stats, err
@@ -787,25 +813,74 @@ func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageC
 	if err != nil {
 		return stats, err
 	}
+	sourceCoverByAlbumID, err := listLegacyMusicCoverByAlbumID(src, db)
+	if err != nil {
+		return stats, err
+	}
 
 	for _, album := range albums {
-		coverRaw := musicAlbumCoverRaw(album.CoverKey, albumCoverByID[album.ID])
-		if coverRaw == "" {
-			continue
-		}
-		sourceKey, skippedExternal := resolveMusicGarageSourceKey(coverRaw, bucket, copier)
-		if skippedExternal {
-			log.Printf("  Garage 音乐跳过外部封面 URL album_id=%d url=%s", album.ID, coverRaw)
-			stats.skipped++
-			continue
-		}
-		if sourceKey == "" {
-			stats.skipped++
+		coverCandidates := musicAlbumGarageCoverCandidates(
+			album,
+			albumCoverByID[album.ID],
+			sourceCoverByAlbumID[album.ID],
+		)
+		if len(coverCandidates) == 0 {
+			log.Printf("  Garage 音乐封面跳过 album_id=%d name=%q 无封面源（检查 music_album.cover_key、music.cover_img_url、源库 music.background_img_url）", album.ID, album.Name)
 			continue
 		}
 
-		albumID := album.ID
-		plan := buildMusicGaragePlan(0, &albumID, "", sourceKey)
+		var (
+			plan            musicGaragePlan
+			migrated        bool
+			skippedExternal bool
+		)
+		for _, coverRaw := range coverCandidates {
+			sourceKey, external := resolveMusicGarageSourceKey(coverRaw, bucket, copier)
+			if external {
+				skippedExternal = true
+				log.Printf("  Garage 音乐封面候选跳过外部 URL album_id=%d url=%s", album.ID, coverRaw)
+				continue
+			}
+			if sourceKey == "" {
+				continue
+			}
+			if isMigratedMusicAlbumCoverKey(album.ID, sourceKey) {
+				exists, err := copier.client.ObjectExists(ctx, sourceKey)
+				if err == nil && exists {
+					migrated = true
+					break
+				}
+				log.Printf("  Garage 音乐封面候选已迁路径但对象不存在 album_id=%d key=%s", album.ID, sourceKey)
+				continue
+			}
+			sourceExists, err := copier.client.ObjectExists(ctx, sourceKey)
+			if err != nil {
+				log.Printf("  Garage 音乐封面候选检查源对象失败 album_id=%d key=%s error=%v", album.ID, sourceKey, err)
+				continue
+			}
+			if !sourceExists {
+				log.Printf("  Garage 音乐封面候选源对象不存在 album_id=%d key=%s", album.ID, sourceKey)
+				continue
+			}
+
+			albumID := album.ID
+			candidate := buildMusicGaragePlan(0, &albumID, "", sourceKey)
+			if !candidate.HasCoverChanges() {
+				continue
+			}
+			plan = candidate
+			migrated = true
+			break
+		}
+		if !migrated {
+			if skippedExternal {
+				stats.skipped++
+				log.Printf("  Garage 音乐封面跳过 album_id=%d name=%q 封面为外部 URL", album.ID, album.Name)
+			} else {
+				log.Printf("  Garage 音乐封面跳过 album_id=%d name=%q 无可用 Garage 源对象 candidates=%v", album.ID, album.Name, coverCandidates)
+			}
+			continue
+		}
 		if !plan.HasCoverChanges() {
 			stats.skipped++
 			continue
@@ -837,30 +912,161 @@ func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageC
 }
 
 type musicAlbumLegacyCoverRow struct {
-	AlbumID     uint
-	CoverImgURL *string
+	AlbumID     uint    `gorm:"column:album_id"`
+	CoverImgURL *string `gorm:"column:cover_img_url"`
 }
 
 func listMusicAlbumLegacyCoverByID(db *gorm.DB) (map[uint]*string, error) {
 	var rows []musicAlbumLegacyCoverRow
-	if err := db.Model(&model.Music{}).
-		Select("album_id", "cover_img_url").
-		Where("album_id IS NOT NULL AND cover_img_url IS NOT NULL AND cover_img_url <> ''").
-		Order("id ASC").
-		Scan(&rows).Error; err != nil {
+	if err := db.Raw(`
+		SELECT album_id, cover_img_url
+		FROM music
+		WHERE album_id IS NOT NULL
+		  AND cover_img_url IS NOT NULL
+		  AND cover_img_url <> ''
+		  AND deleted_at IS NULL
+		ORDER BY id ASC
+	`).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	byAlbumID := make(map[uint]*string, len(rows))
 	for _, row := range rows {
-		if row.AlbumID == 0 {
+		if row.AlbumID == 0 || row.CoverImgURL == nil {
 			continue
 		}
 		if byAlbumID[row.AlbumID] != nil {
 			continue
 		}
-		byAlbumID[row.AlbumID] = row.CoverImgURL
+		value := strings.TrimSpace(*row.CoverImgURL)
+		if value == "" {
+			continue
+		}
+		copied := value
+		byAlbumID[row.AlbumID] = &copied
 	}
 	return byAlbumID, nil
+}
+
+func musicAlbumGarageCoverCandidates(album model.MusicAlbum, legacyCover *string, sourceCovers []string) []string {
+	seen := make(map[string]struct{}, 4)
+	out := make([]string, 0, 4)
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if album.CoverKey != nil {
+		add(*album.CoverKey)
+	}
+	if legacyCover != nil {
+		add(*legacyCover)
+	}
+	for _, cover := range sourceCovers {
+		add(cover)
+	}
+	return out
+}
+
+func listLegacyMusicCoverByAlbumID(src *sql.DB, db *gorm.DB) (map[uint][]string, error) {
+	result := make(map[uint][]string)
+	if src == nil {
+		return result, nil
+	}
+
+	var songs []model.Music
+	if err := db.Model(&model.Music{}).
+		Select("id", "album_id").
+		Where("album_id IS NOT NULL").
+		Order("id ASC").
+		Find(&songs).Error; err != nil {
+		return nil, err
+	}
+	for _, song := range songs {
+		if song.AlbumID == nil {
+			continue
+		}
+		cover, found, err := findLegacyMusicBackgroundImage(src, song.ID)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			appendMusicCoverCandidate(result, *song.AlbumID, cover)
+		}
+	}
+
+	var albums []model.MusicAlbum
+	if err := db.Model(&model.MusicAlbum{}).Select("id", "name").Order("id ASC").Find(&albums).Error; err != nil {
+		return nil, err
+	}
+	for _, album := range albums {
+		if len(result[album.ID]) > 0 {
+			continue
+		}
+		cover, found, err := findLegacyMusicBackgroundImageByAlbumName(src, album.Name)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			appendMusicCoverCandidate(result, album.ID, cover)
+		}
+	}
+	return result, nil
+}
+
+func appendMusicCoverCandidate(result map[uint][]string, albumID uint, value string) {
+	value = strings.TrimSpace(value)
+	if albumID == 0 || value == "" {
+		return
+	}
+	for _, existing := range result[albumID] {
+		if existing == value {
+			return
+		}
+	}
+	result[albumID] = append(result[albumID], value)
+}
+
+func findLegacyMusicBackgroundImage(src *sql.DB, musicID uint) (string, bool, error) {
+	var cover sql.NullString
+	err := src.QueryRow("SELECT background_img_url FROM music WHERE ID = ?", musicID).Scan(&cover)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("查询源 music background_img_url id=%d 失败: %w", musicID, err)
+	}
+	if !cover.Valid || strings.TrimSpace(cover.String) == "" {
+		return "", false, nil
+	}
+	return strings.TrimSpace(cover.String), true, nil
+}
+
+func findLegacyMusicBackgroundImageByAlbumName(src *sql.DB, albumName string) (string, bool, error) {
+	albumName = strings.TrimSpace(albumName)
+	if albumName == "" {
+		return "", false, nil
+	}
+	var cover sql.NullString
+	err := src.QueryRow(
+		"SELECT background_img_url FROM music WHERE album = ? AND background_img_url IS NOT NULL AND background_img_url <> '' ORDER BY ID LIMIT 1",
+		albumName,
+	).Scan(&cover)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("查询源 music album=%s background_img_url 失败: %w", albumName, err)
+	}
+	if !cover.Valid || strings.TrimSpace(cover.String) == "" {
+		return "", false, nil
+	}
+	return strings.TrimSpace(cover.String), true, nil
 }
 
 func listMomentMediaGarageRows(src *sql.DB, db *gorm.DB) ([]momentMediaGarageRow, error) {
@@ -1019,9 +1225,6 @@ func musicGarageAudioRaw(song model.Music) string {
 			return value
 		}
 	}
-	if song.URL != nil {
-		return strings.TrimSpace(*song.URL)
-	}
 	return ""
 }
 
@@ -1059,10 +1262,7 @@ func resolveMusicGarageSourceKey(value, bucket string, copier *garageCopier) (st
 func updateMusicGarageAudioKey(db *gorm.DB, plan musicGaragePlan) error {
 	return db.Model(&model.Music{}).
 		Where("id = ?", plan.MusicID).
-		UpdateColumns(map[string]any{
-			"audio_key": plan.TargetAudioKey,
-			"url":       plan.TargetAudioKey,
-		}).Error
+		UpdateColumn("audio_key", plan.TargetAudioKey).Error
 }
 
 func updateMusicAlbumGarageCoverKey(db *gorm.DB, albumID uint, targetKey string) error {
@@ -1722,12 +1922,12 @@ func migrateTag(src *sql.DB, dst *gorm.DB) error {
 // 关键转换：
 //   song_date varchar(15) → date（尝试解析 "YYYYMMDD" 等格式）
 //   music_time varchar(10) → duration smallint（"mm:ss" → 秒）
-//   icon → cover_img_url（字段改名，源库用 icon 存封面）
+//   background_img_url → music_album.cover_key（专辑封面对象 key）
 //   lyric → text 类型（容量不受限）
 
 func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 	rows, err := src.Query(`
-		SELECT ID, name, singer, album, song_date, url, icon,
+		SELECT ID, name, singer, album, song_date, url, background_img_url,
 		       description, lyric, seq, music_time,
 		       date_create, date_modifed, is_use
 		FROM music ORDER BY ID`)
@@ -1747,7 +1947,7 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 			album       sql.NullString
 			songDate    sql.NullString
 			url         sql.NullString
-			icon        sql.NullString
+			bgImgURL    sql.NullString
 			description sql.NullString
 			lyric       sql.NullString
 			seq         sql.NullInt32
@@ -1756,7 +1956,7 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 			dateModifed sql.NullTime
 			isUse       sql.NullString
 		)
-		if err := rows.Scan(&id, &name, &singer, &album, &songDate, &url, &icon,
+		if err := rows.Scan(&id, &name, &singer, &album, &songDate, &url, &bgImgURL,
 			&description, &lyric, &seq, &musicTime,
 			&dateCreate, &dateModifed, &isUse); err != nil {
 			return err
@@ -1802,11 +2002,18 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 
 			if existedID, ok := albumIDByKey[albumKey]; ok {
 				albumID = &existedID
+				if bgImgURL.Valid && strings.TrimSpace(bgImgURL.String) != "" {
+					if err := dst.Model(&model.MusicAlbum{}).
+						Where("id = ? AND (cover_key IS NULL OR cover_key = '')", existedID).
+						UpdateColumn("cover_key", strings.TrimSpace(bgImgURL.String)).Error; err != nil {
+						return fmt.Errorf("backfill music_album cover_key album_id=%d: %w", existedID, err)
+					}
+				}
 			} else {
 				album := model.MusicAlbum{
 					Name:        albumName,
 					ArtistID:    primaryArtistID,
-					CoverKey:    nullStr(icon),
+					CoverKey:    nullStr(bgImgURL),
 					ReleaseDate: parseSongDate(songDate),
 				}
 				q := dst.Where("name = ?", albumName)
@@ -1827,14 +2034,10 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 		m := model.Music{
 			Base:              migrationBase(id, dateCreate, dateModifed),
 			Name:              name.String,
-			Singer:            singer.String,
 			ArtistDisplayName: singerText,
-			Album:             album.String,
 			AlbumID:           albumID,
 			SongDate:          parseSongDate(songDate),
-			URL:               nullStr(url),
 			AudioKey:          audioKey,
-			CoverImgUrl:       nullStr(icon),
 			Description:       nullStr(description),
 			Lyric:             nullStr(lyric),
 			Duration:          parseMusicDuration(musicTime),

@@ -44,7 +44,7 @@ ALTER TABLE `music`
   ADD COLUMN `album_id` bigint unsigned DEFAULT NULL COMMENT '专辑ID' AFTER `album`,
   ADD COLUMN `artist_display_name` varchar(200) NOT NULL DEFAULT '' COMMENT '歌手展示名' AFTER `singer`,
   ADD COLUMN `album_track_no` smallint unsigned NOT NULL DEFAULT 0 COMMENT '专辑序号' AFTER `album_id`,
-  ADD COLUMN `audio_key` varchar(500) DEFAULT NULL COMMENT '音频对象 key' AFTER `url`,
+  ADD COLUMN `audio_key` varchar(500) DEFAULT NULL COMMENT '音频对象 key' AFTER `song_date`,
   ADD COLUMN `audio_size` bigint unsigned NOT NULL DEFAULT 0 COMMENT '音频大小' AFTER `audio_key`,
   ADD COLUMN `audio_mime` varchar(100) NOT NULL DEFAULT '' COMMENT '音频 MIME' AFTER `audio_size`,
   ADD COLUMN `audio_hash` varchar(64) NOT NULL DEFAULT '' COMMENT '音频 hash' AFTER `audio_mime`,
@@ -55,5 +55,10 @@ ALTER TABLE `music`
 
 UPDATE `music`
 SET `artist_display_name` = COALESCE(NULLIF(TRIM(`singer`), ''), ''),
-    `audio_key` = `url`
-WHERE `artist_display_name` = '';
+    `audio_key` = COALESCE(NULLIF(`audio_key`, ''), NULLIF(`url`, ''))
+WHERE `artist_display_name` = ''
+   OR `audio_key` IS NULL
+   OR `audio_key` = '';
+
+ALTER TABLE `music`
+  DROP COLUMN `url`;
