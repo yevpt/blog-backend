@@ -193,6 +193,40 @@ func TestMusicService_SaveMusic_RejectsMissingArtists(t *testing.T) {
 	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
 }
 
+func TestMusicService_SaveMusic_PersistsAudioMetadata(t *testing.T) {
+	repo := &captureMusicRepository{
+		stubMusicRepository: stubMusicRepository{
+			artists: []model.MusicArtist{{Base: model.Base{ID: 1}, Name: "Aimer"}},
+		},
+	}
+	svc := music.NewMusicService(repo, stubMusicObjectStore{})
+
+	err := svc.SaveMusic(context.Background(), 1, dto.MusicSaveReq{
+		Name:      "Song",
+		ArtistIDs: []uint{1},
+		AudioKey:  "legacy/audio.mp3",
+		AudioSize: 123456,
+		AudioMime: "audio/mpeg",
+		AudioHash: "abc123",
+		IsPublic:  true,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(123456), repo.saved.Music.AudioSize)
+	assert.Equal(t, "audio/mpeg", repo.saved.Music.AudioMime)
+	assert.Equal(t, "abc123", repo.saved.Music.AudioHash)
+}
+
+type captureMusicRepository struct {
+	stubMusicRepository
+	saved musicrepo.MusicSaveData
+}
+
+func (s *captureMusicRepository) SaveMusic(data musicrepo.MusicSaveData) error {
+	s.saved = data
+	return s.stubMusicRepository.SaveMusic(data)
+}
+
 func TestSplitArtistDisplayName_WithChineseTranslation(t *testing.T) {
 	name, nameZh := music.SplitArtistDisplayName("문성남 (文胜南)")
 

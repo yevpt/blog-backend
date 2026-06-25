@@ -85,6 +85,9 @@ type MusicSaveReq struct {
 	AlbumID           *uint   `json:"album_id"`
 	AlbumTrackNo      uint16  `json:"album_track_no"`
 	AudioKey          string  `json:"audio_key" binding:"required,max=500"`
+	AudioSize         uint64  `json:"audio_size"`
+	AudioMime         string  `json:"audio_mime" binding:"omitempty,max=100"`
+	AudioHash         string  `json:"audio_hash" binding:"omitempty,max=64"`
 	Lyric             *string `json:"lyric"`
 	Duration          uint16  `json:"duration"`
 	IsPublic          bool    `json:"is_public"`
