@@ -59,7 +59,7 @@ type UserResp struct {
 type LoginResp struct {
 	AccessToken  string   `json:"access_token"`
 	RefreshToken string   `json:"refresh_token"`
-	ExpiresIn    int      `json:"expires_in"` // 单位：秒，固定 7200（2h）
+	ExpiresIn    int      `json:"expires_in"` // 单位：秒，跟随 JWT access token 配置
 	User         UserResp `json:"user"`
 }
 

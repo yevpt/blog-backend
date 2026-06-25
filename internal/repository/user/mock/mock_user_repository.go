@@ -264,6 +264,20 @@ func (mr *MockUserRepositoryMockRecorder) FindRolesByUserIDs(userIDs any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindRolesByUserIDs", reflect.TypeOf((*MockUserRepository)(nil).FindRolesByUserIDs), userIDs)
 }
 
+// GrantVipRole mocks base method.
+func (m *MockUserRepository) GrantVipRole(userID uint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GrantVipRole", userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GrantVipRole indicates an expected call of GrantVipRole.
+func (mr *MockUserRepositoryMockRecorder) GrantVipRole(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GrantVipRole", reflect.TypeOf((*MockUserRepository)(nil).GrantVipRole), userID)
+}
+
 // ListAll mocks base method.
 func (m *MockUserRepository) ListAll(offset, limit int) ([]model.User, int64, error) {
 	m.ctrl.T.Helper()
@@ -309,6 +323,20 @@ func (m *MockUserRepository) ListRecent(offset, limit int) ([]model.User, int64,
 func (mr *MockUserRepositoryMockRecorder) ListRecent(offset, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRecent", reflect.TypeOf((*MockUserRepository)(nil).ListRecent), offset, limit)
+}
+
+// RevokeVipRole mocks base method.
+func (m *MockUserRepository) RevokeVipRole(userID uint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevokeVipRole", userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RevokeVipRole indicates an expected call of RevokeVipRole.
+func (mr *MockUserRepositoryMockRecorder) RevokeVipRole(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeVipRole", reflect.TypeOf((*MockUserRepository)(nil).RevokeVipRole), userID)
 }
 
 // Update mocks base method.

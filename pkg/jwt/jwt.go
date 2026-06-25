@@ -38,6 +38,11 @@ func NewManager(secret string, expireHours int, refreshExpireHours int) *Manager
 	}
 }
 
+// AccessExpiresInSeconds 返回 access token 配置的有效期，单位为秒。
+func (m *Manager) AccessExpiresInSeconds() int {
+	return int((time.Duration(m.expireHours) * time.Hour) / time.Second)
+}
+
 // GenerateAccess 签发短期 access token，只存 userId，不存可变字段
 func (m *Manager) GenerateAccess(userId int64) (string, error) {
 	return m.generate(userId, "access", m.expireHours)

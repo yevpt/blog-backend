@@ -51,6 +51,10 @@ func (m *mockCaptchaTokenConsumer) ConsumeRegistrationToken(token string, ip str
 }
 
 func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
+	return setupServiceWithJWT(t, jwtpkg.NewManager("secret", 2, 168))
+}
+
+func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
 
@@ -60,7 +64,6 @@ func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserReposito
 
 	mailer := &mockMailSender{}
 	captchaConsumer := &mockCaptchaTokenConsumer{}
-	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 
 	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil, nil, nil)
 	return svc, repo, rdb, mr, mailer, captchaConsumer
@@ -262,6 +265,34 @@ func TestAuthService_Login_Success(t *testing.T) {
 	assert.Equal(t, 7200, resp.ExpiresIn)
 }
 
+func TestAuthService_Login_ExpiresInFollowsJWTConfig(t *testing.T) {
+	svc, repo, _, mr, _, _ := setupServiceWithJWT(t, jwtpkg.NewManager("secret", 5, 168))
+	defer mr.Close()
+
+	rawPwd := "password123"
+	hashedBytes, _ := bcrypt.GenerateFromPassword([]byte(rawPwd), bcrypt.MinCost)
+	email := "user@example.com"
+
+	gomock.InOrder(
+		repo.EXPECT().FindByIdentifier("user@example.com").Return(&model.User{
+			Username: email,
+			Password: string(hashedBytes),
+			Email:    &email,
+			Status:   1,
+		}, nil),
+		repo.EXPECT().UpdateLastLoginAt(uint(0)).Return(nil),
+		repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
+	)
+
+	resp, err := svc.Login(&dto.LoginReq{
+		Identifier: "user@example.com",
+		Password:   rawPwd,
+	}, "127.0.0.1")
+
+	require.NoError(t, err)
+	assert.Equal(t, 5*60*60, resp.ExpiresIn)
+}
+
 func TestAuthService_Login_WrongPassword(t *testing.T) {
 	svc, repo, _, mr, _, _ := setupService(t)
 	defer mr.Close()
@@ -363,6 +394,19 @@ func TestAuthService_Refresh_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
+}
+
+func TestAuthService_Refresh_ExpiresInFollowsJWTConfig(t *testing.T) {
+	jwtMgr := jwtpkg.NewManager("secret", 5, 168)
+	svc, _, _, mr, _, _ := setupServiceWithJWT(t, jwtMgr)
+	defer mr.Close()
+
+	refreshToken, _ := jwtMgr.GenerateRefresh(1)
+
+	resp, err := svc.Refresh(refreshToken)
+
+	require.NoError(t, err)
+	assert.Equal(t, 5*60*60, resp.ExpiresIn)
 }
 
 func TestAuthService_Refresh_AccessTokenRejected(t *testing.T) {

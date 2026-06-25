@@ -332,7 +332,7 @@ func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
 	return &dto.LoginResp{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    7200,
+		ExpiresIn:    s.jwt.AccessExpiresInSeconds(),
 		User: dto.UserResp{
 			ID:            user.ID,
 			Username:      user.Username,
@@ -426,7 +426,7 @@ func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginR
 	return &dto.LoginResp{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
-		ExpiresIn:    7200,
+		ExpiresIn:    s.jwt.AccessExpiresInSeconds(),
 		User: dto.UserResp{
 			ID:            user.ID,
 			Username:      user.Username,
@@ -471,11 +471,11 @@ func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
 		return nil, err
 	}
 
-	// 返回新双 token，旧 refresh token 从此不再有效（无状态 rotation，旧 token 自然过期）
+	// 返回新双 token；当前 refresh token 是无状态 JWT，旧 token 会按自身 exp 自然过期。
 	return &dto.TokenResp{
 		AccessToken:  newAccess,
 		RefreshToken: newRefresh,
-		ExpiresIn:    7200,
+		ExpiresIn:    s.jwt.AccessExpiresInSeconds(),
 	}, nil
 }
 
