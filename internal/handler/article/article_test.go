@@ -278,6 +278,30 @@ func TestArticleHandler_Save_BadRequest(t *testing.T) {
 	assert.Equal(t, response.CodeBadRequest, resp.Code)
 }
 
+func TestArticleHandler_Save_BadRequestForMissingMusic(t *testing.T) {
+	r := newArticleRouter(&stubArticleService{saveErr: articleservice.ErrArticleMusicNotFound})
+	body, err := json.Marshal(dto.ArticleSaveReq{
+		Title:         "A",
+		Content:       "body",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+		MusicIDs:      []uint{999},
+	})
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/articles", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "音乐不存在", resp.Message)
+}
+
 func TestArticleHandler_Save_BadRequestForExternalImage(t *testing.T) {
 	r := newArticleRouter(&stubArticleService{saveErr: articleservice.ErrArticleImageExternal})
 

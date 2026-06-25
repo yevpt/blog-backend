@@ -323,6 +323,7 @@ func writeArticleResponse(c *gin.Context, data any, err error) {
 	}
 	if errors.Is(err, articleservice.ErrArticlePasswordRequired) ||
 		errors.Is(err, articleservice.ErrArticleCategoryRequired) ||
+		errors.Is(err, articleservice.ErrArticleMusicNotFound) ||
 		errors.Is(err, articleservice.ErrArticleImageExternal) ||
 		errors.Is(err, articleservice.ErrArticleImageInvalid) ||
 		errors.Is(err, articleservice.ErrArticleImageNotFound) {
