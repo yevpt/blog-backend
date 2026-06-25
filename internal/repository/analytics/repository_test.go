@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
@@ -41,6 +42,23 @@ func TestUpsertDaily(t *testing.T) {
 	mock.ExpectCommit()
 
 	err := r.UpsertDaily(context.Background(), model.AnalyticsDaily{Date: "2026-06-24", PV: 10, UV: 5})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUpsertSession_IncrementsPVCount(t *testing.T) {
+	r, mock := newRepo(t)
+	mock.ExpectBegin()
+	// 冲突分支必须自增 pv_count（而非覆盖）。正则匹配渲染后的 ON DUPLICATE KEY UPDATE。
+	mock.ExpectExec("ON DUPLICATE KEY UPDATE.*pv_count.*pv_count \\+ 1").
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	err := r.UpsertSession(context.Background(), model.AnalyticsSession{
+		SessionID: "s1", VisitorID: "v1", PVCount: 1, IsBounce: true,
+		FirstSeen: time.Unix(1000, 0), LastSeen: time.Unix(1100, 0),
+		EntryPath: "/a", ExitPath: "/b",
+	})
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

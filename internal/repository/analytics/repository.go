@@ -53,9 +53,15 @@ func (r *repository) InsertEvents(ctx context.Context, events []model.AnalyticsE
 func (r *repository) UpsertSession(ctx context.Context, s model.AnalyticsSession) error {
 	err := r.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "session_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{
-			"last_seen", "pv_count", "exit_path", "duration", "is_bounce",
-			"user_id", "is_authenticated",
+		DoUpdates: clause.Assignments(map[string]any{
+			// 同一会话再来一次 PV：累计计数、刷新末路径/时间，并据此重算停留与跳出。
+			"pv_count":         gorm.Expr("pv_count + 1"),
+			"is_bounce":        false, // 出现第二次 PV，不再算跳出
+			"last_seen":        s.LastSeen,
+			"exit_path":        s.ExitPath,
+			"duration":         gorm.Expr("TIMESTAMPDIFF(SECOND, first_seen, ?)", s.LastSeen),
+			"user_id":          s.UserID,
+			"is_authenticated": s.IsAuthenticated,
 		}),
 	}).Create(&s).Error
 	if err != nil {

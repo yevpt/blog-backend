@@ -96,6 +96,7 @@ func sessionFrom(ev model.AnalyticsEvent, now time.Time) model.AnalyticsSession 
 		FirstSeen:       now,
 		LastSeen:        now,
 		PVCount:         1,
+		IsBounce:        true,
 		EntryPath:       ev.Path,
 		ExitPath:        ev.Path,
 		DeviceType:      ev.DeviceType,
