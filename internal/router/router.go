@@ -314,7 +314,8 @@ func newAnalyticsCollectHandler(
 	ingestor := analyticsworker.NewIngestor(analyticsRepo, analyticsCfg.ChannelBuffer, 100, 2*time.Second, log)
 	sessionIng := analyticsworker.NewSessionIngestor(ingestor, analyticsRepo)
 	dedup := analyticsservice.NewDedupChecker(uvSvc)
-	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, log)
+	tokenVerifier := analyticsservice.NewCollectTokenVerifier(analyticsCfg.CollectTokenSecret, analyticsCfg.CollectTokenTTL, nil)
+	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, tokenVerifier, log)
 
 	// 后台只读查询复用同一 repo（历史累计）与 realtime（今日/在线），不另起依赖图。
 	querySvc := analyticsservice.NewQueryService(analyticsRepo, realtime, log)

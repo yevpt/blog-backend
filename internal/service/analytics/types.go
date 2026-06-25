@@ -16,6 +16,9 @@ type RawEvent struct {
 	Signals      CollectSignals
 	// OriginAllowed 标记请求 Origin 是否在允许列表内（由 collect 处理器计算并注入）。
 	OriginAllowed bool
+	// IsSuspect / SuspectReason 由 DecideSuspect 在 collect 编排阶段写入，再透传给富化。
+	IsSuspect     bool
+	SuspectReason string
 }
 
 // CollectSignals 是 tracker 侧注入的反自动化提示信号。

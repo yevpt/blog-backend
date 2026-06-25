@@ -26,21 +26,26 @@ type CollectService interface {
 }
 
 type collectService struct {
-	enricher Enricher
-	realtime Realtime
-	ingestor SessionIngestor
-	dedup    DedupChecker
-	logger   *zap.Logger
+	enricher      Enricher
+	realtime      Realtime
+	ingestor      SessionIngestor
+	dedup         DedupChecker
+	tokenVerifier CollectTokenVerifier
+	logger        *zap.Logger
 }
 
-// NewCollectService 注入富化、实时、入库、去重依赖，构造编排服务。
-func NewCollectService(enricher Enricher, realtime Realtime, ingestor SessionIngestor, dedup DedupChecker, logger *zap.Logger) CollectService {
-	return &collectService{enricher: enricher, realtime: realtime, ingestor: ingestor, dedup: dedup, logger: logger}
+// NewCollectService 注入富化、实时、入库、去重、token 校验依赖，构造编排服务。
+func NewCollectService(enricher Enricher, realtime Realtime, ingestor SessionIngestor, dedup DedupChecker, tokenVerifier CollectTokenVerifier, logger *zap.Logger) CollectService {
+	return &collectService{enricher: enricher, realtime: realtime, ingestor: ingestor, dedup: dedup, tokenVerifier: tokenVerifier, logger: logger}
 }
 
 // Handle 编排单次上报：富化 → 刷新在线 → 按事件类型分支处理。
 // 非关键路径（实时层、入库、会话）失败仅 Warn，不阻断上报。
 func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
+	// 先做 suspect 决策再富化：后续在线/今日计数均以 IsSuspect 门控，须在 Enrich 前写入 raw。
+	tokenOK, tokenReason := s.tokenVerifier.Verify(raw.CollectToken)
+	raw.IsSuspect, raw.SuspectReason = DecideSuspect(raw, tokenOK, tokenReason)
+
 	ev := s.enricher.Enrich(raw)
 	now := time.Now()
 	ev.CreatedAt = now

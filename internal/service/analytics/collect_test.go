@@ -16,9 +16,10 @@ type fakeIngestor struct {
 	submitted int
 	upserts   int
 	touches   int
+	lastEvent model.AnalyticsEvent
 }
 
-func (f *fakeIngestor) Submit(model.AnalyticsEvent) bool { f.submitted++; return true }
+func (f *fakeIngestor) Submit(ev model.AnalyticsEvent) bool { f.submitted++; f.lastEvent = ev; return true }
 func (f *fakeIngestor) UpsertSession(context.Context, model.AnalyticsSession) error {
 	f.upserts++
 	return nil
@@ -42,7 +43,7 @@ func enr() svc.Enricher { return svc.NewEnricher(fakeGeo{}, "yevpt.com", "salt")
 
 func TestCollectPageView(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
 	err := cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true,
 	})
@@ -55,7 +56,7 @@ func TestCollectPageView(t *testing.T) {
 
 func TestCollectSuspectNotCounted(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
 	// 伪造/不允许的 Origin → IsSuspect=true（非 bot）。
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: false}))
@@ -65,9 +66,22 @@ func TestCollectSuspectNotCounted(t *testing.T) {
 	assert.Equal(t, 1, ing.upserts)   // 会话仍 upsert
 }
 
+func TestCollectInvalidTokenMarksSuspect(t *testing.T) {
+	ing, rt := &fakeIngestor{}, &fakeRT{}
+	// 非空 secret + 非法 token → suspect，不计在线/今日，但仍入库带原因。
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("secret", 0, nil), zap.NewNop())
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true, CollectToken: "bad.token"}))
+	assert.Equal(t, 0, rt.online)
+	assert.Equal(t, 0, rt.incr)
+	assert.Equal(t, 1, ing.submitted)
+	assert.True(t, ing.lastEvent.IsSuspect)
+	assert.Equal(t, "collect_token_invalid", ing.lastEvent.SuspectReason)
+}
+
 func TestCollectDuplicatePVSkipsCount(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: true}, zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: true}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, ing.submitted)
@@ -77,7 +91,7 @@ func TestCollectDuplicatePVSkipsCount(t *testing.T) {
 
 func TestCollectBotNotCounted(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Googlebot/2.1"}))
 	assert.Equal(t, 0, rt.incr)        // bot 不计今日
@@ -86,7 +100,7 @@ func TestCollectBotNotCounted(t *testing.T) {
 
 func TestCollectHeartbeat(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, ing.submitted) // 心跳不入事件表

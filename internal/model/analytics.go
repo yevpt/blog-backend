@@ -24,6 +24,7 @@ type AnalyticsEvent struct {
 	IsBot           bool   `gorm:"index"`
 	BotReason       string `gorm:"type:varchar(64)"`
 	IsSuspect       bool
+	SuspectReason   string    `gorm:"type:varchar(64)"`
 	CreatedAt       time.Time `gorm:"index"`
 }
 

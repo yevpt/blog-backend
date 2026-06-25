@@ -50,14 +50,17 @@ func TestEnrichBot(t *testing.T) {
 	assert.False(t, got.IsAuthenticated)
 }
 
-func TestEnrichOriginAllowed(t *testing.T) {
+func TestEnrichPassesThroughSuspect(t *testing.T) {
+	// suspect 判定已上移到 DecideSuspect，富化仅透传 raw.IsSuspect/SuspectReason。
 	e := svc.NewEnricher(fakeGeo{}, "yevpt.com", "salt")
 
-	allowed := e.Enrich(svc.RawEvent{EventType: "page_view", VisitorID: "v", SessionID: "s",
-		Path: "/", IP: "1.2.3.4", OriginAllowed: true})
-	assert.False(t, allowed.IsSuspect)
+	clean := e.Enrich(svc.RawEvent{EventType: "page_view", VisitorID: "v", SessionID: "s",
+		Path: "/", IP: "1.2.3.4"})
+	assert.False(t, clean.IsSuspect)
+	assert.Empty(t, clean.SuspectReason)
 
-	denied := e.Enrich(svc.RawEvent{EventType: "page_view", VisitorID: "v", SessionID: "s",
-		Path: "/", IP: "1.2.3.4", OriginAllowed: false})
-	assert.True(t, denied.IsSuspect)
+	suspect := e.Enrich(svc.RawEvent{EventType: "page_view", VisitorID: "v", SessionID: "s",
+		Path: "/", IP: "1.2.3.4", IsSuspect: true, SuspectReason: "origin_denied"})
+	assert.True(t, suspect.IsSuspect)
+	assert.Equal(t, "origin_denied", suspect.SuspectReason)
 }

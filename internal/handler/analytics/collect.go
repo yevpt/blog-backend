@@ -53,6 +53,8 @@ func (h *CollectHandler) Collect(c *gin.Context) {
 		Origin:        origin,
 		OriginAllowed: h.originAllowed(origin),
 		UserID:        userIDFromContext(c),
+		CollectToken:  req.CollectToken,
+		Signals:       svc.CollectSignals{WebDriver: req.Signals.WebDriver, NoInteraction: req.Signals.NoInteraction},
 	}
 	_ = h.svc.Handle(c.Request.Context(), raw)
 	c.Status(http.StatusNoContent)

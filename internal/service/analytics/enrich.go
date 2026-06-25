@@ -49,7 +49,8 @@ func (e *enricher) Enrich(raw RawEvent) model.AnalyticsEvent {
 		IPHash:          HashIP(raw.IP, e.ipSalt),
 		IsBot:           isBot,
 		BotReason:       botReason,
-		// Origin 不在允许列表内则标记为可疑流量。
-		IsSuspect: !raw.OriginAllowed,
+		// suspect 判定已在 collect 编排阶段由 DecideSuspect 完成，富化仅透传结果。
+		IsSuspect:     raw.IsSuspect,
+		SuspectReason: raw.SuspectReason,
 	}
 }
