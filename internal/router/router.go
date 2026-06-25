@@ -114,7 +114,7 @@ func Setup(
 	registerPublicRoutes(r, handlers, jwtManager, redisClient)
 	registerAuthedRoutes(r, handlers, jwtManager, redisClient)
 	registerVIPRoutes(r, handlers, jwtManager)
-	registerAdminRoutes(r, handlers, jwtManager)
+	registerAdminRoutes(r, handlers, jwtManager, redisClient)
 }
 
 func configureTrustedProxies(r *gin.Engine) {
@@ -403,7 +403,7 @@ func registerVIPRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Ma
 	vip.GET("/test/vip", handlers.test.Vip)
 }
 
-func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager) {
+func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager, redisClient *redis.Client) {
 	// 管理员路由统一挂在 /admin 前缀下。
 	admin := r.Group("/admin", middleware.Auth(jwtManager, handlers.userCache), middleware.RequireRole(roles.AdminRole))
 	admin.GET("/test", handlers.test.Admin)
@@ -423,8 +423,8 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/tags/:id/articles", handlers.tag.AddArticles)
 	admin.DELETE("/tags/:id/articles", handlers.tag.RemoveArticles)
 	admin.GET("/friend-links", handlers.friendLink.ListAdmin)
-	admin.POST("/friend-links", handlers.friendLink.Create)
-	admin.PUT("/friend-links/:id", handlers.friendLink.Update)
+	admin.POST("/friend-links", middleware.RateLimitTempUpload(redisClient), handlers.friendLink.Create)
+	admin.PUT("/friend-links/:id", middleware.RateLimitTempUpload(redisClient), handlers.friendLink.Update)
 	admin.DELETE("/friend-links/:id", handlers.friendLink.Delete)
 	admin.GET("/notifications/email-tasks", handlers.notificationAdmin.ListEmailTasks)
 	admin.GET("/notifications/email-batches", handlers.notificationAdmin.ListEmailBatches)

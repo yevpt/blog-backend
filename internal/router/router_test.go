@@ -130,3 +130,19 @@ func TestRegisterAuthedRoutes_RegistersTempUpload(t *testing.T) {
 	}
 	assert.True(t, slices.Contains(paths, "/uploads/temp"))
 }
+
+func TestRegisterAdminRoutes_RegistersFriendLinkMutationRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	jwtManager := jwt.NewManager("test-secret", 2, 24)
+
+	registerAdminRoutes(r, routeHandlers{}, jwtManager, nil)
+
+	paths := make([]string, 0, len(r.Routes()))
+	for _, route := range r.Routes() {
+		if route.Method == http.MethodPost {
+			paths = append(paths, route.Path)
+		}
+	}
+	assert.True(t, slices.Contains(paths, "/admin/friend-links"))
+}
