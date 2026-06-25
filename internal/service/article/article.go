@@ -22,6 +22,7 @@ var (
 	ErrArticleCategoryRequired   = errors.New("文章至少需要一个分类")
 	ErrArticleNoDeletePermission = errors.New("无权删除文章")
 	ErrArticleNotSoftDeleted     = errors.New("文章尚未软删除")
+	ErrArticleMusicNotFound      = errors.New("音乐不存在")
 )
 
 // ArticleService 文章业务接口，负责文章查询、保存、点赞和阅读计数。
@@ -160,6 +161,17 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		return nil, ErrArticleImageInvalid
 	}
 
+	musicIDs := uniqueUintIDs(req.MusicIDs)
+	if len(musicIDs) > 0 {
+		count, err := s.repo.CountExistingMusicIDs(musicIDs)
+		if err != nil {
+			return nil, err
+		}
+		if count != int64(len(musicIDs)) {
+			return nil, ErrArticleMusicNotFound
+		}
+	}
+
 	var copiedKeys []string
 	var tempKeys []string
 	var newReferencedKeys []string
@@ -188,7 +200,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		Article:        article,
 		CategoryIDs:    categoryIDs,
 		Tags:           normalizeArticleTagRelations(req),
-		MusicIDs:       uniqueUintIDs(req.MusicIDs),
+		MusicIDs:       musicIDs,
 		Recommend:      req.Recommend,
 		RecommendSeq:   req.RecommendSeq,
 		PrepareArticle: prepareArticle,

@@ -855,3 +855,19 @@ func uintArgs(ids []uint) []driver.Value {
 	}
 	return args
 }
+
+func TestArticleRepository_CountExistingMusicIDs_ReturnsMatchCount(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := article.NewArticleRepository(db)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `music` WHERE id IN \\(\\?,\\?\\) AND `music`.`deleted_at` IS NULL").
+		WithArgs(uint(1), uint(2)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
+
+	count, err := repo.CountExistingMusicIDs([]uint{1, 2})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}

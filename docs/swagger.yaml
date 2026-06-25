@@ -1711,46 +1711,235 @@ definitions:
         example: 21
         type: integer
     type: object
-  dto.MusicItemResp:
+  dto.MusicAdminListResp:
     properties:
-      album:
-        description: Album 专辑名称。
-        example: Album
-        type: string
-      cover_img_url:
-        description: CoverImgUrl 音乐封面图地址。
-        type: string
-      duration:
-        description: Duration 音乐时长，单位为秒。
-        example: 240
+      list:
+        items:
+          $ref: '#/definitions/dto.MusicItemResp'
+        type: array
+      total:
         type: integer
+    type: object
+  dto.MusicAlbumListResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.MusicAlbumResp'
+        type: array
+    type: object
+  dto.MusicAlbumResp:
+    properties:
+      artist:
+        $ref: '#/definitions/dto.MusicArtistResp'
+      cover_url:
+        type: string
+      description:
+        type: string
       id:
-        description: ID 音乐 ID。
         example: 1
         type: integer
       name:
-        description: Name 音乐名称。
+        example: Album
+        type: string
+      release_date:
+        example: "2024-01-01"
+        type: string
+    type: object
+  dto.MusicAlbumSaveReq:
+    properties:
+      artist_id:
+        type: integer
+      cover_key:
+        maxLength: 500
+        type: string
+      description:
+        maxLength: 500
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 150
+        type: string
+      release_date:
+        type: string
+    required:
+    - name
+    type: object
+  dto.MusicArtistListResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.MusicArtistResp'
+        type: array
+    type: object
+  dto.MusicArtistResp:
+    properties:
+      avatar_url:
+        type: string
+      description:
+        type: string
+      display_name:
+        example: 문성남 (文胜南)
+        type: string
+      id:
+        example: 1
+        type: integer
+      name:
+        example: 문성남
+        type: string
+      name_zh:
+        example: 文胜南
+        type: string
+    type: object
+  dto.MusicArtistSaveReq:
+    properties:
+      avatar_key:
+        maxLength: 500
+        type: string
+      description:
+        maxLength: 500
+        type: string
+      id:
+        type: integer
+      name:
+        maxLength: 100
+        type: string
+      name_zh:
+        maxLength: 100
+        type: string
+    required:
+    - name
+    type: object
+  dto.MusicDetailResp:
+    properties:
+      album:
+        $ref: '#/definitions/dto.MusicAlbumResp'
+      album_track_no:
+        example: 1
+        type: integer
+      artist_display_name:
+        example: Aimer / milet
+        type: string
+      artists:
+        items:
+          $ref: '#/definitions/dto.MusicArtistResp'
+        type: array
+      audio_url:
+        type: string
+      cover_url:
+        type: string
+      duration:
+        example: 240
+        type: integer
+      id:
+        example: 1
+        type: integer
+      is_public:
+        example: true
+        type: boolean
+      lyric:
+        type: string
+      name:
         example: Song
         type: string
       seq:
-        description: Seq 排序值，越小越靠前。
         example: 0
         type: integer
-      singer:
-        description: Singer 歌手名称。
-        example: Singer
+    type: object
+  dto.MusicItemResp:
+    properties:
+      album:
+        $ref: '#/definitions/dto.MusicAlbumResp'
+      album_track_no:
+        example: 1
+        type: integer
+      artist_display_name:
+        example: Aimer / milet
         type: string
-      url:
-        description: URL 音乐播放地址。
+      artists:
+        items:
+          $ref: '#/definitions/dto.MusicArtistResp'
+        type: array
+      audio_url:
         type: string
+      cover_url:
+        type: string
+      duration:
+        example: 240
+        type: integer
+      id:
+        example: 1
+        type: integer
+      is_public:
+        example: true
+        type: boolean
+      name:
+        example: Song
+        type: string
+      seq:
+        example: 0
+        type: integer
     type: object
   dto.MusicListResp:
     properties:
       list:
-        description: List 音乐列表，按 seq ASC、id ASC 排序。
         items:
           $ref: '#/definitions/dto.MusicItemResp'
         type: array
+    type: object
+  dto.MusicSaveReq:
+    properties:
+      album_id:
+        type: integer
+      album_track_no:
+        type: integer
+      artist_display_name:
+        maxLength: 200
+        type: string
+      artist_ids:
+        items:
+          type: integer
+        maxItems: 10
+        minItems: 1
+        type: array
+      audio_key:
+        maxLength: 500
+        type: string
+      duration:
+        type: integer
+      id:
+        type: integer
+      is_public:
+        type: boolean
+      lyric:
+        type: string
+      name:
+        maxLength: 100
+        type: string
+      seq:
+        type: integer
+    required:
+    - artist_ids
+    - audio_key
+    - name
+    type: object
+  dto.MusicUploadResp:
+    properties:
+      hash:
+        example: abcdef
+        type: string
+      key:
+        example: temp/music/1/audio/hash.mp3
+        type: string
+      mime:
+        example: audio/mpeg
+        type: string
+      size:
+        example: 123456
+        type: integer
+      url:
+        example: https://cdn.example.com/music/audio/hash.mp3
+        type: string
     type: object
   dto.NotificationActorUserResp:
     properties:
@@ -3170,7 +3359,8 @@ paths:
     put:
       consumes:
       - multipart/form-data
-      description: 管理员修改友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并替换 avatar_url；未传文本字段保持原值，可选字符串传空字符串表示清空。
+      description: 管理员修改友情链接；logo 可选，上传时保存为 avatar/link/{md5}.jpg 并替换 avatar_url，未传
+        logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。
       parameters:
       - description: 友情链接 ID
         in: path
@@ -3205,10 +3395,9 @@ paths:
         in: formData
         name: status
         type: integer
-      - description: 友链 Logo 图片（JPG、PNG、WebP），最大 2MB
+      - description: 友链 Logo 图片（JPG、PNG、WebP），最大 2MB；未传则保留原头像
         in: formData
         name: logo
-        required: true
         type: file
       produces:
       - application/json
@@ -3245,6 +3434,592 @@ paths:
       summary: 修改友情链接
       tags:
       - 友情链接
+  /admin/music:
+    get:
+      description: 管理员分页查询未删除音乐，可按曲名或歌手展示名关键字过滤。
+      parameters:
+      - description: 搜索关键字
+        in: query
+        name: keyword
+        type: string
+      - description: 页码，从 1 开始，默认 1
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 20，最大 100
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicAdminListResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分页查询管理端音乐列表
+      tags:
+      - 音乐
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增或修改音乐；PUT 时路径 ID 优先于请求体中的 id。
+      parameters:
+      - description: 音乐保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MusicSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或修改音乐
+      tags:
+      - 音乐
+  /admin/music/{id}:
+    delete:
+      description: 管理员软删除音乐。
+      parameters:
+      - description: 音乐 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除音乐
+      tags:
+      - 音乐
+    put:
+      consumes:
+      - application/json
+      description: 管理员新增或修改音乐；PUT 时路径 ID 优先于请求体中的 id。
+      parameters:
+      - description: 音乐 ID（仅 PUT）
+        in: path
+        name: id
+        type: integer
+      - description: 音乐保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MusicSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或修改音乐
+      tags:
+      - 音乐
+  /admin/music/albums:
+    get:
+      description: 管理员查询专辑列表，可按专辑名关键字过滤。
+      parameters:
+      - description: 搜索关键字
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicAlbumListResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询管理端专辑列表
+      tags:
+      - 音乐
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增或修改专辑；PUT 时路径 ID 优先于请求体中的 id。
+      parameters:
+      - description: 专辑保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MusicAlbumSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicAlbumResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 歌手或专辑不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或修改专辑
+      tags:
+      - 音乐
+  /admin/music/albums/{id}:
+    delete:
+      description: 管理员软删除专辑。
+      parameters:
+      - description: 专辑 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 专辑不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除专辑
+      tags:
+      - 音乐
+    put:
+      consumes:
+      - application/json
+      description: 管理员新增或修改专辑；PUT 时路径 ID 优先于请求体中的 id。
+      parameters:
+      - description: 专辑 ID（仅 PUT）
+        in: path
+        name: id
+        type: integer
+      - description: 专辑保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MusicAlbumSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicAlbumResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 歌手或专辑不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或修改专辑
+      tags:
+      - 音乐
+  /admin/music/artists:
+    get:
+      description: 管理员查询歌手列表，可按 name 或 name_zh 关键字过滤。
+      parameters:
+      - description: 搜索关键字
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicArtistListResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询管理端歌手列表
+      tags:
+      - 音乐
+    post:
+      consumes:
+      - application/json
+      description: 管理员新增或修改歌手；PUT 时路径 ID 优先于请求体中的 id。
+      parameters:
+      - description: 歌手保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MusicArtistSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicArtistResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 歌手不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或修改歌手
+      tags:
+      - 音乐
+  /admin/music/artists/{id}:
+    delete:
+      description: 管理员软删除歌手。
+      parameters:
+      - description: 歌手 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示删除成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 歌手不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 删除歌手
+      tags:
+      - 音乐
+    put:
+      consumes:
+      - application/json
+      description: 管理员新增或修改歌手；PUT 时路径 ID 优先于请求体中的 id。
+      parameters:
+      - description: 歌手 ID（仅 PUT）
+        in: path
+        name: id
+        type: integer
+      - description: 歌手保存请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.MusicArtistSaveReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicArtistResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 歌手不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增或修改歌手
+      tags:
+      - 音乐
+  /admin/music/uploads/album-cover:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 管理员上传专辑封面到临时路径，最大 10MB。
+      parameters:
+      - description: 封面图片
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示上传成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicUploadResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 上传临时专辑封面
+      tags:
+      - 音乐
+  /admin/music/uploads/artist-avatar:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 管理员上传歌手头像到临时路径，最大 10MB。
+      parameters:
+      - description: 头像图片
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示上传成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicUploadResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 上传临时歌手头像
+      tags:
+      - 音乐
+  /admin/music/uploads/audio:
+    post:
+      consumes:
+      - multipart/form-data
+      description: 管理员上传音乐音频到临时路径，最大 50MB。
+      parameters:
+      - description: 音频文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示上传成功，code=400 表示参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicUploadResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 上传临时音频文件
+      tags:
+      - 音乐
   /admin/notifications/email-batches:
     get:
       consumes:
@@ -5843,7 +6618,8 @@ paths:
       - 碎语
   /music:
     get:
-      description: 返回所有未删除音乐，按 seq ASC、id ASC 排序；url 和 cover_img_url 返回前会解析为可访问 URL。
+      description: 返回 is_public=true 的未删除音乐，按 seq ASC、id ASC 排序；audio_url 和 cover_url
+        返回前会解析为可访问 URL。
       produces:
       - application/json
       responses:
@@ -5860,7 +6636,97 @@ paths:
           description: 服务器内部错误
           schema:
             $ref: '#/definitions/response.Response'
-      summary: 查询音乐列表
+      summary: 查询公开音乐列表
+      tags:
+      - 音乐
+  /music/{id}:
+    get:
+      description: 返回单首公开音乐的详情；非公开或不存在的数据返回 404。
+      parameters:
+      - description: 音乐 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicDetailResp'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 音乐不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开音乐详情
+      tags:
+      - 音乐
+  /music/albums:
+    get:
+      description: 返回专辑列表，可按专辑名关键字过滤；cover_url 返回前会解析为可访问 URL。
+      parameters:
+      - description: 搜索关键字
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicAlbumListResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开专辑列表
+      tags:
+      - 音乐
+  /music/artists:
+    get:
+      description: 返回歌手列表，可按 name 或 name_zh 关键字过滤；avatar_url 返回前会解析为可访问 URL。
+      parameters:
+      - description: 搜索关键字
+        in: query
+        name: keyword
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicArtistListResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开歌手列表
       tags:
       - 音乐
   /notifications:

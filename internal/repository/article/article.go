@@ -81,6 +81,7 @@ type ArticleRepository interface {
 	IncrementReadCount(id uint) (*model.Article, error)
 	IsLiked(articleID uint, userID uint) (bool, int64, error)
 	ToggleLike(articleID uint, userID uint) (*ArticleAggregate, bool, error)
+	CountExistingMusicIDs(ids []uint) (int64, error)
 }
 
 type articleRepo struct {

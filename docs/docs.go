@@ -991,7 +991,7 @@ const docTemplate = `{
         },
         "/admin/friend-links/{id}": {
             "put": {
-                "description": "管理员修改友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并替换 avatar_url；未传文本字段保持原值，可选字符串传空字符串表示清空。",
+                "description": "管理员修改友情链接；logo 可选，上传时保存为 avatar/link/{md5}.jpg 并替换 avatar_url，未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1054,10 +1054,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 2MB",
+                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 2MB；未传则保留原头像",
                         "name": "logo",
-                        "in": "formData",
-                        "required": true
+                        "in": "formData"
                     }
                 ],
                 "responses": {
@@ -1162,6 +1161,939 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "友情链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music": {
+            "get": {
+                "description": "管理员分页查询未删除音乐，可按曲名或歌手展示名关键字过滤。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "分页查询管理端音乐列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始，默认 1",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 20，最大 100",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicAdminListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "管理员新增或修改音乐；PUT 时路径 ID 优先于请求体中的 id。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "新增或修改音乐",
+                "parameters": [
+                    {
+                        "description": "音乐保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MusicSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/albums": {
+            "get": {
+                "description": "管理员查询专辑列表，可按专辑名关键字过滤。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询管理端专辑列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicAlbumListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "管理员新增或修改专辑；PUT 时路径 ID 优先于请求体中的 id。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "新增或修改专辑",
+                "parameters": [
+                    {
+                        "description": "专辑保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MusicAlbumSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicAlbumResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "歌手或专辑不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/albums/{id}": {
+            "put": {
+                "description": "管理员新增或修改专辑；PUT 时路径 ID 优先于请求体中的 id。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "新增或修改专辑",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "专辑 ID（仅 PUT）",
+                        "name": "id",
+                        "in": "path"
+                    },
+                    {
+                        "description": "专辑保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MusicAlbumSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicAlbumResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "歌手或专辑不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员软删除专辑。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "删除专辑",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "专辑 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "专辑不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/artists": {
+            "get": {
+                "description": "管理员查询歌手列表，可按 name 或 name_zh 关键字过滤。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询管理端歌手列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicArtistListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "管理员新增或修改歌手；PUT 时路径 ID 优先于请求体中的 id。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "新增或修改歌手",
+                "parameters": [
+                    {
+                        "description": "歌手保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MusicArtistSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicArtistResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "歌手不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/artists/{id}": {
+            "put": {
+                "description": "管理员新增或修改歌手；PUT 时路径 ID 优先于请求体中的 id。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "新增或修改歌手",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "歌手 ID（仅 PUT）",
+                        "name": "id",
+                        "in": "path"
+                    },
+                    {
+                        "description": "歌手保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MusicArtistSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicArtistResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "歌手不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员软删除歌手。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "删除歌手",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "歌手 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "歌手不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/uploads/album-cover": {
+            "post": {
+                "description": "管理员上传专辑封面到临时路径，最大 10MB。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "上传临时专辑封面",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "封面图片",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示上传成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicUploadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/uploads/artist-avatar": {
+            "post": {
+                "description": "管理员上传歌手头像到临时路径，最大 10MB。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "上传临时歌手头像",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "头像图片",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示上传成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicUploadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/uploads/audio": {
+            "post": {
+                "description": "管理员上传音乐音频到临时路径，最大 50MB。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "上传临时音频文件",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "音频文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示上传成功，code=400 表示参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicUploadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/music/{id}": {
+            "put": {
+                "description": "管理员新增或修改音乐；PUT 时路径 ID 优先于请求体中的 id。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "新增或修改音乐",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "音乐 ID（仅 PUT）",
+                        "name": "id",
+                        "in": "path"
+                    },
+                    {
+                        "description": "音乐保存请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.MusicSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功，code=400 表示参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "管理员软删除音乐。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "删除音乐",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "音乐 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示删除成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -5364,14 +6296,14 @@ const docTemplate = `{
         },
         "/music": {
             "get": {
-                "description": "返回所有未删除音乐，按 seq ASC、id ASC 排序；url 和 cover_img_url 返回前会解析为可访问 URL。",
+                "description": "返回 is_public=true 的未删除音乐，按 seq ASC、id ASC 排序；audio_url 和 cover_url 返回前会解析为可访问 URL。",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "音乐"
                 ],
-                "summary": "查询音乐列表",
+                "summary": "查询公开音乐列表",
                 "responses": {
                     "200": {
                         "description": "统一响应；code=0 表示查询成功",
@@ -5389,6 +6321,157 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/music/albums": {
+            "get": {
+                "description": "返回专辑列表，可按专辑名关键字过滤；cover_url 返回前会解析为可访问 URL。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询公开专辑列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicAlbumListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/music/artists": {
+            "get": {
+                "description": "返回歌手列表，可按 name 或 name_zh 关键字过滤；avatar_url 返回前会解析为可访问 URL。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询公开歌手列表",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "搜索关键字",
+                        "name": "keyword",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicArtistListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/music/{id}": {
+            "get": {
+                "description": "返回单首公开音乐的详情；非公开或不存在的数据返回 404。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询公开音乐详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "音乐 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "音乐不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "500": {
@@ -9307,46 +10390,247 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.MusicItemResp": {
+        "dto.MusicAdminListResp": {
             "type": "object",
             "properties": {
-                "album": {
-                    "description": "Album 专辑名称。",
-                    "type": "string",
-                    "example": "Album"
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MusicItemResp"
+                    }
                 },
-                "cover_img_url": {
-                    "description": "CoverImgUrl 音乐封面图地址。",
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.MusicAlbumListResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MusicAlbumResp"
+                    }
+                }
+            }
+        },
+        "dto.MusicAlbumResp": {
+            "type": "object",
+            "properties": {
+                "artist": {
+                    "$ref": "#/definitions/dto.MusicArtistResp"
+                },
+                "cover_url": {
                     "type": "string"
                 },
-                "duration": {
-                    "description": "Duration 音乐时长，单位为秒。",
-                    "type": "integer",
-                    "example": 240
+                "description": {
+                    "type": "string"
                 },
                 "id": {
-                    "description": "ID 音乐 ID。",
                     "type": "integer",
                     "example": 1
                 },
                 "name": {
-                    "description": "Name 音乐名称。",
+                    "type": "string",
+                    "example": "Album"
+                },
+                "release_date": {
+                    "type": "string",
+                    "example": "2024-01-01"
+                }
+            }
+        },
+        "dto.MusicAlbumSaveReq": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "artist_id": {
+                    "type": "integer"
+                },
+                "cover_key": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 150
+                },
+                "release_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MusicArtistListResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MusicArtistResp"
+                    }
+                }
+            }
+        },
+        "dto.MusicArtistResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string",
+                    "example": "문성남 (文胜南)"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "type": "string",
+                    "example": "문성남"
+                },
+                "name_zh": {
+                    "type": "string",
+                    "example": "文胜南"
+                }
+            }
+        },
+        "dto.MusicArtistSaveReq": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "avatar_key": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "name_zh": {
+                    "type": "string",
+                    "maxLength": 100
+                }
+            }
+        },
+        "dto.MusicDetailResp": {
+            "type": "object",
+            "properties": {
+                "album": {
+                    "$ref": "#/definitions/dto.MusicAlbumResp"
+                },
+                "album_track_no": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "artist_display_name": {
+                    "type": "string",
+                    "example": "Aimer / milet"
+                },
+                "artists": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MusicArtistResp"
+                    }
+                },
+                "audio_url": {
+                    "type": "string"
+                },
+                "cover_url": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer",
+                    "example": 240
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_public": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "lyric": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string",
                     "example": "Song"
                 },
                 "seq": {
-                    "description": "Seq 排序值，越小越靠前。",
                     "type": "integer",
                     "example": 0
+                }
+            }
+        },
+        "dto.MusicItemResp": {
+            "type": "object",
+            "properties": {
+                "album": {
+                    "$ref": "#/definitions/dto.MusicAlbumResp"
                 },
-                "singer": {
-                    "description": "Singer 歌手名称。",
+                "album_track_no": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "artist_display_name": {
                     "type": "string",
-                    "example": "Singer"
+                    "example": "Aimer / milet"
                 },
-                "url": {
-                    "description": "URL 音乐播放地址。",
+                "artists": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MusicArtistResp"
+                    }
+                },
+                "audio_url": {
                     "type": "string"
+                },
+                "cover_url": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer",
+                    "example": 240
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_public": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Song"
+                },
+                "seq": {
+                    "type": "integer",
+                    "example": 0
                 }
             }
         },
@@ -9354,11 +10638,86 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "list": {
-                    "description": "List 音乐列表，按 seq ASC、id ASC 排序。",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.MusicItemResp"
                     }
+                }
+            }
+        },
+        "dto.MusicSaveReq": {
+            "type": "object",
+            "required": [
+                "artist_ids",
+                "audio_key",
+                "name"
+            ],
+            "properties": {
+                "album_id": {
+                    "type": "integer"
+                },
+                "album_track_no": {
+                    "type": "integer"
+                },
+                "artist_display_name": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "artist_ids": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "audio_key": {
+                    "type": "string",
+                    "maxLength": 500
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "lyric": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "seq": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.MusicUploadResp": {
+            "type": "object",
+            "properties": {
+                "hash": {
+                    "type": "string",
+                    "example": "abcdef"
+                },
+                "key": {
+                    "type": "string",
+                    "example": "temp/music/1/audio/hash.mp3"
+                },
+                "mime": {
+                    "type": "string",
+                    "example": "audio/mpeg"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 123456
+                },
+                "url": {
+                    "type": "string",
+                    "example": "https://cdn.example.com/music/audio/hash.mp3"
                 }
             }
         },

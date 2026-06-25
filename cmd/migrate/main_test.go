@@ -19,6 +19,34 @@ func TestArticleStatusVarcharToUint8_PreservesDraftStatus(t *testing.T) {
 	assert.Equal(t, uint8(3), articleStatusVarcharToUint8(sql.NullString{String: "03", Valid: true}))
 }
 
+func TestBuildMusicArtistSeeds_SplitsChineseTranslation(t *testing.T) {
+	seeds := buildMusicArtistSeeds("문성남 (文胜南)")
+
+	require.Len(t, seeds, 1)
+	assert.Equal(t, "문성남", seeds[0].Name)
+	require.NotNil(t, seeds[0].NameZh)
+	assert.Equal(t, "文胜南", *seeds[0].NameZh)
+}
+
+func TestBuildMusicArtistSeeds_SplitsCollaboration(t *testing.T) {
+	seeds := buildMusicArtistSeeds("Aimer / milet feat. 幾田りら")
+
+	require.Len(t, seeds, 3)
+	assert.Equal(t, "Aimer", seeds[0].Name)
+	assert.Equal(t, "milet", seeds[1].Name)
+	assert.Equal(t, "幾田りら", seeds[2].Name)
+}
+
+func TestBuildMusicGaragePlan_RewritesAudioAndCover(t *testing.T) {
+	albumID := uint(8)
+	plan := buildMusicGaragePlan(3, &albumID, "old/song.mp3", "old/cover.jpg")
+
+	assert.Equal(t, "old/song.mp3", plan.SourceAudioKey)
+	assert.Contains(t, plan.TargetAudioKey, "music/audio/3/")
+	assert.Equal(t, "old/cover.jpg", plan.SourceCoverKey)
+	assert.Contains(t, plan.TargetCoverKey, "music/albums/8/cover/")
+}
+
 func TestBuildMomentMediaGaragePlan_RewritesSayPath(t *testing.T) {
 	plan := buildMomentMediaGaragePlan(momentMediaGarageRow{
 		ID:       5,

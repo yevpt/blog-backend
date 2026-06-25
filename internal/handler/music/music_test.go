@@ -1,10 +1,12 @@
 package music_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -17,12 +19,69 @@ import (
 )
 
 type stubMusicService struct {
-	resp *dto.MusicListResp
-	err  error
+	resp   *dto.MusicListResp
+	detail *dto.MusicDetailResp
+	err    error
 }
 
 func (s *stubMusicService) List() (*dto.MusicListResp, error) {
 	return s.resp, s.err
+}
+
+func (s *stubMusicService) ListPublic() (*dto.MusicListResp, error) {
+	return s.List()
+}
+
+func (s *stubMusicService) GetPublicDetail(uint) (*dto.MusicDetailResp, error) {
+	return s.detail, s.err
+}
+
+func (s *stubMusicService) ListArtists(string) (*dto.MusicArtistListResp, error) {
+	return &dto.MusicArtistListResp{}, s.err
+}
+
+func (s *stubMusicService) ListAlbums(string) (*dto.MusicAlbumListResp, error) {
+	return &dto.MusicAlbumListResp{}, s.err
+}
+
+func (s *stubMusicService) ListAdmin(dto.MusicAdminListReq) (*dto.MusicAdminListResp, error) {
+	return &dto.MusicAdminListResp{}, s.err
+}
+
+func (s *stubMusicService) SaveMusic(dto.MusicSaveReq) error {
+	return s.err
+}
+
+func (s *stubMusicService) DeleteMusic(uint) error {
+	return s.err
+}
+
+func (s *stubMusicService) SaveArtist(dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error) {
+	return nil, s.err
+}
+
+func (s *stubMusicService) DeleteArtist(uint) error {
+	return s.err
+}
+
+func (s *stubMusicService) SaveAlbum(dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error) {
+	return nil, s.err
+}
+
+func (s *stubMusicService) DeleteAlbum(uint) error {
+	return s.err
+}
+
+func (s *stubMusicService) UploadAudio(context.Context, musicservice.MusicAudioUploadInput) (*dto.MusicUploadResp, error) {
+	return nil, s.err
+}
+
+func (s *stubMusicService) UploadAlbumCover(context.Context, musicservice.MusicImageUploadInput) (*dto.MusicUploadResp, error) {
+	return nil, s.err
+}
+
+func (s *stubMusicService) UploadArtistAvatar(context.Context, musicservice.MusicImageUploadInput) (*dto.MusicUploadResp, error) {
+	return nil, s.err
 }
 
 var _ musicservice.MusicService = (*stubMusicService)(nil)
@@ -58,4 +117,48 @@ func TestMusicHandler_List_ServerError(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestMusicHandler_GetPublicDetail_Success(t *testing.T) {
+	svc := &stubMusicService{detail: &dto.MusicDetailResp{MusicItemResp: dto.MusicItemResp{ID: 1, Name: "Song"}}}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := music.NewMusicHandler(svc)
+	r.GET("/music/:id", h.GetPublicDetail)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/music/1", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestMusicHandler_SaveArtist_BadJSON(t *testing.T) {
+	svc := &stubMusicService{}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := music.NewMusicHandler(svc)
+	r.POST("/admin/music/artists", h.SaveArtist)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/music/artists", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestMusicHandler_SaveMusic_BadJSON(t *testing.T) {
+	svc := &stubMusicService{}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := music.NewMusicHandler(svc)
+	r.POST("/admin/music", h.SaveMusic)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/music", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
 }

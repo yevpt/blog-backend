@@ -287,6 +287,27 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 	require.ErrorIs(t, err, articleservice.ErrArticlePasswordRequired)
 }
 
+func TestArticleService_SaveRejectsMissingMusicID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+
+	repo.EXPECT().
+		CountExistingMusicIDs([]uint{99}).
+		Return(int64(0), nil)
+
+	_, err := svc.Save(dto.ArticleSaveReq{
+		Title:         "A",
+		Content:       "body",
+		Status:        1,
+		CommentStatus: 1,
+		CategoryIDs:   []uint{1},
+		MusicIDs:      []uint{99},
+	}, 1)
+	require.ErrorIs(t, err, articleservice.ErrArticleMusicNotFound)
+}
+
 func TestArticleService_SaveKeepsFirstCategoryAndNormalizesRelations(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -294,26 +315,31 @@ func TestArticleService_SaveKeepsFirstCategoryAndNormalizesRelations(t *testing.
 	svc := articleservice.NewArticleService(repo, nil, nil, nil)
 
 	now := time.Now()
-	repo.EXPECT().
-		Save(gomock.Any()).
-		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
-			assert.Equal(t, []uint{1}, data.CategoryIDs)
-			assert.Equal(t, []articlerepo.ArticleTagSaveData{
-				{TagID: 3, Seq: 20},
-				{TagID: 4, Seq: 10},
-			}, data.Tags)
-			assert.Equal(t, []uint{5, 6}, data.MusicIDs)
-			return &articlerepo.ArticleAggregate{
-				Article: model.Article{
-					Base:          model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
-					Title:         data.Article.Title,
-					Content:       data.Article.Content,
-					UserID:        data.Article.UserID,
-					Status:        data.Article.Status,
-					CommentStatus: data.Article.CommentStatus,
-				},
-			}, nil
-		})
+	gomock.InOrder(
+		repo.EXPECT().
+			CountExistingMusicIDs([]uint{5, 6}).
+			Return(int64(2), nil),
+		repo.EXPECT().
+			Save(gomock.Any()).
+			DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
+				assert.Equal(t, []uint{1}, data.CategoryIDs)
+				assert.Equal(t, []articlerepo.ArticleTagSaveData{
+					{TagID: 3, Seq: 20},
+					{TagID: 4, Seq: 10},
+				}, data.Tags)
+				assert.Equal(t, []uint{5, 6}, data.MusicIDs)
+				return &articlerepo.ArticleAggregate{
+					Article: model.Article{
+						Base:          model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
+						Title:         data.Article.Title,
+						Content:       data.Article.Content,
+						UserID:        data.Article.UserID,
+						Status:        data.Article.Status,
+						CommentStatus: data.Article.CommentStatus,
+					},
+				}, nil
+			}),
+	)
 
 	resp, err := svc.Save(dto.ArticleSaveReq{
 		Title:         "A",

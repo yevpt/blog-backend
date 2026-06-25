@@ -33,6 +33,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/vpt/blog-backend/internal/migration/garagearticles"
 	"github.com/vpt/blog-backend/internal/model"
+	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/database"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -213,6 +214,9 @@ func autoMigrate(db *gorm.DB) error {
 		&model.ArticleMusic{},
 		&model.Category{},
 		&model.Tag{},
+		&model.MusicArtist{},
+		&model.MusicAlbum{},
+		&model.MusicArtistRelation{},
 		&model.Music{},
 		&model.Moment{},
 		&model.FriendLink{},
@@ -468,6 +472,27 @@ func nullUint(ni sql.NullInt64) *uint {
 	return &v
 }
 
+type musicArtistSeed struct {
+	Name   string
+	NameZh *string
+}
+
+func buildMusicArtistSeeds(value string) []musicArtistSeed {
+	tokens := musicservice.SplitArtistTokens(value)
+	if len(tokens) == 0 && strings.TrimSpace(value) != "" {
+		tokens = []string{strings.TrimSpace(value)}
+	}
+	seeds := make([]musicArtistSeed, 0, len(tokens))
+	for _, token := range tokens {
+		name, nameZh := musicservice.SplitArtistDisplayName(token)
+		if name == "" {
+			continue
+		}
+		seeds = append(seeds, musicArtistSeed{Name: name, NameZh: nameZh})
+	}
+	return seeds
+}
+
 type garageCopier struct {
 	client *storage.Client
 }
@@ -519,6 +544,27 @@ func (p momentMediaGaragePlan) NeedsDBUpdate() bool {
 		(p.UpdatedUploaderID != p.CurrentUploaderID || p.UpdatedMomentID != p.CurrentMomentID)
 }
 
+type musicGaragePlan struct {
+	MusicID        uint
+	AlbumID        *uint
+	SourceAudioKey string
+	TargetAudioKey string
+	SourceCoverKey string
+	TargetCoverKey string
+}
+
+func (p musicGaragePlan) HasAudioChanges() bool {
+	return p.SourceAudioKey != "" && p.TargetAudioKey != "" && p.SourceAudioKey != p.TargetAudioKey
+}
+
+func (p musicGaragePlan) HasCoverChanges() bool {
+	return p.SourceCoverKey != "" && p.TargetCoverKey != "" && p.SourceCoverKey != p.TargetCoverKey
+}
+
+func (p musicGaragePlan) HasChanges() bool {
+	return p.HasAudioChanges() || p.HasCoverChanges()
+}
+
 func newGarageCopier(cfg *config.Config) (*garageCopier, error) {
 	client, err := storage.NewGarage(&cfg.Garage, &cfg.CDN)
 	if err != nil {
@@ -536,13 +582,17 @@ func migrateGarageObjects(ctx context.Context, src *sql.DB, db *gorm.DB, copier 
 	if err != nil {
 		return err
 	}
+	musicStats, err := migrateGarageMusicObjects(ctx, db, copier, bucket)
+	if err != nil {
+		return err
+	}
 
 	total := garageRunStats{
-		planned: articleStats.planned + mediaStats.planned,
-		copied:  articleStats.copied + mediaStats.copied,
-		skipped: articleStats.skipped + mediaStats.skipped,
-		updated: articleStats.updated + mediaStats.updated,
-		failed:  articleStats.failed + mediaStats.failed,
+		planned: articleStats.planned + mediaStats.planned + musicStats.planned,
+		copied:  articleStats.copied + mediaStats.copied + musicStats.copied,
+		skipped: articleStats.skipped + mediaStats.skipped + musicStats.skipped,
+		updated: articleStats.updated + mediaStats.updated + musicStats.updated,
+		failed:  articleStats.failed + mediaStats.failed + musicStats.failed,
 	}
 	log.Printf("  Garage 统计 planned=%d copied=%d skipped=%d updated=%d failed=%d",
 		total.planned, total.copied, total.skipped, total.updated, total.failed)
@@ -670,6 +720,121 @@ func migrateGarageMomentMediaObjects(ctx context.Context, src *sql.DB, db *gorm.
 	return stats, nil
 }
 
+func migrateGarageMusicObjects(ctx context.Context, db *gorm.DB, copier *garageCopier, bucket string) (garageRunStats, error) {
+	stats := garageRunStats{}
+
+	var songs []model.Music
+	if err := db.Model(&model.Music{}).
+		Select("id", "album_id", "audio_key", "url").
+		Order("id ASC").
+		Find(&songs).Error; err != nil {
+		return garageRunStats{}, err
+	}
+
+	for _, song := range songs {
+		audioRaw := musicGarageAudioRaw(song)
+		if audioRaw == "" {
+			continue
+		}
+		sourceKey, skippedExternal := resolveMusicGarageSourceKey(audioRaw, bucket, copier)
+		if skippedExternal {
+			log.Printf("  Garage 音乐跳过外部音频 URL music_id=%d url=%s", song.ID, audioRaw)
+			stats.skipped++
+			continue
+		}
+		if sourceKey == "" {
+			stats.skipped++
+			continue
+		}
+
+		plan := buildMusicGaragePlan(song.ID, nil, sourceKey, "")
+		if !plan.HasAudioChanges() {
+			stats.skipped++
+			continue
+		}
+
+		stats.planned++
+		copied, err := copier.copyObjectIfNeeded(ctx, plan.SourceAudioKey, plan.TargetAudioKey)
+		if err != nil {
+			stats.failed++
+			log.Printf("  Garage 音乐音频复制失败 music_id=%d source=%s target=%s error=%v",
+				song.ID, plan.SourceAudioKey, plan.TargetAudioKey, err)
+			continue
+		}
+		if copied {
+			stats.copied++
+		} else {
+			stats.skipped++
+		}
+		if err := updateMusicGarageAudioKey(db, plan); err != nil {
+			stats.failed++
+			log.Printf("  Garage 音乐音频数据库更新失败 music_id=%d error=%v", song.ID, err)
+			continue
+		}
+		stats.updated++
+		log.Printf("  Garage 音乐音频 music_id=%d source=%s target=%s", song.ID, plan.SourceAudioKey, plan.TargetAudioKey)
+	}
+
+	var albums []model.MusicAlbum
+	if err := db.Model(&model.MusicAlbum{}).
+		Select("id", "cover_key").
+		Where("cover_key IS NOT NULL AND cover_key <> ''").
+		Order("id ASC").
+		Find(&albums).Error; err != nil {
+		return stats, err
+	}
+
+	for _, album := range albums {
+		if album.CoverKey == nil {
+			continue
+		}
+		coverRaw := strings.TrimSpace(*album.CoverKey)
+		if coverRaw == "" {
+			continue
+		}
+		sourceKey, skippedExternal := resolveMusicGarageSourceKey(coverRaw, bucket, copier)
+		if skippedExternal {
+			log.Printf("  Garage 音乐跳过外部封面 URL album_id=%d url=%s", album.ID, coverRaw)
+			stats.skipped++
+			continue
+		}
+		if sourceKey == "" {
+			stats.skipped++
+			continue
+		}
+
+		albumID := album.ID
+		plan := buildMusicGaragePlan(0, &albumID, "", sourceKey)
+		if !plan.HasCoverChanges() {
+			stats.skipped++
+			continue
+		}
+
+		stats.planned++
+		copied, err := copier.copyObjectIfNeeded(ctx, plan.SourceCoverKey, plan.TargetCoverKey)
+		if err != nil {
+			stats.failed++
+			log.Printf("  Garage 音乐封面复制失败 album_id=%d source=%s target=%s error=%v",
+				album.ID, plan.SourceCoverKey, plan.TargetCoverKey, err)
+			continue
+		}
+		if copied {
+			stats.copied++
+		} else {
+			stats.skipped++
+		}
+		if err := updateMusicAlbumGarageCoverKey(db, album.ID, plan.TargetCoverKey); err != nil {
+			stats.failed++
+			log.Printf("  Garage 音乐封面数据库更新失败 album_id=%d error=%v", album.ID, err)
+			continue
+		}
+		stats.updated++
+		log.Printf("  Garage 音乐封面 album_id=%d source=%s target=%s", album.ID, plan.SourceCoverKey, plan.TargetCoverKey)
+	}
+
+	return stats, nil
+}
+
 func listMomentMediaGarageRows(src *sql.DB, db *gorm.DB) ([]momentMediaGarageRow, error) {
 	var media []model.Media
 	if err := db.Model(&model.Media{}).
@@ -782,6 +947,88 @@ func updateMomentMediaURL(db *gorm.DB, plan momentMediaGaragePlan) error {
 	return db.Model(&model.Media{}).
 		Where("id = ?", plan.MediaID).
 		UpdateColumns(updates).Error
+}
+
+func buildMusicGaragePlan(musicID uint, albumID *uint, sourceAudioKey, sourceCoverKey string) musicGaragePlan {
+	plan := musicGaragePlan{
+		MusicID: musicID,
+		AlbumID: albumID,
+	}
+	if musicID > 0 {
+		if key := strings.TrimSpace(sourceAudioKey); key != "" && !isMigratedMusicAudioKey(musicID, key) {
+			base := path.Base(key)
+			if base != "" && base != "." && base != "/" {
+				plan.SourceAudioKey = key
+				plan.TargetAudioKey = path.Join("music", "audio", strconv.FormatUint(uint64(musicID), 10), base)
+			}
+		}
+	}
+	if albumID != nil && *albumID > 0 {
+		if key := strings.TrimSpace(sourceCoverKey); key != "" && !isMigratedMusicAlbumCoverKey(*albumID, key) {
+			base := path.Base(key)
+			if base != "" && base != "." && base != "/" {
+				plan.SourceCoverKey = key
+				plan.TargetCoverKey = path.Join("music", "albums", strconv.FormatUint(uint64(*albumID), 10), "cover", base)
+			}
+		}
+	}
+	return plan
+}
+
+func isMigratedMusicAudioKey(musicID uint, key string) bool {
+	prefix := path.Join("music", "audio", strconv.FormatUint(uint64(musicID), 10)) + "/"
+	return strings.HasPrefix(strings.TrimLeft(strings.TrimSpace(key), "/"), prefix)
+}
+
+func isMigratedMusicAlbumCoverKey(albumID uint, key string) bool {
+	prefix := path.Join("music", "albums", strconv.FormatUint(uint64(albumID), 10), "cover") + "/"
+	return strings.HasPrefix(strings.TrimLeft(strings.TrimSpace(key), "/"), prefix)
+}
+
+func musicGarageAudioRaw(song model.Music) string {
+	if song.AudioKey != nil {
+		if value := strings.TrimSpace(*song.AudioKey); value != "" {
+			return value
+		}
+	}
+	if song.URL != nil {
+		return strings.TrimSpace(*song.URL)
+	}
+	return ""
+}
+
+func resolveMusicGarageSourceKey(value, bucket string, copier *garageCopier) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", false
+	}
+	if storage.IsAbsoluteURL(value) {
+		key, err := copier.client.ObjectKey(value)
+		if err != nil {
+			return "", true
+		}
+		return key, false
+	}
+	key := objectKeyFromStorageValue(value, bucket)
+	if key == "" {
+		return "", false
+	}
+	return key, false
+}
+
+func updateMusicGarageAudioKey(db *gorm.DB, plan musicGaragePlan) error {
+	return db.Model(&model.Music{}).
+		Where("id = ?", plan.MusicID).
+		UpdateColumns(map[string]any{
+			"audio_key": plan.TargetAudioKey,
+			"url":       plan.TargetAudioKey,
+		}).Error
+}
+
+func updateMusicAlbumGarageCoverKey(db *gorm.DB, albumID uint, targetKey string) error {
+	return db.Model(&model.MusicAlbum{}).
+		Where("id = ?", albumID).
+		UpdateColumn("cover_key", targetKey).Error
 }
 
 func findMomentUserID(db *gorm.DB, momentID uint) (uint, error) {
@@ -1449,6 +1696,9 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 	}
 	defer rows.Close()
 
+	artistIDByKey := make(map[string]uint)
+	albumIDByKey := make(map[string]uint)
+
 	for rows.Next() {
 		var (
 			id          uint
@@ -1472,25 +1722,103 @@ func migrateMusic(src *sql.DB, dst *gorm.DB) error {
 			return err
 		}
 
+		singerText := strings.TrimSpace(singer.String)
+		artistSeeds := buildMusicArtistSeeds(singerText)
+		artistIDs := make([]uint, 0, len(artistSeeds))
+		for _, seed := range artistSeeds {
+			key := strings.ToLower(strings.TrimSpace(seed.Name))
+			if seed.NameZh != nil && strings.TrimSpace(*seed.NameZh) != "" {
+				key += "|" + strings.TrimSpace(*seed.NameZh)
+			}
+			if existedID, ok := artistIDByKey[key]; ok {
+				artistIDs = append(artistIDs, existedID)
+				continue
+			}
+
+			artist := model.MusicArtist{
+				Name:   seed.Name,
+				NameZh: seed.NameZh,
+			}
+			if err := dst.Where("name = ?", seed.Name).FirstOrCreate(&artist).Error; err != nil {
+				return fmt.Errorf("insert music_artist name=%s: %w", seed.Name, err)
+			}
+			artistIDByKey[key] = artist.ID
+			artistIDs = append(artistIDs, artist.ID)
+		}
+
+		var albumID *uint
+		albumName := strings.TrimSpace(album.String)
+		if albumName != "" {
+			var primaryArtistID *uint
+			if len(artistIDs) > 0 {
+				primaryArtistID = &artistIDs[0]
+			}
+			albumKey := strings.ToLower(albumName)
+			if primaryArtistID != nil {
+				albumKey += fmt.Sprintf("|%d", *primaryArtistID)
+			} else {
+				albumKey += "|0"
+			}
+
+			if existedID, ok := albumIDByKey[albumKey]; ok {
+				albumID = &existedID
+			} else {
+				album := model.MusicAlbum{
+					Name:        albumName,
+					ArtistID:    primaryArtistID,
+					CoverKey:    nullStr(icon),
+					ReleaseDate: parseSongDate(songDate),
+				}
+				q := dst.Where("name = ?", albumName)
+				if primaryArtistID == nil {
+					q = q.Where("artist_id IS NULL")
+				} else {
+					q = q.Where("artist_id = ?", *primaryArtistID)
+				}
+				if err := q.FirstOrCreate(&album).Error; err != nil {
+					return fmt.Errorf("insert music_album name=%s: %w", albumName, err)
+				}
+				albumIDByKey[albumKey] = album.ID
+				albumID = &album.ID
+			}
+		}
+
+		audioKey := nullStr(url)
 		m := model.Music{
-			Base:        migrationBase(id, dateCreate, dateModifed),
-			Name:        name.String,
-			Singer:      singer.String,
-			Album:       album.String,
-			SongDate:    parseSongDate(songDate),
-			URL:         nullStr(url),
-			CoverImgUrl: nullStr(icon),
-			Description: nullStr(description),
-			Lyric:       nullStr(lyric),
-			Duration:    parseMusicDuration(musicTime),
-			Seq:         uint(seq.Int32),
+			Base:              migrationBase(id, dateCreate, dateModifed),
+			Name:              name.String,
+			Singer:            singer.String,
+			ArtistDisplayName: singerText,
+			Album:             album.String,
+			AlbumID:           albumID,
+			SongDate:          parseSongDate(songDate),
+			URL:               nullStr(url),
+			AudioKey:          audioKey,
+			CoverImgUrl:       nullStr(icon),
+			Description:       nullStr(description),
+			Lyric:             nullStr(lyric),
+			Duration:          parseMusicDuration(musicTime),
+			Seq:               uint(seq.Int32),
+			IsPublic:          true,
 		}
 		if isUse.Valid && isUse.String == "00" {
 			t := time.Now()
 			m.DeletedAt = gorm.DeletedAt{Time: t, Valid: true}
+			m.IsPublic = false
 		}
 		if err := dst.Create(&m).Error; err != nil {
 			return fmt.Errorf("insert music id=%d: %w", id, err)
+		}
+		for seqIdx, artistID := range artistIDs {
+			relation := model.MusicArtistRelation{
+				MusicID:  m.ID,
+				ArtistID: artistID,
+				Role:     "primary",
+				Seq:      uint(seqIdx),
+			}
+			if err := dst.Create(&relation).Error; err != nil {
+				return fmt.Errorf("insert music_artist_relation music_id=%d artist_id=%d: %w", m.ID, artistID, err)
+			}
 		}
 	}
 	return rows.Err()

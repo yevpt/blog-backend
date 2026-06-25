@@ -7,45 +7,130 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	musicrepo "github.com/vpt/blog-backend/internal/repository/music"
 	"github.com/vpt/blog-backend/internal/service/music"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 type stubMusicRepository struct {
-	rows []model.Music
-	err  error
+	rows    []model.Music
+	artists []model.MusicArtist
+	err     error
 }
 
 func (s *stubMusicRepository) List() ([]model.Music, error) {
+	return s.ListPublicSongs()
+}
+
+func (s *stubMusicRepository) ListPublicSongs() ([]model.Music, error) {
 	return s.rows, s.err
+}
+
+func (s *stubMusicRepository) FindMusic(uint) (*model.Music, error) {
+	return nil, nil
+}
+
+func (s *stubMusicRepository) MusicArtistRelations([]uint) (map[uint][]model.MusicArtist, error) {
+	return map[uint][]model.MusicArtist{}, nil
+}
+
+func (s *stubMusicRepository) ListArtists(string) ([]model.MusicArtist, error) {
+	return nil, nil
+}
+
+func (s *stubMusicRepository) FindArtists([]uint) ([]model.MusicArtist, error) {
+	return s.artists, nil
+}
+
+func (s *stubMusicRepository) ListAlbums(string) ([]model.MusicAlbum, error) {
+	return nil, nil
+}
+
+func (s *stubMusicRepository) FindAlbum(uint) (*model.MusicAlbum, error) {
+	return nil, nil
+}
+
+func (s *stubMusicRepository) SaveMusic(musicrepo.MusicSaveData) error {
+	return nil
+}
+
+func (s *stubMusicRepository) DeleteMusic(uint) error {
+	return nil
+}
+
+func (s *stubMusicRepository) SaveArtist(model.MusicArtist) (*model.MusicArtist, error) {
+	return nil, nil
+}
+
+func (s *stubMusicRepository) DeleteArtist(uint) error {
+	return nil
+}
+
+func (s *stubMusicRepository) SaveAlbum(model.MusicAlbum) (*model.MusicAlbum, error) {
+	return nil, nil
+}
+
+func (s *stubMusicRepository) DeleteAlbum(uint) error {
+	return nil
+}
+
+func (s *stubMusicRepository) ListAdminSongs(string, int, int) ([]model.Music, int64, error) {
+	return s.rows, int64(len(s.rows)), s.err
 }
 
 var _ musicrepo.MusicRepository = (*stubMusicRepository)(nil)
 
-type stubMusicResolver struct{}
+type stubMusicObjectStore struct{}
 
-func (stubMusicResolver) ObjectURL(_ context.Context, objectName string) (string, error) {
+func (stubMusicObjectStore) ObjectURL(_ context.Context, objectName string) (string, error) {
 	return "https://cdn.example.com/" + objectName, nil
 }
 
+func (stubMusicObjectStore) ObjectExists(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (stubMusicObjectStore) PutObject(context.Context, string, []byte, string) error {
+	return nil
+}
+
+func (stubMusicObjectStore) DeleteObject(context.Context, string) error {
+	return nil
+}
+
+func (stubMusicObjectStore) MoveObject(context.Context, string, string) error {
+	return nil
+}
+
+func (stubMusicObjectStore) CopyObject(context.Context, string, string) error {
+	return nil
+}
+
+func (stubMusicObjectStore) ObjectKey(string) (string, error) {
+	return "", nil
+}
+
+var _ storage.ObjectStore = (*stubMusicObjectStore)(nil)
+
 func TestMusicService_List_MapsAndResolvesURLs(t *testing.T) {
-	url := "music/song.mp3"
+	audioKey := "music/song.mp3"
 	cover := "music/cover.jpg"
 	svc := music.NewMusicService(&stubMusicRepository{
 		rows: []model.Music{
 			{
-				Base:        model.Base{ID: 1},
-				Name:        "Song",
-				Singer:      "Singer",
-				Album:       "Album",
-				URL:         &url,
-				CoverImgUrl: &cover,
-				Duration:    240,
-				Seq:         2,
+				Base:              model.Base{ID: 1},
+				Name:              "Song",
+				ArtistDisplayName: "Singer",
+				AudioKey:          &audioKey,
+				CoverImgUrl:       &cover,
+				Duration:          240,
+				Seq:               2,
+				IsPublic:          true,
 			},
 		},
-	}, stubMusicResolver{})
+	}, stubMusicObjectStore{})
 
 	resp, err := svc.List()
 	require.NoError(t, err)
@@ -54,10 +139,9 @@ func TestMusicService_List_MapsAndResolvesURLs(t *testing.T) {
 	item := resp.List[0]
 	assert.Equal(t, uint(1), item.ID)
 	assert.Equal(t, "Song", item.Name)
-	assert.Equal(t, "Singer", item.Singer)
-	assert.Equal(t, "Album", item.Album)
-	assert.Equal(t, "https://cdn.example.com/music/song.mp3", *item.URL)
-	assert.Equal(t, "https://cdn.example.com/music/cover.jpg", *item.CoverImgUrl)
+	assert.Equal(t, "Singer", item.ArtistDisplayName)
+	assert.Equal(t, "https://cdn.example.com/music/song.mp3", *item.AudioURL)
+	assert.Equal(t, "https://cdn.example.com/music/cover.jpg", *item.CoverURL)
 	assert.Equal(t, uint16(240), item.Duration)
 	assert.Equal(t, uint(2), item.Seq)
 }
@@ -68,4 +152,77 @@ func TestMusicService_List_PropagatesRepoError(t *testing.T) {
 
 	_, err := svc.List()
 	require.ErrorIs(t, err, dbErr)
+}
+
+func TestMusicService_ListPublic_ResolvesAudioAndArtistDisplay(t *testing.T) {
+	audioKey := "music/audio/1/hash.mp3"
+	repo := &stubMusicRepository{
+		rows: []model.Music{{
+			Base:              model.Base{ID: 1},
+			Name:              "Song",
+			ArtistDisplayName: "문성남 (文胜南)",
+			AudioKey:          &audioKey,
+			Duration:          180,
+			IsPublic:          true,
+		}},
+	}
+	svc := music.NewMusicService(repo, stubMusicObjectStore{})
+
+	resp, err := svc.ListPublic()
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, "https://cdn.example.com/music/audio/1/hash.mp3", *resp.List[0].AudioURL)
+	assert.Equal(t, "문성남 (文胜南)", resp.List[0].ArtistDisplayName)
+}
+
+func TestMusicService_SaveMusic_RejectsMissingArtists(t *testing.T) {
+	repo := &stubMusicRepository{
+		artists: []model.MusicArtist{{Base: model.Base{ID: 1}, Name: "Aimer"}},
+	}
+	svc := music.NewMusicService(repo, nil)
+
+	err := svc.SaveMusic(dto.MusicSaveReq{
+		Name:      "Song",
+		ArtistIDs: []uint{1, 2},
+		AudioKey:  "music/audio/1/a.mp3",
+		IsPublic:  true,
+	})
+
+	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
+}
+
+func TestSplitArtistDisplayName_WithChineseTranslation(t *testing.T) {
+	name, nameZh := music.SplitArtistDisplayName("문성남 (文胜南)")
+
+	assert.Equal(t, "문성남", name)
+	require.NotNil(t, nameZh)
+	assert.Equal(t, "文胜南", *nameZh)
+}
+
+func TestSplitArtistDisplayName_WithFullWidthParentheses(t *testing.T) {
+	name, nameZh := music.SplitArtistDisplayName("문성남（文胜南）")
+
+	assert.Equal(t, "문성남", name)
+	require.NotNil(t, nameZh)
+	assert.Equal(t, "文胜南", *nameZh)
+}
+
+func TestSplitArtistDisplayName_WithoutChineseTranslation(t *testing.T) {
+	name, nameZh := music.SplitArtistDisplayName("Aimer")
+
+	assert.Equal(t, "Aimer", name)
+	assert.Nil(t, nameZh)
+}
+
+func TestSplitArtistTokens_KeepsOrderAndDeduplicates(t *testing.T) {
+	names := music.SplitArtistTokens("Aimer / milet feat. 幾田りら / Aimer")
+
+	assert.Equal(t, []string{"Aimer", "milet", "幾田りら"}, names)
+}
+
+func TestArtistDisplayName_UsesChineseTranslation(t *testing.T) {
+	nameZh := "文胜南"
+
+	assert.Equal(t, "문성남 (文胜南)", music.ArtistDisplayName("문성남", &nameZh))
 }

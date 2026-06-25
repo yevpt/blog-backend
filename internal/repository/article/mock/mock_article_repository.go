@@ -41,6 +41,21 @@ func (m *MockArticleRepository) EXPECT() *MockArticleRepositoryMockRecorder {
 	return m.recorder
 }
 
+// CountExistingMusicIDs mocks base method.
+func (m *MockArticleRepository) CountExistingMusicIDs(ids []uint) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountExistingMusicIDs", ids)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountExistingMusicIDs indicates an expected call of CountExistingMusicIDs.
+func (mr *MockArticleRepositoryMockRecorder) CountExistingMusicIDs(ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountExistingMusicIDs", reflect.TypeOf((*MockArticleRepository)(nil).CountExistingMusicIDs), ids)
+}
+
 // FindAdminDetail mocks base method.
 func (m *MockArticleRepository) FindAdminDetail(id uint, viewerID *uint) (*article.ArticleAggregate, error) {
 	m.ctrl.T.Helper()

@@ -548,3 +548,12 @@ func (r *articleRepo) articleMusic(ids []uint) (map[uint][]model.Music, error) {
 	}
 	return result, err
 }
+
+func (r *articleRepo) CountExistingMusicIDs(ids []uint) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	var count int64
+	err := r.db.Model(&model.Music{}).Where("id IN ?", ids).Count(&count).Error
+	return count, err
+}
