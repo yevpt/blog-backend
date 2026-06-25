@@ -1,49 +1,103 @@
-# Music Catalog Implementation Plan
+# Music Catalog Cursor-Ready Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Upgrade the music module into a lightweight personal music catalog with artists, albums, multi-artist songs, Garage-backed assets, and compatible migration from the existing `music` table.
+**Goal:** Upgrade the existing music module into a lightweight personal music catalog with artists, albums, multi-artist songs, Garage-backed assets, compatible old-data migration, and article background-music support.
 
-**Architecture:** Keep Gin handlers thin, place music catalog orchestration and Garage compensation in `internal/service/music`, and keep GORM access in `internal/repository/music`. Use structured DTOs for every API response; never expose `model.*` directly.
+**Architecture:** Keep HTTP binding in `internal/handler/music`, business validation and Garage compensation in `internal/service/music`, and GORM persistence in `internal/repository/music`. Keep old `music` columns during the first release so migration and rollback stay safe.
 
-**Tech Stack:** Go 1.25+, Gin, GORM/MySQL, Garage/S3 via `pkg/storage`, zap, testify, sqlmock, httptest, swaggo.
-
----
-
-## Scope Check
-
-This plan covers one cohesive module upgrade: music catalog data model, music admin/public APIs, upload support, and migration. Playlists and public song-list sharing stay out of this implementation; the new model only leaves room for them.
-
-## File Structure
-
-- Modify `internal/model/music.go`: add `MusicArtist`, `MusicAlbum`, `MusicArtistRelation`; extend `Music` with catalog fields while keeping old fields during migration.
-- Create `migrations/20260625_music_catalog.sql`: create new tables and backfill existing rows.
-- Modify `internal/dto/music.go`: add public/admin DTOs for artists, albums, songs, upload previews, and save requests.
-- Modify `internal/repository/music/music.go`: expand repository interface with artist, album, song CRUD and relation replacement.
-- Modify `internal/repository/music/music_test.go`: add sqlmock coverage for list/detail/save/delete relation behavior.
-- Modify `internal/service/music/music.go`: add public/admin catalog service methods, artist display formatting, save validation, and Garage key resolution.
-- Create `internal/service/music/parser.go`: parse old singer strings and artist Chinese names.
-- Create `internal/service/music/upload.go`: handle music audio, album cover, and artist avatar uploads through `storage.ObjectStore`.
-- Modify `internal/service/music/music_test.go`: add service tests for mapping, validation, parsing, upload compensation.
-- Modify `internal/handler/music/music.go`: add public and admin handlers with Swagger comments.
-- Modify `internal/handler/music/music_test.go`: add httptest coverage for public/admin endpoints.
-- Modify `internal/router/router.go`: wire admin music routes and upload routes.
-- Modify `internal/router/router_test.go`: update route construction expectations if needed.
-- Modify `cmd/migrate/main.go`: register new models and migrate old music into artist/album/song/relation rows.
-- Modify `cmd/migrate/main_test.go`: test singer parsing and music catalog migration planning.
-- Run `make swag` after handler changes.
+**Tech Stack:** Go 1.25+, Gin, GORM/MySQL, Garage/S3 via `pkg/storage`, testify, sqlmock, httptest, swaggo.
 
 ---
 
-### Task 1: Models And SQL Migration
+## Cursor Auto Execution Rules
+
+Use this plan one task at a time. Do not ask Cursor Auto to implement the whole plan in one run.
+
+Hard rules for every task:
+
+- Only edit files listed in the task.
+- Do not remove legacy `music.singer`, `music.album`, `music.url`, or `music.cover_img_url` in this implementation.
+- Do not expose `model.*` in DTOs or Swagger.
+- Do not use package-level globals for DB, storage, logger, or service instances.
+- Do not add unrelated refactors.
+- Do not add AI signatures to commits.
+- After each task, run the exact test command listed in that task.
+- Stop after the task is complete and report changed files, tests run, and remaining failures.
+
+Known scope boundaries:
+
+- First phase does **not** parse ID3 metadata beyond safe file type/hash/size. Upload returns asset metadata; song title/artist/album are confirmed through save APIs.
+- First phase does **not** build playlists.
+- First phase does **not** delete old Garage keys after migration. It copies new keys and leaves cleanup for a later task.
+
+## File Ownership Map
+
+- `internal/model/music.go`: GORM schema only.
+- `migrations/20260625_music_catalog.sql`: existing database upgrade SQL only.
+- `internal/dto/music.go`: all request and response structs for music APIs.
+- `internal/repository/music/music.go`: DB queries and transactions; returns `model.*`.
+- `internal/service/music/parser.go`: artist name splitting and display-name helpers.
+- `internal/service/music/music.go`: catalog business logic and DTO mapping.
+- `internal/service/music/upload.go`: Garage upload orchestration for music assets.
+- `internal/handler/music/music.go`: Gin handlers and Swagger annotations.
+- `internal/router/router.go`: route registration only.
+- `pkg/audiofile/audiofile.go`: minimal audio byte validation.
+- `cmd/migrate/main.go`: old-blog migration tool updates.
+
+---
+
+## Task 0: Preflight
+
+**Files:** none
+
+- [ ] **Step 1: Read required context**
+
+Read:
+
+```text
+AGENTS.md
+.agents/skills/go-layering/SKILL.md
+.agents/skills/http-api/SKILL.md
+.agents/skills/go-testing/SKILL.md
+docs/superpowers/specs/2026-06-25-music-catalog-design.md
+```
+
+- [ ] **Step 2: Inspect current module**
+
+Run:
+
+```bash
+sed -n '1,220p' internal/model/music.go
+sed -n '1,220p' internal/dto/music.go
+sed -n '1,260p' internal/service/music/music.go
+sed -n '1,260p' internal/repository/music/music.go
+sed -n '292,440p' internal/router/router.go
+```
+
+Expected: current module has only public `GET /music`, simple `music` table, and no artist/album tables.
+
+- [ ] **Step 3: Verify baseline tests**
+
+Run:
+
+```bash
+go test ./internal/repository/music ./internal/service/music ./internal/handler/music -count=1
+```
+
+Expected: PASS before implementation. If baseline fails, stop and report.
+
+---
+
+## Task 1: Add Catalog Models And SQL Migration
 
 **Files:**
 - Modify: `internal/model/music.go`
 - Create: `migrations/20260625_music_catalog.sql`
 
-- [ ] **Step 1: Extend models**
+- [ ] **Step 1: Modify `internal/model/music.go`**
 
-Modify `internal/model/music.go` so it contains these catalog models and keeps legacy fields on `Music` for the first release:
+Keep existing `Music` and `ArticleMusic`. Add these structs above `Music`:
 
 ```go
 type MusicArtist struct {
@@ -78,12 +132,12 @@ type MusicArtistRelation struct {
 func (MusicArtistRelation) TableName() string { return "music_artist_relation" }
 ```
 
-Extend `Music` with:
+Extend existing `Music` with these fields, but do not delete old fields:
 
 ```go
-AlbumID           *uint   `gorm:"index;comment:专辑ID" json:"album_id"`
-ArtistDisplayName string  `gorm:"size:200;comment:歌手展示名" json:"artist_display_name"`
-AlbumTrackNo      uint16  `gorm:"type:smallint unsigned;default:0;comment:专辑序号" json:"album_track_no"`
+AlbumID           *uint  `gorm:"index;comment:专辑ID" json:"album_id"`
+ArtistDisplayName string `gorm:"size:200;comment:歌手展示名" json:"artist_display_name"`
+AlbumTrackNo      uint16 `gorm:"type:smallint unsigned;default:0;comment:专辑序号" json:"album_track_no"`
 AudioKey          *string `gorm:"size:500;comment:音频对象 key" json:"audio_key"`
 AudioSize         uint64  `gorm:"type:bigint unsigned;default:0;comment:音频大小" json:"audio_size"`
 AudioMime         string  `gorm:"size:100;comment:音频 MIME" json:"audio_mime"`
@@ -91,9 +145,11 @@ AudioHash         string  `gorm:"size:64;index;comment:音频 hash" json:"audio_
 IsPublic          bool    `gorm:"default:true;index;comment:是否公开" json:"is_public"`
 ```
 
-- [ ] **Step 2: Create migration SQL**
+Place `AlbumID` after legacy `Album`, `ArtistDisplayName` after `Singer`, and `AudioKey` after legacy `URL` so the model remains readable.
 
-Create `migrations/20260625_music_catalog.sql` with table creation, new columns, and backfill SQL. Use MySQL 8 syntax and keep old columns:
+- [ ] **Step 2: Create SQL migration**
+
+Create `migrations/20260625_music_catalog.sql` with exactly these operations:
 
 ```sql
 CREATE TABLE IF NOT EXISTS `music_artist` (
@@ -157,38 +213,46 @@ SET `artist_display_name` = COALESCE(NULLIF(TRIM(`singer`), ''), ''),
 WHERE `artist_display_name` = '';
 ```
 
-Do not try to split all singers with SQL. Detailed backfill belongs in the Go migration task.
+Do not add SQL logic to split singers. That is handled by Go migration code later.
 
-- [ ] **Step 3: Format and inspect**
+- [ ] **Step 3: Format and test**
 
-Run: `gofmt -w internal/model/music.go`
-
-Run: `git diff -- internal/model/music.go migrations/20260625_music_catalog.sql`
-
-Expected: diff shows only model/schema additions and legacy fields remain.
-
-- [ ] **Step 4: Commit**
+Run:
 
 ```bash
-git add internal/model/music.go migrations/20260625_music_catalog.sql
-git commit -m "feat(music): 新增音乐资料库模型"
+gofmt -w internal/model/music.go
+go test ./internal/model ./internal/repository/music -count=1
+```
+
+Expected: `./internal/model` can report no test files; repository music tests must PASS.
+
+- [ ] **Step 4: Stop and report**
+
+Report:
+
+```text
+Task 1 complete.
+Changed files:
+- internal/model/music.go
+- migrations/20260625_music_catalog.sql
+Tests:
+- go test ./internal/model ./internal/repository/music -count=1
 ```
 
 ---
 
-### Task 2: DTOs And Parsing Helpers
+## Task 2: Add Parser Helpers
 
 **Files:**
-- Modify: `internal/dto/music.go`
 - Create: `internal/service/music/parser.go`
-- Test: `internal/service/music/music_test.go`
+- Modify: `internal/service/music/music_test.go`
 
-- [ ] **Step 1: Add parser tests**
+- [ ] **Step 1: Add tests**
 
-Append tests in `internal/service/music/music_test.go`:
+Append to `internal/service/music/music_test.go`:
 
 ```go
-func TestSplitArtistNameWithChineseTranslation(t *testing.T) {
+func TestSplitArtistDisplayName_WithChineseTranslation(t *testing.T) {
 	name, nameZh := music.SplitArtistDisplayName("문성남 (文胜南)")
 
 	assert.Equal(t, "문성남", name)
@@ -196,27 +260,45 @@ func TestSplitArtistNameWithChineseTranslation(t *testing.T) {
 	assert.Equal(t, "文胜南", *nameZh)
 }
 
-func TestSplitArtistNameWithoutChineseTranslation(t *testing.T) {
+func TestSplitArtistDisplayName_WithFullWidthParentheses(t *testing.T) {
+	name, nameZh := music.SplitArtistDisplayName("문성남（文胜南）")
+
+	assert.Equal(t, "문성남", name)
+	require.NotNil(t, nameZh)
+	assert.Equal(t, "文胜南", *nameZh)
+}
+
+func TestSplitArtistDisplayName_WithoutChineseTranslation(t *testing.T) {
 	name, nameZh := music.SplitArtistDisplayName("Aimer")
 
 	assert.Equal(t, "Aimer", name)
 	assert.Nil(t, nameZh)
 }
 
-func TestSplitArtistTokensKeepsOrder(t *testing.T) {
-	names := music.SplitArtistTokens("Aimer / milet feat. 幾田りら")
+func TestSplitArtistTokens_KeepsOrderAndDeduplicates(t *testing.T) {
+	names := music.SplitArtistTokens("Aimer / milet feat. 幾田りら / Aimer")
 
 	assert.Equal(t, []string{"Aimer", "milet", "幾田りら"}, names)
 }
+
+func TestArtistDisplayName_UsesChineseTranslation(t *testing.T) {
+	nameZh := "文胜南"
+
+	assert.Equal(t, "문성남 (文胜南)", music.ArtistDisplayName("문성남", &nameZh))
+}
 ```
 
-- [ ] **Step 2: Run parser tests and verify failure**
+- [ ] **Step 2: Verify tests fail**
 
-Run: `go test ./internal/service/music -run 'TestSplitArtist' -count=1`
+Run:
 
-Expected: FAIL because parsing helpers are not defined.
+```bash
+go test ./internal/service/music -run 'TestSplitArtist|TestArtistDisplayName' -count=1
+```
 
-- [ ] **Step 3: Implement parser helpers**
+Expected: FAIL because helpers do not exist.
+
+- [ ] **Step 3: Implement parser**
 
 Create `internal/service/music/parser.go`:
 
@@ -248,7 +330,16 @@ func SplitArtistDisplayName(value string) (string, *string) {
 }
 
 func SplitArtistTokens(value string) []string {
-	replacer := strings.NewReplacer(" feat. ", "/", " feat ", "/", " ft. ", "/", " ft ", "/", "、", "/", "，", "/", ",", "/", "&", "/")
+	replacer := strings.NewReplacer(
+		" feat. ", "/",
+		" feat ", "/",
+		" ft. ", "/",
+		" ft ", "/",
+		"、", "/",
+		"，", "/",
+		",", "/",
+		"&", "/",
+	)
 	normalized := replacer.Replace(strings.TrimSpace(value))
 	parts := strings.Split(normalized, "/")
 	result := make([]string, 0, len(parts))
@@ -279,11 +370,35 @@ func ArtistDisplayName(name string, nameZh *string) string {
 }
 ```
 
-- [ ] **Step 4: Add DTO structs**
+- [ ] **Step 4: Test**
 
-Modify `internal/dto/music.go` with concrete request/response types:
+Run:
+
+```bash
+gofmt -w internal/service/music/parser.go internal/service/music/music_test.go
+go test ./internal/service/music -run 'TestSplitArtist|TestArtistDisplayName|TestMusicService_List' -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Stop and report**
+
+Report changed files and test result.
+
+---
+
+## Task 3: Replace Music DTOs With Explicit Catalog DTOs
+
+**Files:**
+- Modify: `internal/dto/music.go`
+
+- [ ] **Step 1: Replace file content**
+
+Replace `internal/dto/music.go` with:
 
 ```go
+package dto
+
 type MusicArtistResp struct {
 	ID          uint    `json:"id" example:"1"`
 	Name        string  `json:"name" example:"문성남"`
@@ -291,6 +406,18 @@ type MusicArtistResp struct {
 	DisplayName string  `json:"display_name" example:"문성남 (文胜南)"`
 	AvatarURL   *string `json:"avatar_url,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+type MusicArtistSaveReq struct {
+	ID          uint    `json:"id"`
+	Name        string  `json:"name" binding:"required,max=100"`
+	NameZh      *string `json:"name_zh" binding:"omitempty,max=100"`
+	AvatarKey   *string `json:"avatar_key" binding:"omitempty,max=500"`
+	Description *string `json:"description" binding:"omitempty,max=500"`
+}
+
+type MusicArtistListResp struct {
+	List []MusicArtistResp `json:"list"`
 }
 
 type MusicAlbumResp struct {
@@ -302,7 +429,20 @@ type MusicAlbumResp struct {
 	Description *string          `json:"description,omitempty"`
 }
 
-type MusicDetailResp struct {
+type MusicAlbumSaveReq struct {
+	ID          uint    `json:"id"`
+	Name        string  `json:"name" binding:"required,max=150"`
+	ArtistID    *uint   `json:"artist_id"`
+	CoverKey    *string `json:"cover_key" binding:"omitempty,max=500"`
+	ReleaseDate *string `json:"release_date" binding:"omitempty"`
+	Description *string `json:"description" binding:"omitempty,max=500"`
+}
+
+type MusicAlbumListResp struct {
+	List []MusicAlbumResp `json:"list"`
+}
+
+type MusicItemResp struct {
 	ID                uint              `json:"id" example:"1"`
 	Name              string            `json:"name" example:"Song"`
 	ArtistDisplayName string            `json:"artist_display_name" example:"Aimer / milet"`
@@ -310,52 +450,81 @@ type MusicDetailResp struct {
 	Album             *MusicAlbumResp   `json:"album,omitempty"`
 	AlbumTrackNo      uint16            `json:"album_track_no" example:"1"`
 	AudioURL          *string           `json:"audio_url,omitempty"`
-	Lyric             *string           `json:"lyric,omitempty"`
+	CoverURL          *string           `json:"cover_url,omitempty"`
 	Duration          uint16            `json:"duration" example:"240"`
 	IsPublic          bool              `json:"is_public" example:"true"`
 	Seq               uint              `json:"seq" example:"0"`
 }
 
+type MusicDetailResp struct {
+	MusicItemResp
+	Lyric *string `json:"lyric,omitempty"`
+}
+
+type MusicListResp struct {
+	List []MusicItemResp `json:"list"`
+}
+
+type MusicAdminListReq struct {
+	Keyword  string `form:"keyword"`
+	Page     int    `form:"page"`
+	PageSize int    `form:"page_size"`
+}
+
+type MusicAdminListResp struct {
+	List  []MusicItemResp `json:"list"`
+	Total int64           `json:"total"`
+}
+
 type MusicSaveReq struct {
-	Name              string `json:"name" binding:"required,max=100"`
-	ArtistIDs         []uint `json:"artist_ids" binding:"required,min=1,max=10"`
-	ArtistDisplayName string `json:"artist_display_name" binding:"omitempty,max=200"`
-	AlbumID           *uint  `json:"album_id"`
-	AlbumTrackNo      uint16 `json:"album_track_no"`
-	AudioKey          string `json:"audio_key" binding:"required,max=500"`
+	ID                uint    `json:"id"`
+	Name              string  `json:"name" binding:"required,max=100"`
+	ArtistIDs         []uint  `json:"artist_ids" binding:"required,min=1,max=10"`
+	ArtistDisplayName string  `json:"artist_display_name" binding:"omitempty,max=200"`
+	AlbumID           *uint   `json:"album_id"`
+	AlbumTrackNo      uint16  `json:"album_track_no"`
+	AudioKey          string  `json:"audio_key" binding:"required,max=500"`
 	Lyric             *string `json:"lyric"`
-	Duration          uint16 `json:"duration"`
-	IsPublic          bool   `json:"is_public"`
-	Seq               uint   `json:"seq"`
+	Duration          uint16  `json:"duration"`
+	IsPublic          bool    `json:"is_public"`
+	Seq               uint    `json:"seq"`
+}
+
+type MusicUploadResp struct {
+	Key  string `json:"key" example:"temp/music/1/audio/hash.mp3"`
+	URL  string `json:"url" example:"https://cdn.example.com/music/audio/hash.mp3"`
+	Size uint64 `json:"size" example:"123456"`
+	Mime string `json:"mime" example:"audio/mpeg"`
+	Hash string `json:"hash" example:"abcdef"`
 }
 ```
 
-Add request/response DTOs for artist and album save/list in the same file, using concrete types and no `any`.
+- [ ] **Step 2: Test compile**
 
-- [ ] **Step 5: Run music service tests**
-
-Run: `go test ./internal/service/music -run 'TestSplitArtist|TestMusicService_List' -count=1`
-
-Expected: PASS.
-
-- [ ] **Step 6: Commit**
+Run:
 
 ```bash
-git add internal/dto/music.go internal/service/music/parser.go internal/service/music/music_test.go
-git commit -m "feat(music): 新增音乐目录 DTO 和解析器"
+gofmt -w internal/dto/music.go
+go test ./internal/service/music ./internal/handler/music -count=1
 ```
+
+Expected: this can FAIL because service/handler still reference old fields (`URL`, `CoverImgUrl`, `Album`, `Singer`). Continue only when failures are limited to those known downstream references. Fix syntax errors or missing DTO names before stopping.
+
+- [ ] **Step 3: Stop and report**
+
+Report changed file and compile errors if present. Do not modify service or handler in this task.
 
 ---
 
-### Task 3: Repository Catalog Operations
+## Task 4: Repository Interfaces And Read Queries
 
 **Files:**
 - Modify: `internal/repository/music/music.go`
-- Test: `internal/repository/music/music_test.go`
+- Modify: `internal/repository/music/music_test.go`
 
-- [ ] **Step 1: Write failing repository tests**
+- [ ] **Step 1: Add repository tests**
 
-Add tests that verify public song listing joins albums and artist relations:
+In `internal/repository/music/music_test.go`, add:
 
 ```go
 func TestMusicRepository_ListPublicSongs_FiltersPublicAndOrders(t *testing.T) {
@@ -367,10 +536,10 @@ func TestMusicRepository_ListPublicSongs_FiltersPublicAndOrders(t *testing.T) {
 	mock.ExpectQuery("SELECT \\* FROM `music` WHERE is_public = \\? AND `music`.`deleted_at` IS NULL ORDER BY seq ASC,id ASC").
 		WithArgs(true).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "created_at", "updated_at", "deleted_at", "name", "artist_display_name",
-			"album_id", "album_track_no", "audio_key", "lyric", "duration", "audio_size",
-			"audio_mime", "audio_hash", "is_public", "seq",
-		}).AddRow(1, now, now, nil, "Song", "Aimer", nil, 0, "music/audio/1/a.mp3", nil, 240, 10, "audio/mpeg", "hash", true, 0))
+			"id", "created_at", "updated_at", "deleted_at", "name", "singer", "artist_display_name",
+			"album", "album_id", "album_track_no", "song_date", "url", "audio_key", "audio_size",
+			"audio_mime", "audio_hash", "cover_img_url", "description", "lyric", "duration", "seq", "is_public",
+		}).AddRow(1, now, now, nil, "Song", "Singer", "Singer", "Album", nil, 0, nil, nil, "music/audio/1/a.mp3", 12, "audio/mpeg", "hash", nil, nil, nil, 240, 0, true))
 
 	rows, err := repo.ListPublicSongs()
 
@@ -379,9 +548,92 @@ func TestMusicRepository_ListPublicSongs_FiltersPublicAndOrders(t *testing.T) {
 	assert.Equal(t, "Song", rows[0].Name)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestMusicRepository_MusicArtistRelations_LoadsArtists(t *testing.T) {
+	db, mock, sqlDB := newMusicMockDB(t)
+	defer sqlDB.Close()
+	repo := music.NewMusicRepository(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT music_artist_relation.music_id, music_artist.\\* FROM `music_artist_relation` JOIN music_artist ON music_artist.id = music_artist_relation.artist_id AND music_artist.deleted_at IS NULL").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"music_id", "id", "created_at", "updated_at", "deleted_at", "name", "name_zh", "avatar_key", "description",
+		}).AddRow(1, 2, now, now, nil, "Aimer", nil, nil, nil))
+
+	rows, err := repo.MusicArtistRelations([]uint{1})
+
+	require.NoError(t, err)
+	require.Len(t, rows[1], 1)
+	assert.Equal(t, "Aimer", rows[1][0].Name)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
 ```
 
-Add tests for `SaveMusic` replacing artist relations inside a transaction:
+- [ ] **Step 2: Verify tests fail**
+
+Run:
+
+```bash
+go test ./internal/repository/music -run 'ListPublicSongs|MusicArtistRelations' -count=1
+```
+
+Expected: FAIL because methods do not exist.
+
+- [ ] **Step 3: Implement read repository contract**
+
+Modify `internal/repository/music/music.go`:
+
+```go
+type MusicRepository interface {
+	List() ([]model.Music, error)
+	ListPublicSongs() ([]model.Music, error)
+	FindMusic(id uint) (*model.Music, error)
+	MusicArtistRelations(musicIDs []uint) (map[uint][]model.MusicArtist, error)
+	ListArtists(keyword string) ([]model.MusicArtist, error)
+	FindArtists(ids []uint) ([]model.MusicArtist, error)
+	ListAlbums(keyword string) ([]model.MusicAlbum, error)
+	FindAlbum(id uint) (*model.MusicAlbum, error)
+}
+```
+
+Keep existing `List()` as a compatibility wrapper and make it call `ListPublicSongs()`.
+
+Implement:
+
+- `ListPublicSongs`: `WHERE is_public = true`, order `seq ASC, id ASC`.
+- `FindMusic`: first by ID; return `nil, nil` on `gorm.ErrRecordNotFound`.
+- `MusicArtistRelations`: join relation to artists, order relation `seq ASC`.
+- `ListArtists`: optional keyword on `name OR name_zh`, order `id DESC`.
+- `FindArtists`: load artists by IDs.
+- `ListAlbums`: optional keyword on name, order `id DESC`.
+- `FindAlbum`: return nil on not found.
+
+- [ ] **Step 4: Test**
+
+Run:
+
+```bash
+gofmt -w internal/repository/music/music.go internal/repository/music/music_test.go
+go test ./internal/repository/music -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 5: Repository Write Operations
+
+**Files:**
+- Modify: `internal/repository/music/music.go`
+- Modify: `internal/repository/music/music_test.go`
+
+- [ ] **Step 1: Add write tests**
+
+Add:
 
 ```go
 func TestMusicRepository_SaveMusic_ReplacesArtistRelations(t *testing.T) {
@@ -408,73 +660,78 @@ func TestMusicRepository_SaveMusic_ReplacesArtistRelations(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run repository tests and verify failure**
+- [ ] **Step 2: Verify tests fail**
 
-Run: `go test ./internal/repository/music -run 'TestMusicRepository_ListPublicSongs|TestMusicRepository_SaveMusic' -count=1`
+Run:
 
-Expected: FAIL because methods and save data type do not exist.
+```bash
+go test ./internal/repository/music -run 'SaveMusic' -count=1
+```
 
-- [ ] **Step 3: Implement repository methods**
+Expected: FAIL because write methods do not exist.
 
-Expand `internal/repository/music/music.go`:
+- [ ] **Step 3: Extend repository contract**
+
+Add:
 
 ```go
 type MusicSaveData struct {
 	Music           model.Music
 	ArtistRelations []model.MusicArtistRelation
 }
+```
 
-type MusicRepository interface {
-	List() ([]model.Music, error)
-	ListPublicSongs() ([]model.Music, error)
-	FindMusic(id uint) (*model.Music, error)
-	SaveMusic(data MusicSaveData) error
-	DeleteMusic(id uint) error
-	ListArtists(keyword string) ([]model.MusicArtist, error)
-	FindArtists(ids []uint) ([]model.MusicArtist, error)
-	SaveArtist(artist model.MusicArtist) (*model.MusicArtist, error)
-	DeleteArtist(id uint) error
-	ListAlbums(keyword string) ([]model.MusicAlbum, error)
-	FindAlbum(id uint) (*model.MusicAlbum, error)
-	SaveAlbum(album model.MusicAlbum) (*model.MusicAlbum, error)
-	DeleteAlbum(id uint) error
-	MusicArtistRelations(musicIDs []uint) (map[uint][]model.MusicArtist, error)
-}
+Add interface methods:
+
+```go
+SaveMusic(data MusicSaveData) error
+DeleteMusic(id uint) error
+SaveArtist(artist model.MusicArtist) (*model.MusicArtist, error)
+DeleteArtist(id uint) error
+SaveAlbum(album model.MusicAlbum) (*model.MusicAlbum, error)
+DeleteAlbum(id uint) error
 ```
 
 Implementation rules:
 
-- Public song listing uses `WHERE is_public = true`.
-- Soft delete uses GORM `Delete`.
-- `SaveMusic` uses `db.Transaction`.
-- Relation replacement deletes by `music_id`, then creates ordered relation rows.
-- Repository returns `model.*`, never `dto.*`.
+- `SaveMusic` uses transaction.
+- For new music (`ID == 0`), create first, then relation rows with the allocated ID.
+- For existing music, verify it exists, update fields, delete old relations, create new relations.
+- `DeleteMusic`, `DeleteArtist`, `DeleteAlbum` use GORM soft delete and return nil if row does not exist.
+- `SaveArtist` and `SaveAlbum` create on ID zero; update known fields on nonzero ID.
 
-- [ ] **Step 4: Run repository package**
+- [ ] **Step 4: Test**
 
-Run: `go test ./internal/repository/music -count=1`
+Run:
+
+```bash
+gofmt -w internal/repository/music/music.go internal/repository/music/music_test.go
+go test ./internal/repository/music -count=1
+```
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Stop and report**
 
-```bash
-git add internal/repository/music/music.go internal/repository/music/music_test.go
-git commit -m "feat(music): 补全音乐资料库仓储"
-```
+Report changed files and tests.
 
 ---
 
-### Task 4: Music Service Behavior
+## Task 6: Service Mapping And Read APIs
 
 **Files:**
 - Modify: `internal/service/music/music.go`
-- Create: `internal/service/music/upload.go`
-- Test: `internal/service/music/music_test.go`
+- Modify: `internal/service/music/music_test.go`
 
-- [ ] **Step 1: Write service mapping tests**
+- [ ] **Step 1: Update service test stubs**
 
-Add tests:
+Expand the stub repository in `internal/service/music/music_test.go` so it implements the new repository interface. For methods not used by a test, return zero values.
+
+Use concrete method signatures from Tasks 4 and 5. Do not use `any` or `interface{}` in service/repository signatures.
+
+- [ ] **Step 2: Add service read tests**
+
+Add:
 
 ```go
 func TestMusicService_ListPublic_ResolvesAudioAndArtistDisplay(t *testing.T) {
@@ -498,94 +755,170 @@ func TestMusicService_ListPublic_ResolvesAudioAndArtistDisplay(t *testing.T) {
 	assert.Equal(t, "https://cdn.example.com/music/audio/1/hash.mp3", *resp.List[0].AudioURL)
 	assert.Equal(t, "문성남 (文胜南)", resp.List[0].ArtistDisplayName)
 }
+```
 
-func TestMusicService_SaveMusic_RejectsMissingArtists(t *testing.T) {
-	repo := &stubMusicRepository{artists: []model.MusicArtist{{Base: model.Base{ID: 1}, Name: "Aimer"}}}
-	svc := music.NewMusicService(repo, nil)
+- [ ] **Step 3: Verify tests fail**
 
-	err := svc.SaveMusic(dto.MusicSaveReq{Name: "Song", ArtistIDs: []uint{1, 2}, AudioKey: "music/audio/1/a.mp3"})
+Run:
 
-	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
+```bash
+go test ./internal/service/music -run 'ListPublic' -count=1
+```
+
+Expected: FAIL because `ListPublic` does not exist.
+
+- [ ] **Step 4: Implement read service methods**
+
+Modify `MusicService` interface:
+
+```go
+type MusicService interface {
+	List() (*dto.MusicListResp, error)
+	ListPublic() (*dto.MusicListResp, error)
+	GetPublicDetail(id uint) (*dto.MusicDetailResp, error)
+	ListArtists(keyword string) (*dto.MusicArtistListResp, error)
+	ListAlbums(keyword string) (*dto.MusicAlbumListResp, error)
 }
 ```
 
-- [ ] **Step 2: Run service tests and verify failure**
+Keep `List()` as:
 
-Run: `go test ./internal/service/music -run 'TestMusicService_ListPublic|TestMusicService_SaveMusic' -count=1`
+```go
+func (s *musicService) List() (*dto.MusicListResp, error) {
+	return s.ListPublic()
+}
+```
 
-Expected: FAIL because methods and errors do not exist.
+Mapping rules:
 
-- [ ] **Step 3: Implement service interface**
+- Resolve `AudioKey` into `AudioURL`.
+- For album cover, resolve `MusicAlbum.CoverKey` into `CoverURL`.
+- Artist `DisplayName` uses `ArtistDisplayName(artist.Name, artist.NameZh)`.
+- `GetPublicDetail` returns `ErrMusicNotFound` if repo returns nil.
 
-Modify `internal/service/music/music.go`:
+Add errors:
 
 ```go
 var (
 	ErrMusicNotFound       = errors.New("音乐不存在")
 	ErrMusicArtistNotFound = errors.New("歌手不存在")
 	ErrMusicAlbumNotFound  = errors.New("专辑不存在")
-	ErrMusicUploadInvalid  = errors.New("音乐文件无效")
 )
-
-type MusicService interface {
-	List() (*dto.MusicListResp, error)
-	ListPublic() (*dto.MusicListResp, error)
-	GetPublicDetail(id uint) (*dto.MusicDetailResp, error)
-	ListAdmin(query dto.MusicAdminListReq) (*dto.MusicAdminListResp, error)
-	SaveMusic(req dto.MusicSaveReq) error
-	DeleteMusic(id uint) error
-	ListArtists(keyword string) ([]dto.MusicArtistResp, error)
-	SaveArtist(req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error)
-	DeleteArtist(id uint) error
-	ListAlbums(keyword string) ([]dto.MusicAlbumResp, error)
-	SaveAlbum(req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error)
-	DeleteAlbum(id uint) error
-}
 ```
 
-Keep `List()` as a compatibility wrapper calling `ListPublic()` until handlers are updated.
+- [ ] **Step 5: Test**
 
-Implement:
+Run:
 
-- `artistDTO` uses `ArtistDisplayName`.
-- `musicDTO` resolves `AudioKey` with `storage.ResolvePtrURL`.
-- `SaveMusic` verifies all `ArtistIDs` exist.
-- `SaveMusic` verifies `AlbumID` exists when provided.
-- `SaveMusic` builds relation rows in request order.
-- If `ArtistDisplayName` is empty, derive it by joining selected artist display names with ` / `.
-
-- [ ] **Step 4: Run service package**
-
-Run: `go test ./internal/service/music -count=1`
+```bash
+gofmt -w internal/service/music/music.go internal/service/music/music_test.go
+go test ./internal/service/music -count=1
+```
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Stop and report**
 
-```bash
-git add internal/service/music internal/dto/music.go
-git commit -m "feat(music): 实现音乐资料库服务"
-```
+Report changed files and tests.
 
 ---
 
-### Task 5: HTTP API And Routes
+## Task 7: Service Write APIs
+
+**Files:**
+- Modify: `internal/service/music/music.go`
+- Modify: `internal/service/music/music_test.go`
+
+- [ ] **Step 1: Add save validation tests**
+
+Add:
+
+```go
+func TestMusicService_SaveMusic_RejectsMissingArtists(t *testing.T) {
+	repo := &stubMusicRepository{
+		artists: []model.MusicArtist{{Base: model.Base{ID: 1}, Name: "Aimer"}},
+	}
+	svc := music.NewMusicService(repo, nil)
+
+	err := svc.SaveMusic(dto.MusicSaveReq{
+		Name: "Song",
+		ArtistIDs: []uint{1, 2},
+		AudioKey: "music/audio/1/a.mp3",
+		IsPublic: true,
+	})
+
+	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
+}
+```
+
+- [ ] **Step 2: Verify tests fail**
+
+Run:
+
+```bash
+go test ./internal/service/music -run 'SaveMusic' -count=1
+```
+
+Expected: FAIL because write service methods do not exist.
+
+- [ ] **Step 3: Extend service interface**
+
+Add:
+
+```go
+SaveMusic(req dto.MusicSaveReq) error
+DeleteMusic(id uint) error
+SaveArtist(req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error)
+DeleteArtist(id uint) error
+SaveAlbum(req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error)
+DeleteAlbum(id uint) error
+```
+
+Implementation rules:
+
+- `SaveMusic` loads all artist IDs; if count mismatches request unique IDs, return `ErrMusicArtistNotFound`.
+- If `AlbumID` is nonnil, load album; nil result returns `ErrMusicAlbumNotFound`.
+- If `ArtistDisplayName` is blank, join selected artist display names with ` / `.
+- Build `model.MusicArtistRelation` rows in request order, role `primary`.
+- Save `AudioKey` into both `Music.AudioKey` and legacy `Music.URL` for first-phase compatibility.
+- `SaveArtist` returns DTO with formatted `DisplayName`.
+- `SaveAlbum` validates `ArtistID` if present.
+
+- [ ] **Step 4: Test**
+
+Run:
+
+```bash
+gofmt -w internal/service/music/music.go internal/service/music/music_test.go
+go test ./internal/service/music -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 8: Public Music Handlers And Route Order
 
 **Files:**
 - Modify: `internal/handler/music/music.go`
 - Modify: `internal/handler/music/music_test.go`
 - Modify: `internal/router/router.go`
-- Modify: `internal/router/router_test.go`
 
-- [ ] **Step 1: Write handler tests**
+- [ ] **Step 1: Add handler tests**
 
-Add tests for admin save and public detail:
+Update the stub service in `internal/handler/music/music_test.go` for new interface methods. Add:
 
 ```go
 func TestMusicHandler_GetPublicDetail_Success(t *testing.T) {
-	svc := &stubMusicService{detail: &dto.MusicDetailResp{ID: 1, Name: "Song"}}
-	r := newMusicRouter(svc)
-	r.GET("/music/:id", music.NewMusicHandler(svc).GetPublicDetail)
+	svc := &stubMusicService{detail: &dto.MusicDetailResp{MusicItemResp: dto.MusicItemResp{ID: 1, Name: "Song"}}}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := music.NewMusicHandler(svc)
+	r.GET("/music/:id", h.GetPublicDetail)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/music/1", nil)
@@ -593,7 +926,161 @@ func TestMusicHandler_GetPublicDetail_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+```
 
+- [ ] **Step 2: Verify tests fail**
+
+Run:
+
+```bash
+go test ./internal/handler/music -run 'GetPublicDetail' -count=1
+```
+
+Expected: FAIL because method does not exist.
+
+- [ ] **Step 3: Implement public handlers**
+
+Add methods:
+
+- `List`
+- `GetPublicDetail`
+- `ListArtists`
+- `ListAlbums`
+
+Rules:
+
+- Parse `:id` with `strconv.ParseUint`.
+- Bad ID returns `response.Fail(c, response.CodeBadRequest, "参数错误")`.
+- `ErrMusicNotFound` returns `response.NotFound(c)`.
+- Use `response.Success`, never `c.JSON`.
+- Add Swagger annotations above each handler.
+
+- [ ] **Step 4: Register routes with safe order**
+
+In `registerPublicRoutes`, static routes must be before `/:id`:
+
+```go
+r.GET("/music", handlers.music.List)
+r.GET("/music/artists", handlers.music.ListArtists)
+r.GET("/music/albums", handlers.music.ListAlbums)
+r.GET("/music/:id", handlers.music.GetPublicDetail)
+```
+
+Do not register `/music/:id` before `/music/artists` or `/music/albums`.
+
+- [ ] **Step 5: Test**
+
+Run:
+
+```bash
+gofmt -w internal/handler/music/music.go internal/handler/music/music_test.go internal/router/router.go
+go test ./internal/handler/music ./internal/router -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 9: Admin Artist And Album Handlers
+
+**Files:**
+- Modify: `internal/handler/music/music.go`
+- Modify: `internal/handler/music/music_test.go`
+- Modify: `internal/router/router.go`
+
+- [ ] **Step 1: Add tests**
+
+Add tests for bad JSON and successful save:
+
+```go
+func TestMusicHandler_SaveArtist_BadJSON(t *testing.T) {
+	svc := &stubMusicService{}
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	h := music.NewMusicHandler(svc)
+	r.POST("/admin/music/artists", h.SaveArtist)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/admin/music/artists", strings.NewReader("{"))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+```
+
+- [ ] **Step 2: Implement handlers**
+
+Add:
+
+- `ListAdminArtists`
+- `SaveArtist`
+- `DeleteArtist`
+- `ListAdminAlbums`
+- `SaveAlbum`
+- `DeleteAlbum`
+
+Rules:
+
+- Bind JSON for save.
+- Bind query `keyword` for list.
+- For `PUT`, read ID from path and assign it to `dto.MusicArtistSaveReq.ID` or `dto.MusicAlbumSaveReq.ID` before calling service.
+- Delete parses `:id`, bad ID is business bad request.
+- Map service not-found errors to `response.NotFound(c)`.
+
+- [ ] **Step 3: Register admin routes**
+
+Inside `registerAdminRoutes`:
+
+```go
+admin.GET("/music/artists", handlers.music.ListAdminArtists)
+admin.POST("/music/artists", handlers.music.SaveArtist)
+admin.PUT("/music/artists/:id", handlers.music.SaveArtist)
+admin.DELETE("/music/artists/:id", handlers.music.DeleteArtist)
+admin.GET("/music/albums", handlers.music.ListAdminAlbums)
+admin.POST("/music/albums", handlers.music.SaveAlbum)
+admin.PUT("/music/albums/:id", handlers.music.SaveAlbum)
+admin.DELETE("/music/albums/:id", handlers.music.DeleteAlbum)
+```
+
+- [ ] **Step 4: Test**
+
+Run:
+
+```bash
+gofmt -w internal/handler/music/music.go internal/handler/music/music_test.go internal/router/router.go internal/dto/music.go
+go test ./internal/handler/music ./internal/router -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 10: Admin Music Handlers
+
+**Files:**
+- Modify: `internal/handler/music/music.go`
+- Modify: `internal/handler/music/music_test.go`
+- Modify: `internal/router/router.go`
+- Modify: `internal/dto/music.go`
+
+- [ ] **Step 1: Use request ID field**
+
+`dto.MusicSaveReq` already has `ID uint`. Handler must set `req.ID` from the path on `PUT /admin/music/:id` before calling service.
+
+- [ ] **Step 2: Add tests**
+
+Add:
+
+```go
 func TestMusicHandler_SaveMusic_BadJSON(t *testing.T) {
 	svc := &stubMusicService{}
 	gin.SetMode(gin.TestMode)
@@ -610,49 +1097,23 @@ func TestMusicHandler_SaveMusic_BadJSON(t *testing.T) {
 }
 ```
 
-- [ ] **Step 2: Run handler tests and verify failure**
-
-Run: `go test ./internal/handler/music -run 'TestMusicHandler_GetPublicDetail|TestMusicHandler_SaveMusic' -count=1`
-
-Expected: FAIL because handler methods do not exist.
-
 - [ ] **Step 3: Implement handlers**
 
-Add methods with Swagger comments:
+Add:
 
-- `List`
-- `GetPublicDetail`
-- `ListArtists`
-- `GetArtist`
-- `ListAlbums`
-- `GetAlbum`
 - `ListAdmin`
 - `SaveMusic`
 - `DeleteMusic`
-- `ListAdminArtists`
-- `SaveArtist`
-- `DeleteArtist`
-- `ListAdminAlbums`
-- `SaveAlbum`
-- `DeleteAlbum`
 
-Handler rules:
+Rules:
 
-- Bind JSON/query only.
-- Map binding errors to `response.Fail(c, response.CodeBadRequest, "参数错误")`.
-- Map not-found service errors to `response.NotFound(c)`.
-- Use `response.Success` / `response.Fail`; do not use `c.JSON`.
+- `ListAdmin` binds `dto.MusicAdminListReq`.
+- Default `Page=1`, `PageSize=20` in service or handler.
+- `PageSize` max is 100.
+- `SaveMusic` maps missing artist/album service errors to `response.Fail(c, response.CodeBadRequest, err.Error())`.
+- `DeleteMusic` returns success with deleted ID or empty object.
 
 - [ ] **Step 4: Register routes**
-
-Modify `internal/router/router.go`:
-
-```go
-r.GET("/music", handlers.music.List)
-r.GET("/music/:id", handlers.music.GetPublicDetail)
-r.GET("/music/artists", handlers.music.ListArtists)
-r.GET("/music/albums", handlers.music.ListAlbums)
-```
 
 Inside admin group:
 
@@ -661,43 +1122,34 @@ admin.GET("/music", handlers.music.ListAdmin)
 admin.POST("/music", handlers.music.SaveMusic)
 admin.PUT("/music/:id", handlers.music.SaveMusic)
 admin.DELETE("/music/:id", handlers.music.DeleteMusic)
-admin.GET("/music/artists", handlers.music.ListAdminArtists)
-admin.POST("/music/artists", handlers.music.SaveArtist)
-admin.PUT("/music/artists/:id", handlers.music.SaveArtist)
-admin.DELETE("/music/artists/:id", handlers.music.DeleteArtist)
-admin.GET("/music/albums", handlers.music.ListAdminAlbums)
-admin.POST("/music/albums", handlers.music.SaveAlbum)
-admin.PUT("/music/albums/:id", handlers.music.SaveAlbum)
-admin.DELETE("/music/albums/:id", handlers.music.DeleteAlbum)
 ```
 
-- [ ] **Step 5: Run handler/router tests**
+Place `/admin/music/artists` and `/admin/music/albums` routes before `/admin/music/:id` if the router ever groups them manually. Gin route tree usually accepts both, but keep static routes first for clarity.
 
-Run: `go test ./internal/handler/music ./internal/router -count=1`
+- [ ] **Step 5: Test**
+
+Run:
+
+```bash
+gofmt -w internal/handler/music/music.go internal/handler/music/music_test.go internal/router/router.go internal/dto/music.go
+go test ./internal/handler/music ./internal/router -count=1
+```
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Stop and report**
 
-```bash
-git add internal/handler/music internal/router/router.go internal/router/router_test.go
-git commit -m "feat(music): 注册音乐资料库接口"
-```
+Report changed files and tests.
 
 ---
 
-### Task 6: Upload Service
+## Task 11: Minimal Audio Validator
 
 **Files:**
 - Create: `pkg/audiofile/audiofile.go`
 - Create: `pkg/audiofile/audiofile_test.go`
-- Modify: `internal/service/music/upload.go`
-- Modify: `internal/handler/music/music.go`
-- Modify: `internal/router/router.go`
-- Test: `internal/service/music/music_test.go`
-- Test: `internal/handler/music/music_test.go`
 
-- [ ] **Step 1: Add audio validation tests**
+- [ ] **Step 1: Create tests**
 
 Create `pkg/audiofile/audiofile_test.go`:
 
@@ -721,6 +1173,7 @@ func TestValidateMP3ByID3Header(t *testing.T) {
 	assert.Equal(t, "audio/mpeg", result.ContentType)
 	assert.Equal(t, ".mp3", result.Ext)
 	assert.NotEmpty(t, result.SHA256)
+	assert.Equal(t, uint64(len(data)), result.Size)
 }
 
 func TestValidateRejectsInvalidAudio(t *testing.T) {
@@ -728,15 +1181,15 @@ func TestValidateRejectsInvalidAudio(t *testing.T) {
 
 	require.ErrorIs(t, err, audiofile.ErrInvalidAudio)
 }
+
+func TestValidateRejectsTooLarge(t *testing.T) {
+	_, err := audiofile.Validate("song.mp3", append([]byte("ID3"), make([]byte, 20)...), 4)
+
+	require.ErrorIs(t, err, audiofile.ErrAudioTooLarge)
+}
 ```
 
-- [ ] **Step 2: Run audio tests and verify failure**
-
-Run: `go test ./pkg/audiofile -count=1`
-
-Expected: FAIL because package does not exist.
-
-- [ ] **Step 3: Implement minimal audio validator**
+- [ ] **Step 2: Implement validator**
 
 Create `pkg/audiofile/audiofile.go`:
 
@@ -799,68 +1252,97 @@ func detectAudio(name string, data []byte) (string, string) {
 }
 ```
 
-Metadata parsing can be added behind this package later without changing service contracts. For this task, the upload API stores safe asset metadata and leaves editable song metadata to the save request.
+- [ ] **Step 3: Test**
 
-- [ ] **Step 4: Implement music upload methods**
+Run:
 
-In `internal/service/music/upload.go`, add:
+```bash
+gofmt -w pkg/audiofile/audiofile.go pkg/audiofile/audiofile_test.go
+go test ./pkg/audiofile -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 4: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 12: Music Upload Service And Handlers
+
+**Files:**
+- Create: `internal/service/music/upload.go`
+- Modify: `internal/service/music/music.go`
+- Modify: `internal/service/music/music_test.go`
+- Modify: `internal/handler/music/music.go`
+- Modify: `internal/handler/music/music_test.go`
+- Modify: `internal/router/router.go`
+
+- [ ] **Step 1: Service contract**
+
+Extend `MusicService`:
 
 ```go
-const MaxMusicAudioBytes = 50 * 1024 * 1024
+UploadAudio(ctx context.Context, input MusicAudioUploadInput) (*dto.MusicUploadResp, error)
+UploadAlbumCover(ctx context.Context, input MusicImageUploadInput) (*dto.MusicUploadResp, error)
+UploadArtistAvatar(ctx context.Context, input MusicImageUploadInput) (*dto.MusicUploadResp, error)
+```
 
+Define input types in `internal/service/music/upload.go`:
+
+```go
 type MusicAudioUploadInput struct {
 	UserID uint
 	Name   string
 	Data   []byte
 }
 
-func (s *musicService) UploadAudio(ctx context.Context, input MusicAudioUploadInput) (*dto.MusicUploadResp, error) {
-	result, err := audiofile.Validate(input.Name, input.Data, MaxMusicAudioBytes)
-	if err != nil {
-		return nil, ErrMusicUploadInvalid
-	}
-	key := fmt.Sprintf("temp/music/%d/audio/%s%s", input.UserID, result.SHA256, result.Ext)
-	exists, err := s.store.ObjectExists(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		if err := s.store.PutObject(ctx, key, result.Data, result.ContentType); err != nil {
-			return nil, err
-		}
-	}
-	url, err := s.store.ObjectURL(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	return &dto.MusicUploadResp{
-		Key: key,
-		URL: url,
-		Size: result.Size,
-		Mime: result.ContentType,
-		Hash: result.SHA256,
-	}, nil
+type MusicImageUploadInput struct {
+	UserID uint
+	Name   string
+	Data   []byte
 }
 ```
 
-Add similar methods for album cover and artist avatar by reusing `pkg/imagefile.Validate`, with keys:
+- [ ] **Step 2: Implement service**
 
-```text
-temp/music/{user_id}/album-cover/{md5}{ext}
-temp/music/{user_id}/artist-avatar/{md5}{ext}
+Implementation requirements:
+
+- Audio max size: `50 * 1024 * 1024`.
+- Image max size: reuse `uploadservice.MaxTempImageBytes` or `10 * 1024 * 1024`.
+- Audio key: `temp/music/{user_id}/audio/{sha256}{ext}`.
+- Album cover key: `temp/music/{user_id}/album-cover/{md5}{ext}`.
+- Artist avatar key: `temp/music/{user_id}/artist-avatar/{md5}{ext}`.
+- Check `ObjectExists`; skip `PutObject` on duplicate.
+- Return URL via `ObjectURL`.
+- Map invalid audio/image to `ErrMusicUploadInvalid`.
+
+Add:
+
+```go
+var ErrMusicUploadInvalid = errors.New("音乐资源无效")
 ```
 
-- [ ] **Step 5: Add upload handlers**
+- [ ] **Step 3: Implement handlers**
 
-Add handler methods:
+Add:
 
 - `UploadAudio`
 - `UploadAlbumCover`
 - `UploadArtistAvatar`
 
-Each reads multipart file with `io.LimitReader`, extracts `jwt.GetClaims(c)`, calls service, and maps invalid file errors to `response.Fail`.
+Rules:
 
-Register admin routes:
+- Use `jwt.GetClaims(c)` and require logged-in admin route context.
+- Read multipart file field named `file`.
+- Use `io.LimitReader` with max + 1.
+- Oversized file returns `response.Fail(c, response.CodeBadRequest, "文件过大")`.
+- Invalid upload returns `response.Fail(c, response.CodeBadRequest, err.Error())`.
+
+- [ ] **Step 4: Register routes**
+
+Inside admin group:
 
 ```go
 admin.POST("/music/uploads/audio", handlers.music.UploadAudio)
@@ -868,32 +1350,101 @@ admin.POST("/music/uploads/album-cover", handlers.music.UploadAlbumCover)
 admin.POST("/music/uploads/artist-avatar", handlers.music.UploadArtistAvatar)
 ```
 
-Apply an existing upload rate limiter if one fits; otherwise add a dedicated admin upload limiter in the same style as `RateLimitTempUpload`.
+- [ ] **Step 5: Test**
 
-- [ ] **Step 6: Run upload tests**
+Run:
 
-Run: `go test ./pkg/audiofile ./internal/service/music ./internal/handler/music -run 'Upload|Validate' -count=1`
+```bash
+gofmt -w internal/service/music internal/handler/music internal/router/router.go
+go test ./pkg/audiofile ./internal/service/music ./internal/handler/music ./internal/router -run 'Upload|Validate|Music' -count=1
+```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Stop and report**
 
-```bash
-git add pkg/audiofile internal/service/music internal/handler/music internal/router/router.go
-git commit -m "feat(music): 新增音乐资源上传"
-```
+Report changed files and tests.
 
 ---
 
-### Task 7: Migration Tool Updates
+## Task 13: Article Music ID Validation
+
+**Files:**
+- Modify: `internal/repository/article/article.go`
+- Modify: `internal/repository/article/mutation.go`
+- Modify: `internal/repository/article/article_test.go`
+- Modify: `internal/service/article/article.go`
+- Modify: `internal/service/article/article_test.go`
+
+- [ ] **Step 1: Inspect existing article save flow**
+
+Read:
+
+```bash
+sed -n '1,120p' internal/repository/article/article.go
+sed -n '1,90p' internal/repository/article/mutation.go
+sed -n '150,230p' internal/service/article/article.go
+```
+
+- [ ] **Step 2: Add repository existence check**
+
+Add this method to `ArticleRepository` in `internal/repository/article/article.go`:
+
+```go
+CountExistingMusicIDs(ids []uint) (int64, error)
+```
+
+Implement it on `articleRepo` in `internal/repository/article/query.go`:
+
+```go
+func (r *articleRepo) CountExistingMusicIDs(ids []uint) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	var count int64
+	err := r.db.Model(&model.Music{}).Where("id IN ?", ids).Count(&count).Error
+	return count, err
+}
+```
+
+- [ ] **Step 3: Validate in service before save**
+
+In article service save path, after `uniqueUintIDs(req.MusicIDs)`, check count equals number of unique music IDs. If not, return a business error like:
+
+```go
+var ErrArticleMusicNotFound = errors.New("音乐不存在")
+```
+
+Map this error in `internal/handler/article/article.go` to `response.Fail(c, response.CodeBadRequest, "音乐不存在")`.
+
+- [ ] **Step 4: Tests**
+
+Add service test for missing music ID. Use existing article service fake repository; extend fake with `CountExistingMusicIDs`.
+
+Run:
+
+```bash
+gofmt -w internal/repository/article internal/service/article
+go test ./internal/repository/article ./internal/service/article ./internal/handler/article -run 'Music|Save|Article' -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 5: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 14: Old Migration Tool
 
 **Files:**
 - Modify: `cmd/migrate/main.go`
 - Modify: `cmd/migrate/main_test.go`
 
-- [ ] **Step 1: Write migration helper tests**
+- [ ] **Step 1: Add helper tests**
 
-Add tests in `cmd/migrate/main_test.go`:
+In `cmd/migrate/main_test.go`, add:
 
 ```go
 func TestBuildMusicArtistSeeds_SplitsChineseTranslation(t *testing.T) {
@@ -908,19 +1459,45 @@ func TestBuildMusicArtistSeeds_SplitsChineseTranslation(t *testing.T) {
 func TestBuildMusicArtistSeeds_SplitsCollaboration(t *testing.T) {
 	seeds := buildMusicArtistSeeds("Aimer / milet feat. 幾田りら")
 
-	assert.Equal(t, []string{"Aimer", "milet", "幾田りら"}, []string{seeds[0].Name, seeds[1].Name, seeds[2].Name})
+	require.Len(t, seeds, 3)
+	assert.Equal(t, "Aimer", seeds[0].Name)
+	assert.Equal(t, "milet", seeds[1].Name)
+	assert.Equal(t, "幾田りら", seeds[2].Name)
 }
 ```
 
-- [ ] **Step 2: Run migration tests and verify failure**
+- [ ] **Step 2: Implement helper**
 
-Run: `go test ./cmd/migrate -run 'TestBuildMusicArtistSeeds' -count=1`
+Add helper in `cmd/migrate/main.go`:
 
-Expected: FAIL because helper does not exist.
+```go
+type musicArtistSeed struct {
+	Name   string
+	NameZh *string
+}
 
-- [ ] **Step 3: Register new models**
+func buildMusicArtistSeeds(value string) []musicArtistSeed {
+	tokens := musicservice.SplitArtistTokens(value)
+	if len(tokens) == 0 && strings.TrimSpace(value) != "" {
+		tokens = []string{strings.TrimSpace(value)}
+	}
+	seeds := make([]musicArtistSeed, 0, len(tokens))
+	for _, token := range tokens {
+		name, nameZh := musicservice.SplitArtistDisplayName(token)
+		if name == "" {
+			continue
+		}
+		seeds = append(seeds, musicArtistSeed{Name: name, NameZh: nameZh})
+	}
+	return seeds
+}
+```
 
-Modify `autoMigrate` in `cmd/migrate/main.go` to include:
+Import `musicservice "github.com/vpt/blog-backend/internal/service/music"`.
+
+- [ ] **Step 3: Register models**
+
+In `autoMigrate`, add before `&model.Music{}`:
 
 ```go
 &model.MusicArtist{},
@@ -928,61 +1505,136 @@ Modify `autoMigrate` in `cmd/migrate/main.go` to include:
 &model.MusicArtistRelation{},
 ```
 
-Place them before `&model.Music{}`.
-
 - [ ] **Step 4: Update `migrateMusic`**
 
-Change `migrateMusic` to:
+Modify `migrateMusic` so it:
 
-- Parse singer into artist seeds.
-- `FirstOrCreate` each `model.MusicArtist` by `name`.
-- Create or find album by `name + artist_id`.
-- Create `model.Music` with:
-  - `ArtistDisplayName = singer.String`
-  - `AlbumID = &album.ID` when album exists
-  - `AudioKey = nullStr(url)`
-  - legacy `URL = nullStr(url)`
-  - legacy `CoverImgUrl = nullStr(icon)`
-- Create `model.MusicArtistRelation` rows in order.
+- Creates/fetches artists from `singer`.
+- Creates/fetches album from `album` with first artist as `artist_id` when available.
+- Creates `model.Music` with original ID preserved.
+- Sets `ArtistDisplayName` to old `singer`.
+- Sets `AudioKey` to old `url`.
+- Keeps legacy `URL`, `CoverImgUrl`, `Singer`, `Album`.
+- Writes `music_artist_relation` rows after music create.
 
-Use helper type:
+Do not move Garage objects in this task.
 
-```go
-type musicArtistSeed struct {
-	Name   string
-	NameZh *string
-}
+- [ ] **Step 5: Test**
+
+Run:
+
+```bash
+gofmt -w cmd/migrate/main.go cmd/migrate/main_test.go
+go test ./cmd/migrate -run 'TestBuildMusicArtistSeeds|TestBuildMomentMediaGaragePlan|TestBuildArticleGaragePlan' -count=1
 ```
-
-Migration should keep existing `ID` values for `music`, preserving `article_music.music_id`.
-
-- [ ] **Step 5: Run migration tests**
-
-Run: `go test ./cmd/migrate -run 'TestBuildMusicArtistSeeds|TestBuildMomentMediaGaragePlan|TestBuildArticleGaragePlan' -count=1`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Stop and report**
 
-```bash
-git add cmd/migrate/main.go cmd/migrate/main_test.go
-git commit -m "feat(music): 更新音乐迁移工具"
-```
+Report changed files and tests.
 
 ---
 
-### Task 8: Swagger And Final Verification
+## Task 15: Garage Migration Planning For Music Assets
 
 **Files:**
-- Modify: `docs/docs.go`
-- Modify: `docs/swagger.json`
-- Modify: `docs/swagger.yaml`
+- Modify: `cmd/migrate/main.go`
+- Modify: `cmd/migrate/main_test.go`
+
+- [ ] **Step 1: Add plan struct**
+
+Add:
+
+```go
+type musicGaragePlan struct {
+	MusicID uint
+	AlbumID *uint
+	SourceAudioKey string
+	TargetAudioKey string
+	SourceCoverKey string
+	TargetCoverKey string
+}
+```
+
+- [ ] **Step 2: Add pure planning tests**
+
+Test only key planning, not real Garage:
+
+```go
+func TestBuildMusicGaragePlan_RewritesAudioAndCover(t *testing.T) {
+	albumID := uint(8)
+	plan := buildMusicGaragePlan(3, &albumID, "old/song.mp3", "old/cover.jpg")
+
+	assert.Equal(t, "old/song.mp3", plan.SourceAudioKey)
+	assert.Contains(t, plan.TargetAudioKey, "music/audio/3/")
+	assert.Equal(t, "old/cover.jpg", plan.SourceCoverKey)
+	assert.Contains(t, plan.TargetCoverKey, "music/albums/8/cover/")
+}
+```
+
+- [ ] **Step 3: Implement planning**
+
+Rules:
+
+- For old audio key `x/y/song.mp3`, target `music/audio/{music_id}/song.mp3` if no hash is available.
+- For old cover key `x/y/cover.jpg`, target `music/albums/{album_id}/cover/cover.jpg`.
+- If value is absolute external URL and `ObjectKey` cannot parse it, skip planning and leave fields unchanged.
+
+- [ ] **Step 4: Hook into `migrateGarageObjects`**
+
+Add a music asset migration phase after article and moment media migration. It must:
+
+- Query migrated `music.id`, `music.audio_key`, `music_album.id`, `music_album.cover_key`.
+- Copy source to target with existing `copyObjectIfNeeded`.
+- Update DB only after copy success.
+- Log skipped external URLs.
+- Never delete source keys.
+
+- [ ] **Step 5: Test**
+
+Run:
+
+```bash
+gofmt -w cmd/migrate/main.go cmd/migrate/main_test.go
+go test ./cmd/migrate -run 'TestBuildMusicGaragePlan|TestBuildMomentMediaGaragePlan|TestBuildArticleGaragePlan' -count=1
+```
+
+Expected: PASS.
+
+- [ ] **Step 6: Stop and report**
+
+Report changed files and tests.
+
+---
+
+## Task 16: Swagger And Final Verification
+
+**Files:**
+- Modify generated Swagger files under `docs/`
 
 - [ ] **Step 1: Generate Swagger**
 
-Run: `make swag`
+Run:
 
-Expected: command exits 0 and Swagger docs contain `/music`, `/music/{id}`, `/admin/music`, and `/admin/music/uploads/audio`.
+```bash
+make swag
+```
+
+Expected: PASS. Swagger includes:
+
+```text
+/music
+/music/{id}
+/music/artists
+/music/albums
+/admin/music
+/admin/music/artists
+/admin/music/albums
+/admin/music/uploads/audio
+/admin/music/uploads/album-cover
+/admin/music/uploads/artist-avatar
+```
 
 - [ ] **Step 2: Run targeted tests**
 
@@ -994,7 +1646,7 @@ go test ./pkg/audiofile ./pkg/storage ./internal/repository/music ./internal/ser
 
 Expected: PASS.
 
-- [ ] **Step 3: Run related article tests**
+- [ ] **Step 3: Run article tests**
 
 Run:
 
@@ -1002,30 +1654,69 @@ Run:
 go test ./internal/repository/article ./internal/service/article ./internal/handler/article -count=1
 ```
 
-Expected: PASS; article `music_ids` behavior remains compatible.
+Expected: PASS.
 
-- [ ] **Step 4: Inspect git diff**
+- [ ] **Step 4: Inspect final diff**
 
 Run:
 
 ```bash
 git diff --stat
-git diff -- migrations/20260625_music_catalog.sql internal/model/music.go internal/router/router.go
+git diff -- internal/model/music.go internal/router/router.go migrations/20260625_music_catalog.sql
 ```
 
-Expected: only music catalog, migration, Swagger, and related tests changed.
+Expected: only music catalog, migration, upload, article music validation, migration tool, tests, and Swagger files changed.
 
-- [ ] **Step 5: Commit verification artifacts**
+- [ ] **Step 5: Stop and report**
 
-```bash
-git add docs docs/swagger.json docs/swagger.yaml
-git commit -m "docs(swagger): 更新音乐资料库接口文档"
+Report:
+
+```text
+Final verification complete.
+Commands run:
+- make swag
+- go test ./pkg/audiofile ./pkg/storage ./internal/repository/music ./internal/service/music ./internal/handler/music ./internal/router ./cmd/migrate -count=1
+- go test ./internal/repository/article ./internal/service/article ./internal/handler/article -count=1
+Known risks:
+- First phase does not parse ID3 metadata.
+- Old Garage keys are copied, not deleted.
 ```
 
-If Swagger files were already committed with the handler task, skip this commit and note that `make swag` produced no diff.
+---
+
+## Cursor Auto Prompt
+
+Use this prompt when assigning one task to Cursor Auto. Replace `{TASK_NUMBER}` before sending.
+
+```text
+You are working in /Volumes/External/SynologyDrive/Codes/Blog/blog-backend.
+
+Read AGENTS.md first. Then read:
+- docs/superpowers/specs/2026-06-25-music-catalog-design.md
+- docs/superpowers/plans/2026-06-25-music-catalog.md
+
+Implement ONLY Task {TASK_NUMBER} from docs/superpowers/plans/2026-06-25-music-catalog.md.
+
+Hard constraints:
+- Only edit files listed in Task {TASK_NUMBER}.
+- Do not implement later tasks.
+- Do not delete legacy music columns or fields.
+- Do not expose model.* in DTOs or Swagger.
+- Do not introduce package-level globals for db, storage, logger, or services.
+- Follow the existing handler/service/repository layering.
+- Use response.Success/Fail/NotFound/etc. in handlers, never c.JSON directly.
+- Run the exact test command listed in the task.
+- Stop after this task. Do not continue to the next task.
+
+When done, report:
+1. Files changed
+2. Tests run and results
+3. Any failures or unclear points
+4. Whether the task is complete
+```
 
 ## Self-Review
 
-- Spec coverage: model split, Chinese translation display, multi-artist songs, Garage paths, upload endpoints, migration locations, and validation strategy are each mapped to tasks.
-- Red-flag scan: every task names concrete files and commands, with no deferred work markers.
-- Type consistency: DTO, model, repository, service, and handler names use `MusicArtist`, `MusicAlbum`, `MusicArtistRelation`, `MusicSaveReq`, and `MusicDetailResp` consistently.
+- Spec coverage: artist, album, song, multi-artist relation, Chinese translated names, Garage paths, uploads, migration, and article music validation each have a task.
+- Cheap-agent hardening: tasks are smaller than the original plan, each has exact file boundaries, explicit non-goals, and stop points.
+- Known implementation choice: first phase uploads validate audio bytes and hash them, but does not parse ID3 metadata.
