@@ -39,10 +39,13 @@ cp config/config.local.yaml.example config/config.local.yaml
 # 2. 安装依赖
 /Users/vpt/.g/go/bin/go mod tidy
 
-# 3. 初始化（启用 git hooks + 同步 AI skill 链接）—— 克隆后执行一次
+# 3. 初始化仓库本地设置（启用 git hooks + 同步 AI skill 链接）—— 克隆后执行一次
 make setup
 
-# 4. 热重载启动（推荐）
+# 4. 初始化数据库结构和默认数据
+make dbsetup
+
+# 5. 热重载启动（推荐）
 # 先安装 air：go install github.com/air-verse/air@latest
 air
 
@@ -81,8 +84,11 @@ docker compose up -d   # 同目录 .env 自动加载，镜像默认回退到 :la
 
 ```
 blog-backend/
-├── cmd/server/main.go       # 程序入口
+├── cmd/
+│   ├── server/main.go       # API 服务入口
+│   └── dbsetup/main.go      # 当前数据库初始化入口
 ├── internal/
+│   ├── dbschema/            # 当前表结构注册和默认种子数据
 │   ├── handler/             # HTTP 层：接收请求，调用 service，返回响应
 │   ├── service/             # 业务逻辑层
 │   ├── repository/          # 数据访问层（GORM）
@@ -101,6 +107,34 @@ blog-backend/
 │   └── logger/              # Zap 日志初始化
 └── config/                  # 配置文件（YAML 多环境分层）
 ```
+
+## 数据库初始化
+
+首次部署新库时执行：
+
+```bash
+make dbsetup
+```
+
+该命令只负责当前版本的一键建表和默认数据，不包含历史旧库迁移。默认会创建 `id=1` 的管理员用户：
+
+| 字段 | 默认值 |
+|------|------|
+| 用户 ID | `1` |
+| 用户名 | `admin` |
+| 初始密码 | `admin` |
+| 角色 | `ROLE_ADMIN` |
+
+可选覆盖：
+
+```bash
+BLOG_DBSETUP_ADMIN_USERNAME='admin' \
+BLOG_DBSETUP_ADMIN_PASSWORD='admin' \
+BLOG_DBSETUP_ADMIN_EMAIL='admin@example.com' \
+make dbsetup
+```
+
+未来增量 SQL 只从 `migrations/20260625_baseline.sql` 之后开始添加，初始化命令和历史数据迁移保持分离。
 
 ## 配置说明
 
@@ -204,6 +238,7 @@ oauth:
 ```bash
 make run        # 启动服务
 make build      # 编译二进制到 bin/
+make dbsetup    # 初始化当前数据库结构和默认数据
 make swag       # 生成 swagger 文档
 make test       # 运行测试
 make tidy       # 整理依赖

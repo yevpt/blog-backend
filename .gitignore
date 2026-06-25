@@ -1,5 +1,6 @@
 # 二进制输出
 bin/
+/migrate
 
 # 本地配置（含密码，不提交）
 config/config.local.yaml
