@@ -2,12 +2,20 @@ package analytics
 
 // CollectRequest 是 /collect 上报载荷（仅可信字段，UA/IP/UserID 由后端注入）。
 type CollectRequest struct {
-	EventType string `json:"event_type" binding:"required,oneof=page_view heartbeat"`
-	Path      string `json:"path"`
-	Title     string `json:"title"`
-	Referer   string `json:"referer"`
-	SessionID string `json:"session_id" binding:"required"`
-	Screen    string `json:"screen"`
+	EventType    string         `json:"event_type" binding:"required,oneof=page_view heartbeat"`
+	Path         string         `json:"path"`
+	Title        string         `json:"title"`
+	Referer      string         `json:"referer"`
+	SessionID    string         `json:"session_id" binding:"required"`
+	Screen       string         `json:"screen"`
+	CollectToken string         `json:"collect_token"`
+	Signals      CollectSignals `json:"signals"`
+}
+
+// CollectSignals 是 tracker 侧提供的反自动化提示信号，仅作为 suspect 参考。
+type CollectSignals struct {
+	WebDriver     bool `json:"webdriver"`
+	NoInteraction bool `json:"no_interaction"`
 }
 
 // Overview 后台总览：今日实时 + 在线 + 历史累计，含注册/匿名分档。

@@ -89,6 +89,8 @@ analytics:
   site_host: "yevpt.com"
   # IP 哈希盐，生产用随机串经 env BLOG_ANALYTICS_IP_SALT 覆盖
   ip_salt: "change_me"
+  collect_token_secret: ""
+  collect_token_ttl: 5m
 
 oauth:
   # state 同时承载 CSRF 防护和 PKCE verifier 关联，过期后 callback 会被拒绝

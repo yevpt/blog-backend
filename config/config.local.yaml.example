@@ -54,6 +54,8 @@ analytics:
   geoip_path: ""
   # 本地开发盐值，无需随机
   ip_salt: "local_dev_salt"
+  collect_token_secret: ""
+  collect_token_ttl: 5m
 
 oauth:
   providers:

@@ -13,3 +13,5 @@ analytics:
   geoip_path: "/app/geoip/ip2region.xdb"
   # IP 哈希盐必须经 env BLOG_ANALYTICS_IP_SALT 注入随机串，此处占位值仅兜底
   ip_salt: "change_me"
+  collect_token_secret: ""
+  collect_token_ttl: 5m

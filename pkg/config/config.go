@@ -125,16 +125,18 @@ type OAuthProviderConfig struct {
 
 // AnalyticsConfig 是站点统计的采集、实时与聚合配置。
 type AnalyticsConfig struct {
-	Timezone       string        `mapstructure:"timezone"`         // 切天时区，如 Asia/Shanghai
-	RetentionDays  int           `mapstructure:"retention_days"`   // 原始事件保留天数，超期清理
-	OnlineWindow   time.Duration `mapstructure:"online_window"`    // 在线判定窗口，如 90s
-	SessionTimeout time.Duration `mapstructure:"session_timeout"`  // 会话超时时长，如 30m
-	BounceDuration time.Duration `mapstructure:"bounce_duration"`  // 跳出判定停留阈值，如 10s
-	ChannelBuffer  int           `mapstructure:"channel_buffer"`   // 异步落库 channel 缓冲大小
-	PublicCacheTTL time.Duration `mapstructure:"public_cache_ttl"` // 公开统计接口缓存 TTL，如 60s
-	GeoIPPath      string        `mapstructure:"geoip_path"`       // ip2region xdb 路径，空则关闭地理解析
-	SiteHost       string        `mapstructure:"site_host"`        // 站点主域名，用于来源/外链判定
-	IPSalt         string        `mapstructure:"ip_salt"`          // IP 哈希盐，生产经 env 覆盖为随机串
+	Timezone           string        `mapstructure:"timezone"`             // 切天时区，如 Asia/Shanghai
+	RetentionDays      int           `mapstructure:"retention_days"`       // 原始事件保留天数，超期清理
+	OnlineWindow       time.Duration `mapstructure:"online_window"`        // 在线判定窗口，如 90s
+	SessionTimeout     time.Duration `mapstructure:"session_timeout"`      // 会话超时时长，如 30m
+	BounceDuration     time.Duration `mapstructure:"bounce_duration"`      // 跳出判定停留阈值，如 10s
+	ChannelBuffer      int           `mapstructure:"channel_buffer"`       // 异步落库 channel 缓冲大小
+	PublicCacheTTL     time.Duration `mapstructure:"public_cache_ttl"`     // 公开统计接口缓存 TTL，如 60s
+	GeoIPPath          string        `mapstructure:"geoip_path"`           // ip2region xdb 路径，空则关闭地理解析
+	SiteHost           string        `mapstructure:"site_host"`            // 站点主域名，用于来源/外链判定
+	IPSalt             string        `mapstructure:"ip_salt"`              // IP 哈希盐，生产经 env 覆盖为随机串
+	CollectTokenSecret string        `mapstructure:"collect_token_secret"` // /collect HMAC token secret，空则开发放行
+	CollectTokenTTL    time.Duration `mapstructure:"collect_token_ttl"`    // collect token 有效期，如 5m
 }
 
 // Load 按优先级叠加加载配置：config.yaml → config.{APP_ENV}.yaml → config.local.yaml → 环境变量（BLOG_ 前缀）
@@ -225,6 +227,7 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"oauth.state_ttl_minutes",
 		"analytics.ip_salt",
 		"analytics.geoip_path",
+		"analytics.collect_token_secret",
 	}
 
 	for _, key := range keys {

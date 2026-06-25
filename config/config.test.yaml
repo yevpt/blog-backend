@@ -19,3 +19,5 @@ analytics:
   geoip_path: ""
   site_host: "yevpt.com"
   ip_salt: "change_me"
+  collect_token_secret: ""
+  collect_token_ttl: 5m
