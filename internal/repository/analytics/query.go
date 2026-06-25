@@ -54,6 +54,35 @@ func (r *repository) QueryTopPages(ctx context.Context, from, to string, limit i
 	return out, nil
 }
 
+// QueryTopPagesPublic 同 QueryTopPages，但排除 /admin/* 路径，供前台公开榜单使用。
+func (r *repository) QueryTopPagesPublic(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error) {
+	var out []model.AnalyticsPageDaily
+	err := r.db.WithContext(ctx).
+		Model(&model.AnalyticsPageDaily{}).
+		Select("path, max(title) as title, sum(pv) as pv, sum(uv) as uv").
+		Where("date >= ? AND date <= ?", from, to).
+		Where("path NOT LIKE ?", "/admin/%").
+		Group("path").Order("pv desc").Limit(limit).
+		Find(&out).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询前台热门页面失败: %w", err)
+	}
+	return out, nil
+}
+
+// QueryTotalsSegmented 汇总累计 UV 及注册/匿名 UV（来自 analytics_daily）。
+func (r *repository) QueryTotalsSegmented(ctx context.Context) (total, registered, anonymous int64, err error) {
+	var row struct{ Total, Registered, Anonymous int64 }
+	e := r.db.WithContext(ctx).
+		Model(&model.AnalyticsDaily{}).
+		Select("COALESCE(SUM(uv),0) as total, COALESCE(SUM(registered_uv),0) as registered, COALESCE(SUM(anonymous_uv),0) as anonymous").
+		Scan(&row).Error
+	if e != nil {
+		return 0, 0, 0, fmt.Errorf("查询分档累计失败: %w", e)
+	}
+	return row.Total, row.Registered, row.Anonymous, nil
+}
+
 func (r *repository) QueryTotals(ctx context.Context) (pv, uv int64, err error) {
 	var row struct {
 		PV int64

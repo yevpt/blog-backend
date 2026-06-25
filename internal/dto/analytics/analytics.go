@@ -48,3 +48,21 @@ type DimensionPoint struct {
 	PV       int    `json:"pv"`
 	UV       int    `json:"uv"`
 }
+
+// PublicSummary 前台公开总览：仅聚合数字。
+type PublicSummary struct {
+	TodayPV      int64 `json:"today_pv"`
+	TodayUV      int64 `json:"today_uv"`
+	Online       int64 `json:"online"`
+	TotalPV      int64 `json:"total_pv"`
+	TotalUV      int64 `json:"total_uv"`
+	RegisteredUV int64 `json:"registered_uv"`
+	AnonymousUV  int64 `json:"anonymous_uv"`
+}
+
+// PublicPageStat 前台热门页面项（仅 path/title/pv）。
+type PublicPageStat struct {
+	Path  string `json:"path"`
+	Title string `json:"title"`
+	PV    int    `json:"pv"`
+}

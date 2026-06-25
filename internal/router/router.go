@@ -89,6 +89,7 @@ type routeHandlers struct {
 	upload            *uploadhandler.Handler
 	analyticsCollect  *analyticshandler.CollectHandler
 	analyticsAdmin    *analyticshandler.AdminHandler
+	analyticsPublic   *analyticshandler.PublicHandler
 	analyticsRuntime  AnalyticsRuntime
 	userCache         userservice.UserCacheService
 }
@@ -257,7 +258,7 @@ func newRouteHandlers(
 	uploadSvc := uploadservice.NewService(objectStore)
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
-	analyticsCollectHandler, analyticsAdminHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics)
+	analyticsCollectHandler, analyticsAdminHandler, analyticsPublicHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics)
 
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
@@ -280,6 +281,7 @@ func newRouteHandlers(
 		upload:            uploadhandler.NewHandler(uploadSvc),
 		analyticsCollect:  analyticsCollectHandler,
 		analyticsAdmin:    analyticsAdminHandler,
+		analyticsPublic:   analyticsPublicHandler,
 		analyticsRuntime:  analyticsRuntime,
 		userCache:         userCacheSvc,
 	}
@@ -297,7 +299,7 @@ func newAnalyticsCollectHandler(
 	redisClient *redis.Client,
 	uvSvc uv.UVService,
 	analyticsCfg config.AnalyticsConfig,
-) (*analyticshandler.CollectHandler, *analyticshandler.AdminHandler, AnalyticsRuntime) {
+) (*analyticshandler.CollectHandler, *analyticshandler.AdminHandler, *analyticshandler.PublicHandler, AnalyticsRuntime) {
 	tz, err := time.LoadLocation(analyticsCfg.Timezone)
 	if err != nil {
 		// 与 repository 层 dayRangeUTC 兜底一致：时区解析失败回退东八区。
@@ -318,9 +320,13 @@ func newAnalyticsCollectHandler(
 	querySvc := analyticsservice.NewQueryService(analyticsRepo, realtime, log)
 	adminHandler := analyticshandler.NewAdminHandler(querySvc)
 
+	// 前台公开统计：复用同一 repo/realtime，响应 JSON 走 Redis 短 TTL 缓存。
+	publicSvc := analyticsservice.NewPublicService(analyticsRepo, realtime, redisClient, analyticsCfg.PublicCacheTTL, log)
+	publicHandler := analyticshandler.NewPublicHandler(publicSvc)
+
 	allowedOrigins := splitCORSOrigins(os.Getenv(analyticsAllowedOriginsEnv))
 	runtime := AnalyticsRuntime{Ingestor: ingestor, Repo: analyticsRepo, TZ: tz}
-	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins), adminHandler, runtime
+	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins), adminHandler, publicHandler, runtime
 }
 
 func newOAuthManager(redisClient *redis.Client, cfg *config.Config) *oauthflow.Manager {
@@ -413,6 +419,8 @@ func registerPublicRoutes(
 		middleware.RateLimitNormal(redisClient),
 		handlers.analyticsCollect.Collect,
 	)
+	r.GET("/analytics/public/summary", middleware.RateLimitNormal(redisClient), handlers.analyticsPublic.Summary)
+	r.GET("/analytics/public/popular", middleware.RateLimitNormal(redisClient), handlers.analyticsPublic.Popular)
 }
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager, redisClient *redis.Client) {

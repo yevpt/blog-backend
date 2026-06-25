@@ -24,7 +24,9 @@ type Repository interface {
 	QueryDailyRange(ctx context.Context, from, to string) ([]model.AnalyticsDaily, error)
 	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
 	QueryTopPages(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
+	QueryTopPagesPublic(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
+	QueryTotalsSegmented(ctx context.Context) (total, registered, anonymous int64, err error)
 	AggregateDay(ctx context.Context, date string) (DayAggregate, error)
 }
 

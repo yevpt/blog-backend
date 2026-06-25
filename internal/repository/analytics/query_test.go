@@ -68,6 +68,31 @@ func TestQueryTotals(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestQueryTopPagesPublic_ExcludesAdmin(t *testing.T) {
+	r, mock := newRepo(t)
+	rows := sqlmock.NewRows([]string{"path", "title", "pv", "uv"}).AddRow("/a", "A", 30, 10)
+	// 必须带 path NOT LIKE 排除 /admin/*
+	mock.ExpectQuery("analytics_page_daily.*NOT LIKE").WillReturnRows(rows)
+	got, err := r.QueryTopPagesPublic(context.Background(), "2026-06-01", "2026-06-30", 5)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "/a", got[0].Path)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestQueryTotalsSegmented(t *testing.T) {
+	r, mock := newRepo(t)
+	rows := sqlmock.NewRows([]string{"total", "registered", "anonymous"}).
+		AddRow(int64(40), int64(10), int64(30))
+	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_daily`")).WillReturnRows(rows)
+	total, reg, anon, err := r.QueryTotalsSegmented(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(40), total)
+	assert.Equal(t, int64(10), reg)
+	assert.Equal(t, int64(30), anon)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 // TestAggregateDay 验证 AggregateDay 依次发出 Daily/各维度/Page 聚合查询并组装结果。
 func TestAggregateDay(t *testing.T) {
 	r, mock := newRepo(t)
