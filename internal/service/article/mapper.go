@@ -346,12 +346,20 @@ func musicDTOs(music []model.Music) ([]uint, []dto.ArticleMusicResp) {
 	items := make([]dto.ArticleMusicResp, 0, len(music))
 	for _, item := range music {
 		ids = append(ids, item.ID)
+		singer := item.Singer
+		if strings.TrimSpace(item.ArtistDisplayName) != "" {
+			singer = item.ArtistDisplayName
+		}
+		audioURL := item.URL
+		if audioURL == nil || strings.TrimSpace(*audioURL) == "" {
+			audioURL = item.AudioKey
+		}
 		items = append(items, dto.ArticleMusicResp{
 			ID:          item.ID,
 			Name:        item.Name,
-			Singer:      item.Singer,
+			Singer:      singer,
 			Album:       item.Album,
-			URL:         item.URL,
+			URL:         audioURL,
 			CoverImgUrl: item.CoverImgUrl,
 			Duration:    item.Duration,
 		})

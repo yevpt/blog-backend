@@ -158,6 +158,8 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 		return ErrMusicArtistNotFound
 	}
 
+	legacyAlbum := ""
+	var legacyCover *string
 	if req.AlbumID != nil {
 		album, err := s.repo.FindAlbum(*req.AlbumID)
 		if err != nil {
@@ -166,6 +168,8 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 		if album == nil {
 			return ErrMusicAlbumNotFound
 		}
+		legacyAlbum = album.Name
+		legacyCover = album.CoverKey
 	}
 
 	artistsByID, err := s.artistsByID(uniqueIDs)
@@ -218,7 +222,9 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 	item := model.Music{
 		Base:              model.Base{ID: req.ID},
 		Name:              req.Name,
+		Singer:            displayName,
 		ArtistDisplayName: displayName,
+		Album:             legacyAlbum,
 		AlbumID:           req.AlbumID,
 		AlbumTrackNo:      req.AlbumTrackNo,
 		AudioKey:          &audioKey,
@@ -226,6 +232,7 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 		AudioSize:         req.AudioSize,
 		AudioMime:         req.AudioMime,
 		AudioHash:         req.AudioHash,
+		CoverImgUrl:       legacyCover,
 		Lyric:             req.Lyric,
 		Duration:          req.Duration,
 		IsPublic:          req.IsPublic,

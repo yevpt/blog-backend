@@ -204,7 +204,9 @@ func (r *musicRepo) SaveMusic(data MusicSaveData) error {
 func musicUpdateFields(item model.Music) map[string]any {
 	return map[string]any{
 		"name":                item.Name,
+		"singer":              item.Singer,
 		"artist_display_name": item.ArtistDisplayName,
+		"album":               item.Album,
 		"album_id":            item.AlbumID,
 		"album_track_no":      item.AlbumTrackNo,
 		"audio_key":           item.AudioKey,
@@ -212,6 +214,7 @@ func musicUpdateFields(item model.Music) map[string]any {
 		"audio_size":          item.AudioSize,
 		"audio_mime":          item.AudioMime,
 		"audio_hash":          item.AudioHash,
+		"cover_img_url":       item.CoverImgUrl,
 		"lyric":               item.Lyric,
 		"duration":            item.Duration,
 		"is_public":           item.IsPublic,
