@@ -8,6 +8,148 @@
     },
     "basePath": "/",
     "paths": {
+        "/admin/analytics/backfill": {
+            "post": {
+                "description": "对指定闭区间逐日重算统计聚合，适用于统计规则调整后的历史补算。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "回填日聚合",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD",
+                        "name": "from",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD",
+                        "name": "to",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功，code=400 参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/analytics.BackfillResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/analytics/dimensions": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "站点维度分布",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "维度：referer_type、device、browser、os、country、user_type",
+                        "name": "dimension",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD，默认近 7 天",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD，默认今天",
+                        "name": "to",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功，code=400 参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/analytics.DimensionPoint"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/analytics/overview": {
             "get": {
                 "produces": [
@@ -3175,6 +3317,91 @@
                         "description": "目标用户不存在",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/public/popular": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "前台热门页面（公开）",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "返回条数，默认 10，上限 20",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功，code=400 参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/analytics.PublicPageStat"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/analytics/public/summary": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "前台站点统计总览（公开）",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/analytics.PublicSummary"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "500": {
@@ -8406,6 +8633,20 @@
         }
     },
     "definitions": {
+        "analytics.BackfillResult": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "to": {
+                    "type": "string"
+                }
+            }
+        },
         "analytics.CollectRequest": {
             "type": "object",
             "required": [
@@ -8434,6 +8675,23 @@
                 },
                 "title": {
                     "type": "string"
+                }
+            }
+        },
+        "analytics.DimensionPoint": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "dim_value": {
+                    "type": "string"
+                },
+                "pv": {
+                    "type": "integer"
+                },
+                "uv": {
+                    "type": "integer"
                 }
             }
         },
@@ -8476,6 +8734,46 @@
                     "type": "string"
                 },
                 "uv": {
+                    "type": "integer"
+                }
+            }
+        },
+        "analytics.PublicPageStat": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string"
+                },
+                "pv": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "analytics.PublicSummary": {
+            "type": "object",
+            "properties": {
+                "anonymous_uv": {
+                    "type": "integer"
+                },
+                "online": {
+                    "type": "integer"
+                },
+                "registered_uv": {
+                    "type": "integer"
+                },
+                "today_pv": {
+                    "type": "integer"
+                },
+                "today_uv": {
+                    "type": "integer"
+                },
+                "total_pv": {
+                    "type": "integer"
+                },
+                "total_uv": {
                     "type": "integer"
                 }
             }

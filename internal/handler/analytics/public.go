@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	dto "github.com/vpt/blog-backend/internal/dto/analytics"
 	svc "github.com/vpt/blog-backend/internal/service/analytics"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -29,6 +30,7 @@ func NewPublicHandler(s svc.PublicService) *PublicHandler { return &PublicHandle
 // @Failure  500 {object} response.Response "服务器内部错误"
 // @Router   /analytics/public/summary [get]
 func (h *PublicHandler) Summary(c *gin.Context) {
+	var data dto.PublicSummary
 	data, err := h.svc.Summary(c.Request.Context())
 	if err != nil {
 		response.ServerError(c)
@@ -58,6 +60,7 @@ func (h *PublicHandler) Popular(c *gin.Context) {
 	if limit > publicMaxPopular {
 		limit = publicMaxPopular
 	}
+	var data []dto.PublicPageStat
 	data, err := h.svc.Popular(c.Request.Context(), limit)
 	if err != nil {
 		response.ServerError(c)
