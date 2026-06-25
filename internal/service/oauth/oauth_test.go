@@ -137,6 +137,8 @@ func (r *fakeUserRepo) UpsertUserSetting(userID uint, updates map[string]any) er
 	return nil
 }
 func (r *fakeUserRepo) CountByAvatarURL(avatarURL string) (int64, error) { return 0, nil }
+func (r *fakeUserRepo) GrantVipRole(userID uint) error                   { return nil }
+func (r *fakeUserRepo) RevokeVipRole(userID uint) error                  { return nil }
 
 type fakeAvatarSaver struct {
 	objectName string
