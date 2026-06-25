@@ -191,8 +191,6 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 		return ErrMusicArtistNotFound
 	}
 
-	legacyAlbum := ""
-	var legacyCover *string
 	if req.AlbumID != nil {
 		album, err := s.repo.FindAlbum(*req.AlbumID)
 		if err != nil {
@@ -201,8 +199,6 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 		if album == nil {
 			return ErrMusicAlbumNotFound
 		}
-		legacyAlbum = album.Name
-		legacyCover = album.CoverKey
 	}
 
 	artistsByID, err := s.artistsByID(uniqueIDs)
@@ -243,9 +239,6 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 			return ErrMusicNotFound
 		}
 		oldAudioKey = existing.AudioKey
-		if oldAudioKey == nil || strings.TrimSpace(*oldAudioKey) == "" {
-			oldAudioKey = existing.URL
-		}
 	}
 
 	var copiedKeys []string
@@ -255,17 +248,13 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 	item := model.Music{
 		Base:              model.Base{ID: req.ID},
 		Name:              req.Name,
-		Singer:            displayName,
 		ArtistDisplayName: displayName,
-		Album:             legacyAlbum,
 		AlbumID:           req.AlbumID,
 		AlbumTrackNo:      req.AlbumTrackNo,
 		AudioKey:          &audioKey,
-		URL:               &audioKey,
 		AudioSize:         req.AudioSize,
 		AudioMime:         req.AudioMime,
 		AudioHash:         req.AudioHash,
-		CoverImgUrl:       legacyCover,
 		Lyric:             req.Lyric,
 		Duration:          req.Duration,
 		IsPublic:          req.IsPublic,
@@ -283,7 +272,6 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 			tempKey = result.TempKey
 			normalizedAudio = result.Key
 			saved.AudioKey = &result.Key
-			saved.URL = &result.Key
 			return saved, nil
 		},
 	})
@@ -669,20 +657,17 @@ func (s *musicService) musicItemToDTO(
 	}
 
 	var album *dto.MusicAlbumResp
-	coverURL := storage.ResolvePtrURL(s.store, item.CoverImgUrl)
+	coverURL := (*string)(nil)
 	if item.AlbumID != nil {
 		if alb, ok := albums[*item.AlbumID]; ok {
 			album = s.albumToDTO(alb, artistsByID)
-			if album != nil && album.CoverURL != nil {
+			if album != nil {
 				coverURL = album.CoverURL
 			}
 		}
 	}
 
 	audioKey := item.AudioKey
-	if audioKey == nil {
-		audioKey = item.URL
-	}
 
 	return dto.MusicItemResp{
 		ID:                item.ID,

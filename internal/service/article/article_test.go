@@ -622,7 +622,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	now := time.Now()
 	categoryURL := "tech"
 	tagURL := "go"
-	musicURL := "https://example.com/song.mp3"
+	musicKey := "music/audio/6/song.mp3"
 	recommendSeq := uint(8)
 	viewerID := uint(10)
 	repo.EXPECT().
@@ -639,7 +639,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 			},
 			Categories: []model.Category{{Base: model.Base{ID: 4}, Name: "Tech", URL: &categoryURL}},
 			Tags:       []model.Tag{{Base: model.Base{ID: 5}, Name: "Go", URL: &tagURL}},
-			Music:      []model.Music{{Base: model.Base{ID: 6}, Name: "Song", URL: &musicURL, Duration: 240}},
+			Music:      []model.Music{{Base: model.Base{ID: 6}, Name: "Song", AudioKey: &musicKey, Duration: 240}},
 			Recommend:  &model.ArticleRecommend{ArticleID: 3, Seq: recommendSeq},
 			LikeCount:  7,
 			IsLiked:    true,

@@ -19,6 +19,7 @@ import (
 type stubMusicRepository struct {
 	rows    []model.Music
 	artists []model.MusicArtist
+	albums  []model.MusicAlbum
 	err     error
 }
 
@@ -57,7 +58,12 @@ func (s *stubMusicRepository) ListAlbums(string) ([]model.MusicAlbum, error) {
 	return nil, nil
 }
 
-func (s *stubMusicRepository) FindAlbum(uint) (*model.MusicAlbum, error) {
+func (s *stubMusicRepository) FindAlbum(id uint) (*model.MusicAlbum, error) {
+	for i := range s.albums {
+		if s.albums[i].ID == id {
+			return &s.albums[i], nil
+		}
+	}
 	return nil, nil
 }
 
@@ -126,17 +132,24 @@ var _ storage.ObjectStore = (*stubMusicObjectStore)(nil)
 func TestMusicService_List_MapsAndResolvesURLs(t *testing.T) {
 	audioKey := "music/song.mp3"
 	cover := "music/cover.jpg"
+	albumID := uint(2)
 	svc := music.NewMusicService(&stubMusicRepository{
 		rows: []model.Music{
 			{
 				Base:              model.Base{ID: 1},
 				Name:              "Song",
 				ArtistDisplayName: "Singer",
+				AlbumID:           &albumID,
 				AudioKey:          &audioKey,
-				CoverImgUrl:       &cover,
 				Duration:          240,
 				Seq:               2,
 				IsPublic:          true,
+			},
+		},
+		albums: []model.MusicAlbum{
+			{
+				Base:     model.Base{ID: albumID},
+				CoverKey: &cover,
 			},
 		},
 	}, stubMusicObjectStore{})

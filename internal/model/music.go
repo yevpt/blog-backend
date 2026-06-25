@@ -42,7 +42,6 @@ type Music struct {
 	AlbumID           *uint      `gorm:"index;comment:专辑ID" json:"album_id"`
 	AlbumTrackNo      uint16     `gorm:"type:smallint unsigned;default:0;comment:专辑序号" json:"album_track_no"`
 	SongDate          *time.Time `gorm:"type:date;comment:发行日期" json:"song_date"`
-	URL               *string    `gorm:"size:200;comment:音频文件URL" json:"url"`
 	AudioKey          *string    `gorm:"size:500;comment:音频对象 key" json:"audio_key"`
 	AudioSize         uint64     `gorm:"type:bigint unsigned;default:0;comment:音频大小" json:"audio_size"`
 	AudioMime         string     `gorm:"size:100;comment:音频 MIME" json:"audio_mime"`

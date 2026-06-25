@@ -223,7 +223,6 @@ func musicUpdateFields(item model.Music) map[string]any {
 		"album_id":            item.AlbumID,
 		"album_track_no":      item.AlbumTrackNo,
 		"audio_key":           item.AudioKey,
-		"url":                 item.URL,
 		"audio_size":          item.AudioSize,
 		"audio_mime":          item.AudioMime,
 		"audio_hash":          item.AudioHash,

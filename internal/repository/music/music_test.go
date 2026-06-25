@@ -39,9 +39,9 @@ func TestMusicRepository_List_OrdersBySeqAndID(t *testing.T) {
 		WithArgs(true).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "name", "singer", "artist_display_name",
-			"album", "album_id", "album_track_no", "song_date", "url", "audio_key", "audio_size",
+			"album", "album_id", "album_track_no", "song_date", "audio_key", "audio_size",
 			"audio_mime", "audio_hash", "cover_img_url", "description", "lyric", "duration", "seq", "is_public",
-		}).AddRow(1, now, now, nil, "Song", "Singer", "Singer", "Album", nil, 0, nil, "song.mp3", nil, 0, "", "", nil, nil, nil, 240, 0, true))
+		}).AddRow(1, now, now, nil, "Song", "Singer", "Singer", "Album", nil, 0, nil, "song.mp3", 0, "", "", nil, nil, nil, 240, 0, true))
 
 	rows, err := repo.List()
 	require.NoError(t, err)
@@ -61,9 +61,9 @@ func TestMusicRepository_ListPublicSongs_FiltersPublicAndOrders(t *testing.T) {
 		WithArgs(true).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "name", "singer", "artist_display_name",
-			"album", "album_id", "album_track_no", "song_date", "url", "audio_key", "audio_size",
+			"album", "album_id", "album_track_no", "song_date", "audio_key", "audio_size",
 			"audio_mime", "audio_hash", "cover_img_url", "description", "lyric", "duration", "seq", "is_public",
-		}).AddRow(1, now, now, nil, "Song", "Singer", "Singer", "Album", nil, 0, nil, nil, "music/audio/1/a.mp3", 12, "audio/mpeg", "hash", nil, nil, nil, 240, 0, true))
+		}).AddRow(1, now, now, nil, "Song", "Singer", "Singer", "Album", nil, 0, nil, "music/audio/1/a.mp3", 12, "audio/mpeg", "hash", nil, nil, nil, 240, 0, true))
 
 	rows, err := repo.ListPublicSongs()
 

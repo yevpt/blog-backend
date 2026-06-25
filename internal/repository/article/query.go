@@ -508,7 +508,7 @@ type musicJoinRow struct {
 	Singer      string
 	Album       string
 	SongDate    *time.Time
-	URL         *string
+	AudioKey    *string
 	CoverImgUrl *string
 	Description *string
 	Lyric       *string
@@ -538,7 +538,7 @@ func (r *articleRepo) articleMusic(ids []uint) (map[uint][]model.Music, error) {
 			Singer:      row.Singer,
 			Album:       row.Album,
 			SongDate:    row.SongDate,
-			URL:         row.URL,
+			AudioKey:    row.AudioKey,
 			CoverImgUrl: row.CoverImgUrl,
 			Description: row.Description,
 			Lyric:       row.Lyric,

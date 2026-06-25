@@ -59,7 +59,7 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 		WithArgs(uint(2)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
-			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
 	expectArticleUsers(mock, 1)
@@ -122,7 +122,7 @@ func TestArticleRepository_ListAdmin_IncludesSoftDeletedArticles(t *testing.T) {
 		WithArgs(uint(1), uint(2)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
-			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
 	expectArticleUsers(mock, 7)
@@ -592,7 +592,7 @@ func TestArticleRepository_ToggleLike_CreatesLike(t *testing.T) {
 		WithArgs(uint(7)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
-			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
 	expectArticleUsers(mock, 2)
@@ -666,7 +666,7 @@ func TestArticleRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 		WithArgs(uint(7)).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
-			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
 	expectArticleUsers(mock, 2)
@@ -828,7 +828,7 @@ func expectEmptyArticleAggregateQueries(mock sqlmock.Sqlmock, articleID uint, us
 		WithArgs(articleID).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"article_id", "id", "created_at", "updated_at", "deleted_at", "name",
-			"singer", "album", "song_date", "url", "cover_img_url", "description",
+			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
 	if len(userIDs) > 0 {
