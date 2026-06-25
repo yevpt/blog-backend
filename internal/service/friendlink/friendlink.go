@@ -133,10 +133,6 @@ func (s *friendLinkService) Create(req dto.FriendLinkCreateReq) (*dto.FriendLink
 }
 
 func (s *friendLinkService) Update(id uint, req dto.FriendLinkUpdateReq) (*dto.FriendLinkItemResp, error) {
-	if req.Logo == nil || len(req.Logo.Data) == 0 {
-		return nil, ErrFriendLinkLogoRequired
-	}
-
 	// 将可选字段转换为明确的更新数据，未传字段不参与更新。
 	data, err := newFriendLinkUpdateData(req)
 	if err != nil {
@@ -151,26 +147,39 @@ func (s *friendLinkService) Update(id uint, req dto.FriendLinkUpdateReq) (*dto.F
 		return nil, ErrFriendLinkNotFound
 	}
 
-	savedLogo, err := s.saveFriendLinkLogo(context.Background(), req.Logo)
-	if err != nil {
-		return nil, err
+	var savedLogo savedFriendLinkLogo
+	var hasNewLogo bool
+	if req.Logo != nil && len(req.Logo.Data) > 0 {
+		savedLogo, err = s.saveFriendLinkLogo(context.Background(), req.Logo)
+		if err != nil {
+			return nil, err
+		}
+		hasNewLogo = true
+		newAvatarURL := savedLogo.ObjectKey
+		data.AvatarUrl = &newAvatarURL
+		data.UpdateAvatarUrl = true
 	}
-	newAvatarURL := savedLogo.ObjectKey
-	data.AvatarUrl = &newAvatarURL
-	data.UpdateAvatarUrl = true
 
 	// 仓储返回 nil 表示目标不存在。
 	updated, err := s.repo.Update(id, data)
 	if err != nil {
-		err = errors.Join(mapFriendLinkRepoError(err), s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo))
+		if hasNewLogo {
+			err = errors.Join(mapFriendLinkRepoError(err), s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo))
+		} else {
+			err = mapFriendLinkRepoError(err)
+		}
 		return nil, err
 	}
 	if updated == nil {
-		_ = s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo)
+		if hasNewLogo {
+			_ = s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo)
+		}
 		return nil, ErrFriendLinkNotFound
 	}
-	if err := s.cleanupReplacedFriendLinkLogo(context.Background(), current.AvatarUrl, newAvatarURL); err != nil {
-		return nil, err
+	if hasNewLogo {
+		if err := s.cleanupReplacedFriendLinkLogo(context.Background(), current.AvatarUrl, savedLogo.ObjectKey); err != nil {
+			return nil, err
+		}
 	}
 
 	return s.friendLinkToDTO(updated), nil

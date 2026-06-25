@@ -314,14 +314,42 @@ func TestFriendLinkService_Create_RejectsGIFLogo(t *testing.T) {
 	assert.Empty(t, repo.createGot.Name)
 }
 
-func TestFriendLinkService_Update_RejectsMissingLogo(t *testing.T) {
-	repo := &fakeFriendLinkRepository{}
-	svc := friendlink.NewFriendLinkService(repo, &fakeFriendLinkObjectStore{})
+func TestFriendLinkService_Update_KeepsExistingAvatarWhenLogoOmitted(t *testing.T) {
+	name := "新友站"
+	oldAvatar := "avatar/link/old.jpg"
+	repo := &fakeFriendLinkRepository{
+		getAdminLink: &model.FriendLink{
+			Base:      model.Base{ID: 7},
+			Name:      "旧友站",
+			Site:      "https://old.example.com",
+			AvatarUrl: &oldAvatar,
+			Seq:       1,
+			Status:    1,
+		},
+		updateResp: &model.FriendLink{
+			Base:      model.Base{ID: 7},
+			Name:      "新友站",
+			Site:      "https://old.example.com",
+			AvatarUrl: &oldAvatar,
+			Seq:       1,
+			Status:    1,
+		},
+	}
+	store := &fakeFriendLinkObjectStore{}
+	svc := friendlink.NewFriendLinkService(repo, store)
 
-	_, err := svc.Update(7, dto.FriendLinkUpdateReq{})
-
-	require.ErrorIs(t, err, friendlink.ErrFriendLinkLogoRequired)
-	assert.Zero(t, repo.updateID)
+	resp, err := svc.Update(7, dto.FriendLinkUpdateReq{
+		Name: &name,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint(7), resp.ID)
+	assert.Equal(t, uint(7), repo.updateID)
+	require.NotNil(t, repo.updateData.Name)
+	assert.Equal(t, "新友站", *repo.updateData.Name)
+	assert.False(t, repo.updateData.UpdateAvatarUrl)
+	assert.Nil(t, repo.updateData.AvatarUrl)
+	assert.Empty(t, store.puts)
+	assert.Empty(t, store.deletes)
 }
 
 func friendLinkPNG(t *testing.T, width int, height int) []byte {
