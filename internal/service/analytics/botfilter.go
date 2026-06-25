@@ -10,11 +10,12 @@ var botUARegex = regexp.MustCompile(`(?i)(bot|spider|crawl|slurp|headless|phanto
 
 // DetectBot 判定是否爬虫/机器人，返回是否命中与原因。
 func DetectBot(ua, deviceType string) (bool, string) {
-	if deviceType == "bot" {
-		return true, "ua_device"
-	}
+	// 优先按 UA 黑名单判定，使具名爬虫（如 Googlebot）统一归因为 ua_blacklist。
 	if botUARegex.MatchString(strings.ToLower(ua)) {
 		return true, "ua_blacklist"
+	}
+	if deviceType == "bot" {
+		return true, "ua_device"
 	}
 	return false, ""
 }
