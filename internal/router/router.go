@@ -88,6 +88,7 @@ type routeHandlers struct {
 	friendLink        *friendlinkhandler.FriendLinkHandler
 	upload            *uploadhandler.Handler
 	analyticsCollect  *analyticshandler.CollectHandler
+	analyticsAdmin    *analyticshandler.AdminHandler
 	analyticsRuntime  AnalyticsRuntime
 	userCache         userservice.UserCacheService
 }
@@ -257,7 +258,7 @@ func newRouteHandlers(
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
 	// TODO(Task 16): 迁移到 cfg.Analytics，下列字面量改为读配置块。
-	analyticsCollectHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc)
+	analyticsCollectHandler, analyticsAdminHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc)
 
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
@@ -279,6 +280,7 @@ func newRouteHandlers(
 		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
 		upload:            uploadhandler.NewHandler(uploadSvc),
 		analyticsCollect:  analyticsCollectHandler,
+		analyticsAdmin:    analyticsAdminHandler,
 		analyticsRuntime:  analyticsRuntime,
 		userCache:         userCacheSvc,
 	}
@@ -295,7 +297,7 @@ func newAnalyticsCollectHandler(
 	db *gorm.DB,
 	redisClient *redis.Client,
 	uvSvc uv.UVService,
-) (*analyticshandler.CollectHandler, AnalyticsRuntime) {
+) (*analyticshandler.CollectHandler, *analyticshandler.AdminHandler, AnalyticsRuntime) {
 	tz, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		tz = time.UTC
@@ -314,9 +316,13 @@ func newAnalyticsCollectHandler(
 	dedup := analyticsservice.NewDedupChecker(uvSvc)
 	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, log)
 
+	// 后台只读查询复用同一 repo（历史累计）与 realtime（今日/在线），不另起依赖图。
+	querySvc := analyticsservice.NewQueryService(analyticsRepo, realtime, log)
+	adminHandler := analyticshandler.NewAdminHandler(querySvc)
+
 	allowedOrigins := splitCORSOrigins(os.Getenv(analyticsAllowedOriginsEnv))
 	runtime := AnalyticsRuntime{Ingestor: ingestor, Repo: analyticsRepo, TZ: tz}
-	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins), runtime
+	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins), adminHandler, runtime
 }
 
 func newOAuthManager(redisClient *redis.Client, cfg *config.Config) *oauthflow.Manager {
@@ -519,4 +525,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
 	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)
+	admin.GET("/analytics/overview", handlers.analyticsAdmin.Overview)
+	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)
+	admin.GET("/analytics/pages", handlers.analyticsAdmin.Pages)
 }

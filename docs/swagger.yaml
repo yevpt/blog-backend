@@ -21,6 +21,48 @@ definitions:
     - event_type
     - session_id
     type: object
+  analytics.Overview:
+    properties:
+      anonymous:
+        $ref: '#/definitions/analytics.SegmentStat'
+      online:
+        type: integer
+      registered:
+        $ref: '#/definitions/analytics.SegmentStat'
+      today_pv:
+        type: integer
+      today_uv:
+        type: integer
+      total_pv:
+        type: integer
+      total_uv:
+        type: integer
+    type: object
+  analytics.PageStat:
+    properties:
+      path:
+        type: string
+      pv:
+        type: integer
+      title:
+        type: string
+      uv:
+        type: integer
+    type: object
+  analytics.SegmentStat:
+    properties:
+      today_pv:
+        type: integer
+      today_uv:
+        type: integer
+    type: object
+  analytics.TrendPoint:
+    properties:
+      date:
+        type: string
+      value:
+        type: integer
+    type: object
   dto.AdminArticleDetailResp:
     properties:
       categories:
@@ -2738,6 +2780,127 @@ info:
   title: Blog Backend API
   version: "1.0"
 paths:
+  /admin/analytics/overview:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/analytics.Overview'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 站点统计总览
+      tags:
+      - analytics
+  /admin/analytics/pages:
+    get:
+      parameters:
+      - description: 起始日期 YYYY-MM-DD，默认近 7 天
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD，默认今天
+        in: query
+        name: to
+        type: string
+      - description: 返回条数，默认 20，上限 100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 成功，code=400 参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/analytics.PageStat'
+                  type: array
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 热门页面排行
+      tags:
+      - analytics
+  /admin/analytics/trend:
+    get:
+      parameters:
+      - description: 起始日期 YYYY-MM-DD，默认近 7 天
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD，默认今天
+        in: query
+        name: to
+        type: string
+      - description: 指标：pv、uv、sessions，默认 pv
+        in: query
+        name: metric
+        type: string
+      - description: 分档：all、registered、anonymous，默认 all
+        in: query
+        name: segment
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 成功，code=400 参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/analytics.TrendPoint'
+                  type: array
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 站点访问趋势
+      tags:
+      - analytics
   /admin/articles:
     get:
       consumes:
