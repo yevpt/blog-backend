@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/handler"
+	analyticshandler "github.com/vpt/blog-backend/internal/handler/analytics"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
 	captchahandler "github.com/vpt/blog-backend/internal/handler/captcha"
@@ -25,6 +26,7 @@ import (
 	"github.com/vpt/blog-backend/internal/middleware"
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
+	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
@@ -36,6 +38,7 @@ import (
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	analyticsservice "github.com/vpt/blog-backend/internal/service/analytics"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
@@ -52,6 +55,7 @@ import (
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/internal/service/uv"
+	analyticsworker "github.com/vpt/blog-backend/internal/worker/analytics"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/email"
 	"github.com/vpt/blog-backend/pkg/jwt"
@@ -83,6 +87,7 @@ type routeHandlers struct {
 	music             *musichandler.MusicHandler
 	friendLink        *friendlinkhandler.FriendLinkHandler
 	upload            *uploadhandler.Handler
+	analyticsCollect  *analyticshandler.CollectHandler
 	userCache         userservice.UserCacheService
 }
 
@@ -237,6 +242,10 @@ func newRouteHandlers(
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo)
 	uploadSvc := uploadservice.NewService(objectStore)
 
+	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
+	// TODO(Task 16): 迁移到 cfg.Analytics，下列字面量改为读配置块。
+	analyticsCollectHandler := newAnalyticsCollectHandler(log, db, redisClient, uvSvc)
+
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
 		test:              handler.NewTestHandler(jwtManager),
@@ -256,8 +265,42 @@ func newRouteHandlers(
 		music:             musichandler.NewMusicHandler(musicSvc),
 		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
 		upload:            uploadhandler.NewHandler(uploadSvc),
+		analyticsCollect:  analyticsCollectHandler,
 		userCache:         userCacheSvc,
 	}
+}
+
+const analyticsAllowedOriginsEnv = "ANALYTICS_ALLOWED_ORIGINS"
+
+// newAnalyticsCollectHandler 组装 /collect 上报所需依赖图。
+// TODO(Task 16): 下列临时字面量（时区/在线窗口/缓冲/批量/站点/盐/GeoIP 路径）迁移到 cfg.Analytics。
+// TODO(Task 13): ingestor.Run 由 bootstrap 启动；此处仅构造，未启动消费 goroutine。
+func newAnalyticsCollectHandler(
+	log *zap.Logger,
+	db *gorm.DB,
+	redisClient *redis.Client,
+	uvSvc uv.UVService,
+) *analyticshandler.CollectHandler {
+	tz, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		tz = time.UTC
+	}
+	ipSalt := os.Getenv("BLOG_ANALYTICS_IP_SALT")
+	if ipSalt == "" {
+		ipSalt = "change_me"
+	}
+
+	geo := analyticsservice.NewGeoResolver(os.Getenv("BLOG_ANALYTICS_GEOIP_PATH"), log)
+	enricher := analyticsservice.NewEnricher(geo, "yevpt.com", ipSalt)
+	analyticsRepo := analyticsrepo.NewRepository(db)
+	realtime := analyticsservice.NewRealtime(redisClient, tz, 90*time.Second)
+	ingestor := analyticsworker.NewIngestor(analyticsRepo, 4096, 100, 2*time.Second, log)
+	sessionIng := analyticsworker.NewSessionIngestor(ingestor, analyticsRepo)
+	dedup := analyticsservice.NewDedupChecker(uvSvc)
+	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, log)
+
+	allowedOrigins := splitCORSOrigins(os.Getenv(analyticsAllowedOriginsEnv))
+	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins)
 }
 
 func newOAuthManager(redisClient *redis.Client, cfg *config.Config) *oauthflow.Manager {
@@ -344,6 +387,12 @@ func registerPublicRoutes(
 	r.GET("/moments/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListMomentReplies)
 	r.GET("/articles/comments/:id/replies", middleware.OptionalAuth(jwtManager), handlers.comment.ListArticleReplies)
 	r.POST("/moments/:id/view", middleware.VisitorID(), handlers.moment.View)
+	r.POST("/collect",
+		middleware.VisitorID(),
+		middleware.OptionalAuth(jwtManager),
+		middleware.RateLimitNormal(redisClient),
+		handlers.analyticsCollect.Collect,
+	)
 }
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager, redisClient *redis.Client) {

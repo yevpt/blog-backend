@@ -4325,9 +4325,36 @@ const docTemplate = `{
                 }
             }
         },
+        "/collect": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "站点访问上报",
+                "parameters": [
+                    {
+                        "description": "上报载荷",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/analytics.CollectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/friend-links": {
             "get": {
-                "description": "分页返回显示中的友情链接，按 seq ASC、id DESC 排序；avatar_url 返回前会解析为可访问 URL。",
+                "description": "分页返回显示中的友情链接；正常友链按 seq ASC、id DESC 排序，失联友链排在最后；avatar_url 返回前会解析为可访问 URL。",
                 "produces": [
                     "application/json"
                 ],
@@ -8187,6 +8214,37 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "analytics.CollectRequest": {
+            "type": "object",
+            "required": [
+                "event_type",
+                "session_id"
+            ],
+            "properties": {
+                "event_type": {
+                    "type": "string",
+                    "enum": [
+                        "page_view",
+                        "heartbeat"
+                    ]
+                },
+                "path": {
+                    "type": "string"
+                },
+                "referer": {
+                    "type": "string"
+                },
+                "screen": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.AdminArticleDetailResp": {
             "type": "object",
             "properties": {
