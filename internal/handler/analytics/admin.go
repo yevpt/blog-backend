@@ -30,8 +30,11 @@ var adminTZ = func() *time.Location {
 }()
 
 var (
-	validMetrics  = map[string]struct{}{"pv": {}, "uv": {}, "sessions": {}}
-	validSegments = map[string]struct{}{"all": {}, "registered": {}, "anonymous": {}}
+	validMetrics    = map[string]struct{}{"pv": {}, "uv": {}, "sessions": {}}
+	validSegments   = map[string]struct{}{"all": {}, "registered": {}, "anonymous": {}}
+	validDimensions = map[string]struct{}{
+		"referer_type": {}, "device": {}, "browser": {}, "os": {}, "country": {}, "user_type": {},
+	}
 )
 
 // AdminHandler 后台统计查询入口，只做参数解析/校验与统一响应。
@@ -135,6 +138,36 @@ func (h *AdminHandler) Pages(c *gin.Context) {
 
 	var data []dto.PageStat
 	data, err := h.svc.TopPages(c.Request.Context(), from, to, limit)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, data)
+}
+
+// Dimensions 维度分布：某维度在区间内逐日的 PV/UV。
+// @Summary  站点维度分布
+// @Tags     analytics
+// @Produce  json
+// @Param    dimension query string true  "维度：referer_type、device、browser、os、country、user_type"
+// @Param    from      query string false "起始日期 YYYY-MM-DD，默认近 7 天"
+// @Param    to        query string false "结束日期 YYYY-MM-DD，默认今天"
+// @Success  200 {object} response.Response{data=[]dto.DimensionPoint} "统一响应；code=0 成功，code=400 参数错误"
+// @Failure  401 {object} response.Response "未登录或 token 已过期"
+// @Failure  403 {object} response.Response "权限不足"
+// @Failure  500 {object} response.Response "服务器内部错误"
+// @Router   /admin/analytics/dimensions [get]
+func (h *AdminHandler) Dimensions(c *gin.Context) {
+	dimension := c.Query("dimension")
+	if _, ok := validDimensions[dimension]; !ok {
+		response.Fail(c, response.CodeBadRequest, "dimension 仅支持 referer_type、device、browser、os、country、user_type")
+		return
+	}
+	from, to, ok := parseRange(c)
+	if !ok {
+		return
+	}
+	data, err := h.svc.Dimensions(c.Request.Context(), dimension, from, to)
 	if err != nil {
 		response.ServerError(c)
 		return

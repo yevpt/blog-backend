@@ -526,4 +526,5 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.GET("/analytics/overview", handlers.analyticsAdmin.Overview)
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)
 	admin.GET("/analytics/pages", handlers.analyticsAdmin.Pages)
+	admin.GET("/analytics/dimensions", handlers.analyticsAdmin.Dimensions)
 }

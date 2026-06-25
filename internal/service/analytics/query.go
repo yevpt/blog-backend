@@ -14,6 +14,7 @@ type QueryReader interface {
 	QueryDailyRange(ctx context.Context, from, to string) ([]model.AnalyticsDaily, error)
 	QueryTopPages(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
+	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
 }
 
 // QueryService 提供后台只读统计：总览、趋势、热门页面。返回 dto.*，不外泄 model。
@@ -21,6 +22,7 @@ type QueryService interface {
 	Overview(ctx context.Context) (dto.Overview, error)
 	Trend(ctx context.Context, from, to, metric, segment string) ([]dto.TrendPoint, error)
 	TopPages(ctx context.Context, from, to string, limit int) ([]dto.PageStat, error)
+	Dimensions(ctx context.Context, dimension, from, to string) ([]dto.DimensionPoint, error)
 }
 
 type queryService struct {
@@ -107,6 +109,19 @@ func (s *queryService) TopPages(ctx context.Context, from, to string, limit int)
 	out := make([]dto.PageStat, 0, len(rows))
 	for _, p := range rows {
 		out = append(out, dto.PageStat{Path: p.Path, Title: p.Title, PV: p.PV, UV: p.UV})
+	}
+	return out, nil
+}
+
+// Dimensions 读取某维度在区间内的逐日分布，映射为 dto.DimensionPoint。
+func (s *queryService) Dimensions(ctx context.Context, dimension, from, to string) ([]dto.DimensionPoint, error) {
+	rows, err := s.repo.QueryDimRange(ctx, dimension, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("读取维度分布失败: %w", err)
+	}
+	out := make([]dto.DimensionPoint, 0, len(rows))
+	for _, d := range rows {
+		out = append(out, dto.DimensionPoint{Date: d.Date, DimValue: d.DimValue, PV: d.PV, UV: d.UV})
 	}
 	return out, nil
 }

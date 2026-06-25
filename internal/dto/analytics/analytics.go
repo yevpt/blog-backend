@@ -40,3 +40,11 @@ type PageStat struct {
 	PV    int    `json:"pv"`
 	UV    int    `json:"uv"`
 }
+
+// DimensionPoint 维度分布单项：某日某维度取值的 PV/UV。
+type DimensionPoint struct {
+	Date     string `json:"date"`
+	DimValue string `json:"dim_value"`
+	PV       int    `json:"pv"`
+	UV       int    `json:"uv"`
+}

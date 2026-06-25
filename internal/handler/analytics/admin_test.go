@@ -20,6 +20,7 @@ import (
 // fakeQuery 记录最后一次调用入参，便于断言默认值与限幅逻辑。
 type fakeQuery struct {
 	lastFrom, lastTo, lastMetric, lastSegment string
+	lastDimension                             string
 	lastLimit                                 int
 }
 
@@ -37,12 +38,18 @@ func (f *fakeQuery) TopPages(_ context.Context, from, to string, limit int) ([]d
 	return []dto.PageStat{{Path: "/", PV: 5}}, nil
 }
 
+func (f *fakeQuery) Dimensions(_ context.Context, dimension, from, to string) ([]dto.DimensionPoint, error) {
+	f.lastDimension, f.lastFrom, f.lastTo = dimension, from, to
+	return []dto.DimensionPoint{{Date: "2026-06-01", DimValue: "desktop", PV: 10, UV: 5}}, nil
+}
+
 func newRouter(h *hdl.AdminHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/admin/analytics/overview", h.Overview)
 	r.GET("/admin/analytics/trend", h.Trend)
 	r.GET("/admin/analytics/pages", h.Pages)
+	r.GET("/admin/analytics/dimensions", h.Dimensions)
 	return r
 }
 
@@ -129,6 +136,35 @@ func TestAdminTrend_InvalidDateFormat(t *testing.T) {
 	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
 
 	w := doGET(r, "/admin/analytics/trend?from=2026/06/01")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminDimensions_HappyPath(t *testing.T) {
+	fq := &fakeQuery{}
+	r := newRouter(hdl.NewAdminHandler(fq))
+
+	w := doGET(r, "/admin/analytics/dimensions?dimension=device")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+	assert.Equal(t, "device", fq.lastDimension)
+}
+
+func TestAdminDimensions_InvalidDimension(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+
+	w := doGET(r, "/admin/analytics/dimensions?dimension=bogus")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminDimensions_MissingDimension(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+
+	w := doGET(r, "/admin/analytics/dimensions")
 
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)

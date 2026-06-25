@@ -16,6 +16,7 @@ import (
 type fakeQueryRepo struct {
 	daily    []model.AnalyticsDaily
 	topPages []model.AnalyticsPageDaily
+	dim      []model.AnalyticsDailyDim
 	totalPV  int64
 	totalUV  int64
 }
@@ -30,6 +31,10 @@ func (f *fakeQueryRepo) QueryTopPages(_ context.Context, _, _ string, _ int) ([]
 
 func (f *fakeQueryRepo) QueryTotals(_ context.Context) (int64, int64, error) {
 	return f.totalPV, f.totalUV, nil
+}
+
+func (f *fakeQueryRepo) QueryDimRange(_ context.Context, _, _, _ string) ([]model.AnalyticsDailyDim, error) {
+	return f.dim, nil
 }
 
 // fakeRealtime 手写假实时层。
@@ -106,6 +111,17 @@ func TestTopPages(t *testing.T) {
 	require.Len(t, got, 2)
 	assert.Equal(t, "/a", got[0].Path)
 	assert.Equal(t, 30, got[0].PV)
+}
+
+func TestDimensions(t *testing.T) {
+	r := &fakeQueryRepo{dim: []model.AnalyticsDailyDim{
+		{Date: "2026-06-01", Dimension: "device", DimValue: "desktop", PV: 10, UV: 5},
+	}}
+	got, err := newQuerySvc(r, &fakeRealtime{}).Dimensions(context.Background(), "device", "2026-06-01", "2026-06-07")
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "desktop", got[0].DimValue)
+	assert.Equal(t, 10, got[0].PV)
 }
 
 // 确保 repo 实现满足 QueryReader 接口（编译期检查）。
