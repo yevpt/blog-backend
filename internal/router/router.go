@@ -88,10 +88,21 @@ type routeHandlers struct {
 	friendLink        *friendlinkhandler.FriendLinkHandler
 	upload            *uploadhandler.Handler
 	analyticsCollect  *analyticshandler.CollectHandler
+	analyticsRuntime  AnalyticsRuntime
 	userCache         userservice.UserCacheService
 }
 
-// Setup 注册所有路由，是整个项目路由的唯一入口
+// AnalyticsRuntime 暴露统计上报链路中需要被 worker 复用的实例。
+// 关键约束：collect handler 与聚合 worker 必须共享同一个 Ingestor —
+// 生产者（collect）投递与消费者（worker.Run）必须作用于同一实例，否则事件只入队不落库。
+type AnalyticsRuntime struct {
+	Ingestor analyticsworker.Ingestor
+	Repo     analyticsrepo.Repository
+	TZ       *time.Location
+}
+
+// Setup 注册所有路由，是整个项目路由的唯一入口。
+// 返回 AnalyticsRuntime，供 main 启动唯一的聚合/落库 worker。
 func Setup(
 	r *gin.Engine,
 	log *zap.Logger,
@@ -102,7 +113,7 @@ func Setup(
 	objectStore storage.ObjectStore,
 	cfg *config.Config,
 	notificationHub *notificationservice.SSEHub,
-) {
+) AnalyticsRuntime {
 	// 配置信任代理，确保反向代理链路下能拿到真实客户端 IP。
 	configureTrustedProxies(r)
 
@@ -120,6 +131,8 @@ func Setup(
 	registerAuthedRoutes(r, handlers, jwtManager, redisClient)
 	registerVIPRoutes(r, handlers, jwtManager)
 	registerAdminRoutes(r, handlers, jwtManager, redisClient)
+
+	return handlers.analyticsRuntime
 }
 
 func configureTrustedProxies(r *gin.Engine) {
@@ -244,7 +257,7 @@ func newRouteHandlers(
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
 	// TODO(Task 16): 迁移到 cfg.Analytics，下列字面量改为读配置块。
-	analyticsCollectHandler := newAnalyticsCollectHandler(log, db, redisClient, uvSvc)
+	analyticsCollectHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc)
 
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
@@ -266,21 +279,23 @@ func newRouteHandlers(
 		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
 		upload:            uploadhandler.NewHandler(uploadSvc),
 		analyticsCollect:  analyticsCollectHandler,
+		analyticsRuntime:  analyticsRuntime,
 		userCache:         userCacheSvc,
 	}
 }
 
 const analyticsAllowedOriginsEnv = "ANALYTICS_ALLOWED_ORIGINS"
 
-// newAnalyticsCollectHandler 组装 /collect 上报所需依赖图。
+// newAnalyticsCollectHandler 组装 /collect 上报所需依赖图，并返回供 worker 复用的运行时实例。
+// 这里构造的 ingestor 是「唯一」实例：collect handler 经 sessionIng 向它投递，
+// worker.Run 也消费同一个，二者不可分裂为两个实例。
 // TODO(Task 16): 下列临时字面量（时区/在线窗口/缓冲/批量/站点/盐/GeoIP 路径）迁移到 cfg.Analytics。
-// TODO(Task 13): ingestor.Run 由 bootstrap 启动；此处仅构造，未启动消费 goroutine。
 func newAnalyticsCollectHandler(
 	log *zap.Logger,
 	db *gorm.DB,
 	redisClient *redis.Client,
 	uvSvc uv.UVService,
-) *analyticshandler.CollectHandler {
+) (*analyticshandler.CollectHandler, AnalyticsRuntime) {
 	tz, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
 		tz = time.UTC
@@ -300,7 +315,8 @@ func newAnalyticsCollectHandler(
 	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, log)
 
 	allowedOrigins := splitCORSOrigins(os.Getenv(analyticsAllowedOriginsEnv))
-	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins)
+	runtime := AnalyticsRuntime{Ingestor: ingestor, Repo: analyticsRepo, TZ: tz}
+	return analyticshandler.NewCollectHandler(collectSvc, allowedOrigins), runtime
 }
 
 func newOAuthManager(redisClient *redis.Client, cfg *config.Config) *oauthflow.Manager {

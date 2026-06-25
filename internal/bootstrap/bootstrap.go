@@ -10,8 +10,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
+	analyticsworker "github.com/vpt/blog-backend/internal/worker/analytics"
 	notificationworker "github.com/vpt/blog-backend/internal/worker/notification"
 	"github.com/vpt/blog-backend/pkg/cache"
 	"github.com/vpt/blog-backend/pkg/config"
@@ -132,6 +134,43 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 		zapLogger.Info("站内通知 worker 启动，邮件 worker 未启用")
 	}
 	go worker.Run(ctx)
+}
+
+// StartAnalyticsWorker 启动统计后台：唯一的事件落库消费 goroutine + 日聚合/清理调度器。
+//
+// 关键约束：ingestor 必须是 router 里 collect handler 投递的同一个实例（经 AnalyticsRuntime 透传），
+// 否则消费者会从一个空实例 Run，而生产事件全部堆在另一个实例上被丢弃。
+// 本函数全程只调用一次，保证「单 ingestor、单 scheduler」。
+// TODO(Task 16): retentionDays / 时区 / onlineWindow 字面量迁移到 cfg.Analytics。
+func StartAnalyticsWorker(
+	ctx context.Context,
+	redisClient *redis.Client,
+	zapLogger *zap.Logger,
+	ingestor analyticsworker.Ingestor,
+	repo analyticsrepo.Repository,
+	tz *time.Location,
+) {
+	if tz == nil {
+		tz = time.UTC
+	}
+
+	// 启动唯一的落库消费循环：消费 collect handler 投递进来的事件。
+	go ingestor.Run(ctx)
+
+	// 组装聚合器并启动调度器：每日 00:30 后对昨天执行 RollupDay + 清理，Redis 租约去重。
+	rollup := analyticsworker.NewRollup(repo, repo, zapLogger)
+	scheduler := analyticsworker.NewScheduler(rollup, redisClient, analyticsworker.SchedulerConfig{
+		WorkerID:      notificationWorkerID(),
+		TZ:            tz,
+		RetentionDays: 90,
+		OnlineWindow:  90 * time.Second,
+		Tick:          time.Minute,
+		AfterMinute:   30,
+		LeaseTTL:      2 * time.Hour,
+	}, zapLogger)
+	go scheduler.Run(ctx)
+
+	zapLogger.Info("统计 worker 启动（事件落库 + 日聚合调度）")
 }
 
 // notificationWorkerID 生成 worker 标识，用于任务租约 locked_by，便于多实例区分。

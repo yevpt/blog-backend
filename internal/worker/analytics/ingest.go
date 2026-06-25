@@ -61,11 +61,13 @@ func (i *ingestor) Run(ctx context.Context) {
 	defer ticker.Stop()
 	buf := make([]model.AnalyticsEvent, 0, i.batchSize)
 
-	flush := func() {
+	// flush 用传入的 flushCtx 落库；周期/批量刷盘用存活的 ctx，
+	// 关闭路径用脱离取消的短超时 ctx，避免最后一批因 ctx 取消而丢失。
+	flush := func(flushCtx context.Context) {
 		if len(buf) == 0 {
 			return
 		}
-		if err := i.repo.InsertEvents(ctx, buf); err != nil {
+		if err := i.repo.InsertEvents(flushCtx, buf); err != nil {
 			i.logger.Error("统计事件落库失败", zap.Error(err), zap.Int("count", len(buf)))
 		}
 		buf = buf[:0]
@@ -74,15 +76,18 @@ func (i *ingestor) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			flush()
+			// 收尾刷盘脱离已取消的 ctx，给一个短超时确保最后一批落库。
+			finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			flush(finalCtx)
+			cancel()
 			return
 		case ev := <-i.ch:
 			buf = append(buf, ev)
 			if len(buf) >= i.batchSize {
-				flush()
+				flush(ctx)
 			}
 		case <-ticker.C:
-			flush()
+			flush(ctx)
 		}
 	}
 }

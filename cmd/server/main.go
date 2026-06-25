@@ -45,10 +45,15 @@ func main() {
 	notificationHub := notificationservice.NewSSEHub()
 
 	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
-	router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg, notificationHub)
+	// 返回统计运行时（含唯一 ingestor），供 worker 复用以保证生产/消费同一实例。
+	analyticsRuntime := router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg, notificationHub)
 
 	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
 	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, notificationHub, zapLogger)
+
+	// 启动统计后台 worker：唯一事件落库消费 + 日聚合/清理调度，与 collect handler 共享同一 ingestor。
+	bootstrap.StartAnalyticsWorker(context.Background(), redisClient, zapLogger,
+		analyticsRuntime.Ingestor, analyticsRuntime.Repo, analyticsRuntime.TZ)
 
 	// 启动服务：监听配置端口，启动失败时终止进程。
 	bootstrap.MustRunHTTP(r, cfg, zapLogger)
