@@ -23,8 +23,8 @@ type RollupReader interface {
 // RollupWriter 把聚合结果落入永久聚合表。repo.Repository 结构上满足该接口。
 type RollupWriter interface {
 	UpsertDaily(ctx context.Context, d model.AnalyticsDaily) error
-	UpsertDailyDim(ctx context.Context, rows []model.AnalyticsDailyDim) error
-	UpsertPageDaily(ctx context.Context, rows []model.AnalyticsPageDaily) error
+	ReplaceDailyDims(ctx context.Context, date string, rows []model.AnalyticsDailyDim) error
+	ReplacePageDaily(ctx context.Context, date string, rows []model.AnalyticsPageDaily) error
 }
 
 // RollupCleaner 删除过期的原始事件与会话。repo.Repository 结构上满足该接口。
@@ -60,10 +60,10 @@ func (r *Rollup) RollupDay(ctx context.Context, date string) error {
 	if err := r.writer.UpsertDaily(ctx, agg.Daily); err != nil {
 		return err
 	}
-	if err := r.writer.UpsertDailyDim(ctx, agg.Dims); err != nil {
+	if err := r.writer.ReplaceDailyDims(ctx, date, agg.Dims); err != nil {
 		return err
 	}
-	if err := r.writer.UpsertPageDaily(ctx, agg.Pages); err != nil {
+	if err := r.writer.ReplacePageDaily(ctx, date, agg.Pages); err != nil {
 		return err
 	}
 	r.logger.Info("日聚合完成",

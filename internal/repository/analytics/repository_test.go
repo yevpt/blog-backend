@@ -46,6 +46,66 @@ func TestUpsertDaily(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestReplaceDailyDims_DeletesThenUpserts(t *testing.T) {
+	r, mock := newRepo(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `analytics_daily_dim` WHERE date = ?")).
+		WithArgs("2026-06-24").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `analytics_daily_dim`")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	err := r.ReplaceDailyDims(context.Background(), "2026-06-24", []model.AnalyticsDailyDim{
+		{Date: "2026-06-24", Dimension: "device", DimValue: "mobile", PV: 1, UV: 1},
+	})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReplaceDailyDims_EmptyRowsClearsOnly(t *testing.T) {
+	r, mock := newRepo(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `analytics_daily_dim` WHERE date = ?")).
+		WithArgs("2026-06-24").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectCommit()
+
+	err := r.ReplaceDailyDims(context.Background(), "2026-06-24", nil)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReplacePageDaily_DeletesThenUpserts(t *testing.T) {
+	r, mock := newRepo(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `analytics_page_daily` WHERE date = ?")).
+		WithArgs("2026-06-24").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO `analytics_page_daily`")).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	err := r.ReplacePageDaily(context.Background(), "2026-06-24", []model.AnalyticsPageDaily{
+		{Date: "2026-06-24", Path: "/", PV: 1, UV: 1},
+	})
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReplacePageDaily_EmptyRowsClearsOnly(t *testing.T) {
+	r, mock := newRepo(t)
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM `analytics_page_daily` WHERE date = ?")).
+		WithArgs("2026-06-24").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectCommit()
+
+	err := r.ReplacePageDaily(context.Background(), "2026-06-24", nil)
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUpsertSession_IncrementsPVCount(t *testing.T) {
 	r, mock := newRepo(t)
 	mock.ExpectBegin()

@@ -2862,6 +2862,10 @@ paths:
           description: 权限不足
           schema:
             $ref: '#/definitions/response.Response'
+        "429":
+          description: 请求过于频繁
+          schema:
+            $ref: '#/definitions/response.Response'
         "500":
           description: 服务器内部错误
           schema:
@@ -4921,6 +4925,10 @@ paths:
                     $ref: '#/definitions/analytics.PublicPageStat'
                   type: array
               type: object
+        "429":
+          description: 请求过于频繁
+          schema:
+            $ref: '#/definitions/response.Response'
         "500":
           description: 服务器内部错误
           schema:
@@ -4942,6 +4950,10 @@ paths:
                 data:
                   $ref: '#/definitions/analytics.PublicSummary'
               type: object
+        "429":
+          description: 请求过于频繁
+          schema:
+            $ref: '#/definitions/response.Response'
         "500":
           description: 服务器内部错误
           schema:

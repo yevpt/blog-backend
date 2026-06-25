@@ -16,7 +16,9 @@ type Repository interface {
 	UpsertSession(ctx context.Context, s model.AnalyticsSession) error
 	TouchSession(ctx context.Context, sessionID string, lastSeen time.Time) error
 	UpsertDaily(ctx context.Context, d model.AnalyticsDaily) error
+	ReplaceDailyDims(ctx context.Context, date string, rows []model.AnalyticsDailyDim) error
 	UpsertDailyDim(ctx context.Context, rows []model.AnalyticsDailyDim) error
+	ReplacePageDaily(ctx context.Context, date string, rows []model.AnalyticsPageDaily) error
 	UpsertPageDaily(ctx context.Context, rows []model.AnalyticsPageDaily) error
 	DeleteEventsBefore(ctx context.Context, t time.Time) (int64, error)
 	DeleteSessionsBefore(ctx context.Context, t time.Time) (int64, error)
@@ -96,6 +98,25 @@ func (r *repository) UpsertDaily(ctx context.Context, d model.AnalyticsDaily) er
 	return nil
 }
 
+func (r *repository) ReplaceDailyDims(ctx context.Context, date string, rows []model.AnalyticsDailyDim) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("date = ?", date).Delete(&model.AnalyticsDailyDim{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "date"}, {Name: "dimension"}, {Name: "dim_value"}},
+			UpdateAll: true,
+		}).CreateInBatches(rows, 200).Error
+	})
+	if err != nil {
+		return fmt.Errorf("替换维度日聚合失败: %w", err)
+	}
+	return nil
+}
+
 func (r *repository) UpsertDailyDim(ctx context.Context, rows []model.AnalyticsDailyDim) error {
 	if len(rows) == 0 {
 		return nil
@@ -106,6 +127,25 @@ func (r *repository) UpsertDailyDim(ctx context.Context, rows []model.AnalyticsD
 	}).CreateInBatches(rows, 200).Error
 	if err != nil {
 		return fmt.Errorf("维度聚合 upsert 失败: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) ReplacePageDaily(ctx context.Context, date string, rows []model.AnalyticsPageDaily) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("date = ?", date).Delete(&model.AnalyticsPageDaily{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "date"}, {Name: "path"}},
+			UpdateAll: true,
+		}).CreateInBatches(rows, 200).Error
+	})
+	if err != nil {
+		return fmt.Errorf("替换页面日聚合失败: %w", err)
 	}
 	return nil
 }

@@ -187,6 +187,7 @@ func (h *AdminHandler) Dimensions(c *gin.Context) {
 // @Success  200 {object} response.Response{data=dto.BackfillResult} "统一响应；code=0 成功，code=400 参数错误"
 // @Failure  401 {object} response.Response "未登录或 token 已过期"
 // @Failure  403 {object} response.Response "权限不足"
+// @Failure  429 {object} response.Response "请求过于频繁"
 // @Failure  500 {object} response.Response "服务器内部错误"
 // @Router   /admin/analytics/backfill [post]
 func (h *AdminHandler) Backfill(c *gin.Context) {

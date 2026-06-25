@@ -27,6 +27,7 @@ func NewPublicHandler(s svc.PublicService) *PublicHandler { return &PublicHandle
 // @Tags     analytics
 // @Produce  json
 // @Success  200 {object} response.Response{data=dto.PublicSummary} "统一响应；code=0 成功"
+// @Failure  429 {object} response.Response "请求过于频繁"
 // @Failure  500 {object} response.Response "服务器内部错误"
 // @Router   /analytics/public/summary [get]
 func (h *PublicHandler) Summary(c *gin.Context) {
@@ -45,6 +46,7 @@ func (h *PublicHandler) Summary(c *gin.Context) {
 // @Produce  json
 // @Param    limit query int false "返回条数，默认 10，上限 20"
 // @Success  200 {object} response.Response{data=[]dto.PublicPageStat} "统一响应；code=0 成功，code=400 参数错误"
+// @Failure  429 {object} response.Response "请求过于频繁"
 // @Failure  500 {object} response.Response "服务器内部错误"
 // @Router   /analytics/public/popular [get]
 func (h *PublicHandler) Popular(c *gin.Context) {

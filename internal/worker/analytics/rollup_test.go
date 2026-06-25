@@ -29,9 +29,13 @@ func (f *fakeReader) AggregateDay(_ context.Context, date string) (analyticsrepo
 
 // recRepo 记录 upsert 与清理调用次数及入参，供断言。
 type recRepo struct {
-	dailyCalls int
-	dimCalls   int
-	pageCalls  int
+	dailyCalls    int
+	dimCalls      int
+	pageCalls     int
+	replaceDim    []model.AnalyticsDailyDim
+	replacePage   []model.AnalyticsPageDaily
+	replaceDimAt  string
+	replacePageAt string
 
 	delEventsCutoff   time.Time
 	delSessionsCutoff time.Time
@@ -44,13 +48,17 @@ func (r *recRepo) UpsertDaily(_ context.Context, _ model.AnalyticsDaily) error {
 	return nil
 }
 
-func (r *recRepo) UpsertDailyDim(_ context.Context, _ []model.AnalyticsDailyDim) error {
+func (r *recRepo) ReplaceDailyDims(_ context.Context, date string, rows []model.AnalyticsDailyDim) error {
 	r.dimCalls++
+	r.replaceDimAt = date
+	r.replaceDim = rows
 	return nil
 }
 
-func (r *recRepo) UpsertPageDaily(_ context.Context, _ []model.AnalyticsPageDaily) error {
+func (r *recRepo) ReplacePageDaily(_ context.Context, date string, rows []model.AnalyticsPageDaily) error {
 	r.pageCalls++
+	r.replacePageAt = date
+	r.replacePage = rows
 	return nil
 }
 
@@ -80,7 +88,11 @@ func TestRollupDay(t *testing.T) {
 	assert.Equal(t, "2026-06-24", reader.gotDate)
 	assert.Equal(t, 1, rec.dailyCalls)
 	assert.Equal(t, 1, rec.dimCalls)
+	assert.Equal(t, "2026-06-24", rec.replaceDimAt)
+	assert.Len(t, rec.replaceDim, 1)
 	assert.Equal(t, 1, rec.pageCalls)
+	assert.Equal(t, "2026-06-24", rec.replacePageAt)
+	assert.Len(t, rec.replacePage, 1)
 }
 
 func TestCleanup(t *testing.T) {
