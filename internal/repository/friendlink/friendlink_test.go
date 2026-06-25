@@ -94,6 +94,37 @@ func TestFriendLinkRepository_Update_ReturnsNilWhenMissing(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestFriendLinkRepository_GetAdmin_ReturnsLinkByID(t *testing.T) {
+	db, mock, sqlDB := newFriendLinkMockDB(t)
+	defer sqlDB.Close()
+	repo := friendlink.NewFriendLinkRepository(db)
+
+	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE `friend_link`.`id` = \\? AND `friend_link`.`deleted_at` IS NULL ORDER BY `friend_link`.`id` LIMIT \\?").
+		WithArgs(uint(3), 1).
+		WillReturnRows(friendLinkRows(3))
+
+	link, err := repo.GetAdmin(3)
+	require.NoError(t, err)
+	require.NotNil(t, link)
+	assert.Equal(t, uint(3), link.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFriendLinkRepository_CountByAvatarURL_CountsActiveReferences(t *testing.T) {
+	db, mock, sqlDB := newFriendLinkMockDB(t)
+	defer sqlDB.Close()
+	repo := friendlink.NewFriendLinkRepository(db)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE avatar_url = \\? AND `friend_link`.`deleted_at` IS NULL").
+		WithArgs("avatar/link/old.jpg").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+
+	count, err := repo.CountByAvatarURL("avatar/link/old.jpg")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestFriendLinkRepository_Delete_SoftDeletes(t *testing.T) {
 	db, mock, sqlDB := newFriendLinkMockDB(t)
 	defer sqlDB.Close()

@@ -34,6 +34,8 @@ type FriendLinkRepository interface {
 	ListPublic(offset, limit int) ([]model.FriendLink, int64, error)
 	// GetPublic 查询显示中的友情链接详情。
 	GetPublic(id uint) (*model.FriendLink, error)
+	// GetAdmin 查询管理端友情链接详情。
+	GetAdmin(id uint) (*model.FriendLink, error)
 	// ListAdmin 查询管理端友情链接列表，可按状态过滤。
 	ListAdmin(offset, limit int, status *uint8) ([]model.FriendLink, int64, error)
 	// Create 创建友情链接。
@@ -42,6 +44,8 @@ type FriendLinkRepository interface {
 	Update(id uint, data FriendLinkUpdateData) (*model.FriendLink, error)
 	// Delete 软删除友情链接。
 	Delete(id uint) (*model.FriendLink, error)
+	// CountByAvatarURL 统计仍引用指定头像 key 的友情链接数量。
+	CountByAvatarURL(avatarURL string) (int64, error)
 }
 
 type friendLinkRepo struct {
@@ -67,6 +71,10 @@ func (r *friendLinkRepo) GetPublic(id uint) (*model.FriendLink, error) {
 		return nil, nil
 	}
 	return &link, err
+}
+
+func (r *friendLinkRepo) GetAdmin(id uint) (*model.FriendLink, error) {
+	return r.findByID(id)
 }
 
 func (r *friendLinkRepo) ListAdmin(offset, limit int, status *uint8) ([]model.FriendLink, int64, error) {
@@ -123,6 +131,15 @@ func (r *friendLinkRepo) Delete(id uint) (*model.FriendLink, error) {
 		return nil, nil
 	}
 	return &link, err
+}
+
+func (r *friendLinkRepo) CountByAvatarURL(avatarURL string) (int64, error) {
+	var count int64
+	if avatarURL == "" {
+		return 0, nil
+	}
+	err := r.db.Model(&model.FriendLink{}).Where("avatar_url = ?", avatarURL).Count(&count).Error
+	return count, err
 }
 
 func (r *friendLinkRepo) findByID(id uint) (*model.FriendLink, error) {
