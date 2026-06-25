@@ -2,6 +2,7 @@ package socialauth
 
 import (
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
@@ -104,6 +105,22 @@ func (r *socialAuthRepo) BindExistingUser(userID uint, socialUser *model.SocialU
 				return err
 			}
 		}
+
+		var existing model.SocialUserAuth
+		err := tx.Unscoped().
+			Where("user_id = ? AND social_user_id = ?", userID, socialUser.ID).
+			First(&existing).Error
+		if err == nil {
+			// 解绑后再绑定：复活软删行，避免 idx_social_auth 唯一索引冲突。
+			if existing.DeletedAt.Valid {
+				return tx.Unscoped().Model(&existing).Update("deleted_at", nil).Error
+			}
+			return fmt.Errorf("social_user_auth 已存在: user_id=%d social_user_id=%d", userID, socialUser.ID)
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+
 		return tx.Create(&model.SocialUserAuth{
 			UserID:       userID,
 			SocialUserID: socialUser.ID,

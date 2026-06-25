@@ -148,3 +148,50 @@ func TestSocialAuthRepository_Unbind(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestSocialAuthRepository_BindExistingUser_InsertsWhenNoPriorAuth(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := socialauth.NewSocialAuthRepository(db)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT \* FROM \x60social_user_auth\x60`).
+		WithArgs(uint(1), uint(16), 1).
+		WillReturnRows(sqlmock.NewRows(nil))
+	mock.ExpectExec(`INSERT INTO \x60social_user_auth\x60`).
+		WillReturnResult(sqlmock.NewResult(22, 1))
+	mock.ExpectCommit()
+
+	socialUser := &model.SocialUser{Base: model.Base{ID: 16}, Source: "qq", UUID: "qq-openid"}
+	err := repo.BindExistingUser(1, socialUser)
+
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSocialAuthRepository_BindExistingUser_RestoresSoftDeletedAuth(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := socialauth.NewSocialAuthRepository(db)
+
+	now := time.Now()
+	deletedAt := now.Add(-time.Hour)
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "user_id", "social_user_id",
+	}).AddRow(21, now, now, deletedAt, 1, 16)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT \* FROM \x60social_user_auth\x60`).
+		WithArgs(uint(1), uint(16), 1).
+		WillReturnRows(rows)
+	mock.ExpectExec(`UPDATE \x60social_user_auth\x60 SET \x60deleted_at\x60=`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), uint(21)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	socialUser := &model.SocialUser{Base: model.Base{ID: 16}, Source: "qq", UUID: "qq-openid"}
+	err := repo.BindExistingUser(1, socialUser)
+
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
