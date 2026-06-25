@@ -62,6 +62,9 @@ oauth:
       client_id: "your_github_client_id"
       client_secret: "your_github_client_secret"
       redirect_uri: "http://localhost:8080/oauth/github/callback"
+      # bridge_url: "https://bridge.example.com"
+      # bridge_secret: "shared-hmac-secret"
+      # bridge_mode: "fallback"   # direct | fallback | bridge_only
     gitee:
       enabled: false
       client_id: "your_gitee_client_id"

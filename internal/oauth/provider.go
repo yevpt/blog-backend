@@ -71,6 +71,12 @@ type AuthCodeOptions struct {
 	Verifier string
 }
 
+// ProfileExchanger 适用于需一次性完成换码和拉资料的 Provider（如启用 Bridge 的 GitHub）。
+type ProfileExchanger interface {
+	Provider
+	ExchangeProfile(ctx context.Context, code string, verifier string) (*TokenSet, *Profile, error)
+}
+
 // Provider 封装单个第三方平台的 OAuth 差异。
 type Provider interface {
 	// Source 返回平台标识，必须与配置和数据库 social_user.source 保持一致。

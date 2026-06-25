@@ -78,11 +78,17 @@ func (m *Manager) Callback(ctx context.Context, source string, code string, stat
 		return nil, ErrStateSourceMismatch
 	}
 
-	token, err := provider.Exchange(ctx, code, flow.Verifier)
-	if err != nil {
-		return nil, err
+	var token *TokenSet
+	var profile *Profile
+	if profileExchanger, ok := provider.(ProfileExchanger); ok {
+		token, profile, err = profileExchanger.ExchangeProfile(ctx, code, flow.Verifier)
+	} else {
+		token, err = provider.Exchange(ctx, code, flow.Verifier)
+		if err != nil {
+			return nil, err
+		}
+		profile, err = provider.FetchProfile(ctx, token)
 	}
-	profile, err := provider.FetchProfile(ctx, token)
 	if err != nil {
 		return nil, err
 	}

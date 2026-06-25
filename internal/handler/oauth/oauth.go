@@ -7,6 +7,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/middleware"
+	"github.com/vpt/blog-backend/internal/oauth/bridge"
 	domain "github.com/vpt/blog-backend/internal/oauth"
 	serviceoauth "github.com/vpt/blog-backend/internal/service/oauth"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
@@ -165,8 +166,14 @@ func writeOAuthError(c *gin.Context, err error) {
 		errors.Is(err, domain.ErrInvalidAction),
 		errors.Is(err, domain.ErrInvalidState),
 		errors.Is(err, domain.ErrProviderNotEnabled),
-		errors.Is(err, domain.ErrStateSourceMismatch):
+		errors.Is(err, domain.ErrStateSourceMismatch),
+		errors.Is(err, bridge.ErrExchangeFailed):
 		response.Fail(c, response.CodeBadRequest, err.Error())
+	case errors.Is(err, bridge.ErrTimeout),
+		errors.Is(err, bridge.ErrUnavailable):
+		response.Fail(c, response.CodeServerError, "GitHub 登录暂时不可用，请稍后重试")
+	case errors.Is(err, bridge.ErrUnauthorized):
+		response.ServerError(c)
 	default:
 		response.ServerError(c)
 	}

@@ -116,3 +116,117 @@ func TestGitHubProvider_FetchProfileReturnsHTTPError(t *testing.T) {
 
 	assert.Error(t, err)
 }
+
+func TestGitHubProvider_ExchangeProfileUsesBridgeWhenBridgeOnlyConfigured(t *testing.T) {
+	bridgeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/internal/oauth/github/exchange", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"provider":"github",
+			"providerUserId":"99",
+			"login":"bridge-user",
+			"name":"Bridge User",
+			"email":"bridge@example.com",
+			"emailVerified":true
+		}`))
+	}))
+	t.Cleanup(bridgeServer.Close)
+
+	provider := providers.NewGitHubProvider(config.OAuthProviderConfig{
+		RedirectURI:  "https://api.example.com/oauth/github/callback",
+		BridgeURL:    bridgeServer.URL,
+		BridgeSecret: "bridge-secret",
+		BridgeMode:   "bridge_only",
+	})
+
+	token, profile, err := provider.ExchangeProfile(context.Background(), "auth-code", "pkce-verifier")
+	require.NoError(t, err)
+	assert.Empty(t, token.AccessToken)
+	assert.Equal(t, "99", profile.UUID)
+	assert.Equal(t, "Bridge User", *profile.Nickname)
+}
+
+func TestGitHubProvider_ExchangeProfileBridgeOnlyWithoutBridgeFallsBackToDirect(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"direct-token","token_type":"bearer"}`))
+	}))
+	t.Cleanup(tokenServer.Close)
+
+	userServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"id":11,"login":"direct-user","name":"Direct User"}`))
+	}))
+	t.Cleanup(userServer.Close)
+
+	provider := providers.NewGitHubProvider(config.OAuthProviderConfig{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		RedirectURI:  "https://api.example.com/oauth/github/callback",
+		TokenURL:     tokenServer.URL,
+		UserURL:      userServer.URL + "/user",
+		BridgeMode:   "bridge_only",
+	})
+
+	token, profile, err := provider.ExchangeProfile(context.Background(), "auth-code", "")
+	require.NoError(t, err)
+	assert.Equal(t, "direct-token", token.AccessToken)
+	assert.Equal(t, "11", profile.UUID)
+}
+
+func TestGitHubProvider_ExchangeProfileFallbackUsesBridgeAfterDirectExchangeNetworkFailure(t *testing.T) {
+	bridgeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"provider":"github",
+			"providerUserId":"77",
+			"login":"fallback-user",
+			"name":"Fallback User",
+			"emailVerified":false
+		}`))
+	}))
+	t.Cleanup(bridgeServer.Close)
+
+	provider := providers.NewGitHubProvider(config.OAuthProviderConfig{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		RedirectURI:  "https://api.example.com/oauth/github/callback",
+		TokenURL:     "http://127.0.0.1:1/oauth/token",
+		BridgeURL:    bridgeServer.URL,
+		BridgeSecret: "bridge-secret",
+		BridgeMode:   "fallback",
+	})
+
+	token, profile, err := provider.ExchangeProfile(context.Background(), "auth-code", "")
+	require.NoError(t, err)
+	assert.Empty(t, token.AccessToken)
+	assert.Equal(t, "77", profile.UUID)
+	assert.Equal(t, "Fallback User", *profile.Nickname)
+}
+
+func TestGitHubProvider_ExchangeProfileUsesDirectGitHubWhenBridgeNotConfigured(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"direct-token","token_type":"bearer"}`))
+	}))
+	t.Cleanup(tokenServer.Close)
+
+	userServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer direct-token", r.Header.Get("Authorization"))
+		_, _ = w.Write([]byte(`{"id":11,"login":"direct-user","name":"Direct User"}`))
+	}))
+	t.Cleanup(userServer.Close)
+
+	provider := providers.NewGitHubProvider(config.OAuthProviderConfig{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		RedirectURI:  "https://api.example.com/oauth/github/callback",
+		TokenURL:     tokenServer.URL,
+		UserURL:      userServer.URL + "/user",
+	})
+
+	token, profile, err := provider.ExchangeProfile(context.Background(), "auth-code", "")
+	require.NoError(t, err)
+	assert.Equal(t, "direct-token", token.AccessToken)
+	assert.Equal(t, "11", profile.UUID)
+	assert.Equal(t, "Direct User", *profile.Nickname)
+}

@@ -105,6 +105,10 @@ oauth:
       auth_url: "https://github.com/login/oauth/authorize"
       token_url: "https://github.com/login/oauth/access_token"
       user_url: "https://api.github.com/user"
+      # bridge_url + bridge_secret 同时配置后 bridge_mode 才生效；未配置时恒为本机直连
+      bridge_url: ""
+      bridge_secret: ""
+      bridge_mode: "direct"   # direct | fallback | bridge_only
     gitee:
       enabled: false
       client_id: ""

@@ -58,6 +58,23 @@ func (p *fakeProvider) FetchProfile(_ context.Context, _ *oauth.TokenSet) (*oaut
 	return &oauth.Profile{Source: p.source, UUID: "remote-user-id"}, nil
 }
 
+type fakeProfileExchanger struct {
+	fakeProvider
+	profile *oauth.Profile
+}
+
+func (p *fakeProfileExchanger) ExchangeProfile(_ context.Context, code string, verifier string) (*oauth.TokenSet, *oauth.Profile, error) {
+	p.gotCode = code
+	p.gotVerifier = verifier
+	if p.exchangeErr != nil {
+		return nil, nil, p.exchangeErr
+	}
+	if p.profile != nil {
+		return &oauth.TokenSet{AccessToken: "bridge-token"}, p.profile, nil
+	}
+	return &oauth.TokenSet{AccessToken: "bridge-token"}, &oauth.Profile{Source: p.source, UUID: "bridge-user-id"}, nil
+}
+
 func TestManager_AuthorizeAndCallback(t *testing.T) {
 	store, _ := newStateStore(t, 10*time.Minute)
 	provider := &fakeProvider{source: "github", authCodeURL: "https://github.com/login/oauth/authorize"}
@@ -154,4 +171,25 @@ func TestManager_CallbackReturnsProviderError(t *testing.T) {
 
 	_, err = manager.Callback(ctx, "github", "callback-code", provider.gotAuthOpts.State)
 	assert.ErrorIs(t, err, wantErr)
+}
+
+func TestManager_CallbackUsesProfileExchangerWhenAvailable(t *testing.T) {
+	store, _ := newStateStore(t, 10*time.Minute)
+	provider := &fakeProfileExchanger{
+		fakeProvider: fakeProvider{source: "github", authCodeURL: "https://github.example.com/auth"},
+		profile:      &oauth.Profile{Source: "github", UUID: "bridge-user-id"},
+	}
+	manager := oauth.NewManager(store, []oauth.Provider{provider})
+	ctx := context.Background()
+
+	_, err := manager.Authorize(ctx, "github", oauth.FlowContext{Action: oauth.ActionLogin})
+	require.NoError(t, err)
+
+	result, err := manager.Callback(ctx, "github", "callback-code", provider.gotAuthOpts.State)
+	require.NoError(t, err)
+
+	assert.Equal(t, "callback-code", provider.gotCode)
+	assert.Equal(t, provider.gotAuthOpts.Verifier, provider.gotVerifier)
+	assert.Equal(t, "bridge-user-id", result.Profile.UUID)
+	assert.Equal(t, "bridge-token", result.Token.AccessToken)
 }

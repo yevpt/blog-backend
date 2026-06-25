@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/vpt/blog-backend/internal/oauth/bridge"
 	domain "github.com/vpt/blog-backend/internal/oauth"
 	"github.com/vpt/blog-backend/pkg/config"
 	gooauth2 "golang.org/x/oauth2"
@@ -22,6 +23,7 @@ type GitHubProvider struct {
 	cfg    config.OAuthProviderConfig
 	oauth  *gooauth2.Config
 	client httpClient
+	bridge bridge.Client
 }
 
 // NewGitHubProvider 创建 GitHub OAuth provider。
@@ -40,6 +42,7 @@ func NewGitHubProvider(cfg config.OAuthProviderConfig) *GitHubProvider {
 			},
 		},
 		client: newProviderHTTPClient(),
+		bridge: bridge.NewClient(cfg.BridgeURL, cfg.BridgeSecret),
 	}
 }
 
@@ -55,6 +58,29 @@ func (p *GitHubProvider) AuthCodeURL(opts domain.AuthCodeOptions) (string, error
 		authOpts = append(authOpts, gooauth2.S256ChallengeOption(opts.Verifier))
 	}
 	return p.oauth.AuthCodeURL(opts.State, authOpts...), nil
+}
+
+// ExchangeProfile 换码并拉取用户资料；策略由 bridge_mode 与 Bridge 是否配置共同决定。
+func (p *GitHubProvider) ExchangeProfile(ctx context.Context, code string, verifier string) (*domain.TokenSet, *domain.Profile, error) {
+	switch p.cfg.EffectiveGitHubBridgeMode() {
+	case config.GitHubBridgeModeBridgeOnly:
+		return p.exchangeViaBridge(ctx, code, verifier)
+	case config.GitHubBridgeModeFallback:
+		token, err := p.Exchange(ctx, code, verifier)
+		if err == nil {
+			profile, fetchErr := p.FetchProfile(ctx, token)
+			if fetchErr != nil {
+				return nil, nil, fetchErr
+			}
+			return token, profile, nil
+		}
+		if IsDirectExchangeRetryable(err) {
+			return p.exchangeViaBridge(ctx, code, verifier)
+		}
+		return nil, nil, err
+	default:
+		return p.exchangeDirect(ctx, code, verifier)
+	}
 }
 
 // Exchange 使用 callback code 换取 GitHub access token。
