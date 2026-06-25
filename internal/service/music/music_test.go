@@ -13,6 +13,7 @@ import (
 	musicrepo "github.com/vpt/blog-backend/internal/repository/music"
 	"github.com/vpt/blog-backend/internal/service/music"
 	"github.com/vpt/blog-backend/pkg/storage"
+	"gorm.io/gorm"
 )
 
 type stubMusicRepository struct {
@@ -219,6 +220,22 @@ func TestMusicService_GetPublicArtist_NotFound(t *testing.T) {
 	_, err := svc.GetPublicArtist(99)
 
 	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
+}
+
+func TestMusicService_DeleteArtist_NotFound(t *testing.T) {
+	svc := music.NewMusicService(&notFoundDeleteMusicRepository{}, stubMusicObjectStore{})
+
+	err := svc.DeleteArtist(99)
+
+	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
+}
+
+type notFoundDeleteMusicRepository struct {
+	stubMusicRepository
+}
+
+func (notFoundDeleteMusicRepository) DeleteArtist(uint) error {
+	return gorm.ErrRecordNotFound
 }
 
 func TestMusicService_SaveMusic_PersistsAudioMetadata(t *testing.T) {

@@ -307,7 +307,11 @@ func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.Music
 }
 
 func (s *musicService) DeleteMusic(id uint) error {
-	return s.repo.DeleteMusic(id)
+	err := s.repo.DeleteMusic(id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrMusicNotFound
+	}
+	return err
 }
 
 func (s *musicService) SaveArtist(ctx context.Context, userID uint, req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error) {
@@ -371,7 +375,11 @@ func (s *musicService) SaveArtist(ctx context.Context, userID uint, req dto.Musi
 }
 
 func (s *musicService) DeleteArtist(id uint) error {
-	return s.repo.DeleteArtist(id)
+	err := s.repo.DeleteArtist(id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrMusicArtistNotFound
+	}
+	return err
 }
 
 func (s *musicService) SaveAlbum(ctx context.Context, userID uint, req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error) {
@@ -459,7 +467,11 @@ func (s *musicService) SaveAlbum(ctx context.Context, userID uint, req dto.Music
 }
 
 func (s *musicService) DeleteAlbum(id uint) error {
-	return s.repo.DeleteAlbum(id)
+	err := s.repo.DeleteAlbum(id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrMusicAlbumNotFound
+	}
+	return err
 }
 
 func (s *musicService) deleteMusicAssetKeys(ctx context.Context, keys []string) error {

@@ -236,7 +236,14 @@ func musicUpdateFields(item model.Music) map[string]any {
 }
 
 func (r *musicRepo) DeleteMusic(id uint) error {
-	return r.db.Delete(&model.Music{}, id).Error
+	result := r.db.Delete(&model.Music{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *musicRepo) SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, error) {
@@ -286,7 +293,14 @@ func (r *musicRepo) SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, er
 }
 
 func (r *musicRepo) DeleteArtist(id uint) error {
-	return r.db.Delete(&model.MusicArtist{}, id).Error
+	result := r.db.Delete(&model.MusicArtist{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *musicRepo) SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error) {
@@ -337,7 +351,14 @@ func (r *musicRepo) SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error
 }
 
 func (r *musicRepo) DeleteAlbum(id uint) error {
-	return r.db.Delete(&model.MusicAlbum{}, id).Error
+	result := r.db.Delete(&model.MusicAlbum{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *musicRepo) ListAdminSongs(keyword string, offset, limit int) ([]model.Music, int64, error) {

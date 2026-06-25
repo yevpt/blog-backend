@@ -256,6 +256,10 @@ func (h *MusicHandler) DeleteMusic(c *gin.Context) {
 		return
 	}
 	if err := h.svc.DeleteMusic(id); err != nil {
+		if errors.Is(err, musicservice.ErrMusicNotFound) {
+			response.NotFound(c)
+			return
+		}
 		response.ServerError(c)
 		return
 	}
