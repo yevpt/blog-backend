@@ -22,6 +22,7 @@ type fakeQuery struct {
 	lastFrom, lastTo, lastMetric, lastSegment string
 	lastDimension                             string
 	lastLimit                                 int
+	lastSteps                                 []string
 }
 
 func (f *fakeQuery) Overview(context.Context) (dto.Overview, error) {
@@ -43,6 +44,16 @@ func (f *fakeQuery) Dimensions(_ context.Context, dimension, from, to string) ([
 	return []dto.DimensionPoint{{Date: "2026-06-01", DimValue: "desktop", PV: 10, UV: 5}}, nil
 }
 
+func (f *fakeQuery) Paths(_ context.Context, from, to string, limit int) ([]dto.PathSequence, error) {
+	f.lastFrom, f.lastTo, f.lastLimit = from, to, limit
+	return []dto.PathSequence{{Sequence: []string{"/", "/articles"}, Sessions: 3}}, nil
+}
+
+func (f *fakeQuery) Funnel(_ context.Context, from, to string, steps []string) ([]dto.FunnelStep, error) {
+	f.lastFrom, f.lastTo, f.lastSteps = from, to, steps
+	return []dto.FunnelStep{{Step: "/", Sessions: 2, ConversionRate: 1}}, nil
+}
+
 type fakeBackfill struct {
 	lastFrom, lastTo string
 }
@@ -59,6 +70,8 @@ func newRouter(h *hdl.AdminHandler) *gin.Engine {
 	r.GET("/admin/analytics/trend", h.Trend)
 	r.GET("/admin/analytics/pages", h.Pages)
 	r.GET("/admin/analytics/dimensions", h.Dimensions)
+	r.GET("/admin/analytics/paths", h.Paths)
+	r.GET("/admin/analytics/funnel", h.Funnel)
 	r.POST("/admin/analytics/backfill", h.Backfill)
 	return r
 }
@@ -214,6 +227,60 @@ func TestAdminPages_RangeTooLarge(t *testing.T) {
 	w := doGET(r, "/admin/analytics/pages?"+url.Values{
 		"from": {"2024-01-01"}, "to": {"2026-06-01"},
 	}.Encode())
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminPaths_LimitCap(t *testing.T) {
+	fq := &fakeQuery{}
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
+
+	w := doGET(r, "/admin/analytics/paths?limit=500")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+	assert.Equal(t, 100, fq.lastLimit) // 上限 100
+}
+
+func TestAdminPaths_LimitDefault(t *testing.T) {
+	fq := &fakeQuery{}
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
+
+	w := doGET(r, "/admin/analytics/paths")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 20, fq.lastLimit) // 默认 20
+}
+
+func TestAdminFunnel_HappyPath(t *testing.T) {
+	fq := &fakeQuery{}
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
+
+	w := doGET(r, "/admin/analytics/funnel?step=/&step=/articles")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+	assert.Equal(t, []string{"/", "/articles"}, fq.lastSteps)
+}
+
+func TestAdminFunnel_MissingStep(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
+
+	w := doGET(r, "/admin/analytics/funnel")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminFunnel_TooManySteps(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
+
+	q := url.Values{}
+	for i := 0; i < 11; i++ {
+		q.Add("step", "/p")
+	}
+	w := doGET(r, "/admin/analytics/funnel?"+q.Encode())
 
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)

@@ -93,6 +93,19 @@ func TestQueryTotalsSegmented(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestQuerySessionPaths(t *testing.T) {
+	r, mock := newRepo(t)
+	rows := sqlmock.NewRows([]string{"session_id", "sequence", "steps"}).
+		AddRow("s1", "/,/articles,/articles/1", 3)
+	mock.ExpectQuery("GROUP_CONCAT\\(path ORDER BY created_at SEPARATOR ','\\).*FROM `analytics_events`").
+		WillReturnRows(rows)
+	got, err := r.QuerySessionPaths(context.Background(), "2026-06-01", "2026-06-02", 1000)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "/,/articles,/articles/1", got[0].Sequence)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 // TestAggregateDay 验证 AggregateDay 依次发出 Daily/各维度/Page 聚合查询并组装结果。
 func TestAggregateDay(t *testing.T) {
 	r, mock := newRepo(t)

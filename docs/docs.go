@@ -163,6 +163,83 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/analytics/funnel": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "访问漏斗",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD，默认近 7 天",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD，默认今天",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "漏斗步骤，可重复传 step=/a\u0026step=/b，最多 10 个",
+                        "name": "step",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功，code=400 参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/analytics.FunnelStep"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/analytics/overview": {
             "get": {
                 "produces": [
@@ -256,6 +333,78 @@ const docTemplate = `{
                                             "type": "array",
                                             "items": {
                                                 "$ref": "#/definitions/analytics.PageStat"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/analytics/paths": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "访问路径序列",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD，默认近 7 天",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD，默认今天",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数，默认 20，上限 100",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功，code=400 参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/analytics.PathSequence"
                                             }
                                         }
                                     }
@@ -8679,6 +8828,9 @@ const docTemplate = `{
                 "session_id"
             ],
             "properties": {
+                "collect_token": {
+                    "type": "string"
+                },
                 "event_type": {
                     "type": "string",
                     "enum": [
@@ -8698,8 +8850,22 @@ const docTemplate = `{
                 "session_id": {
                     "type": "string"
                 },
+                "signals": {
+                    "$ref": "#/definitions/analytics.CollectSignals"
+                },
                 "title": {
                     "type": "string"
+                }
+            }
+        },
+        "analytics.CollectSignals": {
+            "type": "object",
+            "properties": {
+                "no_interaction": {
+                    "type": "boolean"
+                },
+                "webdriver": {
+                    "type": "boolean"
                 }
             }
         },
@@ -8717,6 +8883,20 @@ const docTemplate = `{
                 },
                 "uv": {
                     "type": "integer"
+                }
+            }
+        },
+        "analytics.FunnelStep": {
+            "type": "object",
+            "properties": {
+                "conversion_rate": {
+                    "type": "number"
+                },
+                "sessions": {
+                    "type": "integer"
+                },
+                "step": {
+                    "type": "string"
                 }
             }
         },
@@ -8759,6 +8939,20 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "uv": {
+                    "type": "integer"
+                }
+            }
+        },
+        "analytics.PathSequence": {
+            "type": "object",
+            "properties": {
+                "sequence": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sessions": {
                     "type": "integer"
                 }
             }

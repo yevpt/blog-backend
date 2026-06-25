@@ -19,6 +19,7 @@ type fakeQueryRepo struct {
 	dim      []model.AnalyticsDailyDim
 	totalPV  int64
 	totalUV  int64
+	paths    []repo.SessionPath
 }
 
 func (f *fakeQueryRepo) QueryDailyRange(_ context.Context, _, _ string) ([]model.AnalyticsDaily, error) {
@@ -35,6 +36,10 @@ func (f *fakeQueryRepo) QueryTotals(_ context.Context) (int64, int64, error) {
 
 func (f *fakeQueryRepo) QueryDimRange(_ context.Context, _, _, _ string) ([]model.AnalyticsDailyDim, error) {
 	return f.dim, nil
+}
+
+func (f *fakeQueryRepo) QuerySessionPaths(_ context.Context, _, _ string, _ int) ([]repo.SessionPath, error) {
+	return f.paths, nil
 }
 
 // fakeRealtime 手写假实时层。
@@ -122,6 +127,47 @@ func TestDimensions(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "desktop", got[0].DimValue)
 	assert.Equal(t, 10, got[0].PV)
+}
+
+func TestPaths(t *testing.T) {
+	r := &fakeQueryRepo{paths: []repo.SessionPath{
+		{Sequence: "/,/articles,/articles/1"},
+		{Sequence: "/,/articles,/articles/1"},
+		{Sequence: "/,/articles"},
+	}}
+	got, err := newQuerySvc(r, &fakeRealtime{}).Paths(context.Background(), "2026-06-01", "2026-06-02", 20)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	// 出现两次的序列排在最前。
+	assert.Equal(t, []string{"/", "/articles", "/articles/1"}, got[0].Sequence)
+	assert.Equal(t, 2, got[0].Sessions)
+	assert.Equal(t, 1, got[1].Sessions)
+}
+
+func TestPaths_LimitCap(t *testing.T) {
+	r := &fakeQueryRepo{paths: []repo.SessionPath{
+		{Sequence: "/a"},
+		{Sequence: "/b"},
+		{Sequence: "/c"},
+	}}
+	got, err := newQuerySvc(r, &fakeRealtime{}).Paths(context.Background(), "2026-06-01", "2026-06-02", 2)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+}
+
+func TestFunnel(t *testing.T) {
+	r := &fakeQueryRepo{paths: []repo.SessionPath{
+		{Sequence: "/,/articles,/articles/1"},
+		{Sequence: "/,/articles"},
+	}}
+	steps := []string{"/", "/articles", "/articles/1"}
+	got, err := newQuerySvc(r, &fakeRealtime{}).Funnel(context.Background(), "2026-06-01", "2026-06-02", steps)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	assert.Equal(t, []int{2, 2, 1}, []int{got[0].Sessions, got[1].Sessions, got[2].Sessions})
+	assert.Equal(t, 1.0, got[0].ConversionRate)
+	assert.Equal(t, 1.0, got[1].ConversionRate)
+	assert.Equal(t, 0.5, got[2].ConversionRate)
 }
 
 // 确保 repo 实现满足 QueryReader 接口（编译期检查）。

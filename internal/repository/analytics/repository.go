@@ -29,7 +29,16 @@ type Repository interface {
 	QueryTopPagesPublic(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
 	QueryTotalsSegmented(ctx context.Context) (total, registered, anonymous int64, err error)
+	QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]SessionPath, error)
 	AggregateDay(ctx context.Context, date string) (DayAggregate, error)
+}
+
+// SessionPath 是单个会话按时间排序拼接的访问路径序列，仅含聚合后字段，
+// 不含 visitor/user/IP 等可定位个体的列。
+type SessionPath struct {
+	SessionID string
+	Sequence  string
+	Steps     int
 }
 
 // DayAggregate 是某一日（Asia/Shanghai）从原始事件表聚合出的全量结果，

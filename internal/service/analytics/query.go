@@ -3,9 +3,12 @@ package analytics
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	dto "github.com/vpt/blog-backend/internal/dto/analytics"
 	"github.com/vpt/blog-backend/internal/model"
+	repo "github.com/vpt/blog-backend/internal/repository/analytics"
 	"go.uber.org/zap"
 )
 
@@ -15,7 +18,14 @@ type QueryReader interface {
 	QueryTopPages(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
 	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
+	QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]repo.SessionPath, error)
 }
+
+// funnelMaxSessions 漏斗计算时从原始事件读取的会话上限，避免大区间扫描全表。
+const funnelMaxSessions = 5000
+
+// pathSep 在拼接去重路径序列时使用的分隔符（单元分隔符，路径中不会出现）。
+const pathSep = "\x1f"
 
 // QueryService 提供后台只读统计：总览、趋势、热门页面。返回 dto.*，不外泄 model。
 type QueryService interface {
@@ -23,6 +33,8 @@ type QueryService interface {
 	Trend(ctx context.Context, from, to, metric, segment string) ([]dto.TrendPoint, error)
 	TopPages(ctx context.Context, from, to string, limit int) ([]dto.PageStat, error)
 	Dimensions(ctx context.Context, dimension, from, to string) ([]dto.DimensionPoint, error)
+	Paths(ctx context.Context, from, to string, limit int) ([]dto.PathSequence, error)
+	Funnel(ctx context.Context, from, to string, steps []string) ([]dto.FunnelStep, error)
 }
 
 type queryService struct {
@@ -124,4 +136,82 @@ func (s *queryService) Dimensions(ctx context.Context, dimension, from, to strin
 		out = append(out, dto.DimensionPoint{Date: d.Date, DimValue: d.DimValue, PV: d.PV, UV: d.UV})
 	}
 	return out, nil
+}
+
+// Paths 聚合区间内多步会话的访问路径序列：拆分逗号序列、按完整序列去重计数，
+// 按会话数降序返回前 limit 条。仅含聚合后的序列与会话数，不外泄个体信息。
+func (s *queryService) Paths(ctx context.Context, from, to string, limit int) ([]dto.PathSequence, error) {
+	rows, err := s.repo.QuerySessionPaths(ctx, from, to, funnelMaxSessions)
+	if err != nil {
+		return nil, fmt.Errorf("读取访问路径失败: %w", err)
+	}
+
+	type entry struct {
+		parts []string
+		count int
+	}
+	agg := make(map[string]*entry, len(rows))
+	for _, row := range rows {
+		parts := strings.Split(row.Sequence, ",")
+		key := strings.Join(parts, pathSep)
+		if e, ok := agg[key]; ok {
+			e.count++
+			continue
+		}
+		agg[key] = &entry{parts: parts, count: 1}
+	}
+
+	out := make([]dto.PathSequence, 0, len(agg))
+	for _, e := range agg {
+		out = append(out, dto.PathSequence{Sequence: e.parts, Sessions: e.count})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Sessions > out[j].Sessions })
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+// Funnel 按 steps 给定的顺序统计逐步留存：对每个会话做有序包含匹配，
+// 命中第 k 步即累加前 k 步的会话计数。转化率 = 当前步会话 / 首步会话，
+// 首步在有会话时为 1.0，否则 0。
+func (s *queryService) Funnel(ctx context.Context, from, to string, steps []string) ([]dto.FunnelStep, error) {
+	rows, err := s.repo.QuerySessionPaths(ctx, from, to, funnelMaxSessions)
+	if err != nil {
+		return nil, fmt.Errorf("读取漏斗路径失败: %w", err)
+	}
+
+	counts := make([]int, len(steps))
+	for _, row := range rows {
+		parts := strings.Split(row.Sequence, ",")
+		reached := orderedMatchCount(parts, steps)
+		for i := 0; i < reached; i++ {
+			counts[i]++
+		}
+	}
+
+	out := make([]dto.FunnelStep, 0, len(steps))
+	first := 0
+	if len(counts) > 0 {
+		first = counts[0]
+	}
+	for i, step := range steps {
+		rate := 0.0
+		if first > 0 {
+			rate = float64(counts[i]) / float64(first)
+		}
+		out = append(out, dto.FunnelStep{Step: step, Sessions: counts[i], ConversionRate: rate})
+	}
+	return out, nil
+}
+
+// orderedMatchCount 返回 steps 在 parts 中按顺序（可不相邻）能匹配到的前缀长度。
+func orderedMatchCount(parts, steps []string) int {
+	idx := 0
+	for _, p := range parts {
+		if idx < len(steps) && p == steps[idx] {
+			idx++
+		}
+	}
+	return idx
 }

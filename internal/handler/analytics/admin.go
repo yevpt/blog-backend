@@ -176,6 +176,83 @@ func (h *AdminHandler) Dimensions(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// Paths 访问路径序列（管理员，聚合会话数）。
+// @Summary  访问路径序列
+// @Tags     analytics
+// @Produce  json
+// @Param    from  query string false "起始日期 YYYY-MM-DD，默认近 7 天"
+// @Param    to    query string false "结束日期 YYYY-MM-DD，默认今天"
+// @Param    limit query int false "返回条数，默认 20，上限 100"
+// @Success  200 {object} response.Response{data=[]dto.PathSequence} "统一响应；code=0 成功，code=400 参数错误"
+// @Failure  401 {object} response.Response "未登录或 token 已过期"
+// @Failure  403 {object} response.Response "权限不足"
+// @Failure  500 {object} response.Response "服务器内部错误"
+// @Router   /admin/analytics/paths [get]
+func (h *AdminHandler) Paths(c *gin.Context) {
+	from, to, ok := parseRange(c)
+	if !ok {
+		return
+	}
+
+	limit := defaultPageSize
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			response.Fail(c, response.CodeBadRequest, "limit 必须是大于 0 的整数")
+			return
+		}
+		limit = n
+	}
+	if limit > maxPageSize {
+		limit = maxPageSize
+	}
+
+	data, err := h.svc.Paths(c.Request.Context(), from, to, limit)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, data)
+}
+
+// maxFunnelSteps 漏斗步骤数上限，避免超长 step 列表。
+const maxFunnelSteps = 10
+
+// Funnel 漏斗留存（管理员，按 step 顺序匹配路径）。
+// @Summary  访问漏斗
+// @Tags     analytics
+// @Produce  json
+// @Param    from query string false "起始日期 YYYY-MM-DD，默认近 7 天"
+// @Param    to   query string false "结束日期 YYYY-MM-DD，默认今天"
+// @Param    step query []string true "漏斗步骤，可重复传 step=/a&step=/b，最多 10 个"
+// @Success  200 {object} response.Response{data=[]dto.FunnelStep} "统一响应；code=0 成功，code=400 参数错误"
+// @Failure  401 {object} response.Response "未登录或 token 已过期"
+// @Failure  403 {object} response.Response "权限不足"
+// @Failure  500 {object} response.Response "服务器内部错误"
+// @Router   /admin/analytics/funnel [get]
+func (h *AdminHandler) Funnel(c *gin.Context) {
+	steps := c.QueryArray("step")
+	if len(steps) == 0 {
+		response.Fail(c, response.CodeBadRequest, "step 至少传 1 个")
+		return
+	}
+	if len(steps) > maxFunnelSteps {
+		response.Fail(c, response.CodeBadRequest, "step 最多 10 个")
+		return
+	}
+	from, to, ok := parseRange(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.svc.Funnel(c.Request.Context(), from, to, steps)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, data)
+}
+
 // Backfill 重算指定区间的日聚合（管理员，幂等）。
 // @Summary  回填日聚合
 // @Description 对指定闭区间逐日重算统计聚合，适用于统计规则调整后的历史补算。

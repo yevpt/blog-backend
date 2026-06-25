@@ -11,6 +11,8 @@ definitions:
     type: object
   analytics.CollectRequest:
     properties:
+      collect_token:
+        type: string
       event_type:
         enum:
         - page_view
@@ -24,11 +26,20 @@ definitions:
         type: string
       session_id:
         type: string
+      signals:
+        $ref: '#/definitions/analytics.CollectSignals'
       title:
         type: string
     required:
     - event_type
     - session_id
+    type: object
+  analytics.CollectSignals:
+    properties:
+      no_interaction:
+        type: boolean
+      webdriver:
+        type: boolean
     type: object
   analytics.DimensionPoint:
     properties:
@@ -40,6 +51,15 @@ definitions:
         type: integer
       uv:
         type: integer
+    type: object
+  analytics.FunnelStep:
+    properties:
+      conversion_rate:
+        type: number
+      sessions:
+        type: integer
+      step:
+        type: string
     type: object
   analytics.Overview:
     properties:
@@ -67,6 +87,15 @@ definitions:
       title:
         type: string
       uv:
+        type: integer
+    type: object
+  analytics.PathSequence:
+    properties:
+      sequence:
+        items:
+          type: string
+        type: array
+      sessions:
         type: integer
     type: object
   analytics.PublicPageStat:
@@ -2918,6 +2947,54 @@ paths:
       summary: 站点维度分布
       tags:
       - analytics
+  /admin/analytics/funnel:
+    get:
+      parameters:
+      - description: 起始日期 YYYY-MM-DD，默认近 7 天
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD，默认今天
+        in: query
+        name: to
+        type: string
+      - collectionFormat: csv
+        description: 漏斗步骤，可重复传 step=/a&step=/b，最多 10 个
+        in: query
+        items:
+          type: string
+        name: step
+        required: true
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 成功，code=400 参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/analytics.FunnelStep'
+                  type: array
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 访问漏斗
+      tags:
+      - analytics
   /admin/analytics/overview:
     get:
       produces:
@@ -2989,6 +3066,50 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 热门页面排行
+      tags:
+      - analytics
+  /admin/analytics/paths:
+    get:
+      parameters:
+      - description: 起始日期 YYYY-MM-DD，默认近 7 天
+        in: query
+        name: from
+        type: string
+      - description: 结束日期 YYYY-MM-DD，默认今天
+        in: query
+        name: to
+        type: string
+      - description: 返回条数，默认 20，上限 100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 成功，code=400 参数错误
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/analytics.PathSequence'
+                  type: array
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 访问路径序列
       tags:
       - analytics
   /admin/analytics/trend:

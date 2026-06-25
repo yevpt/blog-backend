@@ -98,6 +98,28 @@ func (r *repository) QueryTotals(ctx context.Context) (pv, uv int64, err error) 
 	return row.PV, row.UV, nil
 }
 
+// QuerySessionPaths 从原始事件表按会话拼接访问路径序列，仅返回聚合后的会话序列。
+// 过滤 is_bot=0 AND is_suspect=0 与 /admin/* 路径；HAVING COUNT(*)>=2 仅保留多步会话。
+// 注意：from/to 为 Asia/Shanghai 日期字符串而 created_at 存 UTC，此处按字符串直接比较，
+// 在日界处存在轻微时区近似，对仅供后台的路径分析可接受。
+func (r *repository) QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]SessionPath, error) {
+	var rows []SessionPath
+	err := r.db.WithContext(ctx).
+		Model(&model.AnalyticsEvent{}).
+		Select("session_id, GROUP_CONCAT(path ORDER BY created_at SEPARATOR ',') as sequence, COUNT(*) as steps").
+		Where("created_at >= ? AND created_at < ?", from, to).
+		Where("is_bot = ? AND is_suspect = ?", false, false).
+		Where("path NOT LIKE ?", "/admin/%").
+		Group("session_id").
+		Having("COUNT(*) >= ?", 2).
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询访问路径失败: %w", err)
+	}
+	return rows, nil
+}
+
 // aggregateDims 列出需要逐列 GROUP BY 的维度及其源列表达式。
 // user_type 由 is_authenticated 推导出 registered/anonymous。
 var aggregateDims = []struct {

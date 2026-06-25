@@ -539,5 +539,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)
 	admin.GET("/analytics/pages", handlers.analyticsAdmin.Pages)
 	admin.GET("/analytics/dimensions", handlers.analyticsAdmin.Dimensions)
+	admin.GET("/analytics/paths", handlers.analyticsAdmin.Paths)
+	admin.GET("/analytics/funnel", handlers.analyticsAdmin.Funnel)
 	admin.POST("/analytics/backfill", middleware.RateLimitNormal(redisClient), handlers.analyticsAdmin.Backfill)
 }

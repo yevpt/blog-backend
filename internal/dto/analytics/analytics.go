@@ -64,6 +64,19 @@ type BackfillResult struct {
 	Days int    `json:"days"`
 }
 
+// PathSequence 聚合后的访问路径序列，不含 visitor/user/IP。
+type PathSequence struct {
+	Sequence []string `json:"sequence"`
+	Sessions int      `json:"sessions"`
+}
+
+// FunnelStep 漏斗步骤的会话留存。
+type FunnelStep struct {
+	Step           string  `json:"step"`
+	Sessions       int     `json:"sessions"`
+	ConversionRate float64 `json:"conversion_rate"`
+}
+
 // PublicSummary 前台公开总览：仅聚合数字。
 type PublicSummary struct {
 	TodayPV      int64 `json:"today_pv"`
