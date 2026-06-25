@@ -43,7 +43,12 @@ func NewCollectService(enricher Enricher, realtime Realtime, ingestor SessionIng
 // 非关键路径（实时层、入库、会话）失败仅 Warn，不阻断上报。
 func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
 	// 先做 suspect 决策再富化：后续在线/今日计数均以 IsSuspect 门控，须在 Enrich 前写入 raw。
-	tokenOK, tokenReason := s.tokenVerifier.Verify(raw.CollectToken)
+	// 心跳不校验 collect token：SSR token 5 分钟过期且页面不刷新，长会话心跳会携带过期 token；
+	// 而 PV/UV 才是值得防伪造的指标，心跳仅维持在线/时长。page_view 仍完整校验。
+	tokenOK, tokenReason := true, ""
+	if raw.EventType != "heartbeat" {
+		tokenOK, tokenReason = s.tokenVerifier.Verify(raw.CollectToken)
+	}
 	raw.IsSuspect, raw.SuspectReason = DecideSuspect(raw, tokenOK, tokenReason)
 
 	ev := s.enricher.Enrich(raw)

@@ -108,3 +108,15 @@ func TestCollectHeartbeat(t *testing.T) {
 	assert.Equal(t, 1, rt.online)
 	assert.Equal(t, 0, rt.incr)
 }
+
+func TestCollectHeartbeatSkipsTokenCheck(t *testing.T) {
+	ing, rt := &fakeIngestor{}, &fakeRT{}
+	// 心跳不校验 collect token：即便携带过期/非法 token 也不应被判 suspect（长会话 token 过期场景）。
+	// 对照 TestCollectInvalidTokenMarksSuspect：同样的坏 token 在 page_view 会被判 suspect。
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("secret", 0, nil), zap.NewNop())
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true, CollectToken: "bad.token"}))
+	assert.Equal(t, 1, rt.online)   // 未被判 suspect → 仍刷新在线
+	assert.Equal(t, 1, ing.touches) // 心跳更新会话
+	assert.Equal(t, 0, ing.submitted)
+}
