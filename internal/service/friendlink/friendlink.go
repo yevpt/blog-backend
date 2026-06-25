@@ -1,6 +1,8 @@
 package friendlink
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"math"
 	"strings"
@@ -8,6 +10,8 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
+	"github.com/vpt/blog-backend/pkg/imagefile"
+	"github.com/vpt/blog-backend/pkg/imageutil"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"github.com/vpt/blog-backend/pkg/strutil"
 	"gorm.io/gorm"
@@ -20,6 +24,10 @@ const (
 	friendLinkDefaultPage              = 1
 	friendLinkDefaultPageSize          = 10
 	friendLinkMaxPageSize              = 50
+	MaxFriendLinkLogoBytes             = 2 * 1024 * 1024
+	maxFriendLinkLogoStoredBytes       = 20 * 1024
+	maxFriendLinkLogoSize              = 120
+	friendLinkLogoObjectPrefix         = "avatar/link"
 )
 
 var (
@@ -28,6 +36,12 @@ var (
 	ErrFriendLinkSiteRequired  = errors.New("友情链接地址不能为空")
 	ErrFriendLinkSeqRequired   = errors.New("友情链接排序不能为空")
 	ErrFriendLinkStatusInvalid = errors.New("友情链接状态无效")
+	ErrFriendLinkLogoRequired  = errors.New("缺少友链 Logo")
+	ErrFriendLinkLogoInvalid   = errors.New("友链 Logo 格式不支持，请上传 JPG、PNG 或 WebP")
+	ErrFriendLinkLogoTooLarge  = errors.New("友链 Logo 不能超过 2MB")
+	ErrFriendLinkLogoGIF       = errors.New("不支持 GIF 友链 Logo")
+	ErrFriendLinkLogoStoredBig = errors.New("友链 Logo 过大，请换一张更小的图片")
+	ErrFriendLinkLogoStore     = errors.New("对象存储不可用")
 )
 
 // FriendLinkService 友情链接业务接口。
@@ -43,11 +57,13 @@ type FriendLinkService interface {
 type friendLinkService struct {
 	repo     friendlinkrepo.FriendLinkRepository
 	resolver storage.ObjectURLResolver
+	store    storage.ObjectStore
 }
 
 // NewFriendLinkService 创建友情链接业务服务实例。
 func NewFriendLinkService(repo friendlinkrepo.FriendLinkRepository, resolver storage.ObjectURLResolver) FriendLinkService {
-	return &friendLinkService{repo: repo, resolver: resolver}
+	store, _ := resolver.(storage.ObjectStore)
+	return &friendLinkService{repo: repo, resolver: resolver, store: store}
 }
 
 func (s *friendLinkService) ListPublic(req dto.FriendLinkListReq) (*dto.FriendLinkPageResp, error) {
@@ -100,9 +116,16 @@ func (s *friendLinkService) Create(req dto.FriendLinkCreateReq) (*dto.FriendLink
 		return nil, err
 	}
 
+	savedLogo, err := s.saveFriendLinkLogo(context.Background(), req.Logo)
+	if err != nil {
+		return nil, err
+	}
+	link.AvatarUrl = &savedLogo.ObjectKey
+
 	// 创建后返回最新数据，避免 handler 接触 model。
 	created, err := s.repo.Create(link)
 	if err != nil {
+		err = errors.Join(err, s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo))
 		return nil, err
 	}
 
@@ -110,19 +133,44 @@ func (s *friendLinkService) Create(req dto.FriendLinkCreateReq) (*dto.FriendLink
 }
 
 func (s *friendLinkService) Update(id uint, req dto.FriendLinkUpdateReq) (*dto.FriendLinkItemResp, error) {
+	if req.Logo == nil || len(req.Logo.Data) == 0 {
+		return nil, ErrFriendLinkLogoRequired
+	}
+
 	// 将可选字段转换为明确的更新数据，未传字段不参与更新。
 	data, err := newFriendLinkUpdateData(req)
 	if err != nil {
 		return nil, err
 	}
 
-	// 仓储返回 nil 表示目标不存在。
-	updated, err := s.repo.Update(id, data)
+	current, err := s.repo.GetAdmin(id)
 	if err != nil {
 		return nil, mapFriendLinkRepoError(err)
 	}
-	if updated == nil {
+	if current == nil {
 		return nil, ErrFriendLinkNotFound
+	}
+
+	savedLogo, err := s.saveFriendLinkLogo(context.Background(), req.Logo)
+	if err != nil {
+		return nil, err
+	}
+	newAvatarURL := savedLogo.ObjectKey
+	data.AvatarUrl = &newAvatarURL
+	data.UpdateAvatarUrl = true
+
+	// 仓储返回 nil 表示目标不存在。
+	updated, err := s.repo.Update(id, data)
+	if err != nil {
+		err = errors.Join(mapFriendLinkRepoError(err), s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo))
+		return nil, err
+	}
+	if updated == nil {
+		_ = s.deleteCreatedFriendLinkLogo(context.Background(), savedLogo)
+		return nil, ErrFriendLinkNotFound
+	}
+	if err := s.cleanupReplacedFriendLinkLogo(context.Background(), current.AvatarUrl, newAvatarURL); err != nil {
+		return nil, err
 	}
 
 	return s.friendLinkToDTO(updated), nil
@@ -238,6 +286,115 @@ func mapFriendLinkRepoError(err error) error {
 		return ErrFriendLinkNotFound
 	}
 	return err
+}
+
+type savedFriendLinkLogo struct {
+	ObjectKey string
+	Created   bool
+}
+
+func (s *friendLinkService) saveFriendLinkLogo(ctx context.Context, file *dto.UploadedImageFile) (savedFriendLinkLogo, error) {
+	if file == nil || len(file.Data) == 0 {
+		return savedFriendLinkLogo{}, ErrFriendLinkLogoRequired
+	}
+	if s == nil || s.store == nil {
+		return savedFriendLinkLogo{}, ErrFriendLinkLogoStore
+	}
+
+	processed, err := processFriendLinkLogo(file)
+	if err != nil {
+		return savedFriendLinkLogo{}, err
+	}
+	objectName := friendLinkLogoObjectPrefix + "/" + processed.MD5 + processed.Ext
+	exists, err := s.store.ObjectExists(ctx, objectName)
+	if err != nil {
+		return savedFriendLinkLogo{}, ErrFriendLinkLogoStore
+	}
+	if exists {
+		return savedFriendLinkLogo{ObjectKey: objectName}, nil
+	}
+	if err := s.store.PutObject(ctx, objectName, processed.Bytes, processed.ContentType); err != nil {
+		return savedFriendLinkLogo{}, ErrFriendLinkLogoStore
+	}
+	return savedFriendLinkLogo{ObjectKey: objectName, Created: true}, nil
+}
+
+func processFriendLinkLogo(file *dto.UploadedImageFile) (*imageutil.Result, error) {
+	validated, err := imagefile.Validate(file.Name, file.Data, MaxFriendLinkLogoBytes)
+	if err != nil {
+		return nil, mapFriendLinkLogoValidateErr(err)
+	}
+	if validated.ContentType == "image/gif" {
+		return nil, ErrFriendLinkLogoGIF
+	}
+
+	result, err := imageutil.Process(bytes.NewReader(validated.Data), imageutil.Options{
+		Format:         imageutil.FormatJPEG,
+		MaxWidth:       maxFriendLinkLogoSize,
+		MaxHeight:      maxFriendLinkLogoSize,
+		MaxBytes:       maxFriendLinkLogoStoredBytes,
+		JPEGQuality:    85,
+		MinJPEGQuality: 35,
+	})
+	if err != nil {
+		return nil, mapFriendLinkLogoProcessErr(err)
+	}
+	if len(result.Bytes) > maxFriendLinkLogoStoredBytes {
+		return nil, ErrFriendLinkLogoStoredBig
+	}
+	return result, nil
+}
+
+func mapFriendLinkLogoValidateErr(err error) error {
+	switch {
+	case errors.Is(err, imagefile.ErrImageTooLarge):
+		return ErrFriendLinkLogoTooLarge
+	case errors.Is(err, imagefile.ErrInvalidImage):
+		return ErrFriendLinkLogoInvalid
+	default:
+		return ErrFriendLinkLogoInvalid
+	}
+}
+
+func mapFriendLinkLogoProcessErr(err error) error {
+	switch {
+	case errors.Is(err, imageutil.ErrInvalidImage), errors.Is(err, imageutil.ErrUnsupportedFormat):
+		return ErrFriendLinkLogoInvalid
+	case errors.Is(err, imageutil.ErrImageTooLarge):
+		return ErrFriendLinkLogoStoredBig
+	default:
+		return err
+	}
+}
+
+func (s *friendLinkService) deleteCreatedFriendLinkLogo(ctx context.Context, logo savedFriendLinkLogo) error {
+	if s == nil || s.store == nil || !logo.Created || logo.ObjectKey == "" {
+		return nil
+	}
+	return s.store.DeleteObject(ctx, logo.ObjectKey)
+}
+
+func (s *friendLinkService) cleanupReplacedFriendLinkLogo(ctx context.Context, oldAvatarURL *string, newAvatarURL string) error {
+	if oldAvatarURL == nil || s == nil || s.store == nil {
+		return nil
+	}
+	oldKey := strings.TrimSpace(*oldAvatarURL)
+	if oldKey == "" || oldKey == newAvatarURL || !isManagedFriendLinkLogoKey(oldKey) {
+		return nil
+	}
+	count, err := s.repo.CountByAvatarURL(oldKey)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	return s.store.DeleteObject(ctx, oldKey)
+}
+
+func isManagedFriendLinkLogoKey(key string) bool {
+	key = strings.TrimSpace(key)
+	return key != "" && strings.HasPrefix(key, friendLinkLogoObjectPrefix+"/")
 }
 
 func (s *friendLinkService) friendLinkPageToDTO(links []model.FriendLink, total int64, page, pageSize int) *dto.FriendLinkPageResp {
