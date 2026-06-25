@@ -25,7 +25,9 @@ type MusicService interface {
 	ListPublic() (*dto.MusicListResp, error)
 	GetPublicDetail(id uint) (*dto.MusicDetailResp, error)
 	ListArtists(keyword string) (*dto.MusicArtistListResp, error)
+	GetPublicArtist(id uint) (*dto.MusicArtistResp, error)
 	ListAlbums(keyword string) (*dto.MusicAlbumListResp, error)
+	GetPublicAlbum(id uint) (*dto.MusicAlbumResp, error)
 	ListAdmin(req dto.MusicAdminListReq) (*dto.MusicAdminListResp, error)
 	SaveMusic(ctx context.Context, userID uint, req dto.MusicSaveReq) error
 	DeleteMusic(id uint) error
@@ -100,6 +102,18 @@ func (s *musicService) ListArtists(keyword string) (*dto.MusicArtistListResp, er
 	return &dto.MusicArtistListResp{List: list}, nil
 }
 
+func (s *musicService) GetPublicArtist(id uint) (*dto.MusicArtistResp, error) {
+	artist, err := s.repo.FindArtist(id)
+	if err != nil {
+		return nil, err
+	}
+	if artist == nil {
+		return nil, ErrMusicArtistNotFound
+	}
+	resp := s.artistToDTO(artist)
+	return &resp, nil
+}
+
 func (s *musicService) ListAlbums(keyword string) (*dto.MusicAlbumListResp, error) {
 	rows, err := s.repo.ListAlbums(keyword)
 	if err != nil {
@@ -129,6 +143,25 @@ func (s *musicService) ListAlbums(keyword string) (*dto.MusicAlbumListResp, erro
 		list = append(list, *s.albumToDTO(&rows[i], artistsByID))
 	}
 	return &dto.MusicAlbumListResp{List: list}, nil
+}
+
+func (s *musicService) GetPublicAlbum(id uint) (*dto.MusicAlbumResp, error) {
+	album, err := s.repo.FindAlbum(id)
+	if err != nil {
+		return nil, err
+	}
+	if album == nil {
+		return nil, ErrMusicAlbumNotFound
+	}
+
+	artistsByID := make(map[uint]model.MusicArtist)
+	if album.ArtistID != nil {
+		artistsByID, err = s.artistsByID([]uint{*album.ArtistID})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s.albumToDTO(album, artistsByID), nil
 }
 
 func (s *musicService) ListAdmin(req dto.MusicAdminListReq) (*dto.MusicAdminListResp, error) {

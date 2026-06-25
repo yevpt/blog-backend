@@ -40,8 +40,16 @@ func (s *stubMusicService) ListArtists(string) (*dto.MusicArtistListResp, error)
 	return &dto.MusicArtistListResp{}, s.err
 }
 
+func (s *stubMusicService) GetPublicArtist(uint) (*dto.MusicArtistResp, error) {
+	return nil, s.err
+}
+
 func (s *stubMusicService) ListAlbums(string) (*dto.MusicAlbumListResp, error) {
 	return &dto.MusicAlbumListResp{}, s.err
+}
+
+func (s *stubMusicService) GetPublicAlbum(uint) (*dto.MusicAlbumResp, error) {
+	return nil, s.err
 }
 
 func (s *stubMusicService) ListAdmin(dto.MusicAdminListReq) (*dto.MusicAdminListResp, error) {

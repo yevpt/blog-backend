@@ -15,6 +15,7 @@ type MusicRepository interface {
 	MusicArtistRelations(musicIDs []uint) (map[uint][]model.MusicArtist, error)
 	ListArtists(keyword string) ([]model.MusicArtist, error)
 	FindArtists(ids []uint) ([]model.MusicArtist, error)
+	FindArtist(id uint) (*model.MusicArtist, error)
 	ListAlbums(keyword string) ([]model.MusicAlbum, error)
 	FindAlbum(id uint) (*model.MusicAlbum, error)
 	SaveMusic(data MusicSaveData) error
@@ -128,6 +129,18 @@ func (r *musicRepo) FindArtists(ids []uint) ([]model.MusicArtist, error) {
 	var rows []model.MusicArtist
 	err := r.db.Where("id IN ?", ids).Find(&rows).Error
 	return rows, err
+}
+
+func (r *musicRepo) FindArtist(id uint) (*model.MusicArtist, error) {
+	var artist model.MusicArtist
+	err := r.db.First(&artist, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &artist, nil
 }
 
 func (r *musicRepo) ListAlbums(keyword string) ([]model.MusicAlbum, error) {

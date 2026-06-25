@@ -45,6 +45,13 @@ func (s *stubMusicRepository) FindArtists([]uint) ([]model.MusicArtist, error) {
 	return s.artists, nil
 }
 
+func (s *stubMusicRepository) FindArtist(uint) (*model.MusicArtist, error) {
+	if len(s.artists) == 0 {
+		return nil, nil
+	}
+	return &s.artists[0], nil
+}
+
 func (s *stubMusicRepository) ListAlbums(string) ([]model.MusicAlbum, error) {
 	return nil, nil
 }
@@ -189,6 +196,27 @@ func TestMusicService_SaveMusic_RejectsMissingArtists(t *testing.T) {
 		AudioKey:  "music/audio/1/a.mp3",
 		IsPublic:  true,
 	})
+
+	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
+}
+
+func TestMusicService_GetPublicArtist_ReturnsArtist(t *testing.T) {
+	svc := music.NewMusicService(&stubMusicRepository{
+		artists: []model.MusicArtist{{Base: model.Base{ID: 2}, Name: "Aimer"}},
+	}, stubMusicObjectStore{})
+
+	resp, err := svc.GetPublicArtist(2)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, uint(2), resp.ID)
+	assert.Equal(t, "Aimer", resp.Name)
+}
+
+func TestMusicService_GetPublicArtist_NotFound(t *testing.T) {
+	svc := music.NewMusicService(&stubMusicRepository{}, stubMusicObjectStore{})
+
+	_, err := svc.GetPublicArtist(99)
 
 	require.ErrorIs(t, err, music.ErrMusicArtistNotFound)
 }

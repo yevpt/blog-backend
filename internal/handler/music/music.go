@@ -87,6 +87,34 @@ func (h *MusicHandler) ListArtists(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// GetPublicArtist 查询公开歌手详情。
+// @Summary 查询公开歌手详情
+// @Description 返回单个歌手详情；不存在时返回 404。
+// @Tags 音乐
+// @Produce json
+// @Param id path int true "歌手 ID"
+// @Success 200 {object} response.Response{data=dto.MusicArtistResp} "统一响应；code=0 表示查询成功"
+// @Failure 400 {object} response.Response "参数错误"
+// @Failure 404 {object} response.Response "歌手不存在"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /music/artists/{id} [get]
+func (h *MusicHandler) GetPublicArtist(c *gin.Context) {
+	id, ok := parseMusicID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.GetPublicArtist(id)
+	if err != nil {
+		if errors.Is(err, musicservice.ErrMusicArtistNotFound) {
+			response.NotFound(c)
+			return
+		}
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
 // ListAlbums 查询公开专辑列表。
 // @Summary 查询公开专辑列表
 // @Description 返回专辑列表，可按专辑名关键字过滤；cover_url 返回前会解析为可访问 URL。
@@ -99,6 +127,34 @@ func (h *MusicHandler) ListArtists(c *gin.Context) {
 func (h *MusicHandler) ListAlbums(c *gin.Context) {
 	resp, err := h.svc.ListAlbums(c.Query("keyword"))
 	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
+// GetPublicAlbum 查询公开专辑详情。
+// @Summary 查询公开专辑详情
+// @Description 返回单个专辑详情；不存在时返回 404。
+// @Tags 音乐
+// @Produce json
+// @Param id path int true "专辑 ID"
+// @Success 200 {object} response.Response{data=dto.MusicAlbumResp} "统一响应；code=0 表示查询成功"
+// @Failure 400 {object} response.Response "参数错误"
+// @Failure 404 {object} response.Response "专辑不存在"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /music/albums/{id} [get]
+func (h *MusicHandler) GetPublicAlbum(c *gin.Context) {
+	id, ok := parseMusicID(c)
+	if !ok {
+		return
+	}
+	resp, err := h.svc.GetPublicAlbum(id)
+	if err != nil {
+		if errors.Is(err, musicservice.ErrMusicAlbumNotFound) {
+			response.NotFound(c)
+			return
+		}
 		response.ServerError(c)
 		return
 	}
