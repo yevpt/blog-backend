@@ -45,8 +45,8 @@ func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
 	now := time.Now()
 	ev.CreatedAt = now
 
-	// bot 不计在线，仅真人刷新在线表。
-	if !ev.IsBot {
+	// bot/伪造来源不计在线，仅可信真人刷新在线表（与历史聚合 is_suspect=0 口径一致）。
+	if !ev.IsBot && !ev.IsSuspect {
 		if err := s.realtime.TouchOnline(ctx, ev.VisitorID); err != nil {
 			s.logger.Warn("刷新在线失败", zap.Error(err))
 		}
@@ -77,8 +77,8 @@ func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
 		s.logger.Warn("会话 upsert 失败", zap.Error(err))
 	}
 
-	// 今日计数仅非 bot 且非重复（dup 已早返回，此处恒为非重复）。
-	if !ev.IsBot && !dup {
+	// 今日计数仅非 bot、非伪造来源且非重复（dup 已早返回，此处恒为非重复），与历史聚合口径一致。
+	if !ev.IsBot && !ev.IsSuspect && !dup {
 		if err := s.realtime.IncrToday(ctx, ev); err != nil {
 			s.logger.Warn("今日计数失败", zap.Error(err))
 		}

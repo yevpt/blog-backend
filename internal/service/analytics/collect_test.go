@@ -44,7 +44,7 @@ func TestCollectPageView(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
 	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
 	err := cs.Handle(context.Background(), svc.RawEvent{
-		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome",
+		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, ing.submitted)
@@ -53,11 +53,23 @@ func TestCollectPageView(t *testing.T) {
 	assert.Equal(t, 1, rt.online)
 }
 
+func TestCollectSuspectNotCounted(t *testing.T) {
+	ing, rt := &fakeIngestor{}, &fakeRT{}
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
+	// 伪造/不允许的 Origin → IsSuspect=true（非 bot）。
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: false}))
+	assert.Equal(t, 0, rt.online)     // 伪造来源不刷新在线
+	assert.Equal(t, 0, rt.incr)       // 伪造来源不计今日
+	assert.Equal(t, 1, ing.submitted) // 但仍入库（带 is_suspect 标记，供审计）
+	assert.Equal(t, 1, ing.upserts)   // 会话仍 upsert
+}
+
 func TestCollectDuplicatePVSkipsCount(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
 	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: true}, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
-		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome"}))
+		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, ing.submitted)
 	assert.Equal(t, 0, rt.incr)
 	assert.Equal(t, 1, rt.online) // 在线仍刷新
@@ -76,7 +88,7 @@ func TestCollectHeartbeat(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
 	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
-		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome"}))
+		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, ing.submitted) // 心跳不入事件表
 	assert.Equal(t, 1, ing.touches)   // 仅刷新会话
 	assert.Equal(t, 1, rt.online)
