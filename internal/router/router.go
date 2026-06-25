@@ -77,6 +77,7 @@ type routeHandlers struct {
 	notification      *notificationhandler.NotificationHandler
 	notificationAdmin *notificationhandler.NotificationAdminHandler
 	user              *userhandler.UserHandler
+	userAdmin         *userhandler.UserAdminHandler
 	category          *categoryhandler.CategoryHandler
 	tag               *taghandler.TagHandler
 	music             *musichandler.MusicHandler
@@ -107,7 +108,7 @@ func Setup(
 	r.Use(middleware.RequestID(), middleware.Recovery(log), middleware.Logger(log))
 
 	// 组装路由所需的 handler，保持 Setup 只关心注册流程。
-	handlers := newRouteHandlers(db, redisClient, jwtManager, mailer, objectStore, cfg, notificationHub)
+	handlers := newRouteHandlers(log, db, redisClient, jwtManager, mailer, objectStore, cfg, notificationHub)
 
 	// 按权限层级注册路由，公开路由在前，受保护路由在后。
 	registerPublicRoutes(r, handlers, jwtManager, redisClient)
@@ -171,6 +172,7 @@ func splitCORSOrigins(allowedOrigins string) []string {
 }
 
 func newRouteHandlers(
+	log *zap.Logger,
 	db *gorm.DB,
 	redisClient *redis.Client,
 	jwtManager *jwt.Manager,
@@ -195,6 +197,7 @@ func newRouteHandlers(
 		Mailer:  mailer,
 		Captcha: captchaSvc,
 	})
+	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc)
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
 	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc)
@@ -247,6 +250,7 @@ func newRouteHandlers(
 		notification:      notificationhandler.NewNotificationHandler(notificationInboxSvc, notificationHub),
 		notificationAdmin: notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:              userhandler.NewUserHandler(userSvc),
+		userAdmin:         userhandler.NewUserAdminHandler(userAdminSvc, log),
 		category:          categoryhandler.NewCategoryHandler(categorySvc),
 		tag:               taghandler.NewTagHandler(tagSvc),
 		music:             musichandler.NewMusicHandler(musicSvc),
@@ -428,4 +432,6 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.PUT("/notifications/email-quotas/:id", handlers.notificationAdmin.UpdateQuota)
 	admin.PUT("/notifications/role-quotas/:id", handlers.notificationAdmin.UpdateRoleQuota)
 	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
+	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
+	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)
 }
