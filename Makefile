@@ -4,7 +4,7 @@ BINARY := bin/blog-server
 MAIN := ./cmd/server
 SWAG_DIRS := $(MAIN),./internal/handler,./internal/dto,./pkg/response
 
-.PHONY: run build swag test lint tidy clean hooks skills setup
+.PHONY: run build dbsetup swag test lint tidy clean hooks skills setup
 
 # 克隆后执行一次：启用 git hooks + 同步 AI skill 符号链接
 setup: hooks skills
@@ -30,6 +30,10 @@ run:
 # 编译二进制
 build:
 	$(GO) build -o $(BINARY) $(MAIN)
+
+# 初始化当前数据库结构和默认数据；默认管理员为 admin/admin
+dbsetup:
+	$(GO) run ./cmd/dbsetup
 
 # 生成 swagger 文档；未安装 swag 时通过 go run 临时执行，避免依赖全局 PATH
 swag:
