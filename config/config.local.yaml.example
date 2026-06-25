@@ -37,10 +37,6 @@ cdn:
   signQueryName: "a"
   timestampQueryName: "b"
 
-# 迁移工具专用：源库连接信息（只读，生产数据，不要提交到 git）
-migrate:
-  src_dsn: "databaseName:pwd_@tcp(ip:port)/blog?charset=utf8mb4&parseTime=True&loc=Local"
-
 email:
   # 供应商标识与安全限额默认值见 config.yaml，本地仅覆盖连接凭证
   provider: aliyun_enterprise

@@ -10,21 +10,15 @@ import (
 
 // Config 是整个项目的配置结构体，字段与 config.yaml 一一对应
 type Config struct {
-	Server  ServerConfig  `mapstructure:"server"`  // HTTP 服务配置
-	Log     LogConfig     `mapstructure:"log"`     // 日志输出配置
-	JWT     JWTConfig     `mapstructure:"jwt"`     // JWT 签名与过期配置
-	DB      DBConfig      `mapstructure:"db"`      // MySQL 数据库配置
-	Redis   RedisConfig   `mapstructure:"redis"`   // Redis 连接配置
-	Garage  GarageConfig  `mapstructure:"garage"`  // Garage/S3 对象存储配置
-	CDN     CDNConfig     `mapstructure:"cdn"`     // CDN 私有读签名配置
-	Migrate MigrateConfig `mapstructure:"migrate"` // 数据迁移工具配置
-	Email   EmailConfig   `mapstructure:"email"`   // 邮件发送配置
-	OAuth   OAuthConfig   `mapstructure:"oauth"`   // 第三方 OAuth 登录配置
-}
-
-// MigrateConfig 数据迁移工具专用配置，仅在 config.local.yaml 中设置，不提交到版本库
-type MigrateConfig struct {
-	SrcDSN string `mapstructure:"src_dsn"` // 源数据库 DSN（只读）
+	Server ServerConfig `mapstructure:"server"` // HTTP 服务配置
+	Log    LogConfig    `mapstructure:"log"`    // 日志输出配置
+	JWT    JWTConfig    `mapstructure:"jwt"`    // JWT 签名与过期配置
+	DB     DBConfig     `mapstructure:"db"`     // MySQL 数据库配置
+	Redis  RedisConfig  `mapstructure:"redis"`  // Redis 连接配置
+	Garage GarageConfig `mapstructure:"garage"` // Garage/S3 对象存储配置
+	CDN    CDNConfig    `mapstructure:"cdn"`    // CDN 私有读签名配置
+	Email  EmailConfig  `mapstructure:"email"`  // 邮件发送配置
+	OAuth  OAuthConfig  `mapstructure:"oauth"`  // 第三方 OAuth 登录配置
 }
 
 type ServerConfig struct {
@@ -85,12 +79,12 @@ type CDNConfig struct {
 }
 
 type EmailConfig struct {
-	Host     string `mapstructure:"host"`     // SMTP 主机地址
-	Port     int    `mapstructure:"port"`     // SMTP 端口
-	From     string `mapstructure:"from"`     // 发件人邮箱
-	Password string `mapstructure:"password"` // 邮箱授权码或密码
+	Host     string `mapstructure:"host"`      // SMTP 主机地址
+	Port     int    `mapstructure:"port"`      // SMTP 端口
+	From     string `mapstructure:"from"`      // 发件人邮箱
+	Password string `mapstructure:"password"`  // 邮箱授权码或密码
 	FromName string `mapstructure:"from_name"` // 发件人昵称，如 YEVPT，为空时仅显示邮箱地址
-	SiteURL  string `mapstructure:"site_url"`   // 站点公网访问前缀，用于邮件正文中的跳转链接，如 https://www.example.com
+	SiteURL  string `mapstructure:"site_url"`  // 站点公网访问前缀，用于邮件正文中的跳转链接，如 https://www.example.com
 
 	Provider               string `mapstructure:"provider"`                  // 邮件供应商标识，如 aliyun_enterprise
 	ProviderDailyHardLimit int    `mapstructure:"provider_daily_hard_limit"` // 供应商标称每日上限，仅作保护参考
