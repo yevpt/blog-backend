@@ -49,6 +49,13 @@ type DimensionPoint struct {
 	UV       int    `json:"uv"`
 }
 
+// BackfillResult 回填结果：成功重算的天数与区间。
+type BackfillResult struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Days int    `json:"days"`
+}
+
 // PublicSummary 前台公开总览：仅聚合数字。
 type PublicSummary struct {
 	TodayPV      int64 `json:"today_pv"`

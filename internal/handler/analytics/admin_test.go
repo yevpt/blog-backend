@@ -43,6 +43,15 @@ func (f *fakeQuery) Dimensions(_ context.Context, dimension, from, to string) ([
 	return []dto.DimensionPoint{{Date: "2026-06-01", DimValue: "desktop", PV: 10, UV: 5}}, nil
 }
 
+type fakeBackfill struct {
+	lastFrom, lastTo string
+}
+
+func (f *fakeBackfill) Backfill(_ context.Context, from, to string) (int, error) {
+	f.lastFrom, f.lastTo = from, to
+	return 3, nil
+}
+
 func newRouter(h *hdl.AdminHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -50,11 +59,19 @@ func newRouter(h *hdl.AdminHandler) *gin.Engine {
 	r.GET("/admin/analytics/trend", h.Trend)
 	r.GET("/admin/analytics/pages", h.Pages)
 	r.GET("/admin/analytics/dimensions", h.Dimensions)
+	r.POST("/admin/analytics/backfill", h.Backfill)
 	return r
 }
 
 func doGET(r *gin.Engine, path string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func doPOST(r *gin.Engine, path string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
@@ -68,7 +85,7 @@ func decode(t *testing.T, w *httptest.ResponseRecorder) response.Response {
 }
 
 func TestAdminOverview(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/overview")
 
@@ -79,7 +96,7 @@ func TestAdminOverview(t *testing.T) {
 
 func TestAdminTrend_HappyPathDefaults(t *testing.T) {
 	fq := &fakeQuery{}
-	r := newRouter(hdl.NewAdminHandler(fq))
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/trend")
 
@@ -94,7 +111,7 @@ func TestAdminTrend_HappyPathDefaults(t *testing.T) {
 
 func TestAdminTrend_ExplicitParams(t *testing.T) {
 	fq := &fakeQuery{}
-	r := newRouter(hdl.NewAdminHandler(fq))
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/trend?from=2026-06-01&to=2026-06-10&metric=uv&segment=registered")
 
@@ -106,7 +123,7 @@ func TestAdminTrend_ExplicitParams(t *testing.T) {
 }
 
 func TestAdminTrend_InvalidMetric(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/trend?metric=bogus")
 
@@ -115,7 +132,7 @@ func TestAdminTrend_InvalidMetric(t *testing.T) {
 }
 
 func TestAdminTrend_InvalidSegment(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/trend?segment=bogus")
 
@@ -124,7 +141,7 @@ func TestAdminTrend_InvalidSegment(t *testing.T) {
 }
 
 func TestAdminTrend_RangeTooLarge(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/trend?from=2024-01-01&to=2026-06-01")
 
@@ -133,7 +150,7 @@ func TestAdminTrend_RangeTooLarge(t *testing.T) {
 }
 
 func TestAdminTrend_InvalidDateFormat(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/trend?from=2026/06/01")
 
@@ -143,7 +160,7 @@ func TestAdminTrend_InvalidDateFormat(t *testing.T) {
 
 func TestAdminDimensions_HappyPath(t *testing.T) {
 	fq := &fakeQuery{}
-	r := newRouter(hdl.NewAdminHandler(fq))
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/dimensions?dimension=device")
 
@@ -153,7 +170,7 @@ func TestAdminDimensions_HappyPath(t *testing.T) {
 }
 
 func TestAdminDimensions_InvalidDimension(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/dimensions?dimension=bogus")
 
@@ -162,7 +179,7 @@ func TestAdminDimensions_InvalidDimension(t *testing.T) {
 }
 
 func TestAdminDimensions_MissingDimension(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/dimensions")
 
@@ -172,7 +189,7 @@ func TestAdminDimensions_MissingDimension(t *testing.T) {
 
 func TestAdminPages_LimitCap(t *testing.T) {
 	fq := &fakeQuery{}
-	r := newRouter(hdl.NewAdminHandler(fq))
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/pages?limit=500")
 
@@ -183,7 +200,7 @@ func TestAdminPages_LimitCap(t *testing.T) {
 
 func TestAdminPages_LimitDefault(t *testing.T) {
 	fq := &fakeQuery{}
-	r := newRouter(hdl.NewAdminHandler(fq))
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/pages")
 
@@ -192,11 +209,42 @@ func TestAdminPages_LimitDefault(t *testing.T) {
 }
 
 func TestAdminPages_RangeTooLarge(t *testing.T) {
-	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}))
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
 
 	w := doGET(r, "/admin/analytics/pages?"+url.Values{
 		"from": {"2024-01-01"}, "to": {"2026-06-01"},
 	}.Encode())
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminBackfill_HappyPath(t *testing.T) {
+	fb := &fakeBackfill{}
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, fb))
+
+	w := doPOST(r, "/admin/analytics/backfill?from=2026-06-01&to=2026-06-03")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+	assert.Equal(t, "2026-06-01", fb.lastFrom)
+	assert.Equal(t, "2026-06-03", fb.lastTo)
+	assert.Contains(t, w.Body.String(), "days")
+}
+
+func TestAdminBackfill_MissingParams(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
+
+	w := doPOST(r, "/admin/analytics/backfill")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminBackfill_RangeTooLarge(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
+
+	w := doPOST(r, "/admin/analytics/backfill?from=2026-01-01&to=2026-06-01")
 
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)

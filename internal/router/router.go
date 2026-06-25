@@ -318,7 +318,10 @@ func newAnalyticsCollectHandler(
 
 	// 后台只读查询复用同一 repo（历史累计）与 realtime（今日/在线），不另起依赖图。
 	querySvc := analyticsservice.NewQueryService(analyticsRepo, realtime, log)
-	adminHandler := analyticshandler.NewAdminHandler(querySvc)
+	// 专用的回填 Rollup：RollupDay 幂等且无状态，可与调度器实例分开。
+	backfillRollup := analyticsworker.NewRollup(analyticsRepo, analyticsRepo, log)
+	backfillSvc := analyticsservice.NewBackfillService(backfillRollup.RollupDay)
+	adminHandler := analyticshandler.NewAdminHandler(querySvc, backfillSvc)
 
 	// 前台公开统计：复用同一 repo/realtime，响应 JSON 走 Redis 短 TTL 缓存。
 	publicSvc := analyticsservice.NewPublicService(analyticsRepo, realtime, redisClient, analyticsCfg.PublicCacheTTL, log)
@@ -535,4 +538,5 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)
 	admin.GET("/analytics/pages", handlers.analyticsAdmin.Pages)
 	admin.GET("/analytics/dimensions", handlers.analyticsAdmin.Dimensions)
+	admin.POST("/analytics/backfill", middleware.RateLimitNormal(redisClient), handlers.analyticsAdmin.Backfill)
 }

@@ -39,12 +39,13 @@ var (
 
 // AdminHandler 后台统计查询入口，只做参数解析/校验与统一响应。
 type AdminHandler struct {
-	svc svc.QueryService
+	svc      svc.QueryService
+	backfill svc.BackfillService
 }
 
-// NewAdminHandler 注入只读查询服务。
-func NewAdminHandler(s svc.QueryService) *AdminHandler {
-	return &AdminHandler{svc: s}
+// NewAdminHandler 注入只读查询服务与回填服务。
+func NewAdminHandler(s svc.QueryService, b svc.BackfillService) *AdminHandler {
+	return &AdminHandler{svc: s, backfill: b}
 }
 
 // Overview 站点总览：今日实时 + 在线 + 历史累计。
@@ -175,6 +176,33 @@ func (h *AdminHandler) Dimensions(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// Backfill 重算指定区间的日聚合（管理员，幂等）。
+// @Summary  回填日聚合
+// @Description 对指定闭区间逐日重算统计聚合，适用于统计规则调整后的历史补算。
+// @Tags     analytics
+// @Accept   json
+// @Produce  json
+// @Param    from query string true "起始日期 YYYY-MM-DD"
+// @Param    to   query string true "结束日期 YYYY-MM-DD"
+// @Success  200 {object} response.Response{data=dto.BackfillResult} "统一响应；code=0 成功，code=400 参数错误"
+// @Failure  401 {object} response.Response "未登录或 token 已过期"
+// @Failure  403 {object} response.Response "权限不足"
+// @Failure  500 {object} response.Response "服务器内部错误"
+// @Router   /admin/analytics/backfill [post]
+func (h *AdminHandler) Backfill(c *gin.Context) {
+	from, to, ok := parseRequiredRange(c)
+	if !ok {
+		return
+	}
+
+	days, err := h.backfill.Backfill(c.Request.Context(), from, to)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, dto.BackfillResult{From: from, To: to, Days: days})
+}
+
 // parseRange 解析 from/to：缺省回看近 7 天，校验格式与跨度上限（含越界即写错误响应）。
 func parseRange(c *gin.Context) (from, to string, ok bool) {
 	now := time.Now().In(adminTZ)
@@ -197,6 +225,37 @@ func parseRange(c *gin.Context) (from, to string, ok bool) {
 	}
 	if toDate.Sub(fromDate) > time.Duration(maxRangeDays)*24*time.Hour {
 		response.Fail(c, response.CodeBadRequest, "查询跨度不能超过 365 天")
+		return "", "", false
+	}
+	return fromRaw, toRaw, true
+}
+
+// parseRequiredRange 解析必填 from/to，校验格式、顺序与回填跨度上限。
+func parseRequiredRange(c *gin.Context) (from, to string, ok bool) {
+	fromRaw, toRaw := c.Query("from"), c.Query("to")
+	if fromRaw == "" || toRaw == "" {
+		response.Fail(c, response.CodeBadRequest, "from 和 to 均为必填 YYYY-MM-DD")
+		return "", "", false
+	}
+
+	fromDate, err := time.ParseInLocation(dateLayout, fromRaw, adminTZ)
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, "from 必须是 YYYY-MM-DD 格式")
+		return "", "", false
+	}
+	toDate, err := time.ParseInLocation(dateLayout, toRaw, adminTZ)
+	if err != nil {
+		response.Fail(c, response.CodeBadRequest, "to 必须是 YYYY-MM-DD 格式")
+		return "", "", false
+	}
+	if toDate.Before(fromDate) {
+		response.Fail(c, response.CodeBadRequest, "to 不能早于 from")
+		return "", "", false
+	}
+
+	days := int(toDate.Sub(fromDate).Hours()/24) + 1
+	if days > svc.BackfillMaxDays {
+		response.Fail(c, response.CodeBadRequest, "回填跨度不能超过 92 天")
 		return "", "", false
 	}
 	return fromRaw, toRaw, true
