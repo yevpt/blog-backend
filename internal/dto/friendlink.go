@@ -52,7 +52,7 @@ type FriendLinkUpdateReq struct {
 	Seq *uint `json:"seq,omitempty" form:"seq" example:"0"`
 	// Status 状态：0 隐藏，1 显示，2 失联。
 	Status *uint8 `json:"status,omitempty" form:"status" example:"1"`
-	// Logo 友链 Logo 文件；multipart 场景由 handler 读取。
+	// Logo 友链 Logo 文件；multipart 场景由 handler 读取；更新时可选，未传则保留原头像。
 	Logo *UploadedImageFile `json:"-" swaggerignore:"true"`
 }
 

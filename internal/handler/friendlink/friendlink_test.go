@@ -182,7 +182,7 @@ func TestFriendLinkHandler_Update_BindsPathAndBody(t *testing.T) {
 	assert.Equal(t, []byte("fake-image"), stub.updateReq.Logo.Data)
 }
 
-func TestFriendLinkHandler_Update_RejectsMissingLogo(t *testing.T) {
+func TestFriendLinkHandler_Update_AllowsMissingLogo(t *testing.T) {
 	stub := &stubFriendLinkService{}
 	r := newFriendLinkRouter(stub)
 	body, contentType := friendLinkMultipartBody(t, map[string]string{
@@ -195,12 +195,10 @@ func TestFriendLinkHandler_Update_RejectsMissingLogo(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Zero(t, stub.updateID)
-
-	var resp response.Response
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(t, response.CodeBadRequest, resp.Code)
-	assert.Equal(t, "缺少友链 Logo", resp.Message)
+	assert.Equal(t, uint(7), stub.updateID)
+	require.NotNil(t, stub.updateReq.Name)
+	assert.Equal(t, "友站", *stub.updateReq.Name)
+	assert.Nil(t, stub.updateReq.Logo)
 }
 
 func friendLinkMultipartBody(t *testing.T, fields map[string]string, fileName string, fileData []byte) (*bytes.Buffer, string) {
