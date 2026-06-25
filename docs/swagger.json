@@ -871,9 +871,9 @@
                 }
             },
             "post": {
-                "description": "管理员新增友情链接；avatar_url 可传外链或对象存储 key。",
+                "description": "管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并写入 avatar_url。",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -884,13 +884,56 @@
                 "summary": "新增友情链接",
                 "parameters": [
                     {
-                        "description": "友情链接新增请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.FriendLinkCreateReq"
-                        }
+                        "type": "string",
+                        "description": "网站名称",
+                        "name": "name",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "网站描述",
+                        "name": "description",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "站长邮箱",
+                        "name": "email",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "联系电话",
+                        "name": "phone",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "网站 URL",
+                        "name": "site",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "排序值，越小越靠前",
+                        "name": "seq",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "状态：0 隐藏，1 显示，2 失联；未传默认显示",
+                        "name": "status",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 2MB",
+                        "name": "logo",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -924,6 +967,12 @@
                             "$ref": "#/definitions/response.Response"
                         }
                     },
+                    "429": {
+                        "description": "请求过于频繁",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
                     "500": {
                         "description": "服务器内部错误",
                         "schema": {
@@ -935,9 +984,9 @@
         },
         "/admin/friend-links/{id}": {
             "put": {
-                "description": "管理员修改友情链接；未传字段保持原值，可选字符串传空字符串表示清空。",
+                "description": "管理员修改友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并替换 avatar_url；未传文本字段保持原值，可选字符串传空字符串表示清空。",
                 "consumes": [
-                    "application/json"
+                    "multipart/form-data"
                 ],
                 "produces": [
                     "application/json"
@@ -955,13 +1004,53 @@
                         "required": true
                     },
                     {
-                        "description": "友情链接修改请求",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.FriendLinkUpdateReq"
-                        }
+                        "type": "string",
+                        "description": "网站名称",
+                        "name": "name",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "网站描述；传空字符串表示清空",
+                        "name": "description",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "站长邮箱；传空字符串表示清空",
+                        "name": "email",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "联系电话；传空字符串表示清空",
+                        "name": "phone",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "网站 URL",
+                        "name": "site",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "排序值，越小越靠前",
+                        "name": "seq",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "状态：0 隐藏，1 显示，2 失联",
+                        "name": "status",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 2MB",
+                        "name": "logo",
+                        "in": "formData",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -997,6 +1086,12 @@
                     },
                     "404": {
                         "description": "友情链接不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "请求过于频繁",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -8649,56 +8744,6 @@
                 }
             }
         },
-        "dto.FriendLinkCreateReq": {
-            "type": "object",
-            "required": [
-                "name",
-                "seq",
-                "site"
-            ],
-            "properties": {
-                "avatar_url": {
-                    "description": "AvatarUrl 网站头像或 Logo 地址，可以是外链或对象存储 key。",
-                    "type": "string",
-                    "example": "friend-links/vpt.png"
-                },
-                "description": {
-                    "description": "Description 网站描述。",
-                    "type": "string",
-                    "example": "个人博客"
-                },
-                "email": {
-                    "description": "Email 站长邮箱。",
-                    "type": "string",
-                    "example": "hello@example.com"
-                },
-                "name": {
-                    "description": "Name 网站名称。",
-                    "type": "string",
-                    "example": "VPT"
-                },
-                "phone": {
-                    "description": "Phone 联系电话。",
-                    "type": "string",
-                    "example": "13800138000"
-                },
-                "seq": {
-                    "description": "Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "site": {
-                    "description": "Site 网站 URL。",
-                    "type": "string",
-                    "example": "https://example.com"
-                },
-                "status": {
-                    "description": "Status 状态：0 隐藏，1 显示，2 失联；未传默认显示。",
-                    "type": "integer",
-                    "example": 1
-                }
-            }
-        },
         "dto.FriendLinkItemResp": {
             "type": "object",
             "properties": {
@@ -8786,51 +8831,6 @@
                     "description": "Total 总记录数。",
                     "type": "integer",
                     "example": 20
-                }
-            }
-        },
-        "dto.FriendLinkUpdateReq": {
-            "type": "object",
-            "properties": {
-                "avatar_url": {
-                    "description": "AvatarUrl 网站头像或 Logo 地址；传空字符串表示清空。",
-                    "type": "string",
-                    "example": "friend-links/vpt.png"
-                },
-                "description": {
-                    "description": "Description 网站描述；传空字符串表示清空。",
-                    "type": "string",
-                    "example": "个人博客"
-                },
-                "email": {
-                    "description": "Email 站长邮箱；传空字符串表示清空。",
-                    "type": "string",
-                    "example": "hello@example.com"
-                },
-                "name": {
-                    "description": "Name 网站名称。",
-                    "type": "string",
-                    "example": "VPT"
-                },
-                "phone": {
-                    "description": "Phone 联系电话；传空字符串表示清空。",
-                    "type": "string",
-                    "example": "13800138000"
-                },
-                "seq": {
-                    "description": "Seq 排序值，越小越靠前。",
-                    "type": "integer",
-                    "example": 0
-                },
-                "site": {
-                    "description": "Site 网站 URL。",
-                    "type": "string",
-                    "example": "https://example.com"
-                },
-                "status": {
-                    "description": "Status 状态：0 隐藏，1 显示，2 失联。",
-                    "type": "integer",
-                    "example": 1
                 }
             }
         },

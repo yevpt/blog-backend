@@ -1297,45 +1297,6 @@ definitions:
     required:
     - display
     type: object
-  dto.FriendLinkCreateReq:
-    properties:
-      avatar_url:
-        description: AvatarUrl 网站头像或 Logo 地址，可以是外链或对象存储 key。
-        example: friend-links/vpt.png
-        type: string
-      description:
-        description: Description 网站描述。
-        example: 个人博客
-        type: string
-      email:
-        description: Email 站长邮箱。
-        example: hello@example.com
-        type: string
-      name:
-        description: Name 网站名称。
-        example: VPT
-        type: string
-      phone:
-        description: Phone 联系电话。
-        example: "13800138000"
-        type: string
-      seq:
-        description: Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
-        example: 0
-        type: integer
-      site:
-        description: Site 网站 URL。
-        example: https://example.com
-        type: string
-      status:
-        description: Status 状态：0 隐藏，1 显示，2 失联；未传默认显示。
-        example: 1
-        type: integer
-    required:
-    - name
-    - seq
-    - site
-    type: object
   dto.FriendLinkItemResp:
     properties:
       avatar_url:
@@ -1403,41 +1364,6 @@ definitions:
       total:
         description: Total 总记录数。
         example: 20
-        type: integer
-    type: object
-  dto.FriendLinkUpdateReq:
-    properties:
-      avatar_url:
-        description: AvatarUrl 网站头像或 Logo 地址；传空字符串表示清空。
-        example: friend-links/vpt.png
-        type: string
-      description:
-        description: Description 网站描述；传空字符串表示清空。
-        example: 个人博客
-        type: string
-      email:
-        description: Email 站长邮箱；传空字符串表示清空。
-        example: hello@example.com
-        type: string
-      name:
-        description: Name 网站名称。
-        example: VPT
-        type: string
-      phone:
-        description: Phone 联系电话；传空字符串表示清空。
-        example: "13800138000"
-        type: string
-      seq:
-        description: Seq 排序值，越小越靠前。
-        example: 0
-        type: integer
-      site:
-        description: Site 网站 URL。
-        example: https://example.com
-        type: string
-      status:
-        description: Status 状态：0 隐藏，1 显示，2 失联。
-        example: 1
         type: integer
     type: object
   dto.GuestbookCreateReq:
@@ -3131,15 +3057,45 @@ paths:
       - 友情链接
     post:
       consumes:
-      - application/json
-      description: 管理员新增友情链接；avatar_url 可传外链或对象存储 key。
+      - multipart/form-data
+      description: 管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并写入 avatar_url。
       parameters:
-      - description: 友情链接新增请求
-        in: body
-        name: request
+      - description: 网站名称
+        in: formData
+        name: name
         required: true
-        schema:
-          $ref: '#/definitions/dto.FriendLinkCreateReq'
+        type: string
+      - description: 网站描述
+        in: formData
+        name: description
+        type: string
+      - description: 站长邮箱
+        in: formData
+        name: email
+        type: string
+      - description: 联系电话
+        in: formData
+        name: phone
+        type: string
+      - description: 网站 URL
+        in: formData
+        name: site
+        required: true
+        type: string
+      - description: 排序值，越小越靠前
+        in: formData
+        name: seq
+        required: true
+        type: integer
+      - description: 状态：0 隐藏，1 显示，2 失联；未传默认显示
+        in: formData
+        name: status
+        type: integer
+      - description: 友链 Logo 图片（JPG、PNG、WebP），最大 2MB
+        in: formData
+        name: logo
+        required: true
+        type: file
       produces:
       - application/json
       responses:
@@ -3158,6 +3114,10 @@ paths:
             $ref: '#/definitions/response.Response'
         "403":
           description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 请求过于频繁
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -3209,20 +3169,47 @@ paths:
       - 友情链接
     put:
       consumes:
-      - application/json
-      description: 管理员修改友情链接；未传字段保持原值，可选字符串传空字符串表示清空。
+      - multipart/form-data
+      description: 管理员修改友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并替换 avatar_url；未传文本字段保持原值，可选字符串传空字符串表示清空。
       parameters:
       - description: 友情链接 ID
         in: path
         name: id
         required: true
         type: integer
-      - description: 友情链接修改请求
-        in: body
-        name: request
+      - description: 网站名称
+        in: formData
+        name: name
+        type: string
+      - description: 网站描述；传空字符串表示清空
+        in: formData
+        name: description
+        type: string
+      - description: 站长邮箱；传空字符串表示清空
+        in: formData
+        name: email
+        type: string
+      - description: 联系电话；传空字符串表示清空
+        in: formData
+        name: phone
+        type: string
+      - description: 网站 URL
+        in: formData
+        name: site
+        type: string
+      - description: 排序值，越小越靠前
+        in: formData
+        name: seq
+        type: integer
+      - description: 状态：0 隐藏，1 显示，2 失联
+        in: formData
+        name: status
+        type: integer
+      - description: 友链 Logo 图片（JPG、PNG、WebP），最大 2MB
+        in: formData
+        name: logo
         required: true
-        schema:
-          $ref: '#/definitions/dto.FriendLinkUpdateReq'
+        type: file
       produces:
       - application/json
       responses:
@@ -3245,6 +3232,10 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 友情链接不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 请求过于频繁
           schema:
             $ref: '#/definitions/response.Response'
         "500":
