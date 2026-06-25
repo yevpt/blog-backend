@@ -6378,6 +6378,65 @@ const docTemplate = `{
                 }
             }
         },
+        "/music/albums/{id}": {
+            "get": {
+                "description": "返回单个专辑详情；不存在时返回 404。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询公开专辑详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "专辑 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicAlbumResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "专辑不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/music/artists": {
             "get": {
                 "description": "返回歌手列表，可按 name 或 name_zh 关键字过滤；avatar_url 返回前会解析为可访问 URL。",
@@ -6413,6 +6472,65 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/music/artists/{id}": {
+            "get": {
+                "description": "返回单个歌手详情；不存在时返回 404。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "音乐"
+                ],
+                "summary": "查询公开歌手详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "歌手 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.MusicArtistResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "歌手不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "500": {
@@ -10671,9 +10789,20 @@ const docTemplate = `{
                         "type": "integer"
                     }
                 },
+                "audio_hash": {
+                    "type": "string",
+                    "maxLength": 64
+                },
                 "audio_key": {
                     "type": "string",
                     "maxLength": 500
+                },
+                "audio_mime": {
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "audio_size": {
+                    "type": "integer"
                 },
                 "duration": {
                     "type": "integer"

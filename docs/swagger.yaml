@@ -1902,9 +1902,17 @@ definitions:
         maxItems: 10
         minItems: 1
         type: array
+      audio_hash:
+        maxLength: 64
+        type: string
       audio_key:
         maxLength: 500
         type: string
+      audio_mime:
+        maxLength: 100
+        type: string
+      audio_size:
+        type: integer
       duration:
         type: integer
       id:
@@ -6702,6 +6710,42 @@ paths:
       summary: 查询公开专辑列表
       tags:
       - 音乐
+  /music/albums/{id}:
+    get:
+      description: 返回单个专辑详情；不存在时返回 404。
+      parameters:
+      - description: 专辑 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicAlbumResp'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 专辑不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开专辑详情
+      tags:
+      - 音乐
   /music/artists:
     get:
       description: 返回歌手列表，可按 name 或 name_zh 关键字过滤；avatar_url 返回前会解析为可访问 URL。
@@ -6727,6 +6771,42 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 查询公开歌手列表
+      tags:
+      - 音乐
+  /music/artists/{id}:
+    get:
+      description: 返回单个歌手详情；不存在时返回 404。
+      parameters:
+      - description: 歌手 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.MusicArtistResp'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 歌手不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询公开歌手详情
       tags:
       - 音乐
   /notifications:
