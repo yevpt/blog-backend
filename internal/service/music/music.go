@@ -10,6 +10,7 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	musicrepo "github.com/vpt/blog-backend/internal/repository/music"
 	"github.com/vpt/blog-backend/pkg/storage"
+	"gorm.io/gorm"
 )
 
 var (
@@ -26,11 +27,11 @@ type MusicService interface {
 	ListArtists(keyword string) (*dto.MusicArtistListResp, error)
 	ListAlbums(keyword string) (*dto.MusicAlbumListResp, error)
 	ListAdmin(req dto.MusicAdminListReq) (*dto.MusicAdminListResp, error)
-	SaveMusic(req dto.MusicSaveReq) error
+	SaveMusic(ctx context.Context, userID uint, req dto.MusicSaveReq) error
 	DeleteMusic(id uint) error
-	SaveArtist(req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error)
+	SaveArtist(ctx context.Context, userID uint, req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error)
 	DeleteArtist(id uint) error
-	SaveAlbum(req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error)
+	SaveAlbum(ctx context.Context, userID uint, req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error)
 	DeleteAlbum(id uint) error
 	UploadAudio(ctx context.Context, input MusicAudioUploadInput) (*dto.MusicUploadResp, error)
 	UploadAlbumCover(ctx context.Context, input MusicImageUploadInput) (*dto.MusicUploadResp, error)
@@ -147,7 +148,7 @@ func (s *musicService) ListAdmin(req dto.MusicAdminListReq) (*dto.MusicAdminList
 	}, nil
 }
 
-func (s *musicService) SaveMusic(req dto.MusicSaveReq) error {
+func (s *musicService) SaveMusic(ctx context.Context, userID uint, req dto.MusicSaveReq) error {
 	uniqueIDs := uniqueArtistIDs(req.ArtistIDs)
 	artists, err := s.repo.FindArtists(uniqueIDs)
 	if err != nil {
@@ -195,6 +196,25 @@ func (s *musicService) SaveMusic(req dto.MusicSaveReq) error {
 		})
 	}
 
+	var oldAudioKey *string
+	if req.ID > 0 {
+		existing, findErr := s.repo.FindMusic(req.ID)
+		if findErr != nil {
+			return findErr
+		}
+		if existing == nil {
+			return ErrMusicNotFound
+		}
+		oldAudioKey = existing.AudioKey
+		if oldAudioKey == nil || strings.TrimSpace(*oldAudioKey) == "" {
+			oldAudioKey = existing.URL
+		}
+	}
+
+	var copiedKeys []string
+	var tempKey string
+	var normalizedAudio string
+
 	item := model.Music{
 		Base:              model.Base{ID: req.ID},
 		Name:              req.Name,
@@ -208,29 +228,100 @@ func (s *musicService) SaveMusic(req dto.MusicSaveReq) error {
 		IsPublic:          req.IsPublic,
 		Seq:               req.Seq,
 	}
-	return s.repo.SaveMusic(musicrepo.MusicSaveData{
+	err = s.repo.SaveMusic(musicrepo.MusicSaveData{
 		Music:           item,
 		ArtistRelations: relations,
+		PrepareMusic: func(saved model.Music) (model.Music, error) {
+			result, normalizeErr := normalizeMusicAudioKey(ctx, s.store, userID, saved.ID, req.AudioKey, oldAudioKey)
+			if normalizeErr != nil {
+				return model.Music{}, normalizeErr
+			}
+			copiedKeys = result.CopiedKeys
+			tempKey = result.TempKey
+			normalizedAudio = result.Key
+			saved.AudioKey = &result.Key
+			saved.URL = &result.Key
+			return saved, nil
+		},
 	})
+	if err != nil {
+		_ = s.deleteMusicAssetKeys(ctx, copiedKeys)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrMusicNotFound
+		}
+		return err
+	}
+	if err := s.deleteMusicAssetKeys(ctx, []string{tempKey}); err != nil {
+		return err
+	}
+	if req.ID > 0 && oldAudioKey != nil {
+		old := strings.TrimSpace(*oldAudioKey)
+		if old != "" && old != normalizedAudio && replaceableFormalMusicAudioKey(req.ID, old) {
+			_ = s.deleteMusicAssetKeys(ctx, []string{old})
+		}
+	}
+	return nil
 }
 
 func (s *musicService) DeleteMusic(id uint) error {
 	return s.repo.DeleteMusic(id)
 }
 
-func (s *musicService) SaveArtist(req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error) {
-	saved, err := s.repo.SaveArtist(model.MusicArtist{
-		Base:        model.Base{ID: req.ID},
-		Name:        req.Name,
-		NameZh:      req.NameZh,
-		AvatarKey:   req.AvatarKey,
-		Description: req.Description,
+func (s *musicService) SaveArtist(ctx context.Context, userID uint, req dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error) {
+	var oldAvatarKey *string
+	if req.ID > 0 {
+		artists, err := s.repo.FindArtists([]uint{req.ID})
+		if err != nil {
+			return nil, err
+		}
+		if len(artists) == 0 {
+			return nil, ErrMusicArtistNotFound
+		}
+		oldAvatarKey = artists[0].AvatarKey
+	}
+
+	var copiedKeys []string
+	var tempKey string
+	var normalizedAvatar string
+
+	saved, err := s.repo.SaveArtist(musicrepo.MusicArtistSaveData{
+		Artist: model.MusicArtist{
+			Base:        model.Base{ID: req.ID},
+			Name:        req.Name,
+			NameZh:      req.NameZh,
+			AvatarKey:   req.AvatarKey,
+			Description: req.Description,
+		},
+		PrepareArtist: func(artist model.MusicArtist) (model.MusicArtist, error) {
+			if req.AvatarKey == nil || strings.TrimSpace(*req.AvatarKey) == "" {
+				return artist, nil
+			}
+			result, normalizeErr := normalizeMusicArtistAvatarKey(ctx, s.store, userID, artist.ID, *req.AvatarKey, oldAvatarKey)
+			if normalizeErr != nil {
+				return model.MusicArtist{}, normalizeErr
+			}
+			copiedKeys = result.CopiedKeys
+			tempKey = result.TempKey
+			normalizedAvatar = result.Key
+			artist.AvatarKey = &result.Key
+			return artist, nil
+		},
 	})
 	if err != nil {
+		_ = s.deleteMusicAssetKeys(ctx, copiedKeys)
 		return nil, err
 	}
 	if saved == nil {
 		return nil, ErrMusicArtistNotFound
+	}
+	if err := s.deleteMusicAssetKeys(ctx, []string{tempKey}); err != nil {
+		return nil, err
+	}
+	if req.ID > 0 && oldAvatarKey != nil {
+		old := strings.TrimSpace(*oldAvatarKey)
+		if old != "" && old != normalizedAvatar && replaceableFormalMusicArtistAvatarKey(req.ID, old) {
+			_ = s.deleteMusicAssetKeys(ctx, []string{old})
+		}
 	}
 	resp := s.artistToDTO(saved)
 	return &resp, nil
@@ -240,7 +331,7 @@ func (s *musicService) DeleteArtist(id uint) error {
 	return s.repo.DeleteArtist(id)
 }
 
-func (s *musicService) SaveAlbum(req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error) {
+func (s *musicService) SaveAlbum(ctx context.Context, userID uint, req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error) {
 	if req.ArtistID != nil {
 		artists, err := s.repo.FindArtists([]uint{*req.ArtistID})
 		if err != nil {
@@ -256,19 +347,61 @@ func (s *musicService) SaveAlbum(req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp
 		return nil, err
 	}
 
-	saved, err := s.repo.SaveAlbum(model.MusicAlbum{
-		Base:        model.Base{ID: req.ID},
-		Name:        req.Name,
-		ArtistID:    req.ArtistID,
-		CoverKey:    req.CoverKey,
-		ReleaseDate: releaseDate,
-		Description: req.Description,
+	var oldCoverKey *string
+	if req.ID > 0 {
+		existing, findErr := s.repo.FindAlbum(req.ID)
+		if findErr != nil {
+			return nil, findErr
+		}
+		if existing == nil {
+			return nil, ErrMusicAlbumNotFound
+		}
+		oldCoverKey = existing.CoverKey
+	}
+
+	var copiedKeys []string
+	var tempKey string
+	var normalizedCover string
+
+	saved, err := s.repo.SaveAlbum(musicrepo.MusicAlbumSaveData{
+		Album: model.MusicAlbum{
+			Base:        model.Base{ID: req.ID},
+			Name:        req.Name,
+			ArtistID:    req.ArtistID,
+			CoverKey:    req.CoverKey,
+			ReleaseDate: releaseDate,
+			Description: req.Description,
+		},
+		PrepareAlbum: func(album model.MusicAlbum) (model.MusicAlbum, error) {
+			if req.CoverKey == nil || strings.TrimSpace(*req.CoverKey) == "" {
+				return album, nil
+			}
+			result, normalizeErr := normalizeMusicAlbumCoverKey(ctx, s.store, userID, album.ID, *req.CoverKey, oldCoverKey)
+			if normalizeErr != nil {
+				return model.MusicAlbum{}, normalizeErr
+			}
+			copiedKeys = result.CopiedKeys
+			tempKey = result.TempKey
+			normalizedCover = result.Key
+			album.CoverKey = &result.Key
+			return album, nil
+		},
 	})
 	if err != nil {
+		_ = s.deleteMusicAssetKeys(ctx, copiedKeys)
 		return nil, err
 	}
 	if saved == nil {
 		return nil, ErrMusicAlbumNotFound
+	}
+	if err := s.deleteMusicAssetKeys(ctx, []string{tempKey}); err != nil {
+		return nil, err
+	}
+	if req.ID > 0 && oldCoverKey != nil {
+		old := strings.TrimSpace(*oldCoverKey)
+		if old != "" && old != normalizedCover && replaceableFormalMusicAlbumCoverKey(req.ID, old) {
+			_ = s.deleteMusicAssetKeys(ctx, []string{old})
+		}
 	}
 
 	artistsByID := make(map[uint]model.MusicArtist)
@@ -284,6 +417,22 @@ func (s *musicService) SaveAlbum(req dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp
 
 func (s *musicService) DeleteAlbum(id uint) error {
 	return s.repo.DeleteAlbum(id)
+}
+
+func (s *musicService) deleteMusicAssetKeys(ctx context.Context, keys []string) error {
+	if s.store == nil {
+		return nil
+	}
+	for _, key := range keys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if err := s.store.DeleteObject(ctx, key); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func uniqueArtistIDs(ids []uint) []uint {

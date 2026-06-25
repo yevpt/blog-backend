@@ -19,9 +19,9 @@ type MusicRepository interface {
 	FindAlbum(id uint) (*model.MusicAlbum, error)
 	SaveMusic(data MusicSaveData) error
 	DeleteMusic(id uint) error
-	SaveArtist(artist model.MusicArtist) (*model.MusicArtist, error)
+	SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, error)
 	DeleteArtist(id uint) error
-	SaveAlbum(album model.MusicAlbum) (*model.MusicAlbum, error)
+	SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error)
 	DeleteAlbum(id uint) error
 	ListAdminSongs(keyword string, offset, limit int) ([]model.Music, int64, error)
 }
@@ -30,6 +30,19 @@ type MusicRepository interface {
 type MusicSaveData struct {
 	Music           model.Music
 	ArtistRelations []model.MusicArtistRelation
+	PrepareMusic    func(item model.Music) (model.Music, error)
+}
+
+// MusicArtistSaveData 保存歌手所需数据。
+type MusicArtistSaveData struct {
+	Artist        model.MusicArtist
+	PrepareArtist func(artist model.MusicArtist) (model.MusicArtist, error)
+}
+
+// MusicAlbumSaveData 保存专辑所需数据。
+type MusicAlbumSaveData struct {
+	Album        model.MusicAlbum
+	PrepareAlbum func(album model.MusicAlbum) (model.MusicAlbum, error)
 }
 
 type musicRepo struct {
@@ -149,7 +162,20 @@ func (r *musicRepo) SaveMusic(data MusicSaveData) error {
 				return err
 			}
 		} else {
-			result := tx.Model(&model.Music{}).Where("id = ?", item.ID).Updates(&item)
+			var existing model.Music
+			if err := tx.Select("id").First(&existing, item.ID).Error; err != nil {
+				return err
+			}
+		}
+		if data.PrepareMusic != nil {
+			prepared, err := data.PrepareMusic(item)
+			if err != nil {
+				return err
+			}
+			item = prepared
+		}
+		if item.ID != 0 && (data.Music.ID != 0 || data.PrepareMusic != nil) {
+			result := tx.Model(&model.Music{}).Where("id = ?", item.ID).Updates(musicUpdateFields(item))
 			if result.Error != nil {
 				return result.Error
 			}
@@ -175,36 +201,66 @@ func (r *musicRepo) SaveMusic(data MusicSaveData) error {
 	})
 }
 
+func musicUpdateFields(item model.Music) map[string]any {
+	return map[string]any{
+		"name":                item.Name,
+		"artist_display_name": item.ArtistDisplayName,
+		"album_id":            item.AlbumID,
+		"album_track_no":      item.AlbumTrackNo,
+		"audio_key":           item.AudioKey,
+		"url":                 item.URL,
+		"lyric":               item.Lyric,
+		"duration":            item.Duration,
+		"is_public":           item.IsPublic,
+		"seq":                 item.Seq,
+	}
+}
+
 func (r *musicRepo) DeleteMusic(id uint) error {
 	return r.db.Delete(&model.Music{}, id).Error
 }
 
-func (r *musicRepo) SaveArtist(artist model.MusicArtist) (*model.MusicArtist, error) {
-	if artist.ID == 0 {
-		if err := r.db.Create(&artist).Error; err != nil {
-			return nil, err
+func (r *musicRepo) SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, error) {
+	var saved model.MusicArtist
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		artist := data.Artist
+		if artist.ID == 0 {
+			if err := tx.Create(&artist).Error; err != nil {
+				return err
+			}
+		} else {
+			var existing model.MusicArtist
+			if err := tx.Select("id").First(&existing, artist.ID).Error; err != nil {
+				return err
+			}
 		}
-		return &artist, nil
-	}
-
-	result := r.db.Model(&model.MusicArtist{}).Where("id = ?", artist.ID).Updates(map[string]any{
-		"name":        artist.Name,
-		"name_zh":     artist.NameZh,
-		"avatar_key":  artist.AvatarKey,
-		"description": artist.Description,
+		if data.PrepareArtist != nil {
+			prepared, err := data.PrepareArtist(artist)
+			if err != nil {
+				return err
+			}
+			artist = prepared
+		}
+		if artist.ID != 0 && (data.Artist.ID != 0 || data.PrepareArtist != nil) {
+			result := tx.Model(&model.MusicArtist{}).Where("id = ?", artist.ID).Updates(map[string]any{
+				"name":        artist.Name,
+				"name_zh":     artist.NameZh,
+				"avatar_key":  artist.AvatarKey,
+				"description": artist.Description,
+			})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return gorm.ErrRecordNotFound
+			}
+		}
+		return tx.First(&saved, artist.ID).Error
 	})
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.RowsAffected == 0 {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-
-	var saved model.MusicArtist
-	if err := r.db.First(&saved, artist.ID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
+	if err != nil {
 		return nil, err
 	}
 	return &saved, nil
@@ -214,33 +270,48 @@ func (r *musicRepo) DeleteArtist(id uint) error {
 	return r.db.Delete(&model.MusicArtist{}, id).Error
 }
 
-func (r *musicRepo) SaveAlbum(album model.MusicAlbum) (*model.MusicAlbum, error) {
-	if album.ID == 0 {
-		if err := r.db.Create(&album).Error; err != nil {
-			return nil, err
+func (r *musicRepo) SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error) {
+	var saved model.MusicAlbum
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		album := data.Album
+		if album.ID == 0 {
+			if err := tx.Create(&album).Error; err != nil {
+				return err
+			}
+		} else {
+			var existing model.MusicAlbum
+			if err := tx.Select("id").First(&existing, album.ID).Error; err != nil {
+				return err
+			}
 		}
-		return &album, nil
-	}
-
-	result := r.db.Model(&model.MusicAlbum{}).Where("id = ?", album.ID).Updates(map[string]any{
-		"name":         album.Name,
-		"artist_id":    album.ArtistID,
-		"cover_key":    album.CoverKey,
-		"release_date": album.ReleaseDate,
-		"description":  album.Description,
+		if data.PrepareAlbum != nil {
+			prepared, err := data.PrepareAlbum(album)
+			if err != nil {
+				return err
+			}
+			album = prepared
+		}
+		if album.ID != 0 && (data.Album.ID != 0 || data.PrepareAlbum != nil) {
+			result := tx.Model(&model.MusicAlbum{}).Where("id = ?", album.ID).Updates(map[string]any{
+				"name":         album.Name,
+				"artist_id":    album.ArtistID,
+				"cover_key":    album.CoverKey,
+				"release_date": album.ReleaseDate,
+				"description":  album.Description,
+			})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return gorm.ErrRecordNotFound
+			}
+		}
+		return tx.First(&saved, album.ID).Error
 	})
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.RowsAffected == 0 {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
-
-	var saved model.MusicAlbum
-	if err := r.db.First(&saved, album.ID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
+	if err != nil {
 		return nil, err
 	}
 	return &saved, nil

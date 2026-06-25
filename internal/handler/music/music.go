@@ -159,9 +159,21 @@ func (h *MusicHandler) SaveMusic(c *gin.Context) {
 		}
 		req.ID = id
 	}
-	if err := h.svc.SaveMusic(req); err != nil {
-		if errors.Is(err, musicservice.ErrMusicArtistNotFound) || errors.Is(err, musicservice.ErrMusicAlbumNotFound) {
+	claims := jwtpkg.GetClaims(c)
+	if claims == nil || claims.UserId <= 0 {
+		response.Unauthorized(c)
+		return
+	}
+	if err := h.svc.SaveMusic(c.Request.Context(), uint(claims.UserId), req); err != nil {
+		if errors.Is(err, musicservice.ErrMusicArtistNotFound) ||
+			errors.Is(err, musicservice.ErrMusicAlbumNotFound) ||
+			errors.Is(err, musicservice.ErrMusicAssetInvalid) ||
+			errors.Is(err, musicservice.ErrMusicAssetNotFound) {
 			response.Fail(c, response.CodeBadRequest, err.Error())
+			return
+		}
+		if errors.Is(err, musicservice.ErrMusicNotFound) {
+			response.NotFound(c)
 			return
 		}
 		response.ServerError(c)
@@ -331,7 +343,12 @@ func (h *MusicHandler) SaveArtist(c *gin.Context) {
 		}
 		req.ID = id
 	}
-	resp, err := h.svc.SaveArtist(req)
+	claims := jwtpkg.GetClaims(c)
+	if claims == nil || claims.UserId <= 0 {
+		response.Unauthorized(c)
+		return
+	}
+	resp, err := h.svc.SaveArtist(c.Request.Context(), uint(claims.UserId), req)
 	writeMusicArtistResponse(c, resp, err)
 }
 
@@ -411,7 +428,12 @@ func (h *MusicHandler) SaveAlbum(c *gin.Context) {
 		}
 		req.ID = id
 	}
-	resp, err := h.svc.SaveAlbum(req)
+	claims := jwtpkg.GetClaims(c)
+	if claims == nil || claims.UserId <= 0 {
+		response.Unauthorized(c)
+		return
+	}
+	resp, err := h.svc.SaveAlbum(c.Request.Context(), uint(claims.UserId), req)
 	writeMusicAlbumResponse(c, resp, err)
 }
 
@@ -462,6 +484,10 @@ func writeMusicArtistResponse(c *gin.Context, data *dto.MusicArtistResp, err err
 		response.NotFound(c)
 		return
 	}
+	if errors.Is(err, musicservice.ErrMusicAssetInvalid) || errors.Is(err, musicservice.ErrMusicAssetNotFound) {
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
 	response.ServerError(c)
 }
 
@@ -472,6 +498,10 @@ func writeMusicAlbumResponse(c *gin.Context, data *dto.MusicAlbumResp, err error
 	}
 	if errors.Is(err, musicservice.ErrMusicArtistNotFound) || errors.Is(err, musicservice.ErrMusicAlbumNotFound) {
 		response.NotFound(c)
+		return
+	}
+	if errors.Is(err, musicservice.ErrMusicAssetInvalid) || errors.Is(err, musicservice.ErrMusicAssetNotFound) {
+		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}
 	response.ServerError(c)

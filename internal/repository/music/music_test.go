@@ -98,6 +98,9 @@ func TestMusicRepository_SaveMusic_ReplacesArtistRelations(t *testing.T) {
 	repo := music.NewMusicRepository(db)
 
 	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT `id` FROM `music`").
+		WithArgs(uint(3), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(3))
 	mock.ExpectExec("UPDATE `music`").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `music_artist_relation` WHERE music_id = \\?").WithArgs(uint(3)).WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("INSERT INTO `music_artist_relation`").WillReturnResult(sqlmock.NewResult(1, 2))

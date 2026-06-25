@@ -48,7 +48,7 @@ func (s *stubMusicService) ListAdmin(dto.MusicAdminListReq) (*dto.MusicAdminList
 	return &dto.MusicAdminListResp{}, s.err
 }
 
-func (s *stubMusicService) SaveMusic(dto.MusicSaveReq) error {
+func (s *stubMusicService) SaveMusic(context.Context, uint, dto.MusicSaveReq) error {
 	return s.err
 }
 
@@ -56,7 +56,7 @@ func (s *stubMusicService) DeleteMusic(uint) error {
 	return s.err
 }
 
-func (s *stubMusicService) SaveArtist(dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error) {
+func (s *stubMusicService) SaveArtist(context.Context, uint, dto.MusicArtistSaveReq) (*dto.MusicArtistResp, error) {
 	return nil, s.err
 }
 
@@ -64,7 +64,7 @@ func (s *stubMusicService) DeleteArtist(uint) error {
 	return s.err
 }
 
-func (s *stubMusicService) SaveAlbum(dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error) {
+func (s *stubMusicService) SaveAlbum(context.Context, uint, dto.MusicAlbumSaveReq) (*dto.MusicAlbumResp, error) {
 	return nil, s.err
 }
 

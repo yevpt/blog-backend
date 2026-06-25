@@ -3,6 +3,7 @@ package music_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,7 @@ func (s *stubMusicRepository) DeleteMusic(uint) error {
 	return nil
 }
 
-func (s *stubMusicRepository) SaveArtist(model.MusicArtist) (*model.MusicArtist, error) {
+func (s *stubMusicRepository) SaveArtist(musicrepo.MusicArtistSaveData) (*model.MusicArtist, error) {
 	return nil, nil
 }
 
@@ -68,7 +69,7 @@ func (s *stubMusicRepository) DeleteArtist(uint) error {
 	return nil
 }
 
-func (s *stubMusicRepository) SaveAlbum(model.MusicAlbum) (*model.MusicAlbum, error) {
+func (s *stubMusicRepository) SaveAlbum(musicrepo.MusicAlbumSaveData) (*model.MusicAlbum, error) {
 	return nil, nil
 }
 
@@ -88,8 +89,8 @@ func (stubMusicObjectStore) ObjectURL(_ context.Context, objectName string) (str
 	return "https://cdn.example.com/" + objectName, nil
 }
 
-func (stubMusicObjectStore) ObjectExists(context.Context, string) (bool, error) {
-	return false, nil
+func (stubMusicObjectStore) ObjectExists(_ context.Context, key string) (bool, error) {
+	return strings.TrimSpace(key) != "", nil
 }
 
 func (stubMusicObjectStore) PutObject(context.Context, string, []byte, string) error {
@@ -182,7 +183,7 @@ func TestMusicService_SaveMusic_RejectsMissingArtists(t *testing.T) {
 	}
 	svc := music.NewMusicService(repo, nil)
 
-	err := svc.SaveMusic(dto.MusicSaveReq{
+	err := svc.SaveMusic(context.Background(), 1, dto.MusicSaveReq{
 		Name:      "Song",
 		ArtistIDs: []uint{1, 2},
 		AudioKey:  "music/audio/1/a.mp3",
