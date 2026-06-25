@@ -2,6 +2,7 @@ package friendlink
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
@@ -30,7 +31,7 @@ type FriendLinkUpdateData struct {
 
 // FriendLinkRepository 友情链接数据访问接口。
 type FriendLinkRepository interface {
-	// ListPublic 查询显示中及失联的友情链接，按 seq ASC、id DESC 排序。
+	// ListPublic 查询显示中及失联的友情链接；正常友链按 seq ASC、id DESC 排序，失联友链排在最后。
 	ListPublic(offset, limit int) ([]model.FriendLink, int64, error)
 	// GetPublic 查询显示中的友情链接详情。
 	GetPublic(id uint) (*model.FriendLink, error)
@@ -158,7 +159,13 @@ func listFriendLinks(query *gorm.DB, offset, limit int) ([]model.FriendLink, int
 	}
 
 	var links []model.FriendLink
-	err := query.Order("seq ASC").Order("id DESC").Offset(offset).Limit(limit).Find(&links).Error
+	err := query.
+		Order(fmt.Sprintf("(status = %d) ASC", friendLinkDisconnectedStatus)).
+		Order("seq ASC").
+		Order("id DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&links).Error
 	return links, total, err
 }
 

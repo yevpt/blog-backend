@@ -44,7 +44,7 @@ func TestFriendLinkRepository_ListPublic_FiltersVisibleAndOrders(t *testing.T) {
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE status IN \\(\\?,\\?\\) AND `friend_link`.`deleted_at` IS NULL").
 		WithArgs(1, 2).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE status IN \\(\\?,\\?\\) AND `friend_link`.`deleted_at` IS NULL ORDER BY seq ASC,id DESC LIMIT \\?").
+	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE status IN \\(\\?,\\?\\) AND `friend_link`.`deleted_at` IS NULL ORDER BY \\(status = 2\\) ASC,seq ASC,id DESC LIMIT \\?").
 		WithArgs(1, 2, 10).
 		WillReturnRows(friendLinkRows(1))
 
@@ -65,7 +65,7 @@ func TestFriendLinkRepository_ListAdmin_FiltersStatusWhenProvided(t *testing.T) 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL").
 		WithArgs(status).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL ORDER BY seq ASC,id DESC LIMIT \\? OFFSET \\?").
+	mock.ExpectQuery("SELECT \\* FROM `friend_link` WHERE status = \\? AND `friend_link`.`deleted_at` IS NULL ORDER BY \\(status = 2\\) ASC,seq ASC,id DESC LIMIT \\? OFFSET \\?").
 		WithArgs(status, 5, 10).
 		WillReturnRows(friendLinkRows(1))
 
