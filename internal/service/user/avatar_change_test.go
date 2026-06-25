@@ -72,6 +72,8 @@ func (r *changeAvatarRepo) UpsertSocialLink(userID uint, platform, url string) e
 func (r *changeAvatarRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
+func (r *changeAvatarRepo) GrantVipRole(userID uint) error  { return nil }
+func (r *changeAvatarRepo) RevokeVipRole(userID uint) error { return nil }
 
 type changeAvatarStore struct {
 	deleted []string
