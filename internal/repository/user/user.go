@@ -142,6 +142,10 @@ type UserRepository interface {
 	UpsertUserSetting(userID uint, updates map[string]any) error
 	// CountByAvatarURL 统计使用指定头像 key 的用户数量。
 	CountByAvatarURL(avatarURL string) (int64, error)
+	// GrantVipRole 为目标用户追加 ROLE_VIP；已拥有时幂等成功。
+	GrantVipRole(userID uint) error
+	// RevokeVipRole 移除目标用户的 ROLE_VIP；本就不是 VIP 时幂等成功。
+	RevokeVipRole(userID uint) error
 }
 
 type userRepo struct {
