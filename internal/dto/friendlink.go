@@ -15,41 +15,45 @@ type FriendLinkListReq struct {
 // FriendLinkCreateReq 新增友情链接请求。
 type FriendLinkCreateReq struct {
 	// Name 网站名称。
-	Name string `json:"name" binding:"required" example:"VPT"`
+	Name string `json:"name" form:"name" binding:"required" example:"VPT"`
 	// Description 网站描述。
-	Description *string `json:"description,omitempty" example:"个人博客"`
+	Description *string `json:"description,omitempty" form:"description" example:"个人博客"`
 	// Email 站长邮箱。
-	Email *string `json:"email,omitempty" example:"hello@example.com"`
+	Email *string `json:"email,omitempty" form:"email" example:"hello@example.com"`
 	// Phone 联系电话。
-	Phone *string `json:"phone,omitempty" example:"13800138000"`
+	Phone *string `json:"phone,omitempty" form:"phone" example:"13800138000"`
 	// Site 网站 URL。
-	Site string `json:"site" binding:"required" example:"https://example.com"`
+	Site string `json:"site" form:"site" binding:"required" example:"https://example.com"`
 	// AvatarUrl 网站头像或 Logo 地址，可以是外链或对象存储 key。
-	AvatarUrl *string `json:"avatar_url,omitempty" example:"friend-links/vpt.png"`
+	AvatarUrl *string `json:"avatar_url,omitempty" form:"avatar_url" example:"friend-links/vpt.png"`
 	// Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
-	Seq *uint `json:"seq" binding:"required" example:"0"`
+	Seq *uint `json:"seq" form:"seq" binding:"required" example:"0"`
 	// Status 状态：0 隐藏，1 显示，2 失联；未传默认显示。
-	Status *uint8 `json:"status,omitempty" example:"1"`
+	Status *uint8 `json:"status,omitempty" form:"status" example:"1"`
+	// Logo 友链 Logo 文件；multipart 场景由 handler 读取。
+	Logo *UploadedImageFile `json:"-" swaggerignore:"true"`
 }
 
 // FriendLinkUpdateReq 修改友情链接请求；未传字段保持原值。
 type FriendLinkUpdateReq struct {
 	// Name 网站名称。
-	Name *string `json:"name,omitempty" example:"VPT"`
+	Name *string `json:"name,omitempty" form:"name" example:"VPT"`
 	// Description 网站描述；传空字符串表示清空。
-	Description *string `json:"description,omitempty" example:"个人博客"`
+	Description *string `json:"description,omitempty" form:"description" example:"个人博客"`
 	// Email 站长邮箱；传空字符串表示清空。
-	Email *string `json:"email,omitempty" example:"hello@example.com"`
+	Email *string `json:"email,omitempty" form:"email" example:"hello@example.com"`
 	// Phone 联系电话；传空字符串表示清空。
-	Phone *string `json:"phone,omitempty" example:"13800138000"`
+	Phone *string `json:"phone,omitempty" form:"phone" example:"13800138000"`
 	// Site 网站 URL。
-	Site *string `json:"site,omitempty" example:"https://example.com"`
+	Site *string `json:"site,omitempty" form:"site" example:"https://example.com"`
 	// AvatarUrl 网站头像或 Logo 地址；传空字符串表示清空。
-	AvatarUrl *string `json:"avatar_url,omitempty" example:"friend-links/vpt.png"`
+	AvatarUrl *string `json:"avatar_url,omitempty" form:"avatar_url" example:"friend-links/vpt.png"`
 	// Seq 排序值，越小越靠前。
-	Seq *uint `json:"seq,omitempty" example:"0"`
+	Seq *uint `json:"seq,omitempty" form:"seq" example:"0"`
 	// Status 状态：0 隐藏，1 显示，2 失联。
-	Status *uint8 `json:"status,omitempty" example:"1"`
+	Status *uint8 `json:"status,omitempty" form:"status" example:"1"`
+	// Logo 友链 Logo 文件；multipart 场景由 handler 读取。
+	Logo *UploadedImageFile `json:"-" swaggerignore:"true"`
 }
 
 // FriendLinkItemResp 友情链接详情响应。
