@@ -47,5 +47,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.EmailRoleQuotaPolicy{},
 		&model.EmailQuotaUsage{},
 		&model.EmailSendLog{},
+		&model.AnalyticsEvent{},
+		&model.AnalyticsSession{},
+		&model.AnalyticsDaily{},
+		&model.AnalyticsDailyDim{},
+		&model.AnalyticsPageDaily{},
 	)
 }
