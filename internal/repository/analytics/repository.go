@@ -20,6 +20,20 @@ type Repository interface {
 	UpsertPageDaily(ctx context.Context, rows []model.AnalyticsPageDaily) error
 	DeleteEventsBefore(ctx context.Context, t time.Time) (int64, error)
 	DeleteSessionsBefore(ctx context.Context, t time.Time) (int64, error)
+
+	QueryDailyRange(ctx context.Context, from, to string) ([]model.AnalyticsDaily, error)
+	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
+	QueryTopPages(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
+	QueryTotals(ctx context.Context) (pv, uv int64, err error)
+	AggregateDay(ctx context.Context, date string) (DayAggregate, error)
+}
+
+// DayAggregate 是某一日（Asia/Shanghai）从原始事件表聚合出的全量结果，
+// 供 rollup worker 落入永久聚合表。类型置于 repo 包以避免 worker→repo 的循环依赖。
+type DayAggregate struct {
+	Daily model.AnalyticsDaily
+	Dims  []model.AnalyticsDailyDim
+	Pages []model.AnalyticsPageDaily
 }
 
 type repository struct{ db *gorm.DB }
