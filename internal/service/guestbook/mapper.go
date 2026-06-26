@@ -32,6 +32,26 @@ func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.Objec
 	}
 }
 
+func adminGuestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.AdminGuestbookPageResp {
+	items := make([]dto.GuestbookItemResp, 0, len(result.Messages))
+	for _, message := range result.Messages {
+		items = append(items, *guestbookItemToDTO(message, resolver, rolesMap))
+	}
+
+	pages := 0
+	if result.PageSize > 0 {
+		pages = int(math.Ceil(float64(result.Total) / float64(result.PageSize)))
+	}
+
+	return &dto.AdminGuestbookPageResp{
+		Total:    result.Total,
+		Pages:    pages,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+		List:     items,
+	}
+}
+
 func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookItemResp {
 	message := aggregate.Message
 	return &dto.GuestbookItemResp{

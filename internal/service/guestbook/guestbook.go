@@ -30,6 +30,7 @@ var (
 // GuestbookService 留言板业务接口，负责留言查询、发表、点赞和删除。
 type GuestbookService interface {
 	List(req dto.GuestbookListReq, viewerID *uint) (*dto.GuestbookPageResp, error)
+	ListAdmin(req dto.AdminGuestbookListReq) (*dto.AdminGuestbookPageResp, error)
 	Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error)
 	ToggleLike(id uint, userID uint) (*dto.GuestbookLikeResp, error)
 	Delete(id uint, userID uint, roleNames []string) (*dto.GuestbookDeleteResp, error)

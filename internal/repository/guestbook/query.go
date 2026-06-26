@@ -1,7 +1,10 @@
 package guestbook
 
 import (
+	"strings"
+
 	"github.com/vpt/blog-backend/internal/model"
+	"gorm.io/gorm"
 )
 
 func (r *guestbookRepo) List(ownerUserID uint, viewerID *uint, page int, pageSize int) (*PageResult, error) {
@@ -19,6 +22,29 @@ func (r *guestbookRepo) List(ownerUserID uint, viewerID *uint, page int, pageSiz
 		return nil, err
 	}
 	aggregates, err := r.attachRelations(messages, viewerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PageResult{
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+		Messages: aggregates,
+	}, nil
+}
+
+func (r *guestbookRepo) ListAdmin(search string, page int, pageSize int) (*PageResult, error) {
+	page, pageSize = normalizePage(page, pageSize)
+	total, err := r.countAdminMessages(search)
+	if err != nil {
+		return nil, err
+	}
+	messages, err := r.listAdminMessages(search, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	aggregates, err := r.attachRelations(messages, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +101,32 @@ func (r *guestbookRepo) listMessages(ownerUserID uint, page int, pageSize int) (
 		Offset(offset).
 		Find(&messages).Error
 	return messages, err
+}
+
+func (r *guestbookRepo) countAdminMessages(search string) (int64, error) {
+	var total int64
+	err := r.adminMessageQuery(search).Count(&total).Error
+	return total, err
+}
+
+func (r *guestbookRepo) listAdminMessages(search string, page int, pageSize int) ([]model.Guestbook, error) {
+	var messages []model.Guestbook
+	offset := (page - 1) * pageSize
+	err := r.adminMessageQuery(search).
+		Order("created_at DESC").
+		Order("id DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&messages).Error
+	return messages, err
+}
+
+func (r *guestbookRepo) adminMessageQuery(search string) *gorm.DB {
+	query := r.db.Model(&model.Guestbook{})
+	if keyword := strings.TrimSpace(search); keyword != "" {
+		query = query.Where("content LIKE ?", "%"+keyword+"%")
+	}
+	return query
 }
 
 func (r *guestbookRepo) attachRelations(messages []model.Guestbook, viewerID *uint) ([]GuestbookAggregate, error) {

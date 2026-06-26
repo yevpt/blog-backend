@@ -21,10 +21,13 @@ import (
 )
 
 type stubGuestbookService struct {
-	listReq      dto.GuestbookListReq
-	listViewerID *uint
-	listResp     *dto.GuestbookPageResp
-	listErr      error
+	listReq       dto.GuestbookListReq
+	listViewerID  *uint
+	listResp      *dto.GuestbookPageResp
+	listErr       error
+	listAdminReq  dto.AdminGuestbookListReq
+	listAdminResp *dto.AdminGuestbookPageResp
+	listAdminErr  error
 
 	createReq    dto.GuestbookCreateReq
 	createUserID uint
@@ -47,6 +50,11 @@ func (s *stubGuestbookService) List(req dto.GuestbookListReq, viewerID *uint) (*
 	s.listReq = req
 	s.listViewerID = viewerID
 	return s.listResp, s.listErr
+}
+
+func (s *stubGuestbookService) ListAdmin(req dto.AdminGuestbookListReq) (*dto.AdminGuestbookPageResp, error) {
+	s.listAdminReq = req
+	return s.listAdminResp, s.listAdminErr
 }
 
 func (s *stubGuestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error) {
@@ -73,6 +81,7 @@ func newGuestbookRouter(svc guestbookservice.GuestbookService) *gin.Engine {
 	r := gin.New()
 	h := guestbookhandler.NewGuestbookHandler(svc)
 	r.GET("/guestbook", h.List)
+	r.GET("/admin/guestbook", h.ListAdmin)
 	r.POST("/guestbook", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
@@ -89,6 +98,22 @@ func newGuestbookRouter(svc guestbookservice.GuestbookService) *gin.Engine {
 		h.Delete(c)
 	})
 	return r
+}
+
+func TestGuestbookHandler_ListAdmin_BindsFilters(t *testing.T) {
+	stub := &stubGuestbookService{
+		listAdminResp: &dto.AdminGuestbookPageResp{Page: 2, PageSize: 5},
+	}
+	r := newGuestbookRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/guestbook?page=2&page_size=5&search=%E4%BD%A0%E5%A5%BD", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 2, stub.listAdminReq.Page)
+	assert.Equal(t, 5, stub.listAdminReq.PageSize)
+	assert.Equal(t, "你好", stub.listAdminReq.Search)
 }
 
 func TestGuestbookHandler_List_AllowsMissingOwnerUserID(t *testing.T) {

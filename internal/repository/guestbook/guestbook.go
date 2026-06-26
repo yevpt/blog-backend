@@ -51,6 +51,8 @@ type LikeResult struct {
 type GuestbookRepository interface {
 	// List 分页查询指定用户留言板，并按 viewerID 补充点赞状态。
 	List(ownerUserID uint, viewerID *uint, page int, pageSize int) (*PageResult, error)
+	// ListAdmin 后台分页查询全部留言。
+	ListAdmin(search string, page int, pageSize int) (*PageResult, error)
 	// Create 创建留言，并返回留言聚合。
 	Create(ownerUserID uint, fromUserID uint, content string) (*GuestbookAggregate, error)
 	// ToggleLike 切换当前用户对留言的点赞状态。

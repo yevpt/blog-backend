@@ -20,12 +20,17 @@ import (
 )
 
 type fakeGuestbookRepo struct {
-	listOwnerID  uint
-	listViewerID *uint
-	listPage     int
-	listPageSize int
-	listResp     *guestbookrepo.PageResult
-	listErr      error
+	listOwnerID       uint
+	listViewerID      *uint
+	listPage          int
+	listPageSize      int
+	listResp          *guestbookrepo.PageResult
+	listErr           error
+	listAdminSearch   string
+	listAdminPage     int
+	listAdminPageSize int
+	listAdminResp     *guestbookrepo.PageResult
+	listAdminErr      error
 
 	createOwnerID uint
 	createFromID  uint
@@ -51,6 +56,13 @@ func (f *fakeGuestbookRepo) List(ownerUserID uint, viewerID *uint, page int, pag
 	f.listPage = page
 	f.listPageSize = pageSize
 	return f.listResp, f.listErr
+}
+
+func (f *fakeGuestbookRepo) ListAdmin(search string, page int, pageSize int) (*guestbookrepo.PageResult, error) {
+	f.listAdminSearch = search
+	f.listAdminPage = page
+	f.listAdminPageSize = pageSize
+	return f.listAdminResp, f.listAdminErr
 }
 
 func (f *fakeGuestbookRepo) Create(ownerUserID uint, fromUserID uint, content string) (*guestbookrepo.GuestbookAggregate, error) {
@@ -116,6 +128,46 @@ func TestGuestbookService_List_DefaultsOwnerAndPagination(t *testing.T) {
 	assert.Equal(t, 10, resp.PageSize)
 	require.Len(t, resp.List, 1)
 	assert.Equal(t, int64(2), resp.List[0].ReplyCount)
+}
+
+func TestGuestbookService_ListAdmin_NormalizesSearchAndPagination(t *testing.T) {
+	now := time.Now()
+	repo := &fakeGuestbookRepo{
+		listAdminResp: &guestbookrepo.PageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 50,
+			Messages: []guestbookrepo.GuestbookAggregate{
+				{
+					Message: model.Guestbook{
+						Base:        model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
+						OwnerUserID: 1,
+						FromUserID:  7,
+						Content:     "你好",
+					},
+					User:       &model.User{Base: model.Base{ID: 7}, Username: "vpt"},
+					ReplyCount: 2,
+					LikeCount:  3,
+				},
+			},
+		},
+	}
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil)
+
+	resp, err := svc.ListAdmin(dto.AdminGuestbookListReq{
+		Page:     0,
+		PageSize: 99,
+		Search:   "  你好  ",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "你好", repo.listAdminSearch)
+	assert.Equal(t, 1, repo.listAdminPage)
+	assert.Equal(t, 50, repo.listAdminPageSize)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, "你好", resp.List[0].Content)
+	assert.Equal(t, int64(2), resp.List[0].ReplyCount)
+	assert.Equal(t, int64(3), resp.List[0].LikeCount)
 }
 
 func TestGuestbookService_Create_TrimsContentAndDefaultsOwner(t *testing.T) {

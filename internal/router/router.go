@@ -518,6 +518,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.DELETE("/articles/:id", handlers.article.Delete)
 	admin.DELETE("/articles/:id/permanent", handlers.article.PermanentDelete)
 	admin.GET("/comments", handlers.comment.ListAdmin)
+	admin.GET("/guestbook", handlers.guestbook.ListAdmin)
 	admin.POST("/categories", handlers.category.Create)
 	admin.PUT("/categories/:id", handlers.category.Update)
 	admin.DELETE("/categories/:id", handlers.category.Delete)

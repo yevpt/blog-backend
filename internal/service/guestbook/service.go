@@ -25,6 +25,18 @@ func (s *guestbookService) List(req dto.GuestbookListReq, viewerID *uint) (*dto.
 	return guestbookPageToDTO(result, s.objectURLResolver, rolesMap), nil
 }
 
+func (s *guestbookService) ListAdmin(req dto.AdminGuestbookListReq) (*dto.AdminGuestbookPageResp, error) {
+	result, err := s.repo.ListAdmin(strings.TrimSpace(req.Search), normalizePage(req.Page), normalizePageSize(req.PageSize))
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	rolesMap, err := s.lookupRoles(collectGuestbookPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+	return adminGuestbookPageToDTO(result, s.objectURLResolver, rolesMap), nil
+}
+
 func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error) {
 	content, err := cleanContent(req.Content)
 	if err != nil {
