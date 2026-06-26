@@ -155,6 +155,10 @@ config.local.yaml    ← 本地密码（.gitignore，不提交）
 APP_ENV=prod ./bin/blog-server
 ```
 
+### 专项配置文档
+
+- [站点分析（Analytics）配置与部署](docs/analytics-configuration.md) —— 采集/聚合/公开接口的全部配置项、前后端跨仓密钥耦合、`site_host` 与 `ANALYTICS_ALLOWED_ORIGINS` 区别、随机串生成、迁移与时钟等。
+
 ## 权限体系
 
 三种角色，权重依次降低：
