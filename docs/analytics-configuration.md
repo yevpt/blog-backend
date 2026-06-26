@@ -125,3 +125,55 @@ openssl rand -hex 32
 | 前台公开（限频 + 缓存 + 脱敏） | `/analytics/public/summary` `/analytics/public/popular` |
 
 完整出入参见 Swagger（`make swag` 生成，导入 Apifox）。设计背景见 [`docs/superpowers/specs/2026-06-25-self-hosted-analytics-design.md`](superpowers/specs/2026-06-25-self-hosted-analytics-design.md)。
+
+---
+
+## 10. 本地开发测试
+
+**本地几乎零额外配置**：前端 `API_BASE_URL` 已在 `apps/web/.env.local` 配好（OAuth 等代理共用）；analytics 的 `ANALYTICS_ALLOWED_ORIGINS`/`collect_token_secret`/`geoip_path` 本地留空即为「放行 + 不校验 token + 关闭地理」，`ip_salt` 有默认值。
+
+### 准备（一次性）
+```bash
+# 本地 Redis（config.local.yaml 默认 localhost:6379）
+redis-server
+
+# ⚠️ 迁移数据库结构（含 is_suspect 等新列），改过模型后都要重跑
+make dbsetup
+
+# 起后端（热重载，:8080）
+make dev
+```
+
+### 测法 A：跑前端走全链路（推荐，最贴近真实）
+```bash
+# blog-frontend 仓
+pnpm dev:web          # http://localhost:3000
+```
+浏览器翻几页 → tracker 自动发 `page_view` + 每 15s 心跳 → 经 BFF `/api/collect` → 后端。登录后再翻，事件带 `user_id`（注册档）。**这就是"啥也不配、访问网页就有数据"的路径。**
+
+### 测法 B：直接 curl `/collect`（只验后端，不起前端）
+```bash
+# -c/-b 维持同一 visitor_id；-A 给浏览器 UA（否则被判 bot 不计数）
+curl -i -c /tmp/cj -b /tmp/cj -X POST http://localhost:8080/collect \
+  -H 'Content-Type: application/json' -H 'Origin: http://localhost:3000' \
+  -A 'Mozilla/5.0 (Macintosh) Chrome/120' \
+  -d '{"event_type":"page_view","path":"/hello","title":"Hi","session_id":"sess-1"}'
+# 期望 204；心跳改 event_type=heartbeat、同 session_id
+```
+
+### 怎么看数据
+| 看什么 | 命令 |
+|---|---|
+| 实时（Redis，秒见） | `redis-cli ZCARD analytics:online`；`redis-cli GET analytics:pv:$(TZ=Asia/Shanghai date +%Y%m%d)` |
+| 公开接口（免登录） | `curl http://localhost:8080/analytics/public/summary` |
+| 原始入库 | `SELECT * FROM analytics_events ORDER BY id DESC LIMIT 10;` |
+| 后台今日（需 admin token） | `GET /admin/analytics/overview`（今日走 Redis、立即有） |
+| 聚合表 trend/pages/dimensions | 先 `POST /admin/analytics/backfill?from=<今天>&to=<今天>` 强制聚合，再查 |
+
+> 日聚合 worker 正常 00:30（Asia/Shanghai）跑昨天；本地测聚合表用 `backfill` 强制聚合任意日期。
+
+### 常见「看着没数据」的坑
+- **curl 不加 `-A` 浏览器 UA** → 判 `is_bot`、入库但不计数（用浏览器访问 web 无此问题）。
+- **去重**：同 `session_id`+`path` 5s 内重复 PV 不计——连发换 `path` 或隔 5s。
+- **新访客**：同一 `visitor_id` 仅首个 page_view `is_new_visitor=true`；重测先 `redis-cli DEL analytics:visitor:seen:<id>` 或 `FLUSHDB`。
+- **visitor_id 是 HttpOnly cookie**：curl 不带 cookie jar 每次都算新访客。
