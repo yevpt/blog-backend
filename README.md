@@ -136,6 +136,8 @@ make dbsetup
 
 未来增量 SQL 只从 `migrations/20260625_baseline.sql` 之后开始添加，初始化命令和历史数据迁移保持分离。
 
+已有库升级时，按顺序手动执行 `migrations/` 下尚未应用的 SQL。例如 `20260626_user_last_active_at.sql` 新增 `last_active_at` 并从 `last_login_at` 回填（UPDATE 段可重复执行）。
+
 ## 配置说明
 
 配置按以下优先级叠加（高优先级覆盖低优先级）：

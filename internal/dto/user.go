@@ -16,6 +16,8 @@ type UserDetailResp struct {
 	Mark          *string              `json:"mark,omitempty"`
 	Status        uint8                `json:"status"`
 	LastLoginAt   *time.Time           `json:"last_login_at,omitempty"`
+	LastActiveAt  *time.Time           `json:"last_active_at,omitempty"`
+	IsOnline      bool                 `json:"is_online"`
 	Roles         []string             `json:"roles"`
 	Meta          *UserMetaResp        `json:"meta,omitempty"`
 	Setting       *UserSettingResp     `json:"setting,omitempty"`
@@ -159,8 +161,10 @@ type UserListItemResp struct {
 	Nickname    *string    `json:"nickname,omitempty" example:"Yevpt"`
 	AvatarUrl   *string    `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
 	Mark        *string    `json:"mark,omitempty" example:"博主"`
-	Roles       []string   `json:"roles"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	Roles        []string   `json:"roles"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+	LastActiveAt *time.Time `json:"last_active_at,omitempty"`
+	IsOnline     bool       `json:"is_online"`
 }
 
 // UserPageResp 用户分页响应
@@ -186,6 +190,8 @@ type UserPublicProfileResp struct {
 	Mark         *string              `json:"mark"`
 	Description  *string              `json:"description"`
 	LastLoginAt  *time.Time           `json:"last_login_at"`
+	LastActiveAt *time.Time           `json:"last_active_at,omitempty"`
+	IsOnline     bool                 `json:"is_online"`
 	RegisterAt   time.Time            `json:"register_at"`
 	Roles        []string             `json:"roles"`
 	DisplayEmail *string              `json:"display_email"`

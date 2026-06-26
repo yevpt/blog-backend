@@ -118,6 +118,8 @@ func (r *fakeUserRepo) FindRolesByUserID(userID uint) ([]string, error) {
 func (r *fakeUserRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error) {
 	return nil, nil
 }
+func (r *fakeUserRepo) TouchLoginPresence(userID uint) error { return nil }
+func (r *fakeUserRepo) UpdateLastActiveAt(userID uint) error { return nil }
 func (r *fakeUserRepo) UpdateLastLoginAt(userID uint) error { return nil }
 func (r *fakeUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
@@ -152,7 +154,7 @@ func (s *fakeAvatarSaver) SaveRemoteAvatar(ctx context.Context, avatarURL string
 }
 
 func newTestService(flow *fakeFlowManager, social *fakeSocialRepo, user *fakeUserRepo) serviceoauth.OAuthService {
-	return serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, nil)
+	return serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, nil, nil)
 }
 
 func TestOAuthService_AuthorizeBindRequiresUser(t *testing.T) {
@@ -187,7 +189,7 @@ func TestOAuthService_CallbackLoginCreatesUserAndBinding(t *testing.T) {
 	social := &fakeSocialRepo{}
 	user := &fakeUserRepo{roles: []string{roles.NormalRole}}
 	avatarSaver := &fakeAvatarSaver{objectName: "avatar/user/md5.jpg"}
-	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, avatarSaver)
+	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, avatarSaver, nil)
 
 	resp, err := svc.Callback(context.Background(), "github", "code", "state")
 
@@ -227,7 +229,7 @@ func TestOAuthService_CallbackLoginIgnoresAvatarFailure(t *testing.T) {
 	social := &fakeSocialRepo{}
 	user := &fakeUserRepo{roles: []string{roles.NormalRole}}
 	avatarSaver := &fakeAvatarSaver{err: assert.AnError}
-	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, avatarSaver)
+	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, avatarSaver, nil)
 
 	resp, err := svc.Callback(context.Background(), "github", "code", "state")
 

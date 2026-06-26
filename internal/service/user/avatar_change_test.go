@@ -55,6 +55,8 @@ func (r *changeAvatarRepo) FindRolesByUserID(id uint) ([]string, error)    { ret
 func (r *changeAvatarRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
 	return nil, nil
 }
+func (r *changeAvatarRepo) TouchLoginPresence(id uint) error  { return nil }
+func (r *changeAvatarRepo) UpdateLastActiveAt(id uint) error { return nil }
 func (r *changeAvatarRepo) UpdateLastLoginAt(id uint) error { return nil }
 func (r *changeAvatarRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
@@ -119,7 +121,7 @@ func TestUserService_ChangeAvatar_UpdatesAndCleansOldAvatar(t *testing.T) {
 	cache := &stubUserCacheService{
 		profile: &dto.UserDetailResp{ID: 7, Username: "alice"},
 	}
-	svc := user.NewUserService(cache, repo, store, &stubAvatarUploader{key: "avatar/user/new.jpg", created: true})
+	svc := user.NewUserService(cache, repo, store, &stubAvatarUploader{key: "avatar/user/new.jpg", created: true}, nil)
 
 	resp, err := svc.ChangeAvatar(7, &dto.UploadedImageFile{Name: "a.png", Data: []byte("png")})
 	require.NoError(t, err)
@@ -139,7 +141,7 @@ func TestUserService_ChangeAvatar_KeepsSharedOldAvatar(t *testing.T) {
 	cache := &stubUserCacheService{
 		profile: &dto.UserDetailResp{ID: 7, Username: "alice"},
 	}
-	svc := user.NewUserService(cache, repo, store, &stubAvatarUploader{key: "avatar/user/new.jpg"})
+	svc := user.NewUserService(cache, repo, store, &stubAvatarUploader{key: "avatar/user/new.jpg"}, nil)
 
 	_, err := svc.ChangeAvatar(7, &dto.UploadedImageFile{Name: "a.png", Data: []byte("png")})
 	require.NoError(t, err)

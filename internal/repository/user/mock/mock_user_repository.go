@@ -353,6 +353,34 @@ func (mr *MockUserRepositoryMockRecorder) Update(id, updates any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUserRepository)(nil).Update), id, updates)
 }
 
+// TouchLoginPresence mocks base method.
+func (m *MockUserRepository) TouchLoginPresence(userID uint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TouchLoginPresence", userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TouchLoginPresence indicates an expected call of TouchLoginPresence.
+func (mr *MockUserRepositoryMockRecorder) TouchLoginPresence(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchLoginPresence", reflect.TypeOf((*MockUserRepository)(nil).TouchLoginPresence), userID)
+}
+
+// UpdateLastActiveAt mocks base method.
+func (m *MockUserRepository) UpdateLastActiveAt(userID uint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateLastActiveAt", userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateLastActiveAt indicates an expected call of UpdateLastActiveAt.
+func (mr *MockUserRepositoryMockRecorder) UpdateLastActiveAt(userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateLastActiveAt", reflect.TypeOf((*MockUserRepository)(nil).UpdateLastActiveAt), userID)
+}
+
 // UpdateLastLoginAt mocks base method.
 func (m *MockUserRepository) UpdateLastLoginAt(userID uint) error {
 	m.ctrl.T.Helper()

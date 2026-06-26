@@ -15,6 +15,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	analyticsservice "github.com/vpt/blog-backend/internal/service/analytics"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/email"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
@@ -72,6 +73,7 @@ type authService struct {
 	avatar          userservice.AvatarUploader
 	store           storage.ObjectStore
 	resolver        storage.ObjectURLResolver
+	presence        analyticsservice.UserPresence
 }
 
 // CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
@@ -88,6 +90,7 @@ func NewAuthService(
 	cache userservice.UserCacheService,
 	avatar userservice.AvatarUploader,
 	store storage.ObjectStore,
+	presence analyticsservice.UserPresence,
 ) AuthService {
 	return &authService{
 		repo:            repo,
@@ -99,6 +102,7 @@ func NewAuthService(
 		avatar:          avatar,
 		store:           store,
 		resolver:        store,
+		presence:        presence,
 	}
 }
 
@@ -305,6 +309,16 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 	return s.issueLoginResp(user)
 }
 
+func (s *authService) touchLoginPresence(ctx context.Context, userID uint) {
+	_ = s.repo.TouchLoginPresence(userID)
+	if s.presence != nil {
+		_ = s.presence.TouchUserOnline(ctx, userID)
+	}
+	if s.cache != nil {
+		_ = s.cache.Invalidate(ctx, int64(userID))
+	}
+}
+
 func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
 	userId := int64(user.ID)
 	accessToken, err := s.jwt.GenerateAccess(userId)
@@ -316,13 +330,7 @@ func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
 		return nil, err
 	}
 
-	_ = s.repo.UpdateLastLoginAt(user.ID)
-
-	if s.cache != nil {
-		go func() {
-			_ = s.cache.Invalidate(context.Background(), userId)
-		}()
-	}
+	s.touchLoginPresence(context.Background(), user.ID)
 
 	userRoles, err := s.repo.FindRolesByUserID(user.ID)
 	if err != nil {
@@ -416,12 +424,7 @@ func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginR
 		return nil, err
 	}
 
-	_ = s.repo.UpdateLastLoginAt(user.ID)
-	if s.cache != nil {
-		go func() {
-			_ = s.cache.Invalidate(context.Background(), userId)
-		}()
-	}
+	s.touchLoginPresence(context.Background(), user.ID)
 
 	return &dto.LoginResp{
 		AccessToken:  accessToken,

@@ -31,12 +31,13 @@ type collectService struct {
 	ingestor      SessionIngestor
 	dedup         DedupChecker
 	tokenVerifier CollectTokenVerifier
+	presence      UserPresence
 	logger        *zap.Logger
 }
 
-// NewCollectService 注入富化、实时、入库、去重、token 校验依赖，构造编排服务。
-func NewCollectService(enricher Enricher, realtime Realtime, ingestor SessionIngestor, dedup DedupChecker, tokenVerifier CollectTokenVerifier, logger *zap.Logger) CollectService {
-	return &collectService{enricher: enricher, realtime: realtime, ingestor: ingestor, dedup: dedup, tokenVerifier: tokenVerifier, logger: logger}
+// NewCollectService 注入富化、实时、入库、去重、token 校验、用户 presence 依赖，构造编排服务。
+func NewCollectService(enricher Enricher, realtime Realtime, ingestor SessionIngestor, dedup DedupChecker, tokenVerifier CollectTokenVerifier, presence UserPresence, logger *zap.Logger) CollectService {
+	return &collectService{enricher: enricher, realtime: realtime, ingestor: ingestor, dedup: dedup, tokenVerifier: tokenVerifier, presence: presence, logger: logger}
 }
 
 // Handle 编排单次上报：富化 → 刷新在线 → 按事件类型分支处理。
@@ -59,6 +60,14 @@ func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
 	if !ev.IsBot && !ev.IsSuspect {
 		if err := s.realtime.TouchOnline(ctx, ev.VisitorID); err != nil {
 			s.logger.Warn("刷新在线失败", zap.Error(err))
+		}
+		if ev.UserID != nil && s.presence != nil {
+			if err := s.presence.TouchUserOnline(ctx, *ev.UserID); err != nil {
+				s.logger.Warn("刷新用户在线失败", zap.Error(err))
+			}
+			if err := s.presence.TouchActiveAt(ctx, *ev.UserID); err != nil {
+				s.logger.Warn("刷新用户活跃时间失败", zap.Error(err))
+			}
 		}
 	}
 

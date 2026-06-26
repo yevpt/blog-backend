@@ -368,7 +368,7 @@ func TestUserRepository_ListAll_OrdersByRoleNameWeight(t *testing.T) {
 		"site", "avatar_url", "mark", "status", "last_login_at",
 	}).AddRow(735, nil, nil, nil, "vip@example.com", "hashed", nil, nil, nil, nil, nil, nil, 1, nil)
 
-	mock.ExpectQuery(`ORDER BY MIN\(CASE role\.name WHEN 'ROLE_ADMIN' THEN 1 WHEN 'ROLE_VIP' THEN 2 WHEN 'ROLE_NORMAL' THEN 3 ELSE 999 END\) ASC, COALESCE\(user\.last_login_at, user\.created_at\) DESC, user\.id DESC`).
+	mock.ExpectQuery(`ORDER BY MIN\(CASE role\.name WHEN 'ROLE_ADMIN' THEN 1 WHEN 'ROLE_VIP' THEN 2 WHEN 'ROLE_NORMAL' THEN 3 ELSE 999 END\) ASC, COALESCE\(user\.last_active_at, user\.created_at\) DESC, user\.id DESC`).
 		WithArgs(1, 10).
 		WillReturnRows(rows)
 

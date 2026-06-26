@@ -38,7 +38,6 @@ type UserService interface {
 	SendEmailCode(userID uint, emailAddr, captchaToken, ip string) error
 	UpdateEmail(userID uint, target, emailAddr, code string) error
 	UpdateEmailDisplay(userID uint, display string) error
-	RecordLogin(userID uint) error
 	ChangeAvatar(userID uint, file *dto.UploadedImageFile) (*dto.UserDetailResp, error)
 }
 
@@ -49,6 +48,7 @@ type userService struct {
 	resolver storage.ObjectURLResolver
 	avatar   AvatarUploader
 	security SecurityDeps
+	presence OnlineChecker
 }
 
 // NewUserService 创建用户资料服务。
@@ -57,6 +57,7 @@ func NewUserService(
 	repo userrepo.UserRepository,
 	store storage.ObjectStore,
 	avatar AvatarUploader,
+	presence OnlineChecker,
 	security ...SecurityDeps,
 ) UserService {
 	deps := SecurityDeps{}
@@ -70,13 +71,19 @@ func NewUserService(
 		resolver: store,
 		avatar:   avatar,
 		security: deps,
+		presence: presence,
 	}
 }
 
 func (s *userService) GetDetail(userID uint) (*dto.UserDetailResp, error) {
 	// context.Background() 是有意为之：此方法仅供 handler 过渡期使用，
 	// Task 4 后 handler 将直接从 gin.Context 读取 UserDetail，此方法弃用。
-	return s.cache.Get(context.Background(), int64(userID))
+	detail, err := s.cache.Get(context.Background(), int64(userID))
+	if err != nil || detail == nil {
+		return detail, err
+	}
+	enrichDetailPresence(context.Background(), s.presence, userID, &detail.IsOnline)
+	return detail, nil
 }
 
 func (s *userService) ListRecent(req *dto.UserListReq) (*dto.UserPageResp, error) {
@@ -95,7 +102,7 @@ func (s *userService) ListRecent(req *dto.UserListReq) (*dto.UserPageResp, error
 		return nil, err
 	}
 
-	return s.buildUserPageResp(users, total, page, pageSize)
+	return s.buildUserPageResp(context.Background(), users, total, page, pageSize)
 }
 
 func (s *userService) ListAll(req *dto.UserListReq) (*dto.UserPageResp, error) {
@@ -114,10 +121,10 @@ func (s *userService) ListAll(req *dto.UserListReq) (*dto.UserPageResp, error) {
 		return nil, err
 	}
 
-	return s.buildUserPageResp(users, total, page, pageSize)
+	return s.buildUserPageResp(context.Background(), users, total, page, pageSize)
 }
 
-func (s *userService) buildUserPageResp(users []model.User, total int64, page, pageSize int) (*dto.UserPageResp, error) {
+func (s *userService) buildUserPageResp(ctx context.Context, users []model.User, total int64, page, pageSize int) (*dto.UserPageResp, error) {
 	if len(users) == 0 {
 		return &dto.UserPageResp{
 			Total:    total,
@@ -144,21 +151,19 @@ func (s *userService) buildUserPageResp(users []model.User, total int64, page, p
 		if roles == nil {
 			roles = []string{} // 兜底为空切片，避免返回 nil
 		}
-		lastLoginAt := u.LastLoginAt
-		if lastLoginAt == nil {
-			t := u.CreatedAt
-			lastLoginAt = &t
-		}
 
 		list = append(list, dto.UserListItemResp{
-			ID:          u.ID,
-			Nickname:    u.Nickname,
-			AvatarUrl:   resolveUserAvatarURL(s.resolver, u.AvatarUrl),
-			Mark:        u.Mark,
-			Roles:       roles,
-			LastLoginAt: lastLoginAt,
+			ID:           u.ID,
+			Nickname:     u.Nickname,
+			AvatarUrl:    resolveUserAvatarURL(s.resolver, u.AvatarUrl),
+			Mark:         u.Mark,
+			Roles:        roles,
+			LastLoginAt:  u.LastLoginAt,
+			LastActiveAt: u.LastActiveAt,
 		})
 	}
+
+	enrichListPresence(ctx, s.presence, list)
 
 	pages := 0
 	if pageSize > 0 {
@@ -192,14 +197,6 @@ func (s *userService) Update(userID uint, req *dto.UserUpdateReq) (*dto.UserDeta
 	return s.cache.Get(context.Background(), int64(userID))
 }
 
-func (s *userService) RecordLogin(userID uint) error {
-	err := s.repo.UpdateLastLoginAt(userID)
-	if err == nil {
-		_ = s.cache.Invalidate(context.Background(), int64(userID))
-	}
-	return err
-}
-
 func (s *userService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error) {
 	agg, err := s.repo.FindDetailByID(userID)
 	if err != nil {
@@ -208,7 +205,9 @@ func (s *userService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp,
 	if agg == nil {
 		return nil, nil
 	}
-	return buildPublicProfile(s.resolver, agg), nil
+	resp := buildPublicProfile(s.resolver, agg)
+	enrichDetailPresence(context.Background(), s.presence, userID, &resp.IsOnline)
+	return resp, nil
 }
 
 func (s *userService) UpdateProfile(userID uint, req *dto.UpdateProfileReq) (*dto.UserDetailResp, error) {

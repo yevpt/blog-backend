@@ -54,10 +54,6 @@ func (s *stubUserService) ChangeAvatar(userID uint, file *dto.UploadedImageFile)
 	return nil, nil
 }
 
-func (s *stubUserService) RecordLogin(userID uint) error {
-	return nil
-}
-
 func (s *stubUserService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error) {
 	return nil, nil
 }
@@ -172,7 +168,7 @@ func TestUserHandler_GetDetail_Success(t *testing.T) {
 		Roles:    []string{"ROLE_NORMAL"},
 		Status:   1,
 	}
-	r := newUserRouter(&stubUserService{}, jwtManager, detail)
+	r := newUserRouter(&stubUserService{resp: detail}, jwtManager, detail)
 	token, err := jwtManager.GenerateAccess(7)
 	require.NoError(t, err)
 

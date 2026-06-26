@@ -65,7 +65,7 @@ func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager) (authservice.Auth
 	mailer := &mockMailSender{}
 	captchaConsumer := &mockCaptchaTokenConsumer{}
 
-	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil, nil, nil)
+	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil, nil, nil, nil)
 	return svc, repo, rdb, mr, mailer, captchaConsumer
 }
 
@@ -202,7 +202,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 		require.NotNil(t, user.EmailVerifiedAt)
 		return nil
 	})
-	repo.EXPECT().UpdateLastLoginAt(uint(1)).Return(nil)
+	repo.EXPECT().TouchLoginPresence(uint(1)).Return(nil)
 	repo.EXPECT().FindRolesByUserID(uint(1)).Return([]string{"ROLE_NORMAL"}, nil)
 
 	nickname := "mynick"
@@ -251,7 +251,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 			Nickname: &nickname,
 			Status:   1,
 		}, nil),
-		repo.EXPECT().UpdateLastLoginAt(uint(0)).Return(nil),
+		repo.EXPECT().TouchLoginPresence(uint(0)).Return(nil),
 		repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
 	)
 
@@ -280,7 +280,7 @@ func TestAuthService_Login_ExpiresInFollowsJWTConfig(t *testing.T) {
 			Email:    &email,
 			Status:   1,
 		}, nil),
-		repo.EXPECT().UpdateLastLoginAt(uint(0)).Return(nil),
+		repo.EXPECT().TouchLoginPresence(uint(0)).Return(nil),
 		repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
 	)
 
@@ -345,7 +345,7 @@ func TestAuthService_AdminLogin_Success(t *testing.T) {
 			Status:   1,
 		}, nil),
 		repo.EXPECT().FindRolesByUserID(uint(7)).Return([]string{roles.AdminRole}, nil),
-		repo.EXPECT().UpdateLastLoginAt(uint(7)).Return(nil),
+		repo.EXPECT().TouchLoginPresence(uint(7)).Return(nil),
 	)
 
 	resp, err := svc.AdminLogin(&dto.AdminLoginReq{

@@ -11,6 +11,7 @@ import (
 	domain "github.com/vpt/blog-backend/internal/oauth"
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	analyticsservice "github.com/vpt/blog-backend/internal/service/analytics"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -53,6 +54,7 @@ type service struct {
 	jwt        *jwtpkg.Manager
 	cache      userservice.UserCacheService
 	avatar     AvatarSaver
+	presence   analyticsservice.UserPresence
 }
 
 func NewOAuthService(
@@ -62,6 +64,7 @@ func NewOAuthService(
 	jwt *jwtpkg.Manager,
 	cache userservice.UserCacheService,
 	avatar AvatarSaver,
+	presence analyticsservice.UserPresence,
 ) OAuthService {
 	return &service{
 		flow:       flow,
@@ -70,6 +73,7 @@ func NewOAuthService(
 		jwt:        jwt,
 		cache:      cache,
 		avatar:     avatar,
+		presence:   presence,
 	}
 }
 
@@ -243,7 +247,10 @@ func (s *service) issueLogin(ctx context.Context, user *model.User) (*dto.LoginR
 	if err != nil {
 		return nil, err
 	}
-	_ = s.userRepo.UpdateLastLoginAt(user.ID)
+	_ = s.userRepo.TouchLoginPresence(user.ID)
+	if s.presence != nil {
+		_ = s.presence.TouchUserOnline(ctx, user.ID)
+	}
 	if s.cache != nil {
 		_ = s.cache.Invalidate(ctx, int64(user.ID))
 	}

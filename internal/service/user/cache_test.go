@@ -47,6 +47,8 @@ func (r *stubUserRepo) FindRolesByUserID(id uint) ([]string, error) { return nil
 func (r *stubUserRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
 	return nil, nil
 }
+func (r *stubUserRepo) TouchLoginPresence(id uint) error      { return nil }
+func (r *stubUserRepo) UpdateLastActiveAt(id uint) error     { return nil }
 func (r *stubUserRepo) UpdateLastLoginAt(id uint) error { return nil }
 func (r *stubUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil

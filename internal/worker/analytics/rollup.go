@@ -14,6 +14,9 @@ import (
 // onlineKey 与 service 层 realtime 的在线 ZSET key 保持一致。
 const onlineKey = "analytics:online"
 
+// userOnlineKey 与 service/analytics.UserOnlineKey 保持一致。
+const userOnlineKey = "user:online"
+
 // RollupReader 读取某一日（Asia/Shanghai）的原始事件聚合结果。
 // repo.Repository 结构上满足该接口。
 type RollupReader interface {
@@ -99,13 +102,15 @@ func (r *Rollup) Cleanup(ctx context.Context, rdb *redis.Client, retentionDays i
 		}
 	}
 
-	// 裁剪在线 ZSET：移除 score < now-onlineWindow 的成员。
+	// 裁剪 analytics 与 user 在线 ZSET：移除 score < now-onlineWindow 的成员。
 	if rdb != nil {
 		max := "(" + strconv.FormatInt(now.Add(-onlineWindow).Unix(), 10)
-		if n, err := rdb.ZRemRangeByScore(ctx, onlineKey, "-inf", max).Result(); err != nil {
-			r.logger.Error("裁剪在线表失败", zap.Error(err))
-		} else if n > 0 {
-			r.logger.Info("裁剪在线表", zap.Int64("removed", n))
+		for _, key := range []string{onlineKey, userOnlineKey} {
+			if n, err := rdb.ZRemRangeByScore(ctx, key, "-inf", max).Result(); err != nil {
+				r.logger.Error("裁剪在线表失败", zap.String("key", key), zap.Error(err))
+			} else if n > 0 {
+				r.logger.Info("裁剪在线表", zap.String("key", key), zap.Int64("removed", n))
+			}
 		}
 	}
 	return nil

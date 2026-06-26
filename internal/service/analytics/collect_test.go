@@ -53,11 +53,24 @@ func (f *fakeDedup) IsDuplicatePV(context.Context, string, string, string) (bool
 	return f.dup, nil
 }
 
+type fakePresence struct {
+	online, active int
+}
+
+func (f *fakePresence) TouchUserOnline(context.Context, uint) error { f.online++; return nil }
+func (f *fakePresence) IsUserOnline(context.Context, uint) (bool, error) {
+	return false, nil
+}
+func (f *fakePresence) BatchIsUserOnline(context.Context, []uint) (map[uint]bool, error) {
+	return map[uint]bool{}, nil
+}
+func (f *fakePresence) TouchActiveAt(context.Context, uint) error { f.active++; return nil }
+
 func enr() svc.Enricher { return svc.NewEnricher(fakeGeo{}, "example.com", "salt") }
 
 func TestCollectPageView(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	err := cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true,
 	})
@@ -70,7 +83,7 @@ func TestCollectPageView(t *testing.T) {
 
 func TestCollectPageViewMarksNewVisitor(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{markNew: true}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 1, rt.marks)               // page_view 触发新访客判定
@@ -79,7 +92,7 @@ func TestCollectPageViewMarksNewVisitor(t *testing.T) {
 
 func TestCollectHeartbeatSkipsVisitorMark(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{markNew: true}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, rt.marks)      // 心跳不消耗新访客标记
@@ -88,7 +101,7 @@ func TestCollectHeartbeatSkipsVisitorMark(t *testing.T) {
 
 func TestCollectSuspectNotCounted(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	// 伪造/不允许的 Origin → IsSuspect=true（非 bot）。
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: false}))
@@ -101,7 +114,7 @@ func TestCollectSuspectNotCounted(t *testing.T) {
 func TestCollectInvalidTokenMarksSuspect(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
 	// 非空 secret + 非法 token → suspect，不计在线/今日，但仍入库带原因。
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("secret", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("secret", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true, CollectToken: "bad.token"}))
 	assert.Equal(t, 0, rt.online)
@@ -113,7 +126,7 @@ func TestCollectInvalidTokenMarksSuspect(t *testing.T) {
 
 func TestCollectDuplicatePVSkipsCount(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: true}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: true}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, ing.submitted)
@@ -123,7 +136,7 @@ func TestCollectDuplicatePVSkipsCount(t *testing.T) {
 
 func TestCollectBotNotCounted(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Googlebot/2.1"}))
 	assert.Equal(t, 0, rt.incr)       // bot 不计今日
@@ -132,7 +145,7 @@ func TestCollectBotNotCounted(t *testing.T) {
 
 func TestCollectHeartbeat(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true}))
 	assert.Equal(t, 0, ing.submitted) // 心跳不入事件表
@@ -141,11 +154,34 @@ func TestCollectHeartbeat(t *testing.T) {
 	assert.Equal(t, 0, rt.incr)
 }
 
+func TestCollectAuthenticatedHeartbeatTouchesUserPresence(t *testing.T) {
+	ing, rt := &fakeIngestor{}, &fakeRT{}
+	pres := &fakePresence{}
+	uid := uint(42)
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), pres, zap.NewNop())
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true, UserID: &uid,
+	}))
+	assert.Equal(t, 1, pres.online)
+	assert.Equal(t, 1, pres.active)
+}
+
+func TestCollectSuspectSkipsUserPresence(t *testing.T) {
+	pres := &fakePresence{}
+	uid := uint(1)
+	cs := svc.NewCollectService(enr(), &fakeRT{}, &fakeIngestor{}, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), pres, zap.NewNop())
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: false, UserID: &uid,
+	}))
+	assert.Equal(t, 0, pres.online)
+	assert.Equal(t, 0, pres.active)
+}
+
 func TestCollectHeartbeatSkipsTokenCheck(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}
 	// 心跳不校验 collect token：即便携带过期/非法 token 也不应被判 suspect（长会话 token 过期场景）。
 	// 对照 TestCollectInvalidTokenMarksSuspect：同样的坏 token 在 page_view 会被判 suspect。
-	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("secret", 0, nil), zap.NewNop())
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("secret", 0, nil), nil, zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true, CollectToken: "bad.token"}))
 	assert.Equal(t, 1, rt.online)   // 未被判 suspect → 仍刷新在线

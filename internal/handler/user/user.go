@@ -37,7 +37,13 @@ func (h *UserHandler) GetDetail(c *gin.Context) {
 		response.Unauthorized(c)
 		return
 	}
-	response.Success(c, detail)
+	// 在线态来自 Redis，需经 service 实时 enrichment（profile 缓存不含 is_online）。
+	enriched, err := h.svc.GetDetail(detail.ID)
+	if err != nil || enriched == nil {
+		response.Unauthorized(c)
+		return
+	}
+	response.Success(c, enriched)
 }
 
 // ListRecent 获取最近访问用户列表
@@ -476,25 +482,4 @@ func writeUserSecurityError(c *gin.Context, err error) {
 	default:
 		response.ServerError(c)
 	}
-}
-
-// RecordLogin 记录当前用户登录时间
-// @Summary 记录当前用户登录时间
-// @Description 从 jwt 中获取当前用户信息，更新最后登录时间
-// @Tags 用户
-// @Accept json
-// @Produce json
-// @Success 200 {object} response.Response "成功"
-// @Router /users/me/login-time [post]
-func (h *UserHandler) RecordLogin(c *gin.Context) {
-	detail := middleware.GetUserDetail(c)
-	if detail == nil {
-		response.Unauthorized(c)
-		return
-	}
-	if err := h.svc.RecordLogin(detail.ID); err != nil {
-		response.ServerError(c)
-		return
-	}
-	response.Success(c, nil)
 }

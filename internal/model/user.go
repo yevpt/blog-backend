@@ -16,6 +16,7 @@ type User struct {
 	Mark            *string    `gorm:"size:200;default:注册会员;comment:身份标签" json:"mark"`
 	Status          uint8      `gorm:"type:tinyint;default:1;comment:状态 0=禁用 1=正常" json:"status"`
 	LastLoginAt     *time.Time `gorm:"comment:最后登录时间" json:"last_login_at"`
+	LastActiveAt    *time.Time `gorm:"comment:最后活跃时间" json:"last_active_at"`
 }
 
 func (User) TableName() string { return "user" }

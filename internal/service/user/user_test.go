@@ -41,7 +41,7 @@ func TestUserService_GetDetail_DelegatesToCache(t *testing.T) {
 		Nickname: &nickname,
 		Roles:    []string{"ROLE_NORMAL", "ROLE_VIP"},
 	}
-	svc := user.NewUserService(&stubUserCacheService{profile: expected}, nil, nil, nil)
+	svc := user.NewUserService(&stubUserCacheService{profile: expected}, nil, nil, nil, nil)
 
 	resp, err := svc.GetDetail(7)
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestUserService_GetDetail_DelegatesToCache(t *testing.T) {
 }
 
 func TestUserService_GetDetail_PropagatesNotFound(t *testing.T) {
-	svc := user.NewUserService(&stubUserCacheService{err: user.ErrUserNotFound}, nil, nil, nil)
+	svc := user.NewUserService(&stubUserCacheService{err: user.ErrUserNotFound}, nil, nil, nil, nil)
 	resp, err := svc.GetDetail(9)
 	assert.Nil(t, resp)
 	assert.ErrorIs(t, err, user.ErrUserNotFound)
@@ -93,7 +93,7 @@ func newSecurityService(
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	mailer := &securityMailSender{}
 	captcha := &securityCaptchaConsumer{}
-	svc := user.NewUserService(nil, repo, nil, nil, user.SecurityDeps{
+	svc := user.NewUserService(nil, repo, nil, nil, nil, user.SecurityDeps{
 		Redis:   rdb,
 		Mailer:  mailer,
 		Captcha: captcha,
@@ -191,7 +191,7 @@ func TestUserService_SetInitialPassword_RejectsExistingPassword(t *testing.T) {
 func TestUserService_ListLikedContent_MapsReplyAsCommentFilterWithContext(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
-	svc := user.NewUserService(nil, repo, nil, nil)
+	svc := user.NewUserService(nil, repo, nil, nil, nil)
 	now := time.Date(2026, 6, 25, 10, 24, 0, 0, time.UTC)
 	nickname := "阿澈"
 	avatar := "avatars/a.png"
@@ -266,7 +266,7 @@ func TestUserService_ListLikedContent_MapsReplyAsCommentFilterWithContext(t *tes
 func TestUserService_CountLikedContent_ReturnsTotal(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
-	svc := user.NewUserService(nil, repo, nil, nil)
+	svc := user.NewUserService(nil, repo, nil, nil, nil)
 
 	repo.EXPECT().CountLikedContent(uint(7)).Return(int64(12), nil)
 

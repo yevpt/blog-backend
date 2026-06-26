@@ -210,9 +210,14 @@ func newRouteHandlers(
 	// 组装认证链路，保持依赖从 repository 到 service 再到 handler 的方向。
 	userRepo := userrepo.NewUserRepository(db)
 	userCacheSvc := userservice.NewUserCacheService(userRepo, objectStore, redisClient)
+	onlineWindow := cfg.Analytics.OnlineWindow
+	if onlineWindow <= 0 {
+		onlineWindow = 90 * time.Second
+	}
+	userPresence := analyticsservice.NewUserPresence(redisClient, userRepo, userCacheSvc, onlineWindow)
 	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
-	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc, avatarSvc, objectStore)
-	userSvc := userservice.NewUserService(userCacheSvc, userRepo, objectStore, avatarSvc, userservice.SecurityDeps{
+	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc, avatarSvc, objectStore, userPresence)
+	userSvc := userservice.NewUserService(userCacheSvc, userRepo, objectStore, avatarSvc, userPresence, userservice.SecurityDeps{
 		Redis:   redisClient,
 		Mailer:  mailer,
 		Captcha: captchaSvc,
@@ -220,7 +225,7 @@ func newRouteHandlers(
 	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc)
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
-	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc)
+	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc, userPresence)
 
 	uvSvc := uv.NewService(redisClient)
 
@@ -258,7 +263,7 @@ func newRouteHandlers(
 	uploadSvc := uploadservice.NewService(objectStore)
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
-	analyticsCollectHandler, analyticsAdminHandler, analyticsPublicHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics)
+	analyticsCollectHandler, analyticsAdminHandler, analyticsPublicHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics, userPresence)
 
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
@@ -299,6 +304,7 @@ func newAnalyticsCollectHandler(
 	redisClient *redis.Client,
 	uvSvc uv.UVService,
 	analyticsCfg config.AnalyticsConfig,
+	userPresence analyticsservice.UserPresence,
 ) (*analyticshandler.CollectHandler, *analyticshandler.AdminHandler, *analyticshandler.PublicHandler, AnalyticsRuntime) {
 	tz, err := time.LoadLocation(analyticsCfg.Timezone)
 	if err != nil {
@@ -315,7 +321,7 @@ func newAnalyticsCollectHandler(
 	sessionIng := analyticsworker.NewSessionIngestor(ingestor, analyticsRepo)
 	dedup := analyticsservice.NewDedupChecker(uvSvc)
 	tokenVerifier := analyticsservice.NewCollectTokenVerifier(analyticsCfg.CollectTokenSecret, analyticsCfg.CollectTokenTTL, nil)
-	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, tokenVerifier, log)
+	collectSvc := analyticsservice.NewCollectService(enricher, realtime, sessionIng, dedup, tokenVerifier, userPresence, log)
 
 	// 后台只读查询复用同一 repo（历史累计）与 realtime（今日/在线），不另起依赖图。
 	querySvc := analyticsservice.NewQueryService(analyticsRepo, realtime, log)
@@ -434,7 +440,6 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.GET("/users/me", handlers.user.GetDetail)
 	authed.PUT("/users/me", handlers.user.Update)
 	authed.POST("/users/me/avatar", middleware.RateLimitAvatarUpload(redisClient), handlers.user.UploadAvatar)
-	authed.POST("/users/me/login-time", handlers.user.RecordLogin)
 	authed.PATCH("/users/me/profile", handlers.user.UpdateProfile)
 	authed.PATCH("/users/me/meta", handlers.user.UpdateMeta)
 	authed.PATCH("/users/me/social/:platform", handlers.user.UpdateSocialLink)

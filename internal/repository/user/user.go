@@ -121,10 +121,11 @@ type UserRepository interface {
 	FindRolesByUserID(userID uint) ([]string, error)
 	// FindRolesByUserIDs 批量查询用户角色列表，返回以 user_id 为 key 的字典
 	FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error)
-	UpdateLastLoginAt(userID uint) error
-	// ListRecent 获取最近访问的用户列表，按最后登录时间降序
+	TouchLoginPresence(userID uint) error
+	UpdateLastActiveAt(userID uint) error
+	// ListRecent 获取最近活跃的用户列表，按 last_active_at 降序
 	ListRecent(offset, limit int) ([]model.User, int64, error)
-	// ListAll 获取所有用户列表，按角色排序 (admin > vip > normal)，然后按最后登录时间降序
+	// ListAll 获取所有用户列表，按角色排序后按 last_active_at 降序
 	ListAll(offset, limit int) ([]model.User, int64, error)
 	// Update 更新用户信息
 	Update(id uint, updates map[string]any) error
@@ -315,10 +316,22 @@ func (r *userRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error)
 	return rolesMap, nil
 }
 
-func (r *userRepo) UpdateLastLoginAt(userID uint) error {
-	// 用 NOW() 由数据库生成时间，避免应用服务器与 DB 时区不一致带来的时间偏差
+func (r *userRepo) TouchLoginPresence(userID uint) error {
 	return r.db.Model(&model.User{}).Where("id = ?", userID).
-		Update("last_login_at", gorm.Expr("NOW()")).Error
+		Updates(map[string]any{
+			"last_login_at":  gorm.Expr("NOW()"),
+			"last_active_at": gorm.Expr("NOW()"),
+		}).Error
+}
+
+func (r *userRepo) UpdateLastActiveAt(userID uint) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).
+		Update("last_active_at", gorm.Expr("NOW()")).Error
+}
+
+func (r *userRepo) UpdateLastLoginAt(userID uint) error {
+	// 保留供历史调用；新代码请用 TouchLoginPresence。
+	return r.TouchLoginPresence(userID)
 }
 
 func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
@@ -332,7 +345,7 @@ func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 		return nil, 0, err
 	}
 
-	err := query.Order("COALESCE(last_login_at, created_at) DESC, id DESC").Offset(offset).Limit(limit).Find(&users).Error
+	err := query.Order("COALESCE(last_active_at, created_at) DESC, id DESC").Offset(offset).Limit(limit).Find(&users).Error
 	return users, total, err
 }
 
@@ -357,7 +370,7 @@ func (r *userRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
 		Joins("LEFT JOIN role ON role.id = user_role.role_id").
 		Where("user.status = ?", 1).
 		Group("user.id").
-		Order(roleWeightExpr + " ASC, COALESCE(user.last_login_at, user.created_at) DESC, user.id DESC").
+		Order(roleWeightExpr + " ASC, COALESCE(user.last_active_at, user.created_at) DESC, user.id DESC").
 		Offset(offset).
 		Limit(limit).
 		Find(&users).Error
