@@ -112,7 +112,7 @@ type ArticleUserResp struct {
 	// AvatarUrl 用户头像 CDN 访问地址。
 	AvatarUrl *string `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
 	// Site 个人站点。
-	Site *string `json:"site,omitempty" example:"https://yevpt.com"`
+	Site *string `json:"site,omitempty" example:"https://example.com"`
 	// Mark 身份标签。
 	Mark *string `json:"mark,omitempty" example:"博主"`
 }

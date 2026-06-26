@@ -53,7 +53,7 @@ func (f *fakeDedup) IsDuplicatePV(context.Context, string, string, string) (bool
 	return f.dup, nil
 }
 
-func enr() svc.Enricher { return svc.NewEnricher(fakeGeo{}, "yevpt.com", "salt") }
+func enr() svc.Enricher { return svc.NewEnricher(fakeGeo{}, "example.com", "salt") }
 
 func TestCollectPageView(t *testing.T) {
 	ing, rt := &fakeIngestor{}, &fakeRT{}

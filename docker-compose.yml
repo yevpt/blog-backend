@@ -7,7 +7,8 @@ name: blog-backend
 
 services:
   blog-server:
-    image: ${BLOG_SERVER_IMAGE:-krccr.ccs.tencentyun.com/yevpt/blog-backend:latest}
+    # 生产由 CI/部署经 BLOG_SERVER_IMAGE 注入精确镜像；下方仅占位，请替换为你的镜像仓
+    image: ${BLOG_SERVER_IMAGE:-your-registry.example.com/blog-backend:latest}
     container_name: ${COMPOSE_CONTAINER_NAME:-blog-server}
     restart: unless-stopped
     environment:

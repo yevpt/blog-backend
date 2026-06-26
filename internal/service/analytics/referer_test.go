@@ -9,13 +9,13 @@ import (
 
 func TestClassifyReferer(t *testing.T) {
 	cases := []struct{ host, site, want string }{
-		{"", "yevpt.com", "direct"},
-		{"yevpt.com", "yevpt.com", "internal"},
-		{"www.google.com", "yevpt.com", "search"},
-		{"www.baidu.com", "yevpt.com", "search"},
-		{"t.co", "yevpt.com", "social"},
-		{"www.zhihu.com", "yevpt.com", "social"},
-		{"example.com", "yevpt.com", "external"},
+		{"", "example.com", "direct"},
+		{"example.com", "example.com", "internal"},
+		{"www.google.com", "example.com", "search"},
+		{"www.baidu.com", "example.com", "search"},
+		{"t.co", "example.com", "social"},
+		{"www.zhihu.com", "example.com", "social"},
+		{"other.com", "example.com", "external"},
 	}
 	for _, c := range cases {
 		assert.Equal(t, c.want, svc.ClassifyReferer(c.host, c.site), c.host)

@@ -10216,7 +10216,7 @@ const docTemplate = `{
                 "site": {
                     "description": "Site 个人站点。",
                     "type": "string",
-                    "example": "https://yevpt.com"
+                    "example": "https://example.com"
                 },
                 "username": {
                     "description": "Username 登录账号。",
@@ -10833,7 +10833,7 @@ const docTemplate = `{
                 "site": {
                     "description": "Site 用户个人站点。",
                     "type": "string",
-                    "example": "https://yevpt.com"
+                    "example": "https://example.com"
                 },
                 "username": {
                     "description": "Username 登录账号。",
@@ -11122,7 +11122,7 @@ const docTemplate = `{
                 "site": {
                     "description": "Site 用户个人站点。",
                     "type": "string",
-                    "example": "https://yevpt.com"
+                    "example": "https://example.com"
                 },
                 "username": {
                     "description": "Username 登录账号。",
@@ -11390,7 +11390,7 @@ const docTemplate = `{
                 "site": {
                     "description": "Site 用户个人站点。",
                     "type": "string",
-                    "example": "https://yevpt.com"
+                    "example": "https://example.com"
                 },
                 "username": {
                     "description": "Username 登录账号。",
@@ -12461,7 +12461,7 @@ const docTemplate = `{
                 },
                 "site": {
                     "type": "string",
-                    "example": "https://yevpt.com"
+                    "example": "https://example.com"
                 },
                 "username": {
                     "type": "string",

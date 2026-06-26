@@ -13,7 +13,7 @@ type fakeGeo struct{}
 func (fakeGeo) Resolve(string) (string, string) { return "中国", "浙江省" }
 
 func TestEnrich(t *testing.T) {
-	e := svc.NewEnricher(fakeGeo{}, "yevpt.com", "salt")
+	e := svc.NewEnricher(fakeGeo{}, "example.com", "salt")
 	uid := uint(7)
 	got := e.Enrich(svc.RawEvent{
 		EventType: "page_view",
@@ -42,7 +42,7 @@ func TestEnrich(t *testing.T) {
 }
 
 func TestEnrichBot(t *testing.T) {
-	e := svc.NewEnricher(fakeGeo{}, "yevpt.com", "salt")
+	e := svc.NewEnricher(fakeGeo{}, "example.com", "salt")
 	got := e.Enrich(svc.RawEvent{EventType: "page_view", VisitorID: "v", SessionID: "s",
 		Path: "/", UA: "Googlebot/2.1", IP: "1.2.3.4"})
 	assert.True(t, got.IsBot)
@@ -52,7 +52,7 @@ func TestEnrichBot(t *testing.T) {
 
 func TestEnrichPassesThroughSuspect(t *testing.T) {
 	// suspect 判定已上移到 DecideSuspect，富化仅透传 raw.IsSuspect/SuspectReason。
-	e := svc.NewEnricher(fakeGeo{}, "yevpt.com", "salt")
+	e := svc.NewEnricher(fakeGeo{}, "example.com", "salt")
 
 	clean := e.Enrich(svc.RawEvent{EventType: "page_view", VisitorID: "v", SessionID: "s",
 		Path: "/", IP: "1.2.3.4"})

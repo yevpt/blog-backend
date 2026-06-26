@@ -67,7 +67,7 @@ type MomentUserResp struct {
 	// AvatarUrl 用户头像地址。
 	AvatarUrl *string `json:"avatar_url,omitempty" example:"https://example.com/avatar.png"`
 	// Site 用户个人站点。
-	Site *string `json:"site,omitempty" example:"https://yevpt.com"`
+	Site *string `json:"site,omitempty" example:"https://example.com"`
 	// Mark 用户身份标签。
 	Mark *string `json:"mark,omitempty" example:"博主"`
 	// Roles 用户角色列表，如 ROLE_VIP、ROLE_ADMIN。

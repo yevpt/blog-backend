@@ -28,7 +28,7 @@ func (c *captureSvc) Handle(_ context.Context, raw svc.RawEvent) error {
 func TestCollectHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cs := &captureSvc{}
-	h := hdl.NewCollectHandler(cs, []string{"https://www.yevpt.com"})
+	h := hdl.NewCollectHandler(cs, []string{"https://www.example.com"})
 
 	r := gin.New()
 	r.POST("/collect", func(c *gin.Context) { c.Set("visitor_id", "v1") }, h.Collect)
@@ -36,7 +36,7 @@ func TestCollectHandler(t *testing.T) {
 	body := `{"event_type":"page_view","path":"/a","session_id":"s1"}`
 	req := httptest.NewRequest(http.MethodPost, "/collect", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://www.yevpt.com")
+	req.Header.Set("Origin", "https://www.example.com")
 	req.Header.Set("User-Agent", "Chrome")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -51,7 +51,7 @@ func TestCollectHandler(t *testing.T) {
 func TestCollectHandlerBadOriginMarksSuspect(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cs := &captureSvc{}
-	h := hdl.NewCollectHandler(cs, []string{"https://www.yevpt.com"})
+	h := hdl.NewCollectHandler(cs, []string{"https://www.example.com"})
 	r := gin.New()
 	r.POST("/collect", func(c *gin.Context) { c.Set("visitor_id", "v1") }, h.Collect)
 

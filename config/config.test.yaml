@@ -17,7 +17,7 @@ analytics:
   channel_buffer: 4096
   public_cache_ttl: 60s
   geoip_path: ""
-  site_host: "yevpt.com"
+  site_host: "example.com"
   ip_salt: "change_me"
   collect_token_secret: ""
   collect_token_ttl: 5m

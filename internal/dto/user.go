@@ -103,7 +103,7 @@ type UserLikedContentAuthorResp struct {
 	Username  string   `json:"username,omitempty" example:"vpt"`
 	Nickname  *string  `json:"nickname,omitempty" example:"VPT"`
 	AvatarUrl *string  `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
-	Site      *string  `json:"site,omitempty" example:"https://yevpt.com"`
+	Site      *string  `json:"site,omitempty" example:"https://example.com"`
 	Mark      *string  `json:"mark,omitempty" example:"博主"`
 	Roles     []string `json:"roles"`
 }

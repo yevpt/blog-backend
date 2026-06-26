@@ -976,7 +976,7 @@ definitions:
         type: string
       site:
         description: Site 个人站点。
-        example: https://yevpt.com
+        example: https://example.com
         type: string
       username:
         description: Username 登录账号。
@@ -1433,7 +1433,7 @@ definitions:
         type: array
       site:
         description: Site 用户个人站点。
-        example: https://yevpt.com
+        example: https://example.com
         type: string
       username:
         description: Username 登录账号。
@@ -1649,7 +1649,7 @@ definitions:
         type: array
       site:
         description: Site 用户个人站点。
-        example: https://yevpt.com
+        example: https://example.com
         type: string
       username:
         description: Username 登录账号。
@@ -1847,7 +1847,7 @@ definitions:
         type: array
       site:
         description: Site 用户个人站点。
-        example: https://yevpt.com
+        example: https://example.com
         type: string
       username:
         description: Username 登录账号。
@@ -2605,7 +2605,7 @@ definitions:
           type: string
         type: array
       site:
-        example: https://yevpt.com
+        example: https://example.com
         type: string
       username:
         example: vpt
