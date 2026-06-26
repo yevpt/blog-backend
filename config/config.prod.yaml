@@ -14,4 +14,5 @@ analytics:
   # IP 哈希盐必须经 env BLOG_ANALYTICS_IP_SALT 注入随机串，此处占位值仅兜底
   ip_salt: "change_me"
   collect_token_secret: ""
-  collect_token_ttl: 5m
+  # 须 >= 前端 ANALYTICS_COLLECT_TOKEN_TTL_MS（前端默认 5m），此处多 1m 作时钟偏差余量。详见 config.yaml 注释。
+  collect_token_ttl: 6m
