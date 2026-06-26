@@ -49,6 +49,9 @@ type stubCommentService struct {
 	toggleLikeUserID      uint
 	toggleLikeResp        *dto.CommentLikeResp
 	toggleLikeErr         error
+	listAdminReq          dto.AdminCommentListReq
+	listAdminResp         *dto.AdminCommentPageResp
+	listAdminErr          error
 }
 
 func (s *stubCommentService) List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error) {
@@ -57,6 +60,11 @@ func (s *stubCommentService) List(targetType string, targetID uint, req dto.Comm
 	s.listReq = req
 	s.listViewerID = viewerID
 	return s.listResp, s.listErr
+}
+
+func (s *stubCommentService) ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error) {
+	s.listAdminReq = req
+	return s.listAdminResp, s.listAdminErr
 }
 
 func (s *stubCommentService) Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
@@ -129,6 +137,7 @@ func newCommentRouter(svc commentservice.CommentService) *gin.Engine {
 		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "vpt", Status: 1})
 		h.ToggleArticleLike(c)
 	})
+	r.GET("/admin/comments", h.ListAdmin)
 	return r
 }
 
@@ -223,4 +232,21 @@ func TestCommentHandler_ToggleArticleLike_BindsIDAndUser(t *testing.T) {
 	assert.Equal(t, "article", stub.toggleLikeTargetType)
 	assert.Equal(t, uint(12), stub.toggleLikeCommentID)
 	assert.Equal(t, uint(7), stub.toggleLikeUserID)
+}
+
+func TestCommentHandler_ListAdmin_BindsFilters(t *testing.T) {
+	stub := &stubCommentService{
+		listAdminResp: &dto.AdminCommentPageResp{Page: 2, PageSize: 5},
+	}
+	r := newCommentRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/comments?page=2&page_size=5&target_type=moment&search=%E6%B5%8B%E8%AF%95", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 2, stub.listAdminReq.Page)
+	assert.Equal(t, 5, stub.listAdminReq.PageSize)
+	assert.Equal(t, "moment", stub.listAdminReq.TargetType)
+	assert.Equal(t, "测试", stub.listAdminReq.Search)
 }

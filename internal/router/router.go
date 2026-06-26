@@ -9,12 +9,12 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/handler"
 	analyticshandler "github.com/vpt/blog-backend/internal/handler/analytics"
-	dashboardhandler "github.com/vpt/blog-backend/internal/handler/dashboard"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
 	captchahandler "github.com/vpt/blog-backend/internal/handler/captcha"
 	categoryhandler "github.com/vpt/blog-backend/internal/handler/category"
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
+	dashboardhandler "github.com/vpt/blog-backend/internal/handler/dashboard"
 	friendlinkhandler "github.com/vpt/blog-backend/internal/handler/friendlink"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
@@ -28,10 +28,10 @@ import (
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
 	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
-	dashboardrepo "github.com/vpt/blog-backend/internal/repository/dashboard"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	dashboardrepo "github.com/vpt/blog-backend/internal/repository/dashboard"
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
@@ -41,13 +41,13 @@ import (
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	analyticsservice "github.com/vpt/blog-backend/internal/service/analytics"
-	dashboardservice "github.com/vpt/blog-backend/internal/service/dashboard"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
 	captchaservice "github.com/vpt/blog-backend/internal/service/captcha"
 	categoryservice "github.com/vpt/blog-backend/internal/service/category"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
+	dashboardservice "github.com/vpt/blog-backend/internal/service/dashboard"
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
@@ -517,6 +517,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/articles", handlers.article.Save)
 	admin.DELETE("/articles/:id", handlers.article.Delete)
 	admin.DELETE("/articles/:id/permanent", handlers.article.PermanentDelete)
+	admin.GET("/comments", handlers.comment.ListAdmin)
 	admin.POST("/categories", handlers.category.Create)
 	admin.PUT("/categories/:id", handlers.category.Update)
 	admin.DELETE("/categories/:id", handlers.category.Delete)

@@ -26,6 +26,12 @@ type fakeCommentRepo struct {
 	listViewerID          *uint
 	listResp              *commentrepo.PageResult
 	listErr               error
+	listAdminTargetType   uint8
+	listAdminSearch       string
+	listAdminPage         int
+	listAdminPageSize     int
+	listAdminResp         *commentrepo.AdminPageResult
+	listAdminErr          error
 	createTarget          commentrepo.Target
 	createUserID          uint
 	createContent         string
@@ -64,6 +70,14 @@ func (f *fakeCommentRepo) List(target commentrepo.Target, viewerID *uint, page i
 	f.listPage = page
 	f.listPageSize = pageSize
 	return f.listResp, f.listErr
+}
+
+func (f *fakeCommentRepo) ListAdmin(targetType uint8, search string, page int, pageSize int) (*commentrepo.AdminPageResult, error) {
+	f.listAdminTargetType = targetType
+	f.listAdminSearch = search
+	f.listAdminPage = page
+	f.listAdminPageSize = pageSize
+	return f.listAdminResp, f.listAdminErr
 }
 
 func (f *fakeCommentRepo) Create(target commentrepo.Target, userID uint, content string) (*commentrepo.CommentAggregate, error) {
@@ -154,6 +168,52 @@ func TestCommentService_List_UsesViewerAndPaging(t *testing.T) {
 	require.NotNil(t, repo.listViewerID)
 	assert.Equal(t, uint(9), *repo.listViewerID)
 	assert.Equal(t, 2, resp.Page)
+}
+
+func TestCommentService_ListAdmin_NormalizesFiltersAndMapsItems(t *testing.T) {
+	now := time.Now()
+	repo := &fakeCommentRepo{
+		listAdminResp: &commentrepo.AdminPageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 50,
+			Comments: []commentrepo.AdminCommentAggregate{
+				{
+					TargetType: commentrepo.TargetMoment,
+					Comment: commentrepo.CommentRecord{
+						ID:        9,
+						TargetID:  3,
+						UserID:    7,
+						Content:   "测试评论",
+						CreatedAt: now,
+						UpdatedAt: now,
+					},
+					User:       &model.User{Base: model.Base{ID: 7}, Username: "vpt"},
+					ReplyCount: 2,
+					LikeCount:  4,
+				},
+			},
+		},
+	}
+	svc := commentservice.NewCommentService(repo, nil, nil, nil)
+
+	resp, err := svc.ListAdmin(dto.AdminCommentListReq{
+		Page:       0,
+		PageSize:   99,
+		TargetType: "moment",
+		Search:     "  测试评论  ",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint8(commentrepo.TargetMoment), repo.listAdminTargetType)
+	assert.Equal(t, "测试评论", repo.listAdminSearch)
+	assert.Equal(t, 1, repo.listAdminPage)
+	assert.Equal(t, 50, repo.listAdminPageSize)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, "moment", resp.List[0].TargetType)
+	assert.Equal(t, int64(2), resp.List[0].ReplyCount)
+	assert.Equal(t, int64(4), resp.List[0].LikeCount)
+	assert.Equal(t, 1, resp.Pages)
 }
 
 func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {

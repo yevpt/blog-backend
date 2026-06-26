@@ -1426,6 +1426,91 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/comments": {
+            "get": {
+                "description": "管理员查询文章与碎语一级评论列表，支持类型筛选与正文搜索。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "后台评论"
+                ],
+                "summary": "后台分页查询评论",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 10，最大 50",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "评论目标类型：all、article、moment",
+                        "name": "target_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "按评论正文搜索",
+                        "name": "search",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminCommentPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 无效",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "非管理员",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/friend-links": {
             "get": {
                 "description": "管理员分页查询未删除的友情链接，可按 status 过滤。",
@@ -9564,6 +9649,38 @@ const docTemplate = `{
                 "status": {
                     "type": "string",
                     "example": "pending"
+                }
+            }
+        },
+        "dto.AdminCommentPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 评论列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CommentItemResp"
+                    }
+                },
+                "page": {
+                    "description": "Page 当前页码。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "description": "PageSize 每页数量。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "description": "Pages 总页数。",
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "description": "Total 总记录数。",
+                    "type": "integer",
+                    "example": 100
                 }
             }
         },

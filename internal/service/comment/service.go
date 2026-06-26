@@ -31,6 +31,23 @@ func (s *commentService) List(targetType string, targetID uint, req dto.CommentL
 	return commentPageToDTO(result, target.Type, s.objectURLResolver, rolesMap), nil
 }
 
+func (s *commentService) ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error) {
+	targetType, err := parseAdminTargetType(req.TargetType)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.repo.ListAdmin(targetType, strings.TrimSpace(req.Search), normalizeCommentPage(req.Page), normalizeCommentPageSize(req.PageSize))
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	rolesMap, err := s.lookupRoles(collectAdminCommentPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+	return adminCommentPageToDTO(result, s.objectURLResolver, rolesMap), nil
+}
+
 func (s *commentService) Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
 	target, err := parseTarget(targetType, targetID)
 	if err != nil {

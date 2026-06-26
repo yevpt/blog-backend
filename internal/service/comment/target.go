@@ -32,6 +32,19 @@ func parseTargetType(targetType string) (uint8, error) {
 	return target.Type, err
 }
 
+func parseAdminTargetType(targetType string) (uint8, error) {
+	switch targetType {
+	case "", "all":
+		return commentrepo.TargetAll, nil
+	case targetTypeArticle:
+		return commentrepo.TargetArticle, nil
+	case targetTypeMoment:
+		return commentrepo.TargetMoment, nil
+	default:
+		return 0, ErrCommentTargetInvalid
+	}
+}
+
 func targetTypeName(commentType uint8) string {
 	switch commentType {
 	case commentrepo.TargetArticle:

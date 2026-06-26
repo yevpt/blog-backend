@@ -30,6 +30,36 @@ func commentPageToDTO(result *commentrepo.PageResult, commentType uint8, resolve
 	}
 }
 
+func adminCommentPageToDTO(result *commentrepo.AdminPageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.AdminCommentPageResp {
+	pages := 0
+	if result.PageSize > 0 {
+		pages = int((result.Total + int64(result.PageSize) - 1) / int64(result.PageSize))
+	}
+
+	items := make([]dto.CommentItemResp, 0, len(result.Comments))
+	for _, aggregate := range result.Comments {
+		items = append(items, dto.CommentItemResp{
+			ID:         aggregate.Comment.ID,
+			TargetType: targetTypeName(aggregate.TargetType),
+			TargetID:   aggregate.Comment.TargetID,
+			UserID:     aggregate.Comment.UserID,
+			Content:    commentasset.ResolveContent(context.Background(), resolver, aggregate.Comment.Content),
+			User:       userToDTO(aggregate.User, resolver, rolesMap),
+			ReplyCount: aggregate.ReplyCount,
+			LikeCount:  aggregate.LikeCount,
+			CreatedAt:  aggregate.Comment.CreatedAt,
+			UpdatedAt:  aggregate.Comment.UpdatedAt,
+		})
+	}
+	return &dto.AdminCommentPageResp{
+		Total:    result.Total,
+		Pages:    pages,
+		Page:     result.Page,
+		PageSize: result.PageSize,
+		List:     items,
+	}
+}
+
 func commentToDTO(aggregate commentrepo.CommentAggregate, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.CommentItemResp {
 	return &dto.CommentItemResp{
 		ID:         aggregate.Comment.ID,
@@ -102,6 +132,19 @@ func userToDTO(user *model.User, resolver storage.ObjectURLResolver, rolesMap ma
 }
 
 func collectCommentPageUserIDs(result *commentrepo.PageResult) []uint {
+	if result == nil {
+		return nil
+	}
+	ids := make([]uint, 0, len(result.Comments))
+	for _, aggregate := range result.Comments {
+		if aggregate.User != nil {
+			ids = append(ids, aggregate.User.ID)
+		}
+	}
+	return ids
+}
+
+func collectAdminCommentPageUserIDs(result *commentrepo.AdminPageResult) []uint {
 	if result == nil {
 		return nil
 	}

@@ -10,6 +10,18 @@ type CommentListReq struct {
 	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
 }
 
+// AdminCommentListReq 后台评论分页查询参数。
+type AdminCommentListReq struct {
+	// Page 页码，从 1 开始。
+	Page int `form:"page" binding:"omitempty,min=1" example:"1"`
+	// PageSize 每页数量，最大 50。
+	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
+	// TargetType 评论目标类型：all、article、moment。
+	TargetType string `form:"target_type" binding:"omitempty,oneof=all article moment" example:"all"`
+	// Search 按评论正文搜索。
+	Search string `form:"search" binding:"omitempty,max=100" example:"写得真好"`
+}
+
 // CommentDeleteReq 删除一级评论请求。
 type CommentDeleteReq struct {
 	// TargetType 评论目标类型：article、moment、guestbook。
@@ -114,6 +126,20 @@ type CommentItemResp struct {
 
 // CommentPageResp 评论分页响应。
 type CommentPageResp struct {
+	// Total 总记录数。
+	Total int64 `json:"total" example:"100"`
+	// Pages 总页数。
+	Pages int `json:"pages" example:"10"`
+	// Page 当前页码。
+	Page int `json:"page" example:"1"`
+	// PageSize 每页数量。
+	PageSize int `json:"page_size" example:"10"`
+	// List 评论列表。
+	List []CommentItemResp `json:"list"`
+}
+
+// AdminCommentPageResp 后台评论分页响应。
+type AdminCommentPageResp struct {
 	// Total 总记录数。
 	Total int64 `json:"total" example:"100"`
 	// Pages 总页数。

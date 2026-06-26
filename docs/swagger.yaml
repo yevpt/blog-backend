@@ -419,6 +419,30 @@ definitions:
         example: pending
         type: string
     type: object
+  dto.AdminCommentPageResp:
+    properties:
+      list:
+        description: List 评论列表。
+        items:
+          $ref: '#/definitions/dto.CommentItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
   dto.AdminEmailBatchPageResp:
     properties:
       list:
@@ -3813,6 +3837,59 @@ paths:
       summary: 添加文章到分类
       tags:
       - 分类
+  /admin/comments:
+    get:
+      consumes:
+      - application/json
+      description: 管理员查询文章与碎语一级评论列表，支持类型筛选与正文搜索。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 评论目标类型：all、article、moment
+        in: query
+        name: target_type
+        type: string
+      - description: 按评论正文搜索
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminCommentPageResp'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 无效
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 非管理员
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 后台分页查询评论
+      tags:
+      - 后台评论
   /admin/friend-links:
     get:
       description: 管理员分页查询未删除的友情链接，可按 status 过滤。

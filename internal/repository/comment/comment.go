@@ -9,6 +9,8 @@ import (
 )
 
 const (
+	// TargetAll 表示后台评论管理查询文章与碎语评论。
+	TargetAll uint8 = 0
 	// TargetArticle 表示文章评论，与 comment_reply.comment_type 保持一致。
 	TargetArticle uint8 = 1
 	// TargetMoment 表示说说评论，与 comment_reply.comment_type 保持一致。
@@ -69,6 +71,15 @@ type CommentAggregate struct {
 	RootSnapshot RootSnapshot
 }
 
+// AdminCommentAggregate 后台评论聚合结果，包含评论来源类型。
+type AdminCommentAggregate struct {
+	TargetType uint8
+	Comment    CommentRecord
+	User       *model.User
+	ReplyCount int64
+	LikeCount  int64
+}
+
 // ReplyRecord 统一的评论回复记录，屏蔽三张回复表差异。
 type ReplyRecord struct {
 	ID            uint
@@ -99,6 +110,14 @@ type PageResult struct {
 	Page     int
 	PageSize int
 	Comments []CommentAggregate
+}
+
+// AdminPageResult 后台评论分页查询结果。
+type AdminPageResult struct {
+	Total    int64
+	Page     int
+	PageSize int
+	Comments []AdminCommentAggregate
 }
 
 // ReplyPageResult 评论回复分页查询结果。
@@ -141,6 +160,8 @@ type ReplyData struct {
 type CommentRepository interface {
 	// List 分页查询一级评论，并按 viewerID 附带回复数量与点赞信息。
 	List(target Target, viewerID *uint, page int, pageSize int) (*PageResult, error)
+	// ListAdmin 后台分页查询文章和碎语一级评论。
+	ListAdmin(targetType uint8, search string, page int, pageSize int) (*AdminPageResult, error)
 	// Create 创建一级评论，并返回评论聚合。
 	Create(target Target, userID uint, content string) (*CommentAggregate, error)
 	// ListReplies 分页查询某条一级评论下的回复。

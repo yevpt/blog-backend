@@ -32,6 +32,7 @@ var (
 // CommentService 评论业务接口，负责评论、回复的查询、创建和删除。
 type CommentService interface {
 	List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error)
+	ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error)
 	Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error)
 	ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error)
 	Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error)
