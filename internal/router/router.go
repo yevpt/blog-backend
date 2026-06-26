@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/vpt/blog-backend/internal/handler"
 	analyticshandler "github.com/vpt/blog-backend/internal/handler/analytics"
+	dashboardhandler "github.com/vpt/blog-backend/internal/handler/dashboard"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
 	authhandler "github.com/vpt/blog-backend/internal/handler/auth"
 	captchahandler "github.com/vpt/blog-backend/internal/handler/captcha"
@@ -27,6 +28,7 @@ import (
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
 	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
+	dashboardrepo "github.com/vpt/blog-backend/internal/repository/dashboard"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
@@ -39,6 +41,7 @@ import (
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	analyticsservice "github.com/vpt/blog-backend/internal/service/analytics"
+	dashboardservice "github.com/vpt/blog-backend/internal/service/dashboard"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
 	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
@@ -91,6 +94,7 @@ type routeHandlers struct {
 	analyticsAdmin    *analyticshandler.AdminHandler
 	analyticsPublic   *analyticshandler.PublicHandler
 	analyticsRuntime  AnalyticsRuntime
+	dashboard         *dashboardhandler.Handler
 	userCache         userservice.UserCacheService
 }
 
@@ -265,6 +269,15 @@ func newRouteHandlers(
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
 	analyticsCollectHandler, analyticsAdminHandler, analyticsPublicHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics, userPresence)
 
+	// 后台首页汇总（内容总量/近期互动/用户统计），切天时区与统计口径一致。
+	dashTZ, dashErr := time.LoadLocation(cfg.Analytics.Timezone)
+	if dashErr != nil {
+		dashTZ = time.FixedZone("CST", 8*3600)
+	}
+	dashboardHandler := dashboardhandler.NewHandler(
+		dashboardservice.NewService(dashboardrepo.NewRepository(db), dashTZ),
+	)
+
 	return routeHandlers{
 		health:            handler.NewHealthHandler(db, redisClient),
 		test:              handler.NewTestHandler(jwtManager),
@@ -288,6 +301,7 @@ func newRouteHandlers(
 		analyticsAdmin:    analyticsAdminHandler,
 		analyticsPublic:   analyticsPublicHandler,
 		analyticsRuntime:  analyticsRuntime,
+		dashboard:         dashboardHandler,
 		userCache:         userCacheSvc,
 	}
 }
@@ -540,6 +554,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
 	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)
+	admin.GET("/overview/summary", handlers.dashboard.Overview)
 	admin.GET("/analytics/overview", handlers.analyticsAdmin.Overview)
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)
 	admin.GET("/analytics/pages", handlers.analyticsAdmin.Pages)

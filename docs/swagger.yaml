@@ -173,6 +173,46 @@ definitions:
       value:
         type: integer
     type: object
+  dashboard.ContentCounts:
+    properties:
+      articles:
+        type: integer
+      categories:
+        type: integer
+      friend_links:
+        type: integer
+      music:
+        type: integer
+      tags:
+        type: integer
+    type: object
+  dashboard.InteractionCounts:
+    properties:
+      new_comments:
+        type: integer
+      new_guestbook:
+        type: integer
+      new_moments:
+        type: integer
+    type: object
+  dashboard.OverviewSummary:
+    properties:
+      content:
+        $ref: '#/definitions/dashboard.ContentCounts'
+      interactions:
+        $ref: '#/definitions/dashboard.InteractionCounts'
+      users:
+        $ref: '#/definitions/dashboard.UserCounts'
+    type: object
+  dashboard.UserCounts:
+    properties:
+      today_active:
+        type: integer
+      today_new:
+        type: integer
+      total:
+        type: integer
+    type: object
   dto.AdminArticleDetailResp:
     properties:
       categories:
@@ -2576,6 +2616,10 @@ definitions:
         type: boolean
       id:
         type: integer
+      is_online:
+        type: boolean
+      last_active_at:
+        type: string
       last_login_at:
         type: string
       mark:
@@ -2720,6 +2764,10 @@ definitions:
       id:
         example: 1
         type: integer
+      is_online:
+        type: boolean
+      last_active_at:
+        type: string
       last_login_at:
         type: string
       mark:
@@ -2789,6 +2837,10 @@ definitions:
         type: string
       id:
         type: integer
+      is_online:
+        type: boolean
+      last_active_at:
+        type: string
       last_login_at:
         type: string
       mark:
@@ -4830,6 +4882,36 @@ paths:
       summary: 调整角色额度策略（管理端）
       tags:
       - 通知管理
+  /admin/overview/summary:
+    get:
+      description: 概览页非流量块：内容总量、近 7 天新增评论/留言/动态、用户总数/今日新增/今日活跃。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dashboard.OverviewSummary'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 后台首页汇总
+      tags:
+      - dashboard
   /admin/tags:
     post:
       consumes:
@@ -8218,21 +8300,6 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 设置展示邮箱
-      tags:
-      - 用户
-  /users/me/login-time:
-    post:
-      consumes:
-      - application/json
-      description: 从 jwt 中获取当前用户信息，更新最后登录时间
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: 成功
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 记录当前用户登录时间
       tags:
       - 用户
   /users/me/meta:

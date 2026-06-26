@@ -3122,6 +3122,56 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/overview/summary": {
+            "get": {
+                "description": "概览页非流量块：内容总量、近 7 天新增评论/留言/动态、用户总数/今日新增/今日活跃。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "dashboard"
+                ],
+                "summary": "后台首页汇总",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dashboard.OverviewSummary"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/tags": {
             "post": {
                 "description": "管理员新增标签。",
@@ -8439,29 +8489,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/users/me/login-time": {
-            "post": {
-                "description": "从 jwt 中获取当前用户信息，更新最后登录时间",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "用户"
-                ],
-                "summary": "记录当前用户登录时间",
-                "responses": {
-                    "200": {
-                        "description": "成功",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/users/me/meta": {
             "patch": {
                 "consumes": [
@@ -9191,6 +9218,68 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dashboard.ContentCounts": {
+            "type": "object",
+            "properties": {
+                "articles": {
+                    "type": "integer"
+                },
+                "categories": {
+                    "type": "integer"
+                },
+                "friend_links": {
+                    "type": "integer"
+                },
+                "music": {
+                    "type": "integer"
+                },
+                "tags": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dashboard.InteractionCounts": {
+            "type": "object",
+            "properties": {
+                "new_comments": {
+                    "type": "integer"
+                },
+                "new_guestbook": {
+                    "type": "integer"
+                },
+                "new_moments": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dashboard.OverviewSummary": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "$ref": "#/definitions/dashboard.ContentCounts"
+                },
+                "interactions": {
+                    "$ref": "#/definitions/dashboard.InteractionCounts"
+                },
+                "users": {
+                    "$ref": "#/definitions/dashboard.UserCounts"
+                }
+            }
+        },
+        "dashboard.UserCounts": {
+            "type": "object",
+            "properties": {
+                "today_active": {
+                    "type": "integer"
+                },
+                "today_new": {
+                    "type": "integer"
+                },
+                "total": {
                     "type": "integer"
                 }
             }
@@ -12492,6 +12581,12 @@ const docTemplate = `{
                 "id": {
                     "type": "integer"
                 },
+                "is_online": {
+                    "type": "boolean"
+                },
+                "last_active_at": {
+                    "type": "string"
+                },
                 "last_login_at": {
                     "type": "string"
                 },
@@ -12699,6 +12794,12 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1
                 },
+                "is_online": {
+                    "type": "boolean"
+                },
+                "last_active_at": {
+                    "type": "string"
+                },
                 "last_login_at": {
                     "type": "string"
                 },
@@ -12800,6 +12901,12 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "integer"
+                },
+                "is_online": {
+                    "type": "boolean"
+                },
+                "last_active_at": {
+                    "type": "string"
                 },
                 "last_login_at": {
                     "type": "string"
