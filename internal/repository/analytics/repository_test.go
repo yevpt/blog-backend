@@ -109,8 +109,8 @@ func TestReplacePageDaily_EmptyRowsClearsOnly(t *testing.T) {
 func TestUpsertSession_IncrementsPVCount(t *testing.T) {
 	r, mock := newRepo(t)
 	mock.ExpectBegin()
-	// 冲突分支必须自增 pv_count（而非覆盖）。正则匹配渲染后的 ON DUPLICATE KEY UPDATE。
-	mock.ExpectExec("ON DUPLICATE KEY UPDATE.*pv_count.*pv_count \\+ 1").
+	// 冲突分支必须自增 pv_count（而非覆盖），并以 STICKY-OR 维持 is_suspect。
+	mock.ExpectExec("ON DUPLICATE KEY UPDATE.*is_suspect.*is_suspect OR.*pv_count.*pv_count \\+ 1").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 

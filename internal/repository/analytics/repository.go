@@ -70,6 +70,8 @@ func (r *repository) UpsertSession(ctx context.Context, s model.AnalyticsSession
 			// 同一会话再来一次 PV：累计计数、刷新末路径/时间，并据此重算停留与跳出。
 			"pv_count":         gorm.Expr("pv_count + 1"),
 			"is_bounce":        false, // 出现第二次 PV，不再算跳出
+			// STICKY-OR：会话任一次 PV 被判 suspect 即永久标脏，避免后续可信 PV 把它洗白后污染聚合。
+			"is_suspect":       gorm.Expr("is_suspect OR ?", s.IsSuspect),
 			"last_seen":        s.LastSeen,
 			"exit_path":        s.ExitPath,
 			"duration":         gorm.Expr("TIMESTAMPDIFF(SECOND, first_seen, ?)", s.LastSeen),

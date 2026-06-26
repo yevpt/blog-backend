@@ -116,5 +116,6 @@ func sessionFrom(ev model.AnalyticsEvent, now time.Time) model.AnalyticsSession 
 		Region:          ev.Region,
 		RefererType:     ev.RefererType,
 		IsBot:           ev.IsBot,
+		IsSuspect:       ev.IsSuspect,
 	}
 }

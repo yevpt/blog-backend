@@ -50,6 +50,7 @@ type AnalyticsSession struct {
 	Region          string `gorm:"type:varchar(64)"`
 	RefererType     string `gorm:"type:varchar(16)"`
 	IsBot           bool
+	IsSuspect       bool
 }
 
 func (AnalyticsSession) TableName() string { return "analytics_sessions" }

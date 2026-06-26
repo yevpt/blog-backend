@@ -235,12 +235,14 @@ func (r *repository) AggregateDay(ctx context.Context, date string) (DayAggregat
 	return agg, nil
 }
 
-// sessionScope 返回「当日开始的真人会话」过滤 builder（first_seen 落在 [start,end)，非 bot）。
+// sessionScope 返回「当日开始的真人会话」过滤 builder（first_seen 落在 [start,end)，非 bot 且非 suspect）。
+// 与 eventScope 口径一致：suspect 会话不计入 avg_duration/bounce_rate。
 func (r *repository) sessionScope(ctx context.Context, start, end time.Time) *gorm.DB {
 	return r.db.WithContext(ctx).
 		Model(&model.AnalyticsSession{}).
 		Where("first_seen >= ? AND first_seen < ?", start, end).
-		Where("is_bot = ?", false)
+		Where("is_bot = ?", false).
+		Where("is_suspect = ?", false)
 }
 
 // eventScope 返回带「当日有效事件」过滤条件的查询 builder。

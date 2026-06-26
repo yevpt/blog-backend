@@ -127,8 +127,8 @@ func TestAggregateDay(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 		WillReturnRows(sqlmock.NewRows(pageCols).AddRow("/x", "X", 9, 4))
 
-	// 会话级指标查询（最后一条）
-	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_sessions`")).
+	// 会话级指标查询（最后一条）；须排除 suspect 会话（is_suspect=false）。
+	mock.ExpectQuery("FROM `analytics_sessions`.*is_suspect").
 		WillReturnRows(sqlmock.NewRows([]string{"avg_duration", "bounce_rate"}).AddRow(42.0, 0.25))
 
 	got, err := r.AggregateDay(context.Background(), "2026-06-24")
