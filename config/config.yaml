@@ -85,8 +85,10 @@ analytics:
   public_cache_ttl: 60s
   # 容器内 ip2region xdb 路径，空则关闭地理解析
   geoip_path: ""
-  # 站点主域名，用于来源与外链判定
-  site_host: "yevpt.com"
+  # 站点主域名（apex 顶级域，如 example.com），用于 referer 内/外链判定；
+  # 后缀匹配会自动覆盖所有子域名（www.* 等），故只填顶级域、勿填 www。
+  # 生产经 env BLOG_ANALYTICS_SITE_HOST 注入；留空则不识别内链（内部来源会被判为 external，不影响其他功能）。
+  site_host: ""
   # IP 哈希盐，生产用随机串经 env BLOG_ANALYTICS_IP_SALT 覆盖
   ip_salt: "change_me"
   collect_token_secret: ""

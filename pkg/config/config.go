@@ -227,6 +227,7 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"oauth.state_ttl_minutes",
 		"analytics.ip_salt",
 		"analytics.geoip_path",
+		"analytics.site_host",
 		"analytics.collect_token_secret",
 	}
 
