@@ -15,13 +15,11 @@ import (
 // NotificationHandler 站内通知 HTTP 处理器。
 type NotificationHandler struct {
 	svc notificationservice.InboxService
-	hub *notificationservice.SSEHub
 }
 
 // NewNotificationHandler 创建站内通知处理器。
-// hub 用于 SSE 在线推送，可为 nil（未启用 SSE 时 Stream 接口将拒绝）。
-func NewNotificationHandler(svc notificationservice.InboxService, hub *notificationservice.SSEHub) *NotificationHandler {
-	return &NotificationHandler{svc: svc, hub: hub}
+func NewNotificationHandler(svc notificationservice.InboxService) *NotificationHandler {
+	return &NotificationHandler{svc: svc}
 }
 
 // requiredUserID 取当前登录用户 ID；未登录时写 401 并返回 false。

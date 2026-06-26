@@ -38,52 +38,50 @@ const banCountWindow = 24 * time.Hour
 // banCountWindowPublic 公开接口计数器窗口，7 天内的历史封禁会累计计数
 const banCountWindowPublic = 7 * 24 * time.Hour
 
-// RateLimitConfig 限流参数，软限返回 429，硬限封禁 IP
+// RateLimitConfig 限流参数，软限返回 429，硬限触发递进式封禁（时长由 escalatingBanDurations(Public) 决定）
 type RateLimitConfig struct {
-	Window      time.Duration // 计数滑动窗口
-	SoftLimit   int           // 超过此次数触发 429，不封禁
-	HardLimit   int           // 超过此次数写入封禁标记
-	BanDuration time.Duration // 封禁时长
+	Window    time.Duration // 计数滑动窗口
+	SoftLimit int           // 超过此次数触发 429，不封禁
+	HardLimit int           // 超过此次数写入封禁标记
 }
 
-// RateLimitStrict 高风险接口限流（send-code、register），60s 内 5 次软限 / 20 次硬限 / 封禁 15min
+// RateLimitStrict 高风险接口限流（send-code、register），60s 内 5 次软限 / 20 次硬限
+// 触发硬限后按 strict 档独立计数应用递进式封禁，不与其他档位互相影响
 func RateLimitStrict(rdb *redis.Client) gin.HandlerFunc {
 	return newIPRateLimiter(rdb, RateLimitConfig{
-		Window:      60 * time.Second,
-		SoftLimit:   5,
-		HardLimit:   20,
-		BanDuration: 15 * time.Minute,
-	})
+		Window:    60 * time.Second,
+		SoftLimit: 5,
+		HardLimit: 20,
+	}, "strict")
 }
 
-// RateLimitNormal 普通敏感接口限流，60s 内 10 次软限 / 30 次硬限 / 封禁 15min
+// RateLimitNormal 普通敏感接口限流，60s 内 10 次软限 / 30 次硬限
+// 触发硬限后按 normal 档独立计数应用递进式封禁，不与其他档位互相影响
 func RateLimitNormal(rdb *redis.Client) gin.HandlerFunc {
 	return newIPRateLimiter(rdb, RateLimitConfig{
-		Window:      60 * time.Second,
-		SoftLimit:   10,
-		HardLimit:   30,
-		BanDuration: 15 * time.Minute,
-	})
+		Window:    60 * time.Second,
+		SoftLimit: 10,
+		HardLimit: 30,
+	}, "normal")
 }
 
-// RateLimitLoose 登录、OAuth 等认证接口，120s 内 30 次软限 / 100 次硬限 / 封禁 10min
+// RateLimitLoose 登录、OAuth 等认证接口，120s 内 30 次软限 / 100 次硬限
+// 触发硬限后按 loose 档独立计数应用递进式封禁，不与其他档位互相影响
 func RateLimitLoose(rdb *redis.Client) gin.HandlerFunc {
 	return newIPRateLimiter(rdb, RateLimitConfig{
-		Window:      120 * time.Second,
-		SoftLimit:   30,
-		HardLimit:   100,
-		BanDuration: 10 * time.Minute,
-	})
+		Window:    120 * time.Second,
+		SoftLimit: 30,
+		HardLimit: 100,
+	}, "loose")
 }
 
 // RateLimitPublic 公开接口兜底防护，300s 内 5000 次软限 / 20000 次硬限
-// 触发硬限时应用递进式封禁（7天窗口）
+// 触发硬限后按 public 档独立计数应用递进式封禁（7天窗口），不与认证类接口互相影响
 func RateLimitPublic(rdb *redis.Client) gin.HandlerFunc {
 	return newIPRateLimiterPublic(rdb, RateLimitConfig{
-		Window:      300 * time.Second,
-		SoftLimit:   5000,
-		HardLimit:   20000,
-		BanDuration: 5 * time.Minute,
+		Window:    300 * time.Second,
+		SoftLimit: 5000,
+		HardLimit: 20000,
 	})
 }
 
@@ -92,7 +90,7 @@ func newIPRateLimiterPublic(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerF
 		rdb,
 		cfg,
 		func(c *gin.Context) string { return "ip:" + c.ClientIP() },
-		func(principal string) string { return "ban:" + principal },
+		func(principal string) string { return "ban:public:" + principal },
 	)
 }
 
@@ -133,8 +131,9 @@ func applyPrincipalRateLimitPublic(c *gin.Context, rdb *redis.Client, cfg RateLi
 	// 超过硬限：应用公开接口的递进式封禁
 	if count > int64(cfg.HardLimit) {
 		banCountKey := banKey + ":count"
-		escalatedDuration := getEscalatedBanDurationPublic(rdb, banCountKey)
-		rdb.Set(ctx, banKey, 1, escalatedDuration)
+		escalatedDuration := claimBanDuration(rdb, banKey, cfg.Window, func() time.Duration {
+			return getEscalatedBanDurationPublic(rdb, banCountKey)
+		})
 		retryAfter := int(escalatedDuration.Seconds())
 		msg := fmt.Sprintf("请求过于频繁，请在 %s 后重试", response.FormatRetryAfter(retryAfter))
 		response.TooManyRequests(c, msg, retryAfter)
@@ -154,13 +153,28 @@ func applyPrincipalRateLimitPublic(c *gin.Context, rdb *redis.Client, cfg RateLi
 	c.Next()
 }
 
+// claimBanDuration 在并发请求同时越过硬限时，只让第一个抢到 claim 标记的请求执行升级计数与落键封禁，
+// 其余请求复用已落键的封禁时长，避免一次超限事件被并发请求重复计数导致封禁等级跳档
+func claimBanDuration(rdb *redis.Client, banKey string, fallbackWindow time.Duration, escalate func() time.Duration) time.Duration {
+	ctx := context.Background()
+	claimed, _ := rdb.SetNX(ctx, banKey+":claim", 1, 2*time.Second).Result()
+	if claimed {
+		duration := escalate()
+		rdb.Set(ctx, banKey, 1, duration)
+		return duration
+	}
+	if ttl, err := rdb.TTL(ctx, banKey).Result(); err == nil && ttl > 0 {
+		return ttl
+	}
+	return fallbackWindow
+}
+
 // RateLimitMomentUpload 按登录用户限制碎语保存频率，降低恶意批量上传图片的资源消耗。
 func RateLimitMomentUpload(rdb *redis.Client) gin.HandlerFunc {
 	return newPrincipalRateLimiter(rdb, RateLimitConfig{
-		Window:      60 * time.Second,
-		SoftLimit:   5,
-		HardLimit:   20,
-		BanDuration: 15 * time.Minute,
+		Window:    60 * time.Second,
+		SoftLimit: 5,
+		HardLimit: 20,
 	}, momentUploadRateLimitPrincipal, momentUploadRateLimitBanKey)
 }
 
@@ -168,17 +182,15 @@ func RateLimitMomentUpload(rdb *redis.Client) gin.HandlerFunc {
 func RateLimitTempUpload(rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := RateLimitConfig{
-			Window:      60 * time.Second,
-			SoftLimit:   10,
-			HardLimit:   40,
-			BanDuration: 15 * time.Minute,
+			Window:    60 * time.Second,
+			SoftLimit: 10,
+			HardLimit: 40,
 		}
 		if detail := GetUserDetail(c); detail != nil && roles.HasPermission(detail.Roles, roles.AdminRole) {
 			cfg = RateLimitConfig{
-				Window:      60 * time.Second,
-				SoftLimit:   60,
-				HardLimit:   180,
-				BanDuration: 15 * time.Minute,
+				Window:    60 * time.Second,
+				SoftLimit: 60,
+				HardLimit: 180,
 			}
 		}
 		principal := tempUploadRateLimitPrincipal(c)
@@ -189,10 +201,9 @@ func RateLimitTempUpload(rdb *redis.Client) gin.HandlerFunc {
 // RateLimitAvatarUpload 按登录用户限制头像更换频率。
 func RateLimitAvatarUpload(rdb *redis.Client) gin.HandlerFunc {
 	return newPrincipalRateLimiter(rdb, RateLimitConfig{
-		Window:      60 * time.Second,
-		SoftLimit:   5,
-		HardLimit:   20,
-		BanDuration: 15 * time.Minute,
+		Window:    60 * time.Second,
+		SoftLimit: 5,
+		HardLimit: 20,
 	}, avatarUploadRateLimitPrincipal, avatarUploadRateLimitBanKey)
 }
 
@@ -212,12 +223,14 @@ func avatarUploadRateLimitBanKey(principal string) string {
 	return "ban:avatar-upload:" + principal
 }
 
-func newIPRateLimiter(rdb *redis.Client, cfg RateLimitConfig) gin.HandlerFunc {
+// newIPRateLimiter 按 IP 限流，tier 用于隔离不同档位的封禁 key，避免某个档位触发硬限后
+// 连带封禁共用同一 IP 的其他档位接口（如 Strict 档封禁不应影响 Loose 档登录接口）
+func newIPRateLimiter(rdb *redis.Client, cfg RateLimitConfig, tier string) gin.HandlerFunc {
 	return newPrincipalRateLimiter(
 		rdb,
 		cfg,
 		func(c *gin.Context) string { return "ip:" + c.ClientIP() },
-		func(principal string) string { return "ban:" + principal },
+		func(principal string) string { return "ban:" + tier + ":" + principal },
 	)
 }
 
@@ -234,29 +247,47 @@ func newPrincipalRateLimiter(
 }
 
 // getEscalatedBanDuration 根据 24 小时内的历史封禁次数，返回本次应用的递进式封禁时长（认证/资源接口）
+// Incr 出错时退化为最低档时长，不参与计数升级，避免 Redis 抖动导致负索引 panic 或计数永不过期
 func getEscalatedBanDuration(rdb *redis.Client, banCountKey string) time.Duration {
-	ctx := context.Background()
-	count, _ := rdb.Incr(ctx, banCountKey).Result()
-	rdb.Expire(ctx, banCountKey, banCountWindow)
-
-	idx := int(count) - 1
-	if idx >= len(escalatingBanDurations) {
-		idx = len(escalatingBanDurations) - 1
+	count, err := incrWithExpire(rdb, banCountKey, banCountWindow)
+	if err != nil {
+		return escalatingBanDurations[0]
 	}
-	return escalatingBanDurations[idx]
+	return escalatingBanDurations[clampIdx(count, len(escalatingBanDurations))]
 }
 
 // getEscalatedBanDurationPublic 根据 7 天内的历史封禁次数，返回本次应用的递进式封禁时长（公开接口）
+// Incr 出错时退化为最低档时长，不参与计数升级，避免 Redis 抖动导致负索引 panic 或计数永不过期
 func getEscalatedBanDurationPublic(rdb *redis.Client, banCountKey string) time.Duration {
-	ctx := context.Background()
-	count, _ := rdb.Incr(ctx, banCountKey).Result()
-	rdb.Expire(ctx, banCountKey, banCountWindowPublic)
-
-	idx := int(count) - 1
-	if idx >= len(escalatingBanDurationsPublic) {
-		idx = len(escalatingBanDurationsPublic) - 1
+	count, err := incrWithExpire(rdb, banCountKey, banCountWindowPublic)
+	if err != nil {
+		return escalatingBanDurationsPublic[0]
 	}
-	return escalatingBanDurationsPublic[idx]
+	return escalatingBanDurationsPublic[clampIdx(count, len(escalatingBanDurationsPublic))]
+}
+
+// incrWithExpire 用 Pipeline 原子执行 Incr+Expire，避免 Incr 成功而 Expire 未执行导致计数 key 永不过期
+func incrWithExpire(rdb *redis.Client, key string, window time.Duration) (int64, error) {
+	ctx := context.Background()
+	pipe := rdb.Pipeline()
+	incrCmd := pipe.Incr(ctx, key)
+	pipe.Expire(ctx, key, window)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, err
+	}
+	return incrCmd.Val(), nil
+}
+
+// clampIdx 把从 1 开始的次数换算成数组下标，并夹在 [0, size-1] 范围内
+func clampIdx(count int64, size int) int {
+	idx := int(count) - 1
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= size {
+		idx = size - 1
+	}
+	return idx
 }
 
 func applyPrincipalRateLimit(c *gin.Context, rdb *redis.Client, cfg RateLimitConfig, principal string, banKey string) {
@@ -286,8 +317,9 @@ func applyPrincipalRateLimit(c *gin.Context, rdb *redis.Client, cfg RateLimitCon
 	// 超过硬限：查询历史封禁次数，应用递进式封禁时长
 	if count > int64(cfg.HardLimit) {
 		banCountKey := banKey + ":count"
-		escalatedDuration := getEscalatedBanDuration(rdb, banCountKey)
-		rdb.Set(ctx, banKey, 1, escalatedDuration)
+		escalatedDuration := claimBanDuration(rdb, banKey, cfg.Window, func() time.Duration {
+			return getEscalatedBanDuration(rdb, banCountKey)
+		})
 		retryAfter := int(escalatedDuration.Seconds())
 		msg := fmt.Sprintf("请求过于频繁，IP 已被临时封禁，请在 %s 后重试", response.FormatRetryAfter(retryAfter))
 		response.TooManyRequests(c, msg, retryAfter)

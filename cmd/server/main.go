@@ -5,7 +5,6 @@ import (
 
 	"github.com/vpt/blog-backend/internal/bootstrap"
 	"github.com/vpt/blog-backend/internal/router"
-	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 )
 
 // @title Blog Backend API
@@ -41,15 +40,12 @@ func main() {
 	// 初始化 HTTP 引擎：设置 Gin 模式并创建空路由引擎。
 	r := bootstrap.InitGin(cfg)
 
-	// 创建 SSE hub：HTTP 侧订阅在线连接，worker 侧分发后推送，需共享同一实例。
-	notificationHub := notificationservice.NewSSEHub()
-
 	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
 	// 返回统计运行时（含唯一 ingestor），供 worker 复用以保证生产/消费同一实例。
-	analyticsRuntime := router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg, notificationHub)
+	analyticsRuntime := router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg)
 
 	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
-	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, notificationHub, zapLogger)
+	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, zapLogger)
 
 	// 启动统计后台 worker：唯一事件落库消费 + 日聚合/清理调度，与 collect handler 共享同一 ingestor。
 	bootstrap.StartAnalyticsWorker(context.Background(), redisClient, zapLogger,

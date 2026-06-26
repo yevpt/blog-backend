@@ -89,7 +89,7 @@ func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.Obje
 
 // StartNotificationWorker 组装并在后台启动通知 worker（dispatcher/planner/sender）。
 // 站内通知分发始终启动；email.worker_enabled=false 时仅关闭邮件聚合与发送。
-func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, hub *notificationservice.SSEHub, zapLogger *zap.Logger) {
+func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, zapLogger *zap.Logger) {
 	// 组装数据访问与读侧适配器。
 	repo := notificationrepo.NewRepository(db)
 	directory := notificationrepo.NewDirectory(db)
@@ -101,13 +101,6 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 		notificationservice.NewPreferenceResolver(repo),
 		directory,
 	)
-	// 共享 HTTP 侧的 SSE hub，分发写入收件箱后实时推送在线用户。
-	if hub != nil {
-		dispatcher.SetInboxNotifier(hub)
-		zapLogger.Info("通知 SSE 已接入 dispatcher")
-	} else {
-		zapLogger.Warn("通知 SSE hub 未注入，在线推送不可用")
-	}
 	quota := notificationservice.NewQuotaService(repo, notificationservice.QuotaConfig{
 		SiteDailySafeLimit: cfg.Email.SiteDailySafeLimit,
 		MaxPerMinute:       cfg.Email.MaxPerMinute,

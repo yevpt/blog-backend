@@ -7767,38 +7767,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/notifications/stream": {
-            "get": {
-                "description": "登录用户建立 SSE 长连接，dispatcher 写入收件箱后推送事件类型；断线后由列表接口补齐历史。",
-                "produces": [
-                    "text/event-stream"
-                ],
-                "tags": [
-                    "通知"
-                ],
-                "summary": "站内通知实时推送（SSE）",
-                "responses": {
-                    "200": {
-                        "description": "SSE 事件流；每条事件 data 为事件类型",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "401": {
-                        "description": "未登录或 token 已过期",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "服务器内部错误",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/notifications/unread-count": {
             "get": {
                 "description": "登录用户查询自己的未读站内通知数量，用于小红点展示。",
