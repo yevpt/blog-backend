@@ -75,6 +75,14 @@ type ListFilter struct {
 	RoleID   *uint
 }
 
+// AdminListFilter 后台碎语分页查询过滤条件。
+type AdminListFilter struct {
+	Page     int
+	PageSize int
+	Status   *uint8
+	Search   string
+}
+
 // SaveData 保存碎语所需的主表、图片和权限信息。
 type SaveData struct {
 	Moment        model.Moment
@@ -106,6 +114,7 @@ type PageResult struct {
 // MomentRepository 碎语数据访问接口。
 type MomentRepository interface {
 	List(filter ListFilter, viewerID *uint) (*PageResult, error)
+	ListAdmin(filter AdminListFilter) (*PageResult, error)
 	ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, error)
 	FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate, error)
 	Save(data SaveData) (*MomentAggregate, error)

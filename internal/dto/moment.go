@@ -26,6 +26,18 @@ type MomentListReq struct {
 	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
 }
 
+// AdminMomentListReq 后台碎语分页查询参数。
+type AdminMomentListReq struct {
+	// Page 页码，从 1 开始。
+	Page int `form:"page" binding:"omitempty,min=1" example:"1"`
+	// PageSize 每页数量，默认 10，最大 50。
+	PageSize int `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
+	// Status 状态筛选：all 全部、public 公开、hidden 隐藏。
+	Status string `form:"status" binding:"omitempty,oneof=all public hidden" example:"all"`
+	// Search 按碎语正文搜索。
+	Search string `form:"search" binding:"omitempty,max=100" example:"今天的风"`
+}
+
 // MomentImageFileReq 表示 multipart 中已经读取出的图片文件。
 type MomentImageFileReq struct {
 	// Name 图片原始文件名。
@@ -126,6 +138,20 @@ type MomentItemResp struct {
 
 // MomentPageResp 碎语分页响应。
 type MomentPageResp struct {
+	// Total 总记录数。
+	Total int64 `json:"total" example:"100"`
+	// Pages 总页数。
+	Pages int `json:"pages" example:"10"`
+	// Page 当前页码。
+	Page int `json:"page" example:"1"`
+	// PageSize 每页数量。
+	PageSize int `json:"page_size" example:"10"`
+	// List 碎语列表。
+	List []MomentItemResp `json:"list"`
+}
+
+// AdminMomentPageResp 后台碎语分页响应。
+type AdminMomentPageResp struct {
 	// Total 总记录数。
 	Total int64 `json:"total" example:"100"`
 	// Pages 总页数。

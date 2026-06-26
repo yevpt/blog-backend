@@ -24,10 +24,13 @@ import (
 )
 
 type fakeMomentRepo struct {
-	listFilter   momentrepo.ListFilter
-	listViewerID *uint
-	listResp     *momentrepo.PageResult
-	listErr      error
+	listFilter      momentrepo.ListFilter
+	listViewerID    *uint
+	listResp        *momentrepo.PageResult
+	listErr         error
+	listAdminFilter momentrepo.AdminListFilter
+	listAdminResp   *momentrepo.PageResult
+	listAdminErr    error
 
 	feedFilter   momentrepo.FeedFilter
 	feedViewerID *uint
@@ -70,6 +73,11 @@ func (f *fakeMomentRepo) List(filter momentrepo.ListFilter, viewerID *uint) (*mo
 	f.listFilter = filter
 	f.listViewerID = viewerID
 	return f.listResp, f.listErr
+}
+
+func (f *fakeMomentRepo) ListAdmin(filter momentrepo.AdminListFilter) (*momentrepo.PageResult, error) {
+	f.listAdminFilter = filter
+	return f.listAdminResp, f.listAdminErr
 }
 
 func (f *fakeMomentRepo) ListFeed(filter momentrepo.FeedFilter, viewerID *uint) (*momentrepo.PageResult, error) {
@@ -232,6 +240,48 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 	require.Len(t, resp.List, 1)
 	assert.Equal(t, "https://cdn.example.com/moments/cat.jpg", resp.List[0].Images[0].AccessURL)
 	assert.Equal(t, []string{"moments/cat.jpg"}, resolver.objects)
+}
+
+func TestMomentService_ListAdmin_NormalizesFiltersAndMapsItems(t *testing.T) {
+	now := time.Now()
+	repo := &fakeMomentRepo{
+		listAdminResp: &momentrepo.PageResult{
+			Total:    1,
+			Page:     1,
+			PageSize: 50,
+			Moments: []momentrepo.MomentAggregate{{
+				Moment: model.Moment{
+					Base:          model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
+					UserID:        7,
+					Content:       "风",
+					Status:        0,
+					CommentStatus: 1,
+				},
+				User:         &model.User{Base: model.Base{ID: 7}, Username: "vpt"},
+				LikeCount:    2,
+				CommentCount: 3,
+			}},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil)
+
+	resp, err := svc.ListAdmin(dto.AdminMomentListReq{
+		Page:     0,
+		PageSize: 99,
+		Status:   "hidden",
+		Search:   "  风  ",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, repo.listAdminFilter.Page)
+	assert.Equal(t, 50, repo.listAdminFilter.PageSize)
+	require.NotNil(t, repo.listAdminFilter.Status)
+	assert.Equal(t, uint8(0), *repo.listAdminFilter.Status)
+	assert.Equal(t, "风", repo.listAdminFilter.Search)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, uint8(0), resp.List[0].Status)
+	assert.Equal(t, int64(2), resp.List[0].LikeCount)
+	assert.Equal(t, int64(3), resp.List[0].CommentCount)
 }
 
 func TestMomentService_FeedList_NormalizesFilter(t *testing.T) {

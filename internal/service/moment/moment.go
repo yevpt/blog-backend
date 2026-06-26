@@ -35,6 +35,7 @@ var (
 // MomentService 碎语业务接口，负责查询、发布、删除、置顶、点赞和阅读计数。
 type MomentService interface {
 	List(req dto.MomentListReq, viewerID *uint) (*dto.MomentPageResp, error)
+	ListAdmin(req dto.AdminMomentListReq) (*dto.AdminMomentPageResp, error)
 	FeedList(req dto.MomentFeedReq, viewerID *uint) (*dto.MomentPageResp, error)
 	GetDetail(id uint, viewerID *uint) (*dto.MomentItemResp, error)
 	Save(req dto.MomentSaveReq, operatorID uint, roleNames []string) (*dto.MomentItemResp, error)

@@ -577,6 +577,30 @@ definitions:
     - password
     - username
     type: object
+  dto.AdminMomentPageResp:
+    properties:
+      list:
+        description: List 碎语列表。
+        items:
+          $ref: '#/definitions/dto.MomentItemResp'
+        type: array
+      page:
+        description: Page 当前页码。
+        example: 1
+        type: integer
+      page_size:
+        description: PageSize 每页数量。
+        example: 10
+        type: integer
+      pages:
+        description: Pages 总页数。
+        example: 10
+        type: integer
+      total:
+        description: Total 总记录数。
+        example: 100
+        type: integer
+    type: object
   dto.AdminQuotaListResp:
     properties:
       purposes:
@@ -4167,6 +4191,59 @@ paths:
       summary: 后台分页查询留言
       tags:
       - 后台留言
+  /admin/moments:
+    get:
+      consumes:
+      - application/json
+      description: 管理员查询全站碎语列表，支持状态筛选与正文搜索。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 10，最大 50
+        in: query
+        name: page_size
+        type: integer
+      - description: 状态筛选：all、public、hidden
+        in: query
+        name: status
+        type: string
+      - description: 按碎语正文搜索
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminMomentPageResp'
+              type: object
+        "400":
+          description: 参数错误
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 无效
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 非管理员
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 后台分页查询碎语
+      tags:
+      - 后台碎语
   /admin/music:
     get:
       description: 管理员分页查询未删除音乐，可按曲名或歌手展示名关键字过滤。

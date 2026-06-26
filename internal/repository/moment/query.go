@@ -2,6 +2,7 @@ package moment
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
@@ -28,6 +29,33 @@ func (r *momentRepo) List(filter ListFilter, viewerID *uint) (*PageResult, error
 	}
 
 	aggregates, err := r.attachRelations(moments, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	return &PageResult{Total: total, Page: page, PageSize: pageSize, Moments: aggregates}, nil
+}
+
+func (r *momentRepo) ListAdmin(filter AdminListFilter) (*PageResult, error) {
+	page, pageSize := normalizePage(filter.Page, filter.PageSize)
+
+	var total int64
+	if err := r.adminMomentQuery(filter).Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	var moments []model.Moment
+	offset := (page - 1) * pageSize
+	if err := r.adminMomentQuery(filter).
+		Order("is_top DESC").
+		Order("created_at DESC").
+		Order("id DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&moments).Error; err != nil {
+		return nil, err
+	}
+
+	aggregates, err := r.attachRelations(moments, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -62,6 +90,17 @@ func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
 	if filter.RoleID != nil {
 		query = query.Joins("JOIN user_role ON user_role.user_id = moment.user_id").
 			Where("user_role.role_id = ?", *filter.RoleID)
+	}
+	return query
+}
+
+func (r *momentRepo) adminMomentQuery(filter AdminListFilter) *gorm.DB {
+	query := r.db.Model(&model.Moment{})
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
+	}
+	if keyword := strings.TrimSpace(filter.Search); keyword != "" {
+		query = query.Where("content LIKE ?", "%"+keyword+"%")
 	}
 	return query
 }

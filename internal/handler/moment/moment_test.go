@@ -22,10 +22,13 @@ import (
 )
 
 type stubMomentService struct {
-	listReq      dto.MomentListReq
-	listViewerID *uint
-	listResp     *dto.MomentPageResp
-	listErr      error
+	listReq       dto.MomentListReq
+	listViewerID  *uint
+	listResp      *dto.MomentPageResp
+	listErr       error
+	listAdminReq  dto.AdminMomentListReq
+	listAdminResp *dto.AdminMomentPageResp
+	listAdminErr  error
 
 	feedReq      dto.MomentFeedReq
 	feedViewerID *uint
@@ -54,6 +57,11 @@ func (s *stubMomentService) List(req dto.MomentListReq, viewerID *uint) (*dto.Mo
 	s.listReq = req
 	s.listViewerID = viewerID
 	return s.listResp, s.listErr
+}
+
+func (s *stubMomentService) ListAdmin(req dto.AdminMomentListReq) (*dto.AdminMomentPageResp, error) {
+	s.listAdminReq = req
+	return s.listAdminResp, s.listAdminErr
 }
 
 func (s *stubMomentService) FeedList(req dto.MomentFeedReq, viewerID *uint) (*dto.MomentPageResp, error) {
@@ -107,6 +115,7 @@ func newMomentRouter(svc momentservice.MomentService) *gin.Engine {
 	r := gin.New()
 	h := momenthandler.NewMomentHandler(svc)
 	r.GET("/moments", h.List)
+	r.GET("/admin/moments", h.ListAdmin)
 	r.GET("/moments/feed", h.Feed)
 	r.POST("/moments", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
@@ -124,6 +133,21 @@ func newMomentRouter(svc momentservice.MomentService) *gin.Engine {
 		h.Delete(c)
 	})
 	return r
+}
+
+func TestMomentHandler_ListAdmin_BindsFilters(t *testing.T) {
+	stub := &stubMomentService{listAdminResp: &dto.AdminMomentPageResp{Page: 2, PageSize: 5}}
+	r := newMomentRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/moments?page=2&page_size=5&status=hidden&search=%E9%A3%8E", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, 2, stub.listAdminReq.Page)
+	assert.Equal(t, 5, stub.listAdminReq.PageSize)
+	assert.Equal(t, "hidden", stub.listAdminReq.Status)
+	assert.Equal(t, "风", stub.listAdminReq.Search)
 }
 
 func TestMomentHandler_List_AllowsOptionalAuth(t *testing.T) {

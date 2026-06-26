@@ -26,6 +26,48 @@ func (s *momentService) List(req dto.MomentListReq, viewerID *uint) (*dto.Moment
 	return s.momentPageToDTO(result)
 }
 
+func (s *momentService) ListAdmin(req dto.AdminMomentListReq) (*dto.AdminMomentPageResp, error) {
+	status, err := adminMomentStatus(req.Status)
+	if err != nil {
+		return nil, err
+	}
+	result, err := s.repo.ListAdmin(momentrepo.AdminListFilter{
+		Page:     normalizeMomentPage(req.Page),
+		PageSize: normalizeMomentPageSize(req.PageSize),
+		Status:   status,
+		Search:   strings.TrimSpace(req.Search),
+	})
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	page, err := s.momentPageToDTO(result)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.AdminMomentPageResp{
+		Total:    page.Total,
+		Pages:    page.Pages,
+		Page:     page.Page,
+		PageSize: page.PageSize,
+		List:     page.List,
+	}, nil
+}
+
+func adminMomentStatus(status string) (*uint8, error) {
+	switch status {
+	case "", "all":
+		return nil, nil
+	case "public":
+		value := uint8(1)
+		return &value, nil
+	case "hidden":
+		value := uint8(0)
+		return &value, nil
+	default:
+		return nil, ErrMomentInvalid
+	}
+}
+
 func (s *momentService) GetDetail(id uint, viewerID *uint) (*dto.MomentItemResp, error) {
 	if id == 0 {
 		return nil, ErrMomentInvalid
