@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -87,7 +88,7 @@ func TestRateLimitStrict_BansAtHardLimit(t *testing.T) {
 	}
 
 	// 验证封禁 key 存在
-	banKey := "ban:ip:10.0.0.3"
+	banKey := "ban:strict:ip:10.0.0.3"
 	exists, err := rdb.Exists(context.Background(), banKey).Result()
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), exists, "封禁 key 应已写入 Redis")
@@ -99,7 +100,7 @@ func TestRateLimitStrict_BannedIPBlocked(t *testing.T) {
 	defer mr.Close()
 
 	// 预先写入封禁 key（TTL=0 表示永不过期，仅测试用）
-	rdb.Set(context.Background(), "ban:ip:10.0.0.4", 1, 0)
+	rdb.Set(context.Background(), "ban:strict:ip:10.0.0.4", 1, 0)
 
 	r := gin.New()
 	r.GET("/auth/send-code", middleware.RateLimitStrict(rdb), func(c *gin.Context) {
@@ -111,6 +112,65 @@ func TestRateLimitStrict_BannedIPBlocked(t *testing.T) {
 	req.RemoteAddr = "10.0.0.4:9999"
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
+}
+
+func TestRateLimitStrictBan_DoesNotBlockPublicTier(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rdb, mr := newTestRedis(t)
+	defer mr.Close()
+
+	r := gin.New()
+	r.GET("/auth/send-code", middleware.RateLimitStrict(rdb), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+	r.GET("/categories", middleware.RateLimitPublic(rdb), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	// 打满 /auth/send-code 触发 Strict 档硬限封禁
+	for i := 0; i < 21; i++ {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/auth/send-code", nil)
+		req.RemoteAddr = "10.0.0.50:9999"
+		r.ServeHTTP(w, req)
+	}
+
+	// 同一 IP 访问公开接口不应被连带封禁（两档应各自独立计数与封禁）
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/categories", nil)
+	req.RemoteAddr = "10.0.0.50:9999"
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code, "Strict 档封禁不应连带封禁 Public 档")
+}
+
+func TestRateLimitStrict_ConcurrentHardLimitBreachOnlyEscalatesOnce(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rdb, mr := newTestRedis(t)
+	defer mr.Close()
+
+	r := gin.New()
+	r.GET("/auth/send-code", middleware.RateLimitStrict(rdb), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	// 模拟并发：多个请求几乎同时把 routeKey 计数推过硬限（20），其中 5 个请求的计数会越过硬限
+	var wg sync.WaitGroup
+	for i := 0; i < 25; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("GET", "/auth/send-code", nil)
+			req.RemoteAddr = "10.0.0.60:9999"
+			r.ServeHTTP(w, req)
+		}()
+	}
+	wg.Wait()
+
+	banCountKey := "ban:strict:ip:10.0.0.60:count"
+	count, err := rdb.Get(context.Background(), banCountKey).Result()
+	assert.NoError(t, err)
+	assert.Equal(t, "1", count, "一次并发超限事件只应记一次升级计数，不应被并发请求重复计数导致跳档")
 }
 
 func TestRateLimitMomentUpload_BlocksByUserID(t *testing.T) {
