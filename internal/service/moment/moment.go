@@ -45,6 +45,7 @@ type MomentService interface {
 	View(id uint, visitorID string) (*dto.MomentViewResp, error)
 	IsLiked(id uint, userID uint) (*dto.MomentLikeResp, error)
 	ToggleLike(id uint, userID uint) (*dto.MomentItemResp, error)
+	CountByUser(userID uint) (*dto.UserMomentsCountResp, error)
 }
 
 type momentService struct {

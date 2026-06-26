@@ -155,6 +155,12 @@ type UserLikedContentCountResp struct {
 	Count int64 `json:"count" example:"12"`
 }
 
+// UserMomentsCountResp 用户公开碎语总数响应。
+type UserMomentsCountResp struct {
+	// Count 用户发布的公开碎语总数，统计口径与 GET /moments?user_id= 一致。
+	Count int64 `json:"count" example:"8"`
+}
+
 // UserListItemResp 用户列表项响应
 type UserListItemResp struct {
 	ID          uint       `json:"id" example:"1"`

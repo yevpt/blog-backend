@@ -128,12 +128,22 @@ func (s *stubUserService) UpdateEmailDisplay(userID uint, display string) error 
 	return nil
 }
 
+type stubMomentsCounter struct {
+	userID uint
+	count  int64
+}
+
+func (s *stubMomentsCounter) CountByUser(userID uint) (*dto.UserMomentsCountResp, error) {
+	s.userID = userID
+	return &dto.UserMomentsCountResp{Count: s.count}, nil
+}
+
 // newUserRouter 构建测试路由，Auth 使用 nil cache（跳过缓存加载），
 // 测试中通过 middleware.SetUserDetail 手动注入用户资料。
 func newUserRouter(svc userservice.UserService, jwtManager *jwt.Manager, detail *dto.UserDetailResp) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := user.NewUserHandler(svc)
+	h := user.NewUserHandler(svc, nil)
 	authed := r.Group("/", middleware.Auth(jwtManager, nil))
 	if detail != nil {
 		// 在 Auth 之后通过中间件注入 UserDetail，模拟 userCache 已加载的状态
@@ -149,12 +159,13 @@ func newUserRouter(svc userservice.UserService, jwtManager *jwt.Manager, detail 
 	return r
 }
 
-func newPublicUserRouter(svc userservice.UserService) *gin.Engine {
+func newPublicUserRouter(svc userservice.UserService, moments user.UserMomentsCounter) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := user.NewUserHandler(svc)
+	h := user.NewUserHandler(svc, moments)
 	r.GET("/users/:id/likes", h.ListLikedContent)
 	r.GET("/users/:id/likes/count", h.CountLikedContent)
+	r.GET("/users/:id/moments/count", h.CountMoments)
 	return r
 }
 
@@ -276,7 +287,7 @@ func TestUserHandler_SetInitialPassword_Success(t *testing.T) {
 
 func TestUserHandler_ListLikedContent_PublicBindsQuery(t *testing.T) {
 	svc := &stubUserService{}
-	r := newPublicUserRouter(svc)
+	r := newPublicUserRouter(svc, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/users/7/likes?page=2&page_size=5&type=comment", nil)
@@ -300,7 +311,7 @@ func TestUserHandler_ListLikedContent_PublicBindsQuery(t *testing.T) {
 
 func TestUserHandler_CountLikedContent_Public(t *testing.T) {
 	svc := &stubUserService{likedCount: 12}
-	r := newPublicUserRouter(svc)
+	r := newPublicUserRouter(svc, nil)
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/users/7/likes/count", nil)
@@ -316,6 +327,26 @@ func TestUserHandler_CountLikedContent_Public(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
 	assert.Equal(t, int64(12), resp.Data.Count)
+}
+
+func TestUserHandler_CountMoments_Public(t *testing.T) {
+	counter := &stubMomentsCounter{count: 8}
+	r := newPublicUserRouter(&stubUserService{}, counter)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/users/7/moments/count", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, uint(7), counter.userID)
+
+	var resp struct {
+		Code int                        `json:"code"`
+		Data dto.UserMomentsCountResp `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
+	assert.Equal(t, int64(8), resp.Data.Count)
 }
 
 func ptrString(value string) *string {

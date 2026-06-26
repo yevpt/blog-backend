@@ -2847,6 +2847,13 @@ definitions:
       sub_email_verified:
         type: boolean
     type: object
+  dto.UserMomentsCountResp:
+    properties:
+      count:
+        description: Count 用户发布的公开碎语总数，统计口径与 GET /moments?user_id= 一致。
+        example: 8
+        type: integer
+    type: object
   dto.UserPageResp:
     properties:
       list:
@@ -6762,6 +6769,14 @@ paths:
         in: query
         name: role_id
         type: integer
+      - description: 是否随机抽样；true 时忽略 page，从公开碎语池随机返回 page_size 条
+        in: query
+        name: random
+        type: boolean
+      - description: 随机抽样时排除的碎语 ID，逗号分隔，如 1,2,3
+        in: query
+        name: exclude_ids
+        type: string
       - description: 页码，从 1 开始
         in: query
         name: page
@@ -8303,6 +8318,40 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 获取用户点赞总数
+      tags:
+      - 用户
+  /users/{id}/moments/count:
+    get:
+      consumes:
+      - application/json
+      description: 公开查询指定用户发布的公开碎语总数，统计口径与 GET /moments?user_id= 一致。
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.UserMomentsCountResp'
+              type: object
+        "400":
+          description: 无效的用户 ID
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 获取用户碎语总数
       tags:
       - 用户
   /users/me:

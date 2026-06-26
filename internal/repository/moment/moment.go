@@ -69,10 +69,12 @@ type FeedFilter struct {
 
 // ListFilter 碎语分页查询过滤条件。
 type ListFilter struct {
-	Page     int
-	PageSize int
-	UserID   *uint
-	RoleID   *uint
+	Page       int
+	PageSize   int
+	UserID     *uint
+	RoleID     *uint
+	Random     bool
+	ExcludeIDs []uint
 }
 
 // AdminListFilter 后台碎语分页查询过滤条件。
@@ -124,6 +126,7 @@ type MomentRepository interface {
 	IncrementReadCount(id uint) (*model.Moment, error)
 	IsLiked(id uint, userID uint) (bool, int64, error)
 	ToggleLike(id uint, userID uint) (*MomentAggregate, bool, error)
+	CountPublicByUser(userID uint) (int64, error)
 }
 
 type momentRepo struct {

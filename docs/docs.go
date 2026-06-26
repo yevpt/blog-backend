@@ -6104,6 +6104,18 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "boolean",
+                        "description": "是否随机抽样；true 时忽略 page，从公开碎语池随机返回 page_size 条",
+                        "name": "random",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "随机抽样时排除的碎语 ID，逗号分隔，如 1,2,3",
+                        "name": "exclude_ids",
+                        "in": "query"
+                    },
+                    {
                         "type": "integer",
                         "description": "页码，从 1 开始",
                         "name": "page",
@@ -9160,6 +9172,62 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/{id}/moments/count": {
+            "get": {
+                "description": "公开查询指定用户发布的公开碎语总数，统计口径与 GET /moments?user_id= 一致。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "获取用户碎语总数",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.UserMomentsCountResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "无效的用户 ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
                         }
                     },
                     "500": {
@@ -13126,6 +13194,16 @@ const docTemplate = `{
                 },
                 "sub_email_verified": {
                     "type": "boolean"
+                }
+            }
+        },
+        "dto.UserMomentsCountResp": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "Count 用户发布的公开碎语总数，统计口径与 GET /moments?user_id= 一致。",
+                    "type": "integer",
+                    "example": 8
                 }
             }
         },

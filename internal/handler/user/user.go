@@ -14,12 +14,18 @@ import (
 
 // UserHandler 用户资料 HTTP 入口，只负责读取登录态和写统一响应。
 type UserHandler struct {
-	svc userservice.UserService
+	svc     userservice.UserService
+	moments UserMomentsCounter
+}
+
+// UserMomentsCounter 供个人页 Tab 展示碎语总数，避免 handler 依赖完整 MomentService。
+type UserMomentsCounter interface {
+	CountByUser(userID uint) (*dto.UserMomentsCountResp, error)
 }
 
 // NewUserHandler 创建用户资料处理器。
-func NewUserHandler(svc userservice.UserService) *UserHandler {
-	return &UserHandler{svc: svc}
+func NewUserHandler(svc userservice.UserService, moments UserMomentsCounter) *UserHandler {
+	return &UserHandler{svc: svc, moments: moments}
 }
 
 // GetDetail 返回当前登录用户完整资料。
@@ -203,6 +209,32 @@ func (h *UserHandler) CountLikedContent(c *gin.Context) {
 	}
 
 	resp, err := h.svc.CountLikedContent(uint(id))
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
+// CountMoments 按用户 ID 返回其公开发布的碎语总数。
+// @Summary 获取用户碎语总数
+// @Description 公开查询指定用户发布的公开碎语总数，统计口径与 GET /moments?user_id= 一致。
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param id path int true "用户 ID"
+// @Success 200 {object} response.Response{data=dto.UserMomentsCountResp} "统一响应；code=0 表示查询成功"
+// @Failure 400 {object} response.Response "无效的用户 ID"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /users/{id}/moments/count [get]
+func (h *UserHandler) CountMoments(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Fail(c, response.CodeBadRequest, "无效的用户 ID")
+		return
+	}
+
+	resp, err := h.moments.CountByUser(uint(id))
 	if err != nil {
 		response.ServerError(c)
 		return

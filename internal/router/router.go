@@ -287,7 +287,7 @@ func newRouteHandlers(
 		moment:            momenthandler.NewMomentHandler(momentSvc),
 		notification:      notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin: notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
-		user:              userhandler.NewUserHandler(userSvc),
+		user:              userhandler.NewUserHandler(userSvc, momentSvc),
 		userAdmin:         userhandler.NewUserAdminHandler(userAdminSvc, log),
 		category:          categoryhandler.NewCategoryHandler(categorySvc),
 		tag:               taghandler.NewTagHandler(tagSvc),
@@ -418,6 +418,7 @@ func registerPublicRoutes(
 	r.GET("/users", middleware.RateLimitPublic(redisClient), handlers.user.ListAll)
 	r.GET("/users/recent", middleware.RateLimitPublic(redisClient), handlers.user.ListRecent)
 	r.GET("/users/:id/likes/count", middleware.RateLimitPublic(redisClient), handlers.user.CountLikedContent)
+	r.GET("/users/:id/moments/count", middleware.RateLimitPublic(redisClient), handlers.user.CountMoments)
 	r.GET("/users/:id/likes", middleware.RateLimitPublic(redisClient), handlers.user.ListLikedContent)
 	r.GET("/users/:id", middleware.OptionalAuth(jwtManager), handlers.user.GetPublicProfile)
 	r.GET("/articles/ids", middleware.RateLimitPublic(redisClient), handlers.article.ListIDs)
