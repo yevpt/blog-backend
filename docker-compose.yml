@@ -33,10 +33,12 @@ services:
       BLOG_CDN_SECRET: ${CDN_SECRET:-}
       BLOG_CDN_SIGN_QUERY_NAME: ${CDN_SIGN_QUERY_NAME:-a}
       BLOG_CDN_TIMESTAMP_QUERY_NAME: ${CDN_TIMESTAMP_QUERY_NAME:-b}
-      # 站点统计：允许的上报来源、地理库路径与 IP 哈希盐
+      # 站点统计：允许的上报来源、地理库路径、IP 哈希盐、collect 反伪造 token secret
       ANALYTICS_ALLOWED_ORIGINS: ${ANALYTICS_ALLOWED_ORIGINS:-}
       BLOG_ANALYTICS_GEOIP_PATH: ${ANALYTICS_GEOIP_PATH:-}
       BLOG_ANALYTICS_IP_SALT: ${ANALYTICS_IP_SALT:-}
+      # 须与前端 ANALYTICS_COLLECT_TOKEN_SECRET 同值；留空则关闭 token 校验
+      BLOG_ANALYTICS_COLLECT_TOKEN_SECRET: ${ANALYTICS_COLLECT_TOKEN_SECRET:-}
     volumes:
       - ./config:/app/config:ro
       # 地理解析库目录（放 ip2region.xdb），并把 geoip_path 设为 /app/geoip/ip2region.xdb
