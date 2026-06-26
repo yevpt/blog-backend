@@ -388,8 +388,8 @@ func registerPublicRoutes(
 	redisClient *redis.Client,
 ) {
 	// 公开路由直接挂载，保留 URL 与 handler 的显式对应关系。
-	r.GET("/health", handlers.health.Check)
-	r.GET("/test/public", handlers.test.Public)
+	r.GET("/health", middleware.RateLimitPublic(redisClient), handlers.health.Check)
+	r.GET("/test/public", middleware.RateLimitPublic(redisClient), handlers.test.Public)
 	r.POST("/test/token", handlers.test.GenToken)
 
 	// 认证接口独立挂载限流，不放入公开 group 以便精确控制
@@ -399,30 +399,30 @@ func registerPublicRoutes(
 	r.POST("/auth/password-reset/code", middleware.RateLimitStrict(redisClient), handlers.auth.SendPasswordResetCode)
 	r.POST("/auth/password-reset", middleware.RateLimitStrict(redisClient), handlers.auth.ResetPassword)
 	r.POST("/auth/register", middleware.RateLimitStrict(redisClient), handlers.auth.Register)
-	r.POST("/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.Login)
-	r.POST("/admin/auth/login", middleware.RateLimitNormal(redisClient), handlers.auth.AdminLogin)
+	r.POST("/auth/login", middleware.RateLimitLoose(redisClient), handlers.auth.Login)
+	r.POST("/admin/auth/login", middleware.RateLimitLoose(redisClient), handlers.auth.AdminLogin)
 	r.POST("/auth/refresh", handlers.auth.Refresh)
-	r.GET("/oauth/providers", handlers.oauth.Providers)
-	r.GET("/oauth/:source/authorize", middleware.RateLimitNormal(redisClient), middleware.OptionalAuth(jwtManager), handlers.oauth.Authorize)
-	r.GET("/oauth/:source/callback", middleware.RateLimitNormal(redisClient), handlers.oauth.Callback)
-	r.GET("/categories", handlers.category.ListTabs)
-	r.GET("/tags", handlers.tag.List)
-	r.GET("/tags/:id", handlers.tag.Get)
-	r.GET("/tags/:id/articles", handlers.tag.ListArticles)
-	r.GET("/music", handlers.music.List)
-	r.GET("/music/artists", handlers.music.ListArtists)
-	r.GET("/music/artists/:id", handlers.music.GetPublicArtist)
-	r.GET("/music/albums", handlers.music.ListAlbums)
-	r.GET("/music/albums/:id", handlers.music.GetPublicAlbum)
-	r.GET("/music/:id", handlers.music.GetPublicDetail)
-	r.GET("/friend-links", handlers.friendLink.ListPublic)
-	r.GET("/friend-links/:id", handlers.friendLink.GetPublic)
-	r.GET("/users", handlers.user.ListAll)
-	r.GET("/users/recent", handlers.user.ListRecent)
-	r.GET("/users/:id/likes/count", handlers.user.CountLikedContent)
-	r.GET("/users/:id/likes", handlers.user.ListLikedContent)
+	r.GET("/oauth/providers", middleware.RateLimitPublic(redisClient), handlers.oauth.Providers)
+	r.GET("/oauth/:source/authorize", middleware.RateLimitLoose(redisClient), middleware.OptionalAuth(jwtManager), handlers.oauth.Authorize)
+	r.GET("/oauth/:source/callback", middleware.RateLimitLoose(redisClient), handlers.oauth.Callback)
+	r.GET("/categories", middleware.RateLimitPublic(redisClient), handlers.category.ListTabs)
+	r.GET("/tags", middleware.RateLimitPublic(redisClient), handlers.tag.List)
+	r.GET("/tags/:id", middleware.RateLimitPublic(redisClient), handlers.tag.Get)
+	r.GET("/tags/:id/articles", middleware.RateLimitPublic(redisClient), handlers.tag.ListArticles)
+	r.GET("/music", middleware.RateLimitPublic(redisClient), handlers.music.List)
+	r.GET("/music/artists", middleware.RateLimitPublic(redisClient), handlers.music.ListArtists)
+	r.GET("/music/artists/:id", middleware.RateLimitPublic(redisClient), handlers.music.GetPublicArtist)
+	r.GET("/music/albums", middleware.RateLimitPublic(redisClient), handlers.music.ListAlbums)
+	r.GET("/music/albums/:id", middleware.RateLimitPublic(redisClient), handlers.music.GetPublicAlbum)
+	r.GET("/music/:id", middleware.RateLimitPublic(redisClient), handlers.music.GetPublicDetail)
+	r.GET("/friend-links", middleware.RateLimitPublic(redisClient), handlers.friendLink.ListPublic)
+	r.GET("/friend-links/:id", middleware.RateLimitPublic(redisClient), handlers.friendLink.GetPublic)
+	r.GET("/users", middleware.RateLimitPublic(redisClient), handlers.user.ListAll)
+	r.GET("/users/recent", middleware.RateLimitPublic(redisClient), handlers.user.ListRecent)
+	r.GET("/users/:id/likes/count", middleware.RateLimitPublic(redisClient), handlers.user.CountLikedContent)
+	r.GET("/users/:id/likes", middleware.RateLimitPublic(redisClient), handlers.user.ListLikedContent)
 	r.GET("/users/:id", middleware.OptionalAuth(jwtManager), handlers.user.GetPublicProfile)
-	r.GET("/articles/ids", handlers.article.ListIDs)
+	r.GET("/articles/ids", middleware.RateLimitPublic(redisClient), handlers.article.ListIDs)
 	r.GET("/articles", middleware.OptionalAuth(jwtManager), handlers.article.ListPublic)
 	r.GET("/articles/:id", middleware.OptionalAuth(jwtManager), handlers.article.GetPublicDetail)
 	r.POST("/articles/:id/view", middleware.VisitorID(), handlers.article.View)
@@ -439,11 +439,11 @@ func registerPublicRoutes(
 	r.POST("/collect",
 		middleware.VisitorID(),
 		middleware.OptionalAuth(jwtManager),
-		middleware.RateLimitNormal(redisClient),
+		middleware.RateLimitPublic(redisClient),
 		handlers.analyticsCollect.Collect,
 	)
-	r.GET("/analytics/public/summary", middleware.RateLimitNormal(redisClient), handlers.analyticsPublic.Summary)
-	r.GET("/analytics/public/popular", middleware.RateLimitNormal(redisClient), handlers.analyticsPublic.Popular)
+	r.GET("/analytics/public/summary", middleware.RateLimitPublic(redisClient), handlers.analyticsPublic.Summary)
+	r.GET("/analytics/public/popular", middleware.RateLimitPublic(redisClient), handlers.analyticsPublic.Popular)
 }
 
 func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.Manager, redisClient *redis.Client) {

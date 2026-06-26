@@ -1,11 +1,24 @@
 package response
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
+
+// FormatRetryAfter 把秒数转成用户友好的时间描述
+func FormatRetryAfter(seconds int) string {
+	if seconds < 60 {
+		return fmt.Sprintf("%d 秒", seconds)
+	}
+	minutes := seconds / 60
+	if seconds%60 == 0 {
+		return fmt.Sprintf("%d 分钟", minutes)
+	}
+	return fmt.Sprintf("约 %d 分钟", minutes)
+}
 
 // Response 所有 API 接口的统一响应包装
 type Response struct {
