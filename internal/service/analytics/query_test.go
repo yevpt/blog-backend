@@ -48,10 +48,11 @@ type fakeRealtime struct {
 	online int64
 }
 
-func (f *fakeRealtime) TouchOnline(_ context.Context, _ string) error           { return nil }
-func (f *fakeRealtime) OnlineCount(_ context.Context) (int64, error)            { return f.online, nil }
+func (f *fakeRealtime) TouchOnline(_ context.Context, _ string) error             { return nil }
+func (f *fakeRealtime) OnlineCount(_ context.Context) (int64, error)              { return f.online, nil }
 func (f *fakeRealtime) IncrToday(_ context.Context, _ model.AnalyticsEvent) error { return nil }
-func (f *fakeRealtime) TodayCounters(_ context.Context) (svc.TodayStat, error)  { return f.today, nil }
+func (f *fakeRealtime) TodayCounters(_ context.Context) (svc.TodayStat, error)    { return f.today, nil }
+func (f *fakeRealtime) MarkVisitorSeen(_ context.Context, _ string) (bool, error) { return false, nil }
 
 func newQuerySvc(r svc.QueryReader, rt svc.Realtime) svc.QueryService {
 	return svc.NewQueryService(r, rt, zap.NewNop())

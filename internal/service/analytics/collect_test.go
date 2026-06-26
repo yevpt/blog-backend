@@ -19,19 +19,33 @@ type fakeIngestor struct {
 	lastEvent model.AnalyticsEvent
 }
 
-func (f *fakeIngestor) Submit(ev model.AnalyticsEvent) bool { f.submitted++; f.lastEvent = ev; return true }
+func (f *fakeIngestor) Submit(ev model.AnalyticsEvent) bool {
+	f.submitted++
+	f.lastEvent = ev
+	return true
+}
 func (f *fakeIngestor) UpsertSession(context.Context, model.AnalyticsSession) error {
 	f.upserts++
 	return nil
 }
-func (f *fakeIngestor) TouchSession(context.Context, string, time.Time) error { f.touches++; return nil }
+func (f *fakeIngestor) TouchSession(context.Context, string, time.Time) error {
+	f.touches++
+	return nil
+}
 
-type fakeRT struct{ online, incr int }
+type fakeRT struct {
+	online, incr, marks int
+	markNew             bool // MarkVisitorSeen 返回值（true = 新访客）
+}
 
 func (f *fakeRT) TouchOnline(context.Context, string) error             { f.online++; return nil }
 func (f *fakeRT) OnlineCount(context.Context) (int64, error)            { return 0, nil }
 func (f *fakeRT) IncrToday(context.Context, model.AnalyticsEvent) error { f.incr++; return nil }
 func (f *fakeRT) TodayCounters(context.Context) (svc.TodayStat, error)  { return svc.TodayStat{}, nil }
+func (f *fakeRT) MarkVisitorSeen(context.Context, string) (bool, error) {
+	f.marks++
+	return f.markNew, nil
+}
 
 type fakeDedup struct{ dup bool }
 
@@ -52,6 +66,24 @@ func TestCollectPageView(t *testing.T) {
 	assert.Equal(t, 1, ing.upserts)
 	assert.Equal(t, 1, rt.incr)
 	assert.Equal(t, 1, rt.online)
+}
+
+func TestCollectPageViewMarksNewVisitor(t *testing.T) {
+	ing, rt := &fakeIngestor{}, &fakeRT{markNew: true}
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Chrome", OriginAllowed: true}))
+	assert.Equal(t, 1, rt.marks)               // page_view 触发新访客判定
+	assert.True(t, ing.lastEvent.IsNewVisitor) // 标记写入入库事件
+}
+
+func TestCollectHeartbeatSkipsVisitorMark(t *testing.T) {
+	ing, rt := &fakeIngestor{}, &fakeRT{markNew: true}
+	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
+	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
+		EventType: "heartbeat", VisitorID: "v", SessionID: "s", UA: "Chrome", OriginAllowed: true}))
+	assert.Equal(t, 0, rt.marks)      // 心跳不消耗新访客标记
+	assert.Equal(t, 0, ing.submitted) // 心跳不入事件表
 }
 
 func TestCollectSuspectNotCounted(t *testing.T) {
@@ -94,8 +126,8 @@ func TestCollectBotNotCounted(t *testing.T) {
 	cs := svc.NewCollectService(enr(), rt, ing, &fakeDedup{dup: false}, svc.NewCollectTokenVerifier("", 0, nil), zap.NewNop())
 	require.NoError(t, cs.Handle(context.Background(), svc.RawEvent{
 		EventType: "page_view", VisitorID: "v", SessionID: "s", Path: "/", UA: "Googlebot/2.1"}))
-	assert.Equal(t, 0, rt.incr)        // bot 不计今日
-	assert.Equal(t, 1, ing.submitted)  // 但仍入库（带 is_bot 标记）
+	assert.Equal(t, 0, rt.incr)       // bot 不计今日
+	assert.Equal(t, 1, ing.submitted) // 但仍入库（带 is_bot 标记）
 }
 
 func TestCollectHeartbeat(t *testing.T) {

@@ -81,6 +81,16 @@ func (s *collectService) Handle(ctx context.Context, raw RawEvent) error {
 		return nil
 	}
 
+	// 新访客判定：仅对可信真人 page_view 标记，且只在实际入库（非去重）路径执行，
+	// 避免心跳/重复 PV 提前消耗「新访客」标记。
+	if raw.EventType == "page_view" && !ev.IsBot && !ev.IsSuspect {
+		if isNew, err := s.realtime.MarkVisitorSeen(ctx, ev.VisitorID); err == nil {
+			ev.IsNewVisitor = isNew
+		} else {
+			s.logger.Warn("新访客判定失败", zap.Error(err))
+		}
+	}
+
 	// 入库与会话 upsert（bot 也入库，带 is_bot 标记便于审计）。
 	s.ingestor.Submit(ev)
 	if err := s.ingestor.UpsertSession(ctx, sessionFrom(ev, now)); err != nil {

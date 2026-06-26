@@ -31,6 +31,19 @@ func TestOnlineCount(t *testing.T) {
 	assert.Equal(t, int64(2), n)
 }
 
+func TestMarkVisitorSeen(t *testing.T) {
+	rt, _ := newRT(t)
+	ctx := context.Background()
+
+	first, err := rt.MarkVisitorSeen(ctx, "v1")
+	require.NoError(t, err)
+	assert.True(t, first) // 首次出现 → 新访客
+
+	second, err := rt.MarkVisitorSeen(ctx, "v1")
+	require.NoError(t, err)
+	assert.False(t, second) // 同一访客再次出现 → 非新访客
+}
+
 func TestIncrTodaySegments(t *testing.T) {
 	rt, _ := newRT(t)
 	ctx := context.Background()

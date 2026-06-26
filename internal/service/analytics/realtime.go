@@ -12,6 +12,9 @@ import (
 
 const onlineKey = "analytics:online"
 
+// visitorSeenTTL 新访客判定窗口：一年内未出现视为新访客，与 visitor_id cookie 寿命对齐。
+const visitorSeenTTL = 365 * 24 * time.Hour
+
 // TodayStat 今日实时计数快照。
 type TodayStat struct {
 	PV, UV, RegisteredPV, RegisteredUV, AnonymousPV, AnonymousUV int64
@@ -23,6 +26,7 @@ type Realtime interface {
 	OnlineCount(ctx context.Context) (int64, error)
 	IncrToday(ctx context.Context, ev model.AnalyticsEvent) error
 	TodayCounters(ctx context.Context) (TodayStat, error)
+	MarkVisitorSeen(ctx context.Context, visitorID string) (bool, error)
 }
 
 type realtime struct {
@@ -87,6 +91,15 @@ func (r *realtime) IncrToday(ctx context.Context, ev model.AnalyticsEvent) error
 		r.rdb.Expire(ctx, "analytics:uv:"+day+suffix, ttl)
 	}
 	return nil
+}
+
+// MarkVisitorSeen 以 SetNX 记录访客首次出现：返回 true 表示窗口内首见（新访客）。
+func (r *realtime) MarkVisitorSeen(ctx context.Context, visitorID string) (bool, error) {
+	first, err := r.rdb.SetNX(ctx, "analytics:visitor:seen:"+visitorID, 1, visitorSeenTTL).Result()
+	if err != nil {
+		return false, fmt.Errorf("新访客判定写入失败: %w", err)
+	}
+	return first, nil
 }
 
 func (r *realtime) TodayCounters(ctx context.Context) (TodayStat, error) {
