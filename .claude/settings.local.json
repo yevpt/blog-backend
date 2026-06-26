@@ -53,7 +53,10 @@
       "mcp__houtini-lm__list_models",
       "Bash(jq '.mcpServers.houtini-lm = { *)",
       "Bash(mv /tmp/.claude.json /Users/vpt/.claude.json)",
-      "Bash(jq '.mcpServers[\"houtini-lm\"] = { *)"
+      "Bash(jq '.mcpServers[\"houtini-lm\"] = { *)",
+      "Bash(xargs ls -la)",
+      "Bash(go test *)",
+      "mcp__visualize__show_widget"
     ]
   }
 }
