@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -478,7 +479,9 @@ func writeUserSecurityError(c *gin.Context, err error) {
 		errors.Is(err, userservice.ErrPasswordAlreadySet):
 		response.Fail(c, response.CodeBadRequest, err.Error())
 	case errors.Is(err, userservice.ErrTooManyEmailCodeRequests):
-		response.TooManyRequests(c, err.Error(), 60)
+		retryAfter := 60
+		msg := fmt.Sprintf("发送过于频繁，请在 %s 后重试", response.FormatRetryAfter(retryAfter))
+		response.TooManyRequests(c, msg, retryAfter)
 	default:
 		response.ServerError(c)
 	}
