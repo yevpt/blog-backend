@@ -26,7 +26,7 @@ func TestArticleService_ListPublic_NormalizesPagination(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 50}, (*uint)(nil)).
@@ -42,7 +42,7 @@ func TestArticleService_ListAdmin_IncludesDeletedAtAndAllStatuses(t *testing.T) 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	deletedAt := time.Now()
 	search := "Go"
@@ -98,7 +98,7 @@ func TestArticleService_ListPublic_ResolvesCoverImgURL(t *testing.T) {
 			"post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg": "https://cdn.example.com/blog/post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg?a=sign&b=1700000000",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver, nil, nil)
+	svc := articleservice.NewArticleService(repo, resolver, nil, nil, nil)
 
 	cover := "post/bg-images/202106/245eb60be3b9dadf181b6e98ae7482f6.jpg"
 	repo.EXPECT().
@@ -135,7 +135,7 @@ func TestArticleService_ListPublic_IncludesUserWithResolvedAvatarURL(t *testing.
 			"avatars/vpt.png": "https://cdn.example.com/blog/avatars/vpt.png?sign=1",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver, nil, nil)
+	svc := articleservice.NewArticleService(repo, resolver, nil, nil, nil)
 
 	nickname := "VPT"
 	avatar := "avatars/vpt.png"
@@ -177,7 +177,7 @@ func TestArticleService_ListPublic_IncludesCategoryInListItem(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	categoryURL := "tech"
 	repo.EXPECT().
@@ -214,7 +214,7 @@ func TestArticleService_ListPublic_NilCategoryWhenNoneAssigned(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		ListPublic(articlerepo.ArticleListFilter{Page: 1, PageSize: 10}, (*uint)(nil)).
@@ -243,7 +243,7 @@ func TestArticleService_ListPublic_PassesViewerIDForLikedState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	viewerID := uint(9)
 	repo.EXPECT().
@@ -275,7 +275,7 @@ func TestArticleService_SaveRejectsEncryptedArticleWithoutPassword(t *testing.T)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	_, err := svc.Save(dto.ArticleSaveReq{
 		Title:         "Secret",
@@ -291,7 +291,7 @@ func TestArticleService_SaveRejectsMissingMusicID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		CountExistingMusicIDs([]uint{99}).
@@ -312,7 +312,7 @@ func TestArticleService_SaveKeepsFirstCategoryAndNormalizesRelations(t *testing.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	now := time.Now()
 	gomock.InOrder(
@@ -363,7 +363,7 @@ func TestArticleService_SaveUsesLegacyTagIDsWithDefaultSeq(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	now := time.Now()
 	repo.EXPECT().
@@ -405,7 +405,7 @@ func TestArticleService_SaveCopiesTempAssetsAndCleansTempOnSuccess(t *testing.T)
 	store := newTrackingObjectStore()
 	store.keys["temp/articles/7/images/a.png"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/articles/7/images/a.png?a=1"] = "temp/articles/7/images/a.png"
-	svc := articleservice.NewArticleService(repo, store, nil, nil)
+	svc := articleservice.NewArticleService(repo, store, nil, nil, nil)
 
 	repo.EXPECT().
 		Save(gomock.Any()).
@@ -449,7 +449,7 @@ func TestArticleService_SaveDeletesCopiedAssetsOnRepoFailure(t *testing.T) {
 	store := newTrackingObjectStore()
 	store.keys["temp/articles/7/images/a.png"] = true
 	store.keyMap["https://cdn.example.com/blog/temp/articles/7/images/a.png"] = "temp/articles/7/images/a.png"
-	svc := articleservice.NewArticleService(repo, store, nil, nil)
+	svc := articleservice.NewArticleService(repo, store, nil, nil, nil)
 
 	repo.EXPECT().
 		Save(gomock.Any()).
@@ -485,7 +485,7 @@ func TestArticleService_SaveMovesRemovedAssetsOnEdit(t *testing.T) {
 	repo := mock.NewMockArticleRepository(ctrl)
 	store := newTrackingObjectStore()
 	store.keys["articles/9/images/keep.png"] = true
-	svc := articleservice.NewArticleService(repo, store, nil, nil)
+	svc := articleservice.NewArticleService(repo, store, nil, nil, nil)
 
 	oldCover := "articles/9/cover/old.jpg"
 	oldContent := "![old](articles/9/images/old.png)\n![keep](articles/9/images/keep.png)"
@@ -541,7 +541,7 @@ func TestArticleService_GetPublicDetail_HidesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(2), (*uint)(nil)).
@@ -565,7 +565,7 @@ func TestArticleService_GetAdminDetail_IncludesEncryptedContent(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		FindAdminDetail(uint(2), (*uint)(nil)).
@@ -589,7 +589,7 @@ func TestArticleService_GetAdminDetail_IncludesDeletedAt(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	deletedAt := time.Now()
 	repo.EXPECT().
@@ -617,7 +617,7 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	now := time.Now()
 	categoryURL := "tech"
@@ -661,6 +661,39 @@ func TestArticleService_GetPublicDetail_MapsAggregateFields(t *testing.T) {
 	assert.Equal(t, uint16(240), resp.Music[0].Duration)
 }
 
+func TestArticleService_GetPublicDetail_IncludesFullMusicItems(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	presenter := &stubMusicItemPresenter{
+		items: []dto.MusicItemResp{{
+			ID:                6,
+			Name:              "Song",
+			ArtistDisplayName: "Aimer / milet",
+			Artists: []dto.MusicArtistResp{
+				{ID: 1, Name: "Aimer", DisplayName: "Aimer"},
+				{ID: 2, Name: "milet", DisplayName: "milet"},
+			},
+			Duration: 240,
+		}},
+	}
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, presenter)
+
+	repo.EXPECT().
+		FindPublicDetail(uint(3), (*uint)(nil)).
+		Return(&articlerepo.ArticleAggregate{
+			Article: model.Article{Base: model.Base{ID: 3}, Title: "A", Content: "body", UserID: 1, Status: 1},
+			Music:   []model.Music{{Base: model.Base{ID: 6}, Name: "Song", Duration: 240}},
+		}, nil)
+
+	resp, err := svc.GetPublicDetail(3, nil)
+	require.NoError(t, err)
+	require.Len(t, resp.Music, 1)
+	assert.Equal(t, "Aimer / milet", resp.Music[0].ArtistDisplayName)
+	require.Len(t, resp.Music[0].Artists, 2)
+	assert.Equal(t, "Aimer", resp.Music[0].Artists[0].Name)
+}
+
 func TestArticleService_GetPublicDetail_IncludesUserWithResolvedAvatarURL(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -670,7 +703,7 @@ func TestArticleService_GetPublicDetail_IncludesUserWithResolvedAvatarURL(t *tes
 			"avatars/detail.png": "https://cdn.example.com/blog/avatars/detail.png?sign=1",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver, nil, nil)
+	svc := articleservice.NewArticleService(repo, resolver, nil, nil, nil)
 
 	avatar := "avatars/detail.png"
 	repo.EXPECT().
@@ -709,7 +742,7 @@ func TestArticleService_GetPublicDetail_ResolvesMarkdownObjectLinksInContent(t *
 			"posts/attachments/manual.pdf": "https://cdn.example.com/blog/posts/attachments/manual.pdf?sign=1",
 		},
 	}
-	svc := articleservice.NewArticleService(repo, resolver, nil, nil)
+	svc := articleservice.NewArticleService(repo, resolver, nil, nil, nil)
 
 	viewerID := uint(10)
 	content := "下载[说明书](posts/attachments/manual.pdf)，外链[官网](https://example.com/docs)保持不变。"
@@ -735,7 +768,7 @@ func TestArticleService_GetPublicDetail_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		FindPublicDetail(uint(404), (*uint)(nil)).
@@ -749,7 +782,7 @@ func TestArticleService_IsLiked_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		IsLiked(uint(8), uint(1)).
@@ -764,7 +797,7 @@ func TestArticleService_ToggleLike_ReturnsLatestLikeState(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, nil, nil, nil)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
 
 	repo.EXPECT().
 		ToggleLike(uint(8), uint(3)).
@@ -783,6 +816,15 @@ func TestArticleService_ToggleLike_ReturnsLatestLikeState(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, resp.IsLiked)
 	assert.Equal(t, int64(11), resp.LikeCount)
+}
+
+type stubMusicItemPresenter struct {
+	items []dto.MusicItemResp
+	err   error
+}
+
+func (s *stubMusicItemPresenter) MusicItemsToDTO([]model.Music) ([]dto.MusicItemResp, error) {
+	return s.items, s.err
 }
 
 type stubObjectURLResolver struct {
@@ -804,7 +846,7 @@ func TestArticleService_PermanentDeleteMovesArticleAssetsBeforeDeleting(t *testi
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
 	store := &stubArticleObjectStore{}
-	svc := articleservice.NewArticleService(repo, store, nil, nil)
+	svc := articleservice.NewArticleService(repo, store, nil, nil, nil)
 
 	deletedAt := time.Now()
 	cover := "articles/9/cover/cover.jpg"
@@ -842,7 +884,7 @@ func TestArticleService_PermanentDeleteRequiresAuthor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, &stubArticleObjectStore{}, nil, nil)
+	svc := articleservice.NewArticleService(repo, &stubArticleObjectStore{}, nil, nil, nil)
 
 	repo.EXPECT().
 		FindDeletedByID(uint(9)).
@@ -860,7 +902,7 @@ func TestArticleService_PermanentDeleteRequiresSoftDeletedArticle(t *testing.T) 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
-	svc := articleservice.NewArticleService(repo, &stubArticleObjectStore{}, nil, nil)
+	svc := articleservice.NewArticleService(repo, &stubArticleObjectStore{}, nil, nil, nil)
 
 	repo.EXPECT().
 		FindDeletedByID(uint(9)).
@@ -975,7 +1017,7 @@ func TestArticleService_ToggleLike_PublishesEventOnLike(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
 	pub := &recordingPublisher{}
-	svc := articleservice.NewArticleService(repo, nil, nil, pub)
+	svc := articleservice.NewArticleService(repo, nil, nil, pub, nil)
 	shortContent := "文章摘要"
 
 	repo.EXPECT().ToggleLike(uint(8), uint(3)).Return(&articlerepo.ArticleAggregate{
@@ -1002,7 +1044,7 @@ func TestArticleService_ToggleLike_DoesNotPublishOnUnlike(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
 	pub := &recordingPublisher{}
-	svc := articleservice.NewArticleService(repo, nil, nil, pub)
+	svc := articleservice.NewArticleService(repo, nil, nil, pub, nil)
 
 	// 取消点赞返回 liked=false，不应发布事件。
 	repo.EXPECT().ToggleLike(uint(8), uint(3)).Return(&articlerepo.ArticleAggregate{
@@ -1021,7 +1063,7 @@ func TestArticleService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
 	defer ctrl.Finish()
 	repo := mock.NewMockArticleRepository(ctrl)
 	pub := &recordingPublisher{}
-	svc := articleservice.NewArticleService(repo, nil, nil, pub)
+	svc := articleservice.NewArticleService(repo, nil, nil, pub, nil)
 
 	// 文章作者与点赞者同为 userID=5。
 	repo.EXPECT().ToggleLike(uint(8), uint(5)).Return(&articlerepo.ArticleAggregate{

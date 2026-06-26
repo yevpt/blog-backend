@@ -498,26 +498,13 @@ func (r *articleRepo) articleTags(ids []uint) (map[uint][]model.Tag, error) {
 	return result, err
 }
 
-type musicJoinRow struct {
-	ArticleID   uint
-	ID          uint
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   gorm.DeletedAt
-	Name        string
-	Singer      string
-	Album       string
-	SongDate    *time.Time
-	AudioKey    *string
-	CoverImgUrl *string
-	Description *string
-	Lyric       *string
-	Duration    uint16
-	Seq         uint
+type articleMusicRow struct {
+	ArticleID uint `gorm:"column:article_id"`
+	model.Music
 }
 
 func (r *articleRepo) articleMusic(ids []uint) (map[uint][]model.Music, error) {
-	var rows []musicJoinRow
+	var rows []articleMusicRow
 	err := r.db.Table("article_music").
 		Select("article_music.article_id, music.*").
 		Joins("JOIN music ON music.id = article_music.music_id AND music.deleted_at IS NULL").
@@ -527,24 +514,7 @@ func (r *articleRepo) articleMusic(ids []uint) (map[uint][]model.Music, error) {
 		Scan(&rows).Error
 	result := make(map[uint][]model.Music)
 	for _, row := range rows {
-		result[row.ArticleID] = append(result[row.ArticleID], model.Music{
-			Base: model.Base{
-				ID:        row.ID,
-				CreatedAt: row.CreatedAt,
-				UpdatedAt: row.UpdatedAt,
-				DeletedAt: row.DeletedAt,
-			},
-			Name:        row.Name,
-			Singer:      row.Singer,
-			Album:       row.Album,
-			SongDate:    row.SongDate,
-			AudioKey:    row.AudioKey,
-			CoverImgUrl: row.CoverImgUrl,
-			Description: row.Description,
-			Lyric:       row.Lyric,
-			Duration:    row.Duration,
-			Seq:         row.Seq,
-		})
+		result[row.ArticleID] = append(result[row.ArticleID], row.Music)
 	}
 	return result, err
 }

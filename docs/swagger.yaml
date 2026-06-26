@@ -266,9 +266,9 @@ definitions:
         example: 3
         type: integer
       music:
-        description: Music 音乐列表。
+        description: Music 音乐列表，字段与音乐模块 MusicItemResp 一致。
         items:
-          $ref: '#/definitions/dto.ArticleMusicResp'
+          $ref: '#/definitions/dto.MusicItemResp'
         type: array
       music_ids:
         description: MusicIDs 音乐 ID 列表。
@@ -753,9 +753,9 @@ definitions:
         example: 3
         type: integer
       music:
-        description: Music 音乐列表。
+        description: Music 音乐列表，字段与音乐模块 MusicItemResp 一致。
         items:
-          $ref: '#/definitions/dto.ArticleMusicResp'
+          $ref: '#/definitions/dto.MusicItemResp'
         type: array
       music_ids:
         description: MusicIDs 音乐 ID 列表。
@@ -892,35 +892,6 @@ definitions:
         description: UserID 作者用户 ID。
         example: 1
         type: integer
-    type: object
-  dto.ArticleMusicResp:
-    properties:
-      album:
-        description: Album 专辑名称。
-        example: Album
-        type: string
-      cover_img_url:
-        description: CoverImgUrl 音乐封面图地址。
-        type: string
-      duration:
-        description: Duration 音乐时长，单位为秒。
-        example: 240
-        type: integer
-      id:
-        description: ID 音乐 ID。
-        example: 1
-        type: integer
-      name:
-        description: Name 音乐名称。
-        example: Song
-        type: string
-      singer:
-        description: Singer 歌手名称。
-        example: Singer
-        type: string
-      url:
-        description: URL 音乐播放地址。
-        type: string
     type: object
   dto.ArticlePageResp:
     properties:

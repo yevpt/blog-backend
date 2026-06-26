@@ -242,16 +242,15 @@ func newRouteHandlers(
 
 	// 组装文章链路，前端对象地址由 service 层统一解析。
 	articleRepo := articlerepo.NewArticleRepository(db)
-	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc, notificationPublisher)
+	musicRepo := musicrepo.NewMusicRepository(db)
+	musicSvc := musicservice.NewMusicService(musicRepo, objectStore)
+	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc, notificationPublisher, musicSvc)
 
 	categoryRepo := categoryrepo.NewCategoryRepository(db)
 	categorySvc := categoryservice.NewCategoryService(categoryRepo)
 
 	tagRepo := tagrepo.NewTagRepository(db)
 	tagSvc := tagservice.NewTagService(tagRepo, articleSvc)
-
-	musicRepo := musicrepo.NewMusicRepository(db)
-	musicSvc := musicservice.NewMusicService(musicRepo, objectStore)
 
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)

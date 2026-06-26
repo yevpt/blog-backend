@@ -83,24 +83,6 @@ type ArticleRelationResp struct {
 	CoverImgUrl *string `json:"cover_img_url,omitempty"`
 }
 
-// ArticleMusicResp 文章关联音乐响应。
-type ArticleMusicResp struct {
-	// ID 音乐 ID。
-	ID uint `json:"id" example:"1"`
-	// Name 音乐名称。
-	Name string `json:"name" example:"Song"`
-	// Singer 歌手名称。
-	Singer string `json:"singer" example:"Singer"`
-	// Album 专辑名称。
-	Album string `json:"album" example:"Album"`
-	// URL 音乐播放地址。
-	URL *string `json:"url,omitempty"`
-	// CoverImgUrl 音乐封面图地址。
-	CoverImgUrl *string `json:"cover_img_url,omitempty"`
-	// Duration 音乐时长，单位为秒。
-	Duration uint16 `json:"duration" example:"240"`
-}
-
 // ArticleUserResp 文章作者摘要。
 type ArticleUserResp struct {
 	// ID 用户 ID。
@@ -173,8 +155,8 @@ type ArticleDetailResp struct {
 	Tags []ArticleRelationResp `json:"tags"`
 	// MusicIDs 音乐 ID 列表。
 	MusicIDs []uint `json:"music_ids"`
-	// Music 音乐列表。
-	Music []ArticleMusicResp `json:"music"`
+	// Music 音乐列表，字段与音乐模块 MusicItemResp 一致。
+	Music []MusicItemResp `json:"music"`
 	// RecommendSeq 推荐排序值。
 	RecommendSeq *uint `json:"recommend_seq,omitempty" example:"10"`
 }

@@ -24,6 +24,7 @@ type MusicService interface {
 	List() (*dto.MusicListResp, error)
 	ListPublic() (*dto.MusicListResp, error)
 	GetPublicDetail(id uint) (*dto.MusicDetailResp, error)
+	MusicItemsToDTO(rows []model.Music) ([]dto.MusicItemResp, error)
 	ListArtists(keyword string) (*dto.MusicArtistListResp, error)
 	GetPublicArtist(id uint) (*dto.MusicArtistResp, error)
 	ListAlbums(keyword string) (*dto.MusicAlbumListResp, error)
@@ -506,9 +507,9 @@ func parseOptionalDate(value *string) (*time.Time, error) {
 	return &parsed, nil
 }
 
-func (s *musicService) musicListToDTO(rows []model.Music) (*dto.MusicListResp, error) {
+func (s *musicService) MusicItemsToDTO(rows []model.Music) ([]dto.MusicItemResp, error) {
 	if len(rows) == 0 {
-		return &dto.MusicListResp{List: []dto.MusicItemResp{}}, nil
+		return nil, nil
 	}
 
 	ids := make([]uint, len(rows))
@@ -529,6 +530,17 @@ func (s *musicService) musicListToDTO(rows []model.Music) (*dto.MusicListResp, e
 	items := make([]dto.MusicItemResp, 0, len(rows))
 	for i := range rows {
 		items = append(items, s.musicItemToDTO(&rows[i], relations, albums, artistsByID))
+	}
+	return items, nil
+}
+
+func (s *musicService) musicListToDTO(rows []model.Music) (*dto.MusicListResp, error) {
+	items, err := s.MusicItemsToDTO(rows)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		return &dto.MusicListResp{List: []dto.MusicItemResp{}}, nil
 	}
 	return &dto.MusicListResp{List: items}, nil
 }

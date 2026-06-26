@@ -116,23 +116,6 @@ func resolveArticleUserAvatarURL(user *dto.ArticleUserResp, objectURLResolver st
 	return nil
 }
 
-func resolveMusicURLs(items []dto.ArticleMusicResp, objectURLResolver storage.ObjectURLResolver) error {
-	for i := range items {
-		url, err := resolveURL(items[i].URL, objectURLResolver)
-		if err != nil {
-			return err
-		}
-		items[i].URL = url
-
-		coverURL, err := resolveURL(items[i].CoverImgUrl, objectURLResolver)
-		if err != nil {
-			return err
-		}
-		items[i].CoverImgUrl = coverURL
-	}
-	return nil
-}
-
 func resolveArticleContent(content string, objectURLResolver storage.ObjectURLResolver) (string, error) {
 	// 无内容或无解析器时直接返回原文，避免对非对象存储场景做无意义处理。
 	if content == "" || objectURLResolver == nil {
@@ -185,7 +168,12 @@ func resolveMarkdownLinkTarget(target string, objectURLResolver storage.ObjectUR
 	return *resolved, nil
 }
 
-func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleContentPolicy, objectURLResolver storage.ObjectURLResolver) (*dto.ArticleDetailResp, error) {
+func articleDetailToDTO(
+	aggregate *articlerepo.ArticleAggregate,
+	policy articleContentPolicy,
+	objectURLResolver storage.ObjectURLResolver,
+	musicItems []dto.MusicItemResp,
+) (*dto.ArticleDetailResp, error) {
 	item := articleListItemToDTO(aggregate)
 	if err := resolveListItemCoverURL(&item, objectURLResolver); err != nil {
 		return nil, err
@@ -211,10 +199,8 @@ func articleDetailToDTO(aggregate *articlerepo.ArticleAggregate, policy articleC
 	}
 	resp.CategoryIDs, resp.Categories = categoryDTOs(aggregate.Categories)
 	resp.TagIDs, resp.Tags = tagDTOs(aggregate.Tags)
-	resp.MusicIDs, resp.Music = musicDTOs(aggregate.Music)
-	if err := resolveMusicURLs(resp.Music, objectURLResolver); err != nil {
-		return nil, err
-	}
+	resp.MusicIDs = musicIDs(aggregate.Music)
+	resp.Music = musicItems
 	if aggregate.Recommend != nil {
 		resp.IsRecommended = true
 		resp.RecommendSeq = &aggregate.Recommend.Seq
@@ -287,8 +273,17 @@ func adminArticleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.Admi
 	return item
 }
 
-func adminArticleDetailToDTO(aggregate *articlerepo.ArticleAggregate, objectURLResolver storage.ObjectURLResolver) (*dto.AdminArticleDetailResp, error) {
-	detail, err := articleDetailToDTO(aggregate, articleContentAdmin, objectURLResolver)
+func adminArticleDetailToDTO(
+	aggregate *articlerepo.ArticleAggregate,
+	policy articleContentPolicy,
+	objectURLResolver storage.ObjectURLResolver,
+	musicPresenter MusicItemPresenter,
+) (*dto.AdminArticleDetailResp, error) {
+	musicItems, err := mapArticleMusicRows(aggregate.Music, musicPresenter, objectURLResolver)
+	if err != nil {
+		return nil, err
+	}
+	detail, err := articleDetailToDTO(aggregate, policy, objectURLResolver, musicItems)
 	if err != nil {
 		return nil, err
 	}
@@ -341,22 +336,50 @@ func tagDTOs(tags []model.Tag) ([]uint, []dto.ArticleRelationResp) {
 	return ids, items
 }
 
-func musicDTOs(music []model.Music) ([]uint, []dto.ArticleMusicResp) {
+func musicIDs(music []model.Music) []uint {
 	ids := make([]uint, 0, len(music))
-	items := make([]dto.ArticleMusicResp, 0, len(music))
 	for _, item := range music {
 		ids = append(ids, item.ID)
-		singer := item.ArtistDisplayName
-		items = append(items, dto.ArticleMusicResp{
-			ID:          item.ID,
-			Name:        item.Name,
-			Singer:      singer,
-			URL:         item.AudioKey,
-			CoverImgUrl: nil,
-			Duration:    item.Duration,
+	}
+	return ids
+}
+
+func mapArticleMusicRows(
+	rows []model.Music,
+	presenter MusicItemPresenter,
+	objectURLResolver storage.ObjectURLResolver,
+) ([]dto.MusicItemResp, error) {
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	if presenter != nil {
+		return presenter.MusicItemsToDTO(rows)
+	}
+	return fallbackMusicItems(rows, objectURLResolver), nil
+}
+
+func fallbackMusicItems(rows []model.Music, objectURLResolver storage.ObjectURLResolver) []dto.MusicItemResp {
+	items := make([]dto.MusicItemResp, 0, len(rows))
+	for i := range rows {
+		row := &rows[i]
+		display := row.ArtistDisplayName
+		if display == "" {
+			display = row.Singer
+		}
+		items = append(items, dto.MusicItemResp{
+			ID:                row.ID,
+			Name:              row.Name,
+			ArtistDisplayName: display,
+			Artists:           []dto.MusicArtistResp{},
+			AlbumTrackNo:      row.AlbumTrackNo,
+			AudioURL:          storage.ResolvePtrURL(objectURLResolver, row.AudioKey),
+			CoverURL:          storage.ResolvePtrURL(objectURLResolver, row.CoverImgUrl),
+			Duration:          row.Duration,
+			IsPublic:          row.IsPublic,
+			Seq:               row.Seq,
 		})
 	}
-	return ids, items
+	return items
 }
 
 func cleanArticlePassword(status uint8, password *string) *string {

@@ -9513,10 +9513,10 @@
                     "example": 3
                 },
                 "music": {
-                    "description": "Music 音乐列表。",
+                    "description": "Music 音乐列表，字段与音乐模块 MusicItemResp 一致。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.ArticleMusicResp"
+                        "$ref": "#/definitions/dto.MusicItemResp"
                     }
                 },
                 "music_ids": {
@@ -10183,10 +10183,10 @@
                     "example": 3
                 },
                 "music": {
-                    "description": "Music 音乐列表。",
+                    "description": "Music 音乐列表，字段与音乐模块 MusicItemResp 一致。",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.ArticleMusicResp"
+                        "$ref": "#/definitions/dto.MusicItemResp"
                     }
                 },
                 "music_ids": {
@@ -10374,44 +10374,6 @@
                     "description": "UserID 作者用户 ID。",
                     "type": "integer",
                     "example": 1
-                }
-            }
-        },
-        "dto.ArticleMusicResp": {
-            "type": "object",
-            "properties": {
-                "album": {
-                    "description": "Album 专辑名称。",
-                    "type": "string",
-                    "example": "Album"
-                },
-                "cover_img_url": {
-                    "description": "CoverImgUrl 音乐封面图地址。",
-                    "type": "string"
-                },
-                "duration": {
-                    "description": "Duration 音乐时长，单位为秒。",
-                    "type": "integer",
-                    "example": 240
-                },
-                "id": {
-                    "description": "ID 音乐 ID。",
-                    "type": "integer",
-                    "example": 1
-                },
-                "name": {
-                    "description": "Name 音乐名称。",
-                    "type": "string",
-                    "example": "Song"
-                },
-                "singer": {
-                    "description": "Singer 歌手名称。",
-                    "type": "string",
-                    "example": "Singer"
-                },
-                "url": {
-                    "description": "URL 音乐播放地址。",
-                    "type": "string"
                 }
             }
         },

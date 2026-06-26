@@ -25,6 +25,11 @@ var (
 	ErrArticleMusicNotFound      = errors.New("音乐不存在")
 )
 
+// MusicItemPresenter 将音乐模型映射为完整对外响应，供文章详情复用音乐模块字段。
+type MusicItemPresenter interface {
+	MusicItemsToDTO(rows []model.Music) ([]dto.MusicItemResp, error)
+}
+
 // ArticleService 文章业务接口，负责文章查询、保存、点赞和阅读计数。
 type ArticleService interface {
 	ListIDs() (*dto.ArticleIDsResp, error)
@@ -45,12 +50,26 @@ type articleService struct {
 	objectURLResolver storage.ObjectURLResolver
 	uvSvc             uv.UVService
 	publisher         notificationservice.Publisher
+	musicPresenter    MusicItemPresenter
 }
 
 // NewArticleService 创建文章业务服务实例。
 // publisher 用于点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewArticleService(repo articlerepo.ArticleRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher) ArticleService {
-	return &articleService{repo: repo, objectURLResolver: objectURLResolver, uvSvc: uvSvc, publisher: publisher}
+// musicPresenter 用于文章详情返回完整音乐信息，生产环境应注入音乐服务。
+func NewArticleService(
+	repo articlerepo.ArticleRepository,
+	objectURLResolver storage.ObjectURLResolver,
+	uvSvc uv.UVService,
+	publisher notificationservice.Publisher,
+	musicPresenter MusicItemPresenter,
+) ArticleService {
+	return &articleService{
+		repo:              repo,
+		objectURLResolver: objectURLResolver,
+		uvSvc:             uvSvc,
+		publisher:         publisher,
+		musicPresenter:    musicPresenter,
+	}
 }
 
 func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -103,7 +122,7 @@ func (s *articleService) GetPublicDetail(id uint, viewerID *uint) (*dto.ArticleD
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return articleDetailToDTO(aggregate, articleContentPublic, s.objectURLResolver)
+	return s.buildArticleDetail(aggregate, articleContentPublic)
 }
 
 func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArticleDetailResp, error) {
@@ -114,7 +133,19 @@ func (s *articleService) GetAdminDetail(id uint, viewerID *uint) (*dto.AdminArti
 	if aggregate == nil {
 		return nil, ErrArticleNotFound
 	}
-	return adminArticleDetailToDTO(aggregate, s.objectURLResolver)
+	return adminArticleDetailToDTO(aggregate, articleContentAdmin, s.objectURLResolver, s.musicPresenter)
+}
+
+func (s *articleService) buildArticleDetail(aggregate *articlerepo.ArticleAggregate, policy articleContentPolicy) (*dto.ArticleDetailResp, error) {
+	musicItems, err := s.mapArticleMusic(aggregate.Music)
+	if err != nil {
+		return nil, err
+	}
+	return articleDetailToDTO(aggregate, policy, s.objectURLResolver, musicItems)
+}
+
+func (s *articleService) mapArticleMusic(rows []model.Music) ([]dto.MusicItemResp, error) {
+	return mapArticleMusicRows(rows, s.musicPresenter, s.objectURLResolver)
 }
 
 func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.ArticleDetailResp, error) {
@@ -220,7 +251,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 			return nil, err
 		}
 	}
-	return articleDetailToDTO(aggregate, articleContentAdmin, s.objectURLResolver)
+	return s.buildArticleDetail(aggregate, articleContentAdmin)
 }
 
 func (s *articleService) Delete(id uint) (*dto.ArticleDetailResp, error) {

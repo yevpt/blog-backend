@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/music"
+	"github.com/vpt/blog-backend/internal/model"
 	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -34,6 +35,10 @@ func (s *stubMusicService) ListPublic() (*dto.MusicListResp, error) {
 
 func (s *stubMusicService) GetPublicDetail(uint) (*dto.MusicDetailResp, error) {
 	return s.detail, s.err
+}
+
+func (s *stubMusicService) MusicItemsToDTO([]model.Music) ([]dto.MusicItemResp, error) {
+	return nil, s.err
 }
 
 func (s *stubMusicService) ListArtists(string) (*dto.MusicArtistListResp, error) {
