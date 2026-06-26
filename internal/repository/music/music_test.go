@@ -117,3 +117,74 @@ func TestMusicRepository_SaveMusic_ReplacesArtistRelations(t *testing.T) {
 	require.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestMusicRepository_SaveArtist_RestoresSoftDeletedArtist(t *testing.T) {
+	db, mock, sqlDB := newMusicMockDB(t)
+	defer sqlDB.Close()
+	repo := music.NewMusicRepository(db)
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "name", "name_zh", "avatar_key", "description",
+	}).AddRow(9, now, now, now.Add(-time.Hour), "Aimer", nil, nil, nil)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `music_artist`").
+		WithArgs("Aimer", 1).
+		WillReturnRows(rows)
+	mock.ExpectExec("UPDATE `music_artist` SET .*deleted_at").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT \\* FROM `music_artist`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "name", "name_zh", "avatar_key", "description",
+		}).AddRow(9, now, now, nil, "Aimer", nil, nil, "restored"))
+	mock.ExpectCommit()
+
+	saved, err := repo.SaveArtist(music.MusicArtistSaveData{
+		Artist: model.MusicArtist{Name: "Aimer", Description: strPtr("restored")},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.Equal(t, uint(9), saved.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMusicRepository_SaveAlbum_RestoresSoftDeletedAlbum(t *testing.T) {
+	db, mock, sqlDB := newMusicMockDB(t)
+	defer sqlDB.Close()
+	repo := music.NewMusicRepository(db)
+
+	now := time.Now()
+	artistID := uint(3)
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "name", "artist_id", "cover_key", "release_date", "description",
+	}).AddRow(15, now, now, now.Add(-time.Hour), "Dawn", artistID, nil, nil, nil)
+
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `music_album`").
+		WithArgs("Dawn", artistID, 1).
+		WillReturnRows(rows)
+	mock.ExpectExec("UPDATE `music_album` SET .*deleted_at").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT \\* FROM `music_album`").
+		WithArgs(uint(15), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "name", "artist_id", "cover_key", "release_date", "description",
+		}).AddRow(15, now, now, nil, "Dawn", artistID, nil, nil, "restored"))
+	mock.ExpectCommit()
+
+	saved, err := repo.SaveAlbum(music.MusicAlbumSaveData{
+		Album: model.MusicAlbum{Name: "Dawn", ArtistID: &artistID, Description: strPtr("restored")},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.Equal(t, uint(15), saved.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func strPtr(s string) *string {
+	return &s
+}

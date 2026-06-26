@@ -110,6 +110,30 @@ func TestUserRepository_FindByEmail_OnlyMatchesEmail(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUserRepository_UpsertSocialLink_RestoresSoftDeletedLink(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"id", "created_at", "updated_at", "deleted_at", "user_id", "platform", "url",
+	}).AddRow(12, now, now, now.Add(-time.Hour), 7, "github", "https://github.com/old")
+
+	mock.ExpectQuery(`SELECT \* FROM \x60user_social_link\x60 WHERE user_id = \? AND platform = \? ORDER BY \x60user_social_link\x60\.\x60id\x60 LIMIT \?`).
+		WithArgs(uint(7), "github", 1).
+		WillReturnRows(rows)
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE \x60user_social_link\x60 SET .*deleted_at`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	err := repo.UpsertSocialLink(7, "github", "https://github.com/new")
+
+	require.NoError(t, err)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserRepository_ExistsByEmail_True(t *testing.T) {
 	db, mock, sqlDB := newMockDB(t)
 	defer sqlDB.Close()

@@ -2,6 +2,7 @@ package music
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
@@ -249,9 +250,22 @@ func (r *musicRepo) SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, er
 	var saved model.MusicArtist
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		artist := data.Artist
+		restoring := false
 		if artist.ID == 0 {
-			if err := tx.Create(&artist).Error; err != nil {
-				return err
+			existing, err := findArtistByNameUnscoped(tx, artist.Name)
+			if err == nil {
+				if !existing.DeletedAt.Valid {
+					return fmt.Errorf("music_artist 已存在: name=%s", artist.Name)
+				}
+				artist.ID = existing.ID
+				restoring = true
+			} else {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+				if err := tx.Create(&artist).Error; err != nil {
+					return err
+				}
 			}
 		} else {
 			var existing model.MusicArtist
@@ -266,13 +280,19 @@ func (r *musicRepo) SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, er
 			}
 			artist = prepared
 		}
-		if artist.ID != 0 && (data.Artist.ID != 0 || data.PrepareArtist != nil) {
-			result := tx.Model(&model.MusicArtist{}).Where("id = ?", artist.ID).Updates(map[string]any{
+		if artist.ID != 0 && (data.Artist.ID != 0 || data.PrepareArtist != nil || restoring) {
+			updates := map[string]any{
 				"name":        artist.Name,
 				"name_zh":     artist.NameZh,
 				"avatar_key":  artist.AvatarKey,
 				"description": artist.Description,
-			})
+			}
+			query := tx.Model(&model.MusicArtist{})
+			if restoring {
+				updates["deleted_at"] = nil
+				query = query.Unscoped()
+			}
+			result := query.Where("id = ?", artist.ID).Updates(updates)
 			if result.Error != nil {
 				return result.Error
 			}
@@ -291,6 +311,12 @@ func (r *musicRepo) SaveArtist(data MusicArtistSaveData) (*model.MusicArtist, er
 	return &saved, nil
 }
 
+func findArtistByNameUnscoped(tx *gorm.DB, name string) (*model.MusicArtist, error) {
+	var artist model.MusicArtist
+	err := tx.Unscoped().Where("name = ?", name).First(&artist).Error
+	return &artist, err
+}
+
 func (r *musicRepo) DeleteArtist(id uint) error {
 	result := r.db.Delete(&model.MusicArtist{}, id)
 	if result.Error != nil {
@@ -306,9 +332,22 @@ func (r *musicRepo) SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error
 	var saved model.MusicAlbum
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		album := data.Album
+		restoring := false
 		if album.ID == 0 {
-			if err := tx.Create(&album).Error; err != nil {
-				return err
+			existing, err := findAlbumByNameAndArtistUnscoped(tx, album.Name, album.ArtistID)
+			if err == nil {
+				if !existing.DeletedAt.Valid {
+					return fmt.Errorf("music_album 已存在: name=%s", album.Name)
+				}
+				album.ID = existing.ID
+				restoring = true
+			} else {
+				if !errors.Is(err, gorm.ErrRecordNotFound) {
+					return err
+				}
+				if err := tx.Create(&album).Error; err != nil {
+					return err
+				}
 			}
 		} else {
 			var existing model.MusicAlbum
@@ -323,14 +362,20 @@ func (r *musicRepo) SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error
 			}
 			album = prepared
 		}
-		if album.ID != 0 && (data.Album.ID != 0 || data.PrepareAlbum != nil) {
-			result := tx.Model(&model.MusicAlbum{}).Where("id = ?", album.ID).Updates(map[string]any{
+		if album.ID != 0 && (data.Album.ID != 0 || data.PrepareAlbum != nil || restoring) {
+			updates := map[string]any{
 				"name":         album.Name,
 				"artist_id":    album.ArtistID,
 				"cover_key":    album.CoverKey,
 				"release_date": album.ReleaseDate,
 				"description":  album.Description,
-			})
+			}
+			query := tx.Model(&model.MusicAlbum{})
+			if restoring {
+				updates["deleted_at"] = nil
+				query = query.Unscoped()
+			}
+			result := query.Where("id = ?", album.ID).Updates(updates)
 			if result.Error != nil {
 				return result.Error
 			}
@@ -347,6 +392,18 @@ func (r *musicRepo) SaveAlbum(data MusicAlbumSaveData) (*model.MusicAlbum, error
 		return nil, err
 	}
 	return &saved, nil
+}
+
+func findAlbumByNameAndArtistUnscoped(tx *gorm.DB, name string, artistID *uint) (*model.MusicAlbum, error) {
+	var album model.MusicAlbum
+	query := tx.Unscoped().Where("name = ?", name)
+	if artistID == nil {
+		query = query.Where("artist_id IS NULL")
+	} else {
+		query = query.Where("artist_id = ?", *artistID)
+	}
+	err := query.First(&album).Error
+	return &album, err
 }
 
 func (r *musicRepo) DeleteAlbum(id uint) error {

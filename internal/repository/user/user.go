@@ -399,11 +399,20 @@ func (r *userRepo) UpsertMeta(userID uint, updates map[string]any) error {
 }
 
 func (r *userRepo) UpsertSocialLink(userID uint, platform, url string) error {
-	// 用 ON DUPLICATE KEY UPDATE 语义：先尝试插入，已存在则更新
-	link := model.UserSocialLink{UserID: userID, Platform: platform, URL: url}
-	return r.db.Where(model.UserSocialLink{UserID: userID, Platform: platform}).
-		Assign(model.UserSocialLink{URL: url}).
-		FirstOrCreate(&link).Error
+	var link model.UserSocialLink
+	err := r.db.Unscoped().
+		Where("user_id = ? AND platform = ?", userID, platform).
+		First(&link).Error
+	if err == nil {
+		return r.db.Unscoped().Model(&link).Updates(map[string]any{
+			"url":        url,
+			"deleted_at": nil,
+		}).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return r.db.Create(&model.UserSocialLink{UserID: userID, Platform: platform, URL: url}).Error
 }
 
 func (r *userRepo) DeleteSocialLink(userID uint, platform string) error {
