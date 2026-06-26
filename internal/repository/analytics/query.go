@@ -70,6 +70,22 @@ func (r *repository) QueryTopPagesPublic(ctx context.Context, from, to string, l
 	return out, nil
 }
 
+func (r *repository) QueryFriendLinkDaily(ctx context.Context, from, to string, limit int) ([]model.AnalyticsFriendLinkDaily, error) {
+	var out []model.AnalyticsFriendLinkDaily
+	err := r.db.WithContext(ctx).
+		Model(&model.AnalyticsFriendLinkDaily{}).
+		Select("friend_link_id, max(friend_name) as friend_name, max(site) as site, max(site_host) as site_host, sum(pv) as pv, sum(uv) as uv, sum(sessions) as sessions").
+		Where("date >= ? AND date <= ?", from, to).
+		Group("friend_link_id").
+		Order("pv desc").
+		Limit(limit).
+		Find(&out).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询友链来源失败: %w", err)
+	}
+	return out, nil
+}
+
 // QueryTotalsSegmented 汇总累计 UV 及注册/匿名 UV（来自 analytics_daily）。
 func (r *repository) QueryTotalsSegmented(ctx context.Context) (total, registered, anonymous int64, err error) {
 	var row struct{ Total, Registered, Anonymous int64 }
@@ -235,7 +251,14 @@ func (r *repository) AggregateDay(ctx context.Context, date string) (DayAggregat
 		})
 	}
 
-	// 4) 会话级指标：平均停留时长与跳出率（来自 analytics_sessions，当天开始的真人会话）。
+	// 4) 友链来源 GROUP BY：按友链站点 host 匹配 referer_host，写入永久聚合。
+	friendLinks, err := r.aggregateFriendLinks(ctx, date, start, end)
+	if err != nil {
+		return DayAggregate{}, err
+	}
+	agg.FriendLinks = friendLinks
+
+	// 5) 会话级指标：平均停留时长与跳出率（来自 analytics_sessions，当天开始的真人会话）。
 	var sess struct {
 		AvgDuration float64
 		BounceRate  float64
@@ -249,6 +272,57 @@ func (r *repository) AggregateDay(ctx context.Context, date string) (DayAggregat
 	agg.Daily.BounceRate = sess.BounceRate
 
 	return agg, nil
+}
+
+const (
+	friendLinkStatusVisible      = 1
+	friendLinkStatusDisconnected = 2
+)
+
+// friendLinkHostSQL 从 friend_link.site 提取小写 host 并去掉端口，便于与 referer_host 比对。
+const friendLinkHostSQL = "SUBSTRING_INDEX(SUBSTRING_INDEX(REPLACE(REPLACE(LOWER(f.site), 'https://', ''), 'http://', ''), '/', 1), ':', 1)"
+
+func (r *repository) aggregateFriendLinks(ctx context.Context, date string, start, end time.Time) ([]model.AnalyticsFriendLinkDaily, error) {
+	var rows []model.AnalyticsFriendLinkDaily
+	sql := fmt.Sprintf(`
+SELECT
+  f.id AS friend_link_id,
+  f.name AS friend_name,
+  f.site AS site,
+  %s AS site_host,
+  COUNT(*) AS pv,
+  COUNT(DISTINCT COALESCE(e.user_id, e.visitor_id)) AS uv,
+  COUNT(DISTINCT e.session_id) AS sessions
+FROM analytics_events AS e
+JOIN friend_link AS f
+  ON f.deleted_at IS NULL
+ AND f.status IN (?, ?)
+ AND (
+   e.referer_host = %s
+   OR e.referer_host = CONCAT('www.', %s)
+   OR CONCAT('www.', e.referer_host) = %s
+ )
+WHERE e.created_at >= ? AND e.created_at < ?
+  AND e.is_bot = ? AND e.is_suspect = ?
+  AND e.referer_host <> ''
+GROUP BY f.id, f.name, f.site, site_host
+ORDER BY pv DESC`, friendLinkHostSQL, friendLinkHostSQL, friendLinkHostSQL, friendLinkHostSQL)
+	err := r.db.WithContext(ctx).Raw(
+		sql,
+		friendLinkStatusVisible,
+		friendLinkStatusDisconnected,
+		start,
+		end,
+		false,
+		false,
+	).Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("聚合友链来源失败: %w", err)
+	}
+	for i := range rows {
+		rows[i].Date = date
+	}
+	return rows, nil
 }
 
 // sessionScope 返回「当日开始的真人会话」过滤 builder（first_seen 落在 [start,end)，非 bot 且非 suspect）。

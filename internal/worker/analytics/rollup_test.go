@@ -29,13 +29,16 @@ func (f *fakeReader) AggregateDay(_ context.Context, date string) (analyticsrepo
 
 // recRepo 记录 upsert 与清理调用次数及入参，供断言。
 type recRepo struct {
-	dailyCalls    int
-	dimCalls      int
-	pageCalls     int
-	replaceDim    []model.AnalyticsDailyDim
-	replacePage   []model.AnalyticsPageDaily
-	replaceDimAt  string
-	replacePageAt string
+	dailyCalls      int
+	dimCalls        int
+	pageCalls       int
+	friendCalls     int
+	replaceDim      []model.AnalyticsDailyDim
+	replacePage     []model.AnalyticsPageDaily
+	replaceFriend   []model.AnalyticsFriendLinkDaily
+	replaceDimAt    string
+	replacePageAt   string
+	replaceFriendAt string
 
 	delEventsCutoff   time.Time
 	delSessionsCutoff time.Time
@@ -62,6 +65,13 @@ func (r *recRepo) ReplacePageDaily(_ context.Context, date string, rows []model.
 	return nil
 }
 
+func (r *recRepo) ReplaceFriendLinkDaily(_ context.Context, date string, rows []model.AnalyticsFriendLinkDaily) error {
+	r.friendCalls++
+	r.replaceFriendAt = date
+	r.replaceFriend = rows
+	return nil
+}
+
 func (r *recRepo) DeleteEventsBefore(_ context.Context, t time.Time) (int64, error) {
 	r.delEventsCalls++
 	r.delEventsCutoff = t
@@ -76,9 +86,10 @@ func (r *recRepo) DeleteSessionsBefore(_ context.Context, t time.Time) (int64, e
 
 func TestRollupDay(t *testing.T) {
 	reader := &fakeReader{agg: analyticsrepo.DayAggregate{
-		Daily: model.AnalyticsDaily{Date: "2026-06-24", PV: 10, UV: 5},
-		Dims:  []model.AnalyticsDailyDim{{Date: "2026-06-24", Dimension: "device", DimValue: "mobile", PV: 6, UV: 3}},
-		Pages: []model.AnalyticsPageDaily{{Date: "2026-06-24", Path: "/", PV: 4, UV: 2}},
+		Daily:       model.AnalyticsDaily{Date: "2026-06-24", PV: 10, UV: 5},
+		Dims:        []model.AnalyticsDailyDim{{Date: "2026-06-24", Dimension: "device", DimValue: "mobile", PV: 6, UV: 3}},
+		Pages:       []model.AnalyticsPageDaily{{Date: "2026-06-24", Path: "/", PV: 4, UV: 2}},
+		FriendLinks: []model.AnalyticsFriendLinkDaily{{Date: "2026-06-24", FriendLinkID: 7, FriendName: "友站", SiteHost: "friend.example.com", PV: 3, UV: 2, Sessions: 1}},
 	}}
 	rec := &recRepo{}
 	r := worker.NewRollup(reader, rec, zap.NewNop())
@@ -93,6 +104,9 @@ func TestRollupDay(t *testing.T) {
 	assert.Equal(t, 1, rec.pageCalls)
 	assert.Equal(t, "2026-06-24", rec.replacePageAt)
 	assert.Len(t, rec.replacePage, 1)
+	assert.Equal(t, 1, rec.friendCalls)
+	assert.Equal(t, "2026-06-24", rec.replaceFriendAt)
+	assert.Len(t, rec.replaceFriend, 1)
 }
 
 func TestCleanup(t *testing.T) {

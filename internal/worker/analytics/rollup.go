@@ -25,6 +25,7 @@ type RollupWriter interface {
 	UpsertDaily(ctx context.Context, d model.AnalyticsDaily) error
 	ReplaceDailyDims(ctx context.Context, date string, rows []model.AnalyticsDailyDim) error
 	ReplacePageDaily(ctx context.Context, date string, rows []model.AnalyticsPageDaily) error
+	ReplaceFriendLinkDaily(ctx context.Context, date string, rows []model.AnalyticsFriendLinkDaily) error
 }
 
 // RollupCleaner 删除过期的原始事件与会话。repo.Repository 结构上满足该接口。
@@ -66,12 +67,16 @@ func (r *Rollup) RollupDay(ctx context.Context, date string) error {
 	if err := r.writer.ReplacePageDaily(ctx, date, agg.Pages); err != nil {
 		return err
 	}
+	if err := r.writer.ReplaceFriendLinkDaily(ctx, date, agg.FriendLinks); err != nil {
+		return err
+	}
 	r.logger.Info("日聚合完成",
 		zap.String("date", date),
 		zap.Int("pv", agg.Daily.PV),
 		zap.Int("uv", agg.Daily.UV),
 		zap.Int("dims", len(agg.Dims)),
 		zap.Int("pages", len(agg.Pages)),
+		zap.Int("friend_links", len(agg.FriendLinks)),
 	)
 	return nil
 }

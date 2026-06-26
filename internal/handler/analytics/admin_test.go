@@ -44,6 +44,11 @@ func (f *fakeQuery) Dimensions(_ context.Context, dimension, from, to string) ([
 	return []dto.DimensionPoint{{Date: "2026-06-01", DimValue: "desktop", PV: 10, UV: 5}}, nil
 }
 
+func (f *fakeQuery) FriendLinks(_ context.Context, from, to string, limit int) ([]dto.FriendLinkStat, error) {
+	f.lastFrom, f.lastTo, f.lastLimit = from, to, limit
+	return []dto.FriendLinkStat{{FriendLinkID: 7, FriendName: "友站", SiteHost: "friend.example.com", PV: 12, UV: 6, Sessions: 4, InboundRate: 0.2}}, nil
+}
+
 func (f *fakeQuery) Paths(_ context.Context, from, to string, limit int) ([]dto.PathSequence, error) {
 	f.lastFrom, f.lastTo, f.lastLimit = from, to, limit
 	return []dto.PathSequence{{Sequence: []string{"/", "/articles"}, Sessions: 3}}, nil
@@ -75,6 +80,7 @@ func newRouter(h *hdl.AdminHandler) *gin.Engine {
 	r.GET("/admin/analytics/trend", h.Trend)
 	r.GET("/admin/analytics/pages", h.Pages)
 	r.GET("/admin/analytics/dimensions", h.Dimensions)
+	r.GET("/admin/analytics/friend-links", h.FriendLinks)
 	r.GET("/admin/analytics/paths", h.Paths)
 	r.GET("/admin/analytics/funnel", h.Funnel)
 	r.POST("/admin/analytics/backfill", h.Backfill)
@@ -214,6 +220,20 @@ func TestAdminDimensions_MissingDimension(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, response.CodeBadRequest, decode(t, w).Code)
+}
+
+func TestAdminFriendLinks_HappyPathAndLimitCap(t *testing.T) {
+	fq := &fakeQuery{}
+	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
+
+	w := doGET(r, "/admin/analytics/friend-links?from=2026-06-01&to=2026-06-30&limit=500")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+	assert.Equal(t, "2026-06-01", fq.lastFrom)
+	assert.Equal(t, "2026-06-30", fq.lastTo)
+	assert.Equal(t, 100, fq.lastLimit)
+	assert.Contains(t, w.Body.String(), "inbound_rate")
 }
 
 func TestAdminPages_LimitCap(t *testing.T) {

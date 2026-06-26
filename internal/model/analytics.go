@@ -93,3 +93,17 @@ type AnalyticsPageDaily struct {
 }
 
 func (AnalyticsPageDaily) TableName() string { return "analytics_page_daily" }
+
+// AnalyticsFriendLinkDaily 每日每友链来源聚合（永久），用于原始事件清理后仍可分析友链入站贡献。
+type AnalyticsFriendLinkDaily struct {
+	Date         string `gorm:"primaryKey;type:varchar(10)"`
+	FriendLinkID uint   `gorm:"primaryKey;index"`
+	FriendName   string `gorm:"type:varchar(50)"`
+	Site         string `gorm:"type:varchar(500)"`
+	SiteHost     string `gorm:"type:varchar(255);index"`
+	PV           int
+	UV           int
+	Sessions     int
+}
+
+func (AnalyticsFriendLinkDaily) TableName() string { return "analytics_friend_link_daily" }

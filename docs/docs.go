@@ -163,6 +163,79 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/analytics/friend-links": {
+            "get": {
+                "description": "统计从已配置友链站点 referer 跳入本站的 PV、UV、会话数与入站占比。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "友链来源排行",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "起始日期 YYYY-MM-DD，默认近 7 天",
+                        "name": "from",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "结束日期 YYYY-MM-DD，默认今天",
+                        "name": "to",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数，默认 20，上限 100",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功，code=400 参数错误",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/analytics.FriendLinkStat"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/analytics/funnel": {
             "get": {
                 "produces": [
@@ -8929,6 +9002,35 @@ const docTemplate = `{
                 },
                 "pv": {
                     "type": "integer"
+                },
+                "uv": {
+                    "type": "integer"
+                }
+            }
+        },
+        "analytics.FriendLinkStat": {
+            "type": "object",
+            "properties": {
+                "friend_link_id": {
+                    "type": "integer"
+                },
+                "friend_name": {
+                    "type": "string"
+                },
+                "inbound_rate": {
+                    "type": "number"
+                },
+                "pv": {
+                    "type": "integer"
+                },
+                "sessions": {
+                    "type": "integer"
+                },
+                "site": {
+                    "type": "string"
+                },
+                "site_host": {
+                    "type": "string"
                 },
                 "uv": {
                     "type": "integer"

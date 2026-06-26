@@ -145,6 +145,11 @@ func TestAggregateDay(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 		WillReturnRows(sqlmock.NewRows(pageCols).AddRow("/x", "X", 9, 4))
 
+	// 友链来源聚合：按已配置友链站点 host 匹配 referer_host。
+	friendCols := []string{"friend_link_id", "friend_name", "site", "site_host", "pv", "uv", "sessions"}
+	mock.ExpectQuery("FROM analytics_events AS e.*friend_link AS f").
+		WillReturnRows(sqlmock.NewRows(friendCols).AddRow(uint(7), "友站", "https://friend.example.com", "friend.example.com", 11, 5, 4))
+
 	// 会话级指标查询（最后一条）；须排除 suspect 会话（is_suspect=false）。
 	mock.ExpectQuery("FROM `analytics_sessions`.*is_suspect").
 		WillReturnRows(sqlmock.NewRows([]string{"avg_duration", "bounce_rate"}).AddRow(42.0, 0.25))
@@ -162,6 +167,10 @@ func TestAggregateDay(t *testing.T) {
 	assert.Len(t, got.Pages, 1)
 	assert.Equal(t, "/x", got.Pages[0].Path)
 	assert.Equal(t, "2026-06-24", got.Pages[0].Date)
+	require.Len(t, got.FriendLinks, 1)
+	assert.Equal(t, uint(7), got.FriendLinks[0].FriendLinkID)
+	assert.Equal(t, "friend.example.com", got.FriendLinks[0].SiteHost)
+	assert.Equal(t, 11, got.FriendLinks[0].PV)
 	assert.Equal(t, 42, got.Daily.AvgDuration)
 	assert.Equal(t, 0.25, got.Daily.BounceRate)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -184,6 +193,10 @@ func TestAggregateDay_EmptyEventDay(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 		WillReturnRows(sqlmock.NewRows(pageCols))
 
+	friendCols := []string{"friend_link_id", "friend_name", "site", "site_host", "pv", "uv", "sessions"}
+	mock.ExpectQuery("FROM analytics_events AS e.*friend_link AS f").
+		WillReturnRows(sqlmock.NewRows(friendCols))
+
 	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_sessions`")).
 		WillReturnRows(sqlmock.NewRows([]string{"avg_duration", "bounce_rate"}).AddRow(0.0, 0.0))
 
@@ -193,5 +206,23 @@ func TestAggregateDay_EmptyEventDay(t *testing.T) {
 	assert.Zero(t, got.Daily.PV)
 	assert.Empty(t, got.Dims)
 	assert.Empty(t, got.Pages)
+	assert.Empty(t, got.FriendLinks)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestQueryFriendLinkDaily(t *testing.T) {
+	r, mock := newRepo(t)
+	rows := sqlmock.NewRows([]string{"friend_link_id", "friend_name", "site", "site_host", "pv", "uv", "sessions"}).
+		AddRow(uint(7), "友站", "https://friend.example.com", "friend.example.com", 12, 6, 4)
+	mock.ExpectQuery("FROM `analytics_friend_link_daily`.*GROUP BY.*friend_link_id").
+		WillReturnRows(rows)
+
+	got, err := r.QueryFriendLinkDaily(context.Background(), "2026-06-01", "2026-06-30", 20)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, uint(7), got[0].FriendLinkID)
+	assert.Equal(t, "友站", got[0].FriendName)
+	assert.Equal(t, 12, got[0].PV)
+	assert.Equal(t, 4, got[0].Sessions)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

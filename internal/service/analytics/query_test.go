@@ -19,6 +19,7 @@ type fakeQueryRepo struct {
 	daily    []model.AnalyticsDaily
 	topPages []model.AnalyticsPageDaily
 	dim      []model.AnalyticsDailyDim
+	friend   []model.AnalyticsFriendLinkDaily
 	totalPV  int64
 	totalUV  int64
 	paths    []repo.SessionPath
@@ -41,6 +42,10 @@ func (f *fakeQueryRepo) QueryTotals(_ context.Context) (int64, int64, error) {
 
 func (f *fakeQueryRepo) QueryDimRange(_ context.Context, _, _, _ string) ([]model.AnalyticsDailyDim, error) {
 	return f.dim, nil
+}
+
+func (f *fakeQueryRepo) QueryFriendLinkDaily(_ context.Context, _, _ string, _ int) ([]model.AnalyticsFriendLinkDaily, error) {
+	return f.friend, nil
 }
 
 func (f *fakeQueryRepo) QuerySessionPaths(_ context.Context, _, _ string, _ int) ([]repo.SessionPath, error) {
@@ -161,6 +166,21 @@ func TestDimensions(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "desktop", got[0].DimValue)
 	assert.Equal(t, 10, got[0].PV)
+}
+
+func TestFriendLinks_MapsRowsAndComputesInboundRate(t *testing.T) {
+	r := &fakeQueryRepo{
+		daily:  []model.AnalyticsDaily{{Date: "2026-06-01", PV: 100}},
+		friend: []model.AnalyticsFriendLinkDaily{{FriendLinkID: 7, FriendName: "友站", Site: "https://friend.example.com", SiteHost: "friend.example.com", PV: 25, UV: 10, Sessions: 8}},
+	}
+	got, err := newQuerySvc(r, &fakeRealtime{}).FriendLinks(context.Background(), "2026-06-01", "2026-06-01", 20)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, uint(7), got[0].FriendLinkID)
+	assert.Equal(t, "友站", got[0].FriendName)
+	assert.Equal(t, 25, got[0].PV)
+	assert.Equal(t, 8, got[0].Sessions)
+	assert.Equal(t, 0.25, got[0].InboundRate)
 }
 
 func TestPaths(t *testing.T) {

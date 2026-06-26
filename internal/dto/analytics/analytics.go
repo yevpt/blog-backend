@@ -57,6 +57,18 @@ type DimensionPoint struct {
 	UV       int    `json:"uv"`
 }
 
+// FriendLinkStat 友链入站来源统计项。
+type FriendLinkStat struct {
+	FriendLinkID uint    `json:"friend_link_id"`
+	FriendName   string  `json:"friend_name"`
+	Site         string  `json:"site"`
+	SiteHost     string  `json:"site_host"`
+	PV           int     `json:"pv"`
+	UV           int     `json:"uv"`
+	Sessions     int     `json:"sessions"`
+	InboundRate  float64 `json:"inbound_rate"`
+}
+
 // BackfillResult 回填结果：成功重算的天数与区间。
 type BackfillResult struct {
 	From string `json:"from"`

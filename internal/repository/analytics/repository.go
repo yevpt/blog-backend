@@ -20,6 +20,7 @@ type Repository interface {
 	UpsertDailyDim(ctx context.Context, rows []model.AnalyticsDailyDim) error
 	ReplacePageDaily(ctx context.Context, date string, rows []model.AnalyticsPageDaily) error
 	UpsertPageDaily(ctx context.Context, rows []model.AnalyticsPageDaily) error
+	ReplaceFriendLinkDaily(ctx context.Context, date string, rows []model.AnalyticsFriendLinkDaily) error
 	DeleteEventsBefore(ctx context.Context, t time.Time) (int64, error)
 	DeleteSessionsBefore(ctx context.Context, t time.Time) (int64, error)
 
@@ -27,6 +28,7 @@ type Repository interface {
 	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
 	QueryTopPages(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
 	QueryTopPagesPublic(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
+	QueryFriendLinkDaily(ctx context.Context, from, to string, limit int) ([]model.AnalyticsFriendLinkDaily, error)
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
 	QueryTotalsSegmented(ctx context.Context) (total, registered, anonymous int64, err error)
 	QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]SessionPath, error)
@@ -51,9 +53,10 @@ type SessionPath struct {
 // DayAggregate 是某一日（Asia/Shanghai）从原始事件表聚合出的全量结果，
 // 供 rollup worker 落入永久聚合表。类型置于 repo 包以避免 worker→repo 的循环依赖。
 type DayAggregate struct {
-	Daily model.AnalyticsDaily
-	Dims  []model.AnalyticsDailyDim
-	Pages []model.AnalyticsPageDaily
+	Daily       model.AnalyticsDaily
+	Dims        []model.AnalyticsDailyDim
+	Pages       []model.AnalyticsPageDaily
+	FriendLinks []model.AnalyticsFriendLinkDaily
 }
 
 type repository struct{ db *gorm.DB }
@@ -164,6 +167,25 @@ func (r *repository) ReplacePageDaily(ctx context.Context, date string, rows []m
 	})
 	if err != nil {
 		return fmt.Errorf("替换页面日聚合失败: %w", err)
+	}
+	return nil
+}
+
+func (r *repository) ReplaceFriendLinkDaily(ctx context.Context, date string, rows []model.AnalyticsFriendLinkDaily) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("date = ?", date).Delete(&model.AnalyticsFriendLinkDaily{}).Error; err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "date"}, {Name: "friend_link_id"}},
+			UpdateAll: true,
+		}).CreateInBatches(rows, 200).Error
+	})
+	if err != nil {
+		return fmt.Errorf("替换友链日聚合失败: %w", err)
 	}
 	return nil
 }

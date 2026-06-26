@@ -121,7 +121,7 @@ openssl rand -hex 32
 | 分组 | 接口 |
 |---|---|
 | 上报 | `POST /collect`（公开，恒 204） |
-| 后台（需登录 + Admin） | `/admin/analytics/overview` `trend` `pages` `dimensions` `realtime` `paths` `funnel` `backfill` |
+| 后台（需登录 + Admin） | `/admin/analytics/overview` `trend` `pages` `dimensions` `friend-links` `realtime` `paths` `funnel` `backfill` |
 | 前台公开（限频 + 缓存 + 脱敏） | `/analytics/public/summary` `/analytics/public/popular` |
 
 完整出入参见 Swagger（`make swag` 生成，导入 Apifox）。设计背景见 [`docs/superpowers/specs/2026-06-25-self-hosted-analytics-design.md`](superpowers/specs/2026-06-25-self-hosted-analytics-design.md)。
@@ -169,6 +169,7 @@ curl -i -c /tmp/cj -b /tmp/cj -X POST http://localhost:8080/collect \
 | 原始入库 | `SELECT * FROM analytics_events ORDER BY id DESC LIMIT 10;` |
 | 后台今日（需 admin token） | `GET /admin/analytics/overview`（今日走 Redis、立即有） |
 | 聚合表 trend/pages/dimensions | 先 `POST /admin/analytics/backfill?from=<今天>&to=<今天>` 强制聚合，再查 |
+| 友链长期来源 | 先 `POST /admin/analytics/backfill?from=<今天>&to=<今天>` 写入 `analytics_friend_link_daily`，再查 `/admin/analytics/friend-links` |
 
 > 日聚合 worker 正常 00:30（Asia/Shanghai）跑昨天；本地测聚合表用 `backfill` 强制聚合任意日期。
 

@@ -52,5 +52,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.AnalyticsDaily{},
 		&model.AnalyticsDailyDim{},
 		&model.AnalyticsPageDaily{},
+		&model.AnalyticsFriendLinkDaily{},
 	)
 }

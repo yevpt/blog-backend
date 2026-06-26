@@ -194,6 +194,38 @@ func (h *AdminHandler) Dimensions(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// FriendLinks 友链入站来源排行：区间内按 PV 取前 limit 条，并返回占全站 PV 比例。
+// @Summary  友链来源排行
+// @Description 统计从已配置友链站点 referer 跳入本站的 PV、UV、会话数与入站占比。
+// @Tags     analytics
+// @Produce  json
+// @Param    from  query string false "起始日期 YYYY-MM-DD，默认近 7 天"
+// @Param    to    query string false "结束日期 YYYY-MM-DD，默认今天"
+// @Param    limit query int    false "返回条数，默认 20，上限 100"
+// @Success  200 {object} response.Response{data=[]dto.FriendLinkStat} "统一响应；code=0 成功，code=400 参数错误"
+// @Failure  401 {object} response.Response "未登录或 token 已过期"
+// @Failure  403 {object} response.Response "权限不足"
+// @Failure  500 {object} response.Response "服务器内部错误"
+// @Router   /admin/analytics/friend-links [get]
+func (h *AdminHandler) FriendLinks(c *gin.Context) {
+	from, to, ok := parseRange(c)
+	if !ok {
+		return
+	}
+
+	limit, ok := parseLimit(c)
+	if !ok {
+		return
+	}
+
+	data, err := h.svc.FriendLinks(c.Request.Context(), from, to, limit)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, data)
+}
+
 // Paths 访问路径序列（管理员，聚合会话数）。
 // @Summary  访问路径序列
 // @Tags     analytics
@@ -212,17 +244,9 @@ func (h *AdminHandler) Paths(c *gin.Context) {
 		return
 	}
 
-	limit := defaultPageSize
-	if raw := c.Query("limit"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n <= 0 {
-			response.Fail(c, response.CodeBadRequest, "limit 必须是大于 0 的整数")
-			return
-		}
-		limit = n
-	}
-	if limit > maxPageSize {
-		limit = maxPageSize
+	limit, ok := parseLimit(c)
+	if !ok {
+		return
 	}
 
 	data, err := h.svc.Paths(c.Request.Context(), from, to, limit)
@@ -324,6 +348,22 @@ func parseRange(c *gin.Context) (from, to string, ok bool) {
 		return "", "", false
 	}
 	return fromRaw, toRaw, true
+}
+
+func parseLimit(c *gin.Context) (int, bool) {
+	limit := defaultPageSize
+	if raw := c.Query("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			response.Fail(c, response.CodeBadRequest, "limit 必须是大于 0 的整数")
+			return 0, false
+		}
+		limit = n
+	}
+	if limit > maxPageSize {
+		limit = maxPageSize
+	}
+	return limit, true
 }
 
 // parseRequiredRange 解析必填 from/to，校验格式、顺序与回填跨度上限。

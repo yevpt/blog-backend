@@ -19,6 +19,7 @@ type QueryReader interface {
 	QueryTopPages(ctx context.Context, from, to string, limit int) ([]model.AnalyticsPageDaily, error)
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
 	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
+	QueryFriendLinkDaily(ctx context.Context, from, to string, limit int) ([]model.AnalyticsFriendLinkDaily, error)
 	QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]repo.SessionPath, error)
 	QueryRecentActivePaths(ctx context.Context, since time.Time, limit int) ([]repo.RecentActivePath, error)
 }
@@ -42,6 +43,7 @@ type QueryService interface {
 	Trend(ctx context.Context, from, to, metric, segment string) ([]dto.TrendPoint, error)
 	TopPages(ctx context.Context, from, to string, limit int) ([]dto.PageStat, error)
 	Dimensions(ctx context.Context, dimension, from, to string) ([]dto.DimensionPoint, error)
+	FriendLinks(ctx context.Context, from, to string, limit int) ([]dto.FriendLinkStat, error)
 	Paths(ctx context.Context, from, to string, limit int) ([]dto.PathSequence, error)
 	Funnel(ctx context.Context, from, to string, steps []string) ([]dto.FunnelStep, error)
 }
@@ -163,6 +165,41 @@ func (s *queryService) Dimensions(ctx context.Context, dimension, from, to strin
 	out := make([]dto.DimensionPoint, 0, len(rows))
 	for _, d := range rows {
 		out = append(out, dto.DimensionPoint{Date: d.Date, DimValue: d.DimValue, PV: d.PV, UV: d.UV})
+	}
+	return out, nil
+}
+
+// FriendLinks 读取区间内友链入站聚合，并计算该友链 PV 占全站 PV 的比例。
+func (s *queryService) FriendLinks(ctx context.Context, from, to string, limit int) ([]dto.FriendLinkStat, error) {
+	rows, err := s.repo.QueryFriendLinkDaily(ctx, from, to, limit)
+	if err != nil {
+		return nil, fmt.Errorf("读取友链来源失败: %w", err)
+	}
+	daily, err := s.repo.QueryDailyRange(ctx, from, to)
+	if err != nil {
+		return nil, fmt.Errorf("读取全站趋势失败: %w", err)
+	}
+	totalPV := 0
+	for _, d := range daily {
+		totalPV += d.PV
+	}
+
+	out := make([]dto.FriendLinkStat, 0, len(rows))
+	for _, row := range rows {
+		inboundRate := 0.0
+		if totalPV > 0 {
+			inboundRate = float64(row.PV) / float64(totalPV)
+		}
+		out = append(out, dto.FriendLinkStat{
+			FriendLinkID: row.FriendLinkID,
+			FriendName:   row.FriendName,
+			Site:         row.Site,
+			SiteHost:     row.SiteHost,
+			PV:           row.PV,
+			UV:           row.UV,
+			Sessions:     row.Sessions,
+			InboundRate:  inboundRate,
+		})
 	}
 	return out, nil
 }
