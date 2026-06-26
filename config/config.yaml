@@ -83,8 +83,9 @@ analytics:
   channel_buffer: 4096
   # 公开统计接口缓存 TTL
   public_cache_ttl: 60s
-  # 容器内 ip2region xdb 路径，空则关闭地理解析
-  geoip_path: ""
+  # 容器内 ip2region IPv4/IPv6 xdb 路径，空则关闭对应版本地理解析
+  geoip_v4_path: ""
+  geoip_v6_path: ""
   # 站点主域名（apex 顶级域，如 example.com），用于 referer 内/外链判定；
   # 后缀匹配会自动覆盖所有子域名（www.* 等），故只填顶级域、勿填 www。
   # 生产经 env BLOG_ANALYTICS_SITE_HOST 注入；留空则不识别内链（内部来源会被判为 external，不影响其他功能）。

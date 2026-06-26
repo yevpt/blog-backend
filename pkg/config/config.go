@@ -132,7 +132,8 @@ type AnalyticsConfig struct {
 	BounceDuration     time.Duration `mapstructure:"bounce_duration"`      // 跳出判定停留阈值，如 10s
 	ChannelBuffer      int           `mapstructure:"channel_buffer"`       // 异步落库 channel 缓冲大小
 	PublicCacheTTL     time.Duration `mapstructure:"public_cache_ttl"`     // 公开统计接口缓存 TTL，如 60s
-	GeoIPPath          string        `mapstructure:"geoip_path"`           // ip2region xdb 路径，空则关闭地理解析
+	GeoIPV4Path        string        `mapstructure:"geoip_v4_path"`        // ip2region IPv4 xdb 路径，空则关闭 IPv4 地理解析
+	GeoIPV6Path        string        `mapstructure:"geoip_v6_path"`        // ip2region IPv6 xdb 路径，空则关闭 IPv6 地理解析
 	SiteHost           string        `mapstructure:"site_host"`            // 站点主域名，用于来源/外链判定
 	IPSalt             string        `mapstructure:"ip_salt"`              // IP 哈希盐，生产经 env 覆盖为随机串
 	CollectTokenSecret string        `mapstructure:"collect_token_secret"` // /collect HMAC token secret，空则开发放行
@@ -226,7 +227,8 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"email.lease_seconds",
 		"oauth.state_ttl_minutes",
 		"analytics.ip_salt",
-		"analytics.geoip_path",
+		"analytics.geoip_v4_path",
+		"analytics.geoip_v6_path",
 		"analytics.site_host",
 		"analytics.collect_token_secret",
 	}

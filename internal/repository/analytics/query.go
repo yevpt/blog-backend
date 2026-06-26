@@ -163,6 +163,10 @@ var aggregateDims = []struct {
 	{"os", "os"},
 	{"referer_type", "referer_type"},
 	{"country", "country"},
+	{"region", "region"},
+	{"city", "city"},
+	{"isp", "isp"},
+	{"country_code", "country_code"},
 	{"user_type", "CASE WHEN is_authenticated THEN 'registered' ELSE 'anonymous' END"},
 }
 

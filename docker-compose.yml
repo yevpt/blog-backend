@@ -36,7 +36,8 @@ services:
       BLOG_CDN_TIMESTAMP_QUERY_NAME: ${CDN_TIMESTAMP_QUERY_NAME:-b}
       # 站点统计：允许的上报来源、地理库路径、IP 哈希盐、collect 反伪造 token secret
       ANALYTICS_ALLOWED_ORIGINS: ${ANALYTICS_ALLOWED_ORIGINS:-}
-      BLOG_ANALYTICS_GEOIP_PATH: ${ANALYTICS_GEOIP_PATH:-}
+      BLOG_ANALYTICS_GEOIP_V4_PATH: ${ANALYTICS_GEOIP_V4_PATH:-}
+      BLOG_ANALYTICS_GEOIP_V6_PATH: ${ANALYTICS_GEOIP_V6_PATH:-}
       BLOG_ANALYTICS_IP_SALT: ${ANALYTICS_IP_SALT:-}
       # 站点主域名（apex），用于 referer 内/外链判定
       BLOG_ANALYTICS_SITE_HOST: ${ANALYTICS_SITE_HOST:-}
@@ -44,7 +45,7 @@ services:
       BLOG_ANALYTICS_COLLECT_TOKEN_SECRET: ${ANALYTICS_COLLECT_TOKEN_SECRET:-}
     volumes:
       - ./config:/app/config:ro
-      # 地理解析库目录（放 ip2region.xdb），并把 geoip_path 设为 /app/geoip/ip2region.xdb
+      # 地理解析库目录（放 ip2region_v4.xdb 与 ip2region_v6.xdb）
       - ./geoip:/app/geoip:ro
     ports:
       - "${SERVER_PORT:-8080}:8080"

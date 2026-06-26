@@ -33,7 +33,8 @@ var (
 	validMetrics    = map[string]struct{}{"pv": {}, "uv": {}, "sessions": {}}
 	validSegments   = map[string]struct{}{"all": {}, "registered": {}, "anonymous": {}}
 	validDimensions = map[string]struct{}{
-		"referer_type": {}, "device": {}, "browser": {}, "os": {}, "country": {}, "user_type": {},
+		"referer_type": {}, "device": {}, "browser": {}, "os": {}, "country": {}, "region": {},
+		"city": {}, "isp": {}, "country_code": {}, "user_type": {},
 	}
 )
 
@@ -168,7 +169,7 @@ func (h *AdminHandler) Pages(c *gin.Context) {
 // @Summary  站点维度分布
 // @Tags     analytics
 // @Produce  json
-// @Param    dimension query string true  "维度：referer_type、device、browser、os、country、user_type"
+// @Param    dimension query string true  "维度：referer_type、device、browser、os、country、region、city、isp、country_code、user_type"
 // @Param    from      query string false "起始日期 YYYY-MM-DD，默认近 7 天"
 // @Param    to        query string false "结束日期 YYYY-MM-DD，默认今天"
 // @Success  200 {object} response.Response{data=[]dto.DimensionPoint} "统一响应；code=0 成功，code=400 参数错误"
@@ -179,7 +180,7 @@ func (h *AdminHandler) Pages(c *gin.Context) {
 func (h *AdminHandler) Dimensions(c *gin.Context) {
 	dimension := c.Query("dimension")
 	if _, ok := validDimensions[dimension]; !ok {
-		response.Fail(c, response.CodeBadRequest, "dimension 仅支持 referer_type、device、browser、os、country、user_type")
+		response.Fail(c, response.CodeBadRequest, "dimension 仅支持 referer_type、device、browser、os、country、region、city、isp、country_code、user_type")
 		return
 	}
 	from, to, ok := parseRange(c)

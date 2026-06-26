@@ -227,6 +227,8 @@ garage:
 	t.Setenv("BLOG_GARAGE_ENDPOINT", "http://garage.example.com")
 	t.Setenv("BLOG_GARAGE_ACCESSKEYID", "garage-access")
 	t.Setenv("BLOG_GARAGE_SECRETACCESSKEY", "garage-secret")
+	t.Setenv("BLOG_ANALYTICS_GEOIP_V4_PATH", "/app/geoip/ip2region_v4.xdb")
+	t.Setenv("BLOG_ANALYTICS_GEOIP_V6_PATH", "/app/geoip/ip2region_v6.xdb")
 	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
 
 	// 加载配置。
@@ -244,4 +246,6 @@ garage:
 	assert.Equal(t, "http://garage.example.com", cfg.Garage.Endpoint)
 	assert.Equal(t, "garage-access", cfg.Garage.AccessKeyID)
 	assert.Equal(t, "garage-secret", cfg.Garage.SecretAccessKey)
+	assert.Equal(t, "/app/geoip/ip2region_v4.xdb", cfg.Analytics.GeoIPV4Path)
+	assert.Equal(t, "/app/geoip/ip2region_v6.xdb", cfg.Analytics.GeoIPV6Path)
 }

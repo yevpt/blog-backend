@@ -19,6 +19,9 @@ type AnalyticsEvent struct {
 	OS              string `gorm:"type:varchar(32)"`
 	Country         string `gorm:"type:varchar(64)"`
 	Region          string `gorm:"type:varchar(64)"`
+	City            string `gorm:"type:varchar(64)"`
+	ISP             string `gorm:"type:varchar(64)"`
+	CountryCode     string `gorm:"type:varchar(8)"`
 	IPHash          string `gorm:"type:varchar(64)"`
 	IsNewVisitor    bool
 	IsBot           bool   `gorm:"index"`
@@ -48,6 +51,9 @@ type AnalyticsSession struct {
 	OS              string `gorm:"type:varchar(32)"`
 	Country         string `gorm:"type:varchar(64)"`
 	Region          string `gorm:"type:varchar(64)"`
+	City            string `gorm:"type:varchar(64)"`
+	ISP             string `gorm:"type:varchar(64)"`
+	CountryCode     string `gorm:"type:varchar(8)"`
 	RefererType     string `gorm:"type:varchar(16)"`
 	IsBot           bool
 	IsSuspect       bool
@@ -75,7 +81,7 @@ func (AnalyticsDaily) TableName() string { return "analytics_daily" }
 // AnalyticsDailyDim 每日每维度（永久），长表。
 type AnalyticsDailyDim struct {
 	Date      string `gorm:"primaryKey;type:varchar(10)"`
-	Dimension string `gorm:"primaryKey;type:varchar(32)"` // referer_type/device/browser/os/country/user_type
+	Dimension string `gorm:"primaryKey;type:varchar(32)"` // referer_type/device/browser/os/country/region/city/isp/country_code/user_type
 	DimValue  string `gorm:"primaryKey;type:varchar(64)"`
 	PV        int
 	UV        int

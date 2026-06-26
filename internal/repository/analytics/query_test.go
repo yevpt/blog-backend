@@ -9,6 +9,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpt/blog-backend/internal/model"
 )
 
 func TestQueryDailyRange(t *testing.T) {
@@ -133,9 +134,9 @@ func TestAggregateDay(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 		WillReturnRows(sqlmock.NewRows(dailyCols).AddRow(50, 20, 30, 8, 20, 12, 15, 6))
 
-	// 6 个维度，每个一条 GROUP BY 查询
+	// 10 个维度，每个一条 GROUP BY 查询
 	dimCols := []string{"dim_value", "pv", "uv"}
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 10; i++ {
 		mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 			WillReturnRows(sqlmock.NewRows(dimCols).AddRow("val", 5, 3))
 	}
@@ -161,9 +162,12 @@ func TestAggregateDay(t *testing.T) {
 	assert.Equal(t, 20, got.Daily.UV)
 	assert.Equal(t, 30, got.Daily.RegisteredPV)
 	assert.Equal(t, 15, got.Daily.Sessions)
-	// 每个维度一行，共 6 行
-	assert.Len(t, got.Dims, 6)
+	// 每个维度一行，共 10 行
+	assert.Len(t, got.Dims, 10)
 	assert.Equal(t, "2026-06-24", got.Dims[0].Date)
+	assert.Contains(t, dimNames(got.Dims), "city")
+	assert.Contains(t, dimNames(got.Dims), "isp")
+	assert.Contains(t, dimNames(got.Dims), "country_code")
 	assert.Len(t, got.Pages, 1)
 	assert.Equal(t, "/x", got.Pages[0].Path)
 	assert.Equal(t, "2026-06-24", got.Pages[0].Date)
@@ -184,7 +188,7 @@ func TestAggregateDay_EmptyEventDay(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows(dailyCols).AddRow(0, 0, 0, 0, 0, 0, 0, 0))
 
 	dimCols := []string{"dim_value", "pv", "uv"}
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 10; i++ {
 		mock.ExpectQuery(regexp.QuoteMeta("FROM `analytics_events`")).
 			WillReturnRows(sqlmock.NewRows(dimCols))
 	}
@@ -208,6 +212,14 @@ func TestAggregateDay_EmptyEventDay(t *testing.T) {
 	assert.Empty(t, got.Pages)
 	assert.Empty(t, got.FriendLinks)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func dimNames(rows []model.AnalyticsDailyDim) []string {
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		names = append(names, row.Dimension)
+	}
+	return names
 }
 
 func TestQueryFriendLinkDaily(t *testing.T) {

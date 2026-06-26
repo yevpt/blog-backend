@@ -24,7 +24,7 @@ func (e *enricher) Enrich(raw RawEvent) model.AnalyticsEvent {
 	deviceType, browser, os := ParseUserAgent(raw.UA)
 	isBot, botReason := DetectBot(raw.UA, deviceType)
 	refHost := RefererHost(raw.Referer)
-	country, region := e.geo.Resolve(raw.IP)
+	geo := e.geo.Resolve(raw.IP)
 
 	title := raw.Title
 	if len(title) > maxTitleLen {
@@ -44,8 +44,11 @@ func (e *enricher) Enrich(raw RawEvent) model.AnalyticsEvent {
 		DeviceType:      deviceType,
 		Browser:         browser,
 		OS:              os,
-		Country:         country,
-		Region:          region,
+		Country:         geo.Country,
+		Region:          geo.Region,
+		City:            geo.City,
+		ISP:             geo.ISP,
+		CountryCode:     geo.CountryCode,
 		IPHash:          HashIP(raw.IP, e.ipSalt),
 		IsBot:           isBot,
 		BotReason:       botReason,

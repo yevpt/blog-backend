@@ -307,7 +307,7 @@ func newAnalyticsCollectHandler(
 		tz = time.FixedZone("CST", 8*3600)
 	}
 
-	geo := analyticsservice.NewGeoResolver(analyticsCfg.GeoIPPath, log)
+	geo := analyticsservice.NewGeoResolver(analyticsCfg.GeoIPV4Path, analyticsCfg.GeoIPV6Path, log)
 	enricher := analyticsservice.NewEnricher(geo, analyticsCfg.SiteHost, analyticsCfg.IPSalt)
 	analyticsRepo := analyticsrepo.NewRepository(db)
 	realtime := analyticsservice.NewRealtime(redisClient, tz, analyticsCfg.OnlineWindow)

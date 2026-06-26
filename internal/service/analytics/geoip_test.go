@@ -9,13 +9,21 @@ import (
 )
 
 func TestGeoResolverNoopWhenMissing(t *testing.T) {
-	r := svc.NewGeoResolver("", zap.NewNop())
-	country, region := r.Resolve("1.2.3.4")
-	assert.Equal(t, "", country)
-	assert.Equal(t, "", region)
+	r := svc.NewGeoResolver("", "", zap.NewNop())
+	geo := r.Resolve("1.2.3.4")
+	assert.Equal(t, svc.GeoInfo{}, geo)
 
-	r2 := svc.NewGeoResolver("/nonexistent/path.xdb", zap.NewNop())
-	c2, rg2 := r2.Resolve("1.2.3.4")
-	assert.Equal(t, "", c2)
-	assert.Equal(t, "", rg2)
+	r2 := svc.NewGeoResolver("/nonexistent/v4.xdb", "/nonexistent/v6.xdb", zap.NewNop())
+	geo2 := r2.Resolve("1.2.3.4")
+	assert.Equal(t, svc.GeoInfo{}, geo2)
+}
+
+func TestGeoInfoFromRegion(t *testing.T) {
+	got := svc.GeoInfoFromRegion("中国|浙江省|杭州市|电信|CN")
+
+	assert.Equal(t, "中国", got.Country)
+	assert.Equal(t, "浙江省", got.Region)
+	assert.Equal(t, "杭州市", got.City)
+	assert.Equal(t, "电信", got.ISP)
+	assert.Equal(t, "CN", got.CountryCode)
 }

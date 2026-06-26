@@ -50,8 +50,9 @@ email:
   site_url: "https://www.example.com"
 
 analytics:
-  # 本地默认关闭地理解析；如需调试可指向本地 ip2region.xdb 路径
-  geoip_path: ""
+  # 本地默认关闭地理解析；如需调试可指向本地 ip2region_v4/v6.xdb 路径
+  geoip_v4_path: ""
+  geoip_v6_path: ""
   # 本地开发盐值，无需随机
   ip_salt: "local_dev_salt"
   collect_token_secret: ""

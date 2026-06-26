@@ -102,7 +102,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "维度：referer_type、device、browser、os、country、user_type",
+                        "description": "维度：referer_type、device、browser、os、country、region、city、isp、country_code、user_type",
                         "name": "dimension",
                         "in": "query",
                         "required": true

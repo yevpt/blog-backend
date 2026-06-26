@@ -11,7 +11,7 @@
 | 模式 | 必填 | 效果 |
 |---|---|---|
 | **最小可用** | `ANALYTICS_ALLOWED_ORIGINS`、`ANALYTICS_SITE_HOST`、`ANALYTICS_IP_SALT` | PV/UV/来源/设备/会话/在线、后台与公开接口全部可用 |
-| **+ 地理** | 再加 `ANALYTICS_GEOIP_PATH` + 挂载 `ip2region.xdb` | 增加国家/省份维度；不配则地理留空、不报错 |
+| **+ 地理** | 再加 `ANALYTICS_GEOIP_V4_PATH` / `ANALYTICS_GEOIP_V6_PATH` + 挂载 xdb | 增加国家/省份/城市/ISP/国家代码维度；不配则地理留空、不报错 |
 | **+ 反伪造 token** | 再加 `ANALYTICS_COLLECT_TOKEN_SECRET`（前后端同值） | `/collect` 校验签名 token，提高伪造上报门槛；不配则该校验关闭（系统照常工作） |
 
 > token 这一组**要么前后端都配、要么都留空，切忌只配一边**（只配一边会导致真实上报全部被判 suspect、PV/UV 不计数）。
@@ -31,7 +31,8 @@
 | `bounce_duration` | `10s` | 跳出判定的停留阈值 |
 | `channel_buffer` | `4096` | 异步落库 channel 容量，满则丢弃（记 drop 计数） |
 | `public_cache_ttl` | `60s` | 公开统计接口的 Redis 缓存 TTL |
-| `geoip_path` | `""` | ip2region xdb 路径，空则关闭地理解析。**经 env 注入** |
+| `geoip_v4_path` | `""` | ip2region IPv4 xdb 路径，空则关闭 IPv4 地理解析。**经 env 注入** |
+| `geoip_v6_path` | `""` | ip2region IPv6 xdb 路径，空则关闭 IPv6 地理解析。**经 env 注入** |
 | `site_host` | `""` | 站点 apex 顶级域，referer 内/外链判定用。**经 env 注入**，见第 5 节 |
 | `ip_salt` | `"change_me"` | IP 哈希盐，仅后端用。**经 env 注入随机串**，见第 6 节 |
 | `collect_token_secret` | `""` | collect 签名 token 的 HMAC secret。**经 env 注入**，见第 6 节 |
@@ -48,7 +49,8 @@
 | `ANALYTICS_ALLOWED_ORIGINS` | `ANALYTICS_ALLOWED_ORIGINS` | ✅ 生产必填 | `https://www.example.com,https://example.com` |
 | `ANALYTICS_SITE_HOST` | `BLOG_ANALYTICS_SITE_HOST` | ✅ 建议填 | `example.com` |
 | `ANALYTICS_IP_SALT` | `BLOG_ANALYTICS_IP_SALT` | ✅ 必填随机串 | `<openssl rand -hex 32>` |
-| `ANALYTICS_GEOIP_PATH` | `BLOG_ANALYTICS_GEOIP_PATH` | 用地理才填 | `/app/geoip/ip2region.xdb` |
+| `ANALYTICS_GEOIP_V4_PATH` | `BLOG_ANALYTICS_GEOIP_V4_PATH` | 用 IPv4 地理才填 | `/app/geoip/ip2region_v4.xdb` |
+| `ANALYTICS_GEOIP_V6_PATH` | `BLOG_ANALYTICS_GEOIP_V6_PATH` | 用 IPv6 地理才填 | `/app/geoip/ip2region_v6.xdb` |
 | `ANALYTICS_COLLECT_TOKEN_SECRET` | `BLOG_ANALYTICS_COLLECT_TOKEN_SECRET` | 用 token 才填 | `<与前端同一随机串>` |
 
 > ⚠️ `ANALYTICS_ALLOWED_ORIGINS` **生产不填 = 所有 PV 被判 suspect、不计数**。必须列全 www 与裸域、**不含 admin 域名**，且为**精确全等**（含 `https://`）。
@@ -103,7 +105,7 @@ openssl rand -hex 32
 
 1. **数据库迁移**：跑 `make dbsetup`（= `go run ./cmd/dbsetup`）执行 AutoMigrate，建 analytics 表并补新增列。AutoMigrate 是**加法式幂等**——以后模型新增字段/表重跑即可；删列/改名/改类型需手写 SQL。
    - ⚠️ 首跑确认 `analytics_page_daily` 建表成功（`path` varchar(512) 在复合主键中；MySQL 8 正常，≤5.6 可能报索引超长）。
-2. **地理库（可选）**：下载 `ip2region.xdb` 放到挂载目录（compose 已挂 `./geoip:/app/geoip:ro`），`ANALYTICS_GEOIP_PATH=/app/geoip/ip2region.xdb`。
+2. **地理库（可选）**：下载 `ip2region_v4.xdb` 与 `ip2region_v6.xdb` 放到挂载目录（compose 已挂 `./geoip:/app/geoip:ro`），分别设置 `ANALYTICS_GEOIP_V4_PATH=/app/geoip/ip2region_v4.xdb`、`ANALYTICS_GEOIP_V6_PATH=/app/geoip/ip2region_v6.xdb`。
 3. **前端**：部署含 tracker + BFF 路由（`apps/web/app/api/collect`、`apps/web/app/api/analytics-token`）的版本。
 
 ---
@@ -130,7 +132,7 @@ openssl rand -hex 32
 
 ## 10. 本地开发测试
 
-**本地几乎零额外配置**：前端 `API_BASE_URL` 已在 `apps/web/.env.local` 配好（OAuth 等代理共用）；analytics 的 `ANALYTICS_ALLOWED_ORIGINS`/`collect_token_secret`/`geoip_path` 本地留空即为「放行 + 不校验 token + 关闭地理」，`ip_salt` 有默认值。
+**本地几乎零额外配置**：前端 `API_BASE_URL` 已在 `apps/web/.env.local` 配好（OAuth 等代理共用）；analytics 的 `ANALYTICS_ALLOWED_ORIGINS`/`collect_token_secret`/`geoip_v4_path`/`geoip_v6_path` 本地留空即为「放行 + 不校验 token + 关闭地理」，`ip_salt` 有默认值。
 
 ### 准备（一次性）
 ```bash

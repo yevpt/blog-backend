@@ -197,11 +197,11 @@ func TestAdminDimensions_HappyPath(t *testing.T) {
 	fq := &fakeQuery{}
 	r := newRouter(hdl.NewAdminHandler(fq, &fakeBackfill{}))
 
-	w := doGET(r, "/admin/analytics/dimensions?dimension=device")
+	w := doGET(r, "/admin/analytics/dimensions?dimension=city")
 
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, response.CodeOK, decode(t, w).Code)
-	assert.Equal(t, "device", fq.lastDimension)
+	assert.Equal(t, "city", fq.lastDimension)
 }
 
 func TestAdminDimensions_InvalidDimension(t *testing.T) {

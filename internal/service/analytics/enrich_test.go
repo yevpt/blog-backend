@@ -10,7 +10,15 @@ import (
 
 type fakeGeo struct{}
 
-func (fakeGeo) Resolve(string) (string, string) { return "中国", "浙江省" }
+func (fakeGeo) Resolve(string) svc.GeoInfo {
+	return svc.GeoInfo{
+		Country:     "中国",
+		Region:      "浙江省",
+		City:        "杭州市",
+		ISP:         "电信",
+		CountryCode: "CN",
+	}
+}
 
 func TestEnrich(t *testing.T) {
 	e := svc.NewEnricher(fakeGeo{}, "example.com", "salt")
@@ -33,6 +41,9 @@ func TestEnrich(t *testing.T) {
 	assert.Equal(t, "desktop", got.DeviceType)
 	assert.Equal(t, "中国", got.Country)
 	assert.Equal(t, "浙江省", got.Region)
+	assert.Equal(t, "杭州市", got.City)
+	assert.Equal(t, "电信", got.ISP)
+	assert.Equal(t, "CN", got.CountryCode)
 	assert.Equal(t, uint(7), *got.UserID)
 	assert.True(t, got.IsAuthenticated)
 	assert.False(t, got.IsBot)

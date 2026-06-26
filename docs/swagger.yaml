@@ -2940,7 +2940,7 @@ paths:
   /admin/analytics/dimensions:
     get:
       parameters:
-      - description: 维度：referer_type、device、browser、os、country、user_type
+      - description: 维度：referer_type、device、browser、os、country、region、city、isp、country_code、user_type
         in: query
         name: dimension
         required: true
