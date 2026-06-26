@@ -300,6 +300,59 @@ func TestMomentRepository_SetTop_RejectsFourthTop(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestMomentRepository_IncrementReadCount_UsesUpdateColumn(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `moment` SET `read_count`=read_count \\+ 1 WHERE \\(id = \\? AND status = \\?\\) AND `moment`.`deleted_at` IS NULL").
+		WithArgs(uint(9), uint8(1)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风", 1, 1, 1, false))
+	mock.ExpectCommit()
+
+	moment, err := repo.IncrementReadCount(9)
+	require.NoError(t, err)
+	require.NotNil(t, moment)
+	assert.Equal(t, uint(1), moment.ReadCount)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMomentRepository_SetTop_UsesUpdateColumn(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint(9), 1).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "风", 1, 1, 0, false))
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
+		WithArgs(uint(1), true, uint(9)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectExec("UPDATE `moment` SET `is_top`=\\? WHERE id = \\? AND `moment`.`deleted_at` IS NULL").
+		WithArgs(true, uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	moment, err := repo.SetTop(9, 1, false)
+	require.NoError(t, err)
+	require.NotNil(t, moment)
+	assert.True(t, moment.IsTop)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMomentRepository_ToggleLike_CreatesLike(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()

@@ -366,8 +366,8 @@ func TestArticleRepository_IncrementReadCount_UsesAtomicUpdate(t *testing.T) {
 
 	now := time.Now()
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1,`updated_at`=\\? WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
-		WithArgs(sqlmock.AnyArg(), uint(7), uint(1), uint(2)).
+	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1 WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
+		WithArgs(uint(7), uint(1), uint(2)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT \\* FROM `article`").
 		WithArgs(uint(7), 1).
@@ -391,8 +391,8 @@ func TestArticleRepository_IncrementReadCount_HiddenArticleNotFound(t *testing.T
 	repo := article.NewArticleRepository(db)
 
 	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1,`updated_at`=\\? WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
-		WithArgs(sqlmock.AnyArg(), uint(8), uint(1), uint(2)).
+	mock.ExpectExec("UPDATE `article` SET `read_count`=read_count \\+ 1 WHERE id = \\? AND status IN \\(\\?,\\?\\) AND `article`.`deleted_at` IS NULL").
+		WithArgs(uint(8), uint(1), uint(2)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 

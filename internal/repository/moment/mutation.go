@@ -134,7 +134,7 @@ func (r *momentRepo) IncrementReadCount(id uint) (*model.Moment, error) {
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&model.Moment{}).
 			Where("id = ? AND status = ?", id, uint8(1)).
-			Update("read_count", gorm.Expr("read_count + 1"))
+			UpdateColumn("read_count", gorm.Expr("read_count + 1"))
 		if res.Error != nil {
 			return res.Error
 		}
@@ -224,7 +224,7 @@ func (r *momentRepo) updateTop(id uint, operatorID uint, force bool, top bool) (
 				return ErrTopLimitExceeded
 			}
 		}
-		if err := tx.Model(&model.Moment{}).Where("id = ?", id).Update("is_top", top).Error; err != nil {
+		if err := tx.Model(&model.Moment{}).Where("id = ?", id).UpdateColumn("is_top", top).Error; err != nil {
 			return err
 		}
 		moment = *found

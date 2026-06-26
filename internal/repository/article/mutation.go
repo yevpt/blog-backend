@@ -137,7 +137,7 @@ func (r *articleRepo) IncrementReadCount(id uint) (*model.Article, error) {
 		res := tx.Model(&model.Article{}).
 			Where("id = ?", id).
 			Where("status IN ?", visibleArticleStatuses()).
-			Update("read_count", gorm.Expr("read_count + 1"))
+			UpdateColumn("read_count", gorm.Expr("read_count + 1"))
 		if res.Error != nil {
 			return res.Error
 		}
