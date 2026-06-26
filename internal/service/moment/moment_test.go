@@ -67,6 +67,10 @@ type fakeMomentRepo struct {
 	isLikedResp   bool
 	likeCountResp int64
 	isLikedErr    error
+
+	countUserID uint
+	countResp   int64
+	countErr    error
 }
 
 func (f *fakeMomentRepo) List(filter momentrepo.ListFilter, viewerID *uint) (*momentrepo.PageResult, error) {
@@ -149,6 +153,11 @@ func (f *fakeMomentRepo) ToggleLike(id uint, userID uint) (*momentrepo.MomentAgg
 	return f.likeResp, true, f.likeErr
 }
 
+func (f *fakeMomentRepo) CountPublicByUser(userID uint) (int64, error) {
+	f.countUserID = userID
+	return f.countResp, f.countErr
+}
+
 type fakeURLResolver struct {
 	objects []string
 }
@@ -214,6 +223,18 @@ func (s *fakeMomentObjectStore) ObjectKey(value string) (string, error) {
 	return value, nil
 }
 
+func TestMomentService_CountByUser_ReturnsTotal(t *testing.T) {
+	repo := &fakeMomentRepo{countResp: 8}
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil, nil)
+
+	resp, err := svc.CountByUser(7)
+
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	assert.Equal(t, int64(8), resp.Count)
+	assert.Equal(t, uint(7), repo.countUserID)
+}
+
 func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) {
 	now := time.Now()
 	viewerID := uint(7)
@@ -240,6 +261,29 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 	require.Len(t, resp.List, 1)
 	assert.Equal(t, "https://cdn.example.com/moments/cat.jpg", resp.List[0].Images[0].AccessURL)
 	assert.Equal(t, []string{"moments/cat.jpg"}, resolver.objects)
+}
+
+func TestMomentService_List_ForwardsRandomAndExcludeIDs(t *testing.T) {
+	repo := &fakeMomentRepo{
+		listResp: &momentrepo.PageResult{
+			Total:    0,
+			Page:     1,
+			PageSize: 3,
+			Moments:  nil,
+		},
+	}
+	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil)
+
+	_, err := svc.List(dto.MomentListReq{
+		Random:     true,
+		ExcludeIDs: []uint{50, 49, 48},
+		PageSize:   3,
+	}, nil)
+
+	require.NoError(t, err)
+	assert.True(t, repo.listFilter.Random)
+	assert.Equal(t, []uint{50, 49, 48}, repo.listFilter.ExcludeIDs)
+	assert.Equal(t, 3, repo.listFilter.PageSize)
 }
 
 func TestMomentService_ListAdmin_NormalizesFiltersAndMapsItems(t *testing.T) {

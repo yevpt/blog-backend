@@ -15,15 +15,29 @@ import (
 
 func (s *momentService) List(req dto.MomentListReq, viewerID *uint) (*dto.MomentPageResp, error) {
 	result, err := s.repo.List(momentrepo.ListFilter{
-		Page:     normalizeMomentPage(req.Page),
-		PageSize: normalizeMomentPageSize(req.PageSize),
-		UserID:   req.UserID,
-		RoleID:   req.RoleID,
+		Page:       normalizeMomentPage(req.Page),
+		PageSize:   normalizeMomentPageSize(req.PageSize),
+		UserID:     req.UserID,
+		RoleID:     req.RoleID,
+		Random:     req.Random,
+		ExcludeIDs: req.ExcludeIDs,
 	}, viewerID)
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
 	return s.momentPageToDTO(result)
+}
+
+// CountByUser 返回某用户发布的公开碎语总数。
+func (s *momentService) CountByUser(userID uint) (*dto.UserMomentsCountResp, error) {
+	if userID == 0 {
+		return nil, ErrMomentInvalid
+	}
+	count, err := s.repo.CountPublicByUser(userID)
+	if err != nil {
+		return nil, mapRepoError(err)
+	}
+	return &dto.UserMomentsCountResp{Count: count}, nil
 }
 
 func (s *momentService) ListAdmin(req dto.AdminMomentListReq) (*dto.AdminMomentPageResp, error) {

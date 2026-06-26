@@ -29,6 +29,22 @@ func newMomentMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 	return gormDB, mock, sqlDB
 }
 
+func TestMomentRepository_CountPublicByUser_UsesPublicStatusFilter(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
+		WithArgs(uint8(1), uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+	count, err := repo.CountPublicByUser(7)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
@@ -77,6 +93,36 @@ func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 	assert.True(t, resp.Moments[0].IsLiked)
 	assert.Len(t, resp.Moments[0].Images, 1)
 	assert.Equal(t, "vpt", resp.Moments[0].User.Username)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMomentRepository_List_RandomExcludesIDsAndIgnoresOffset(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+
+	now := time.Now()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
+		WithArgs(uint8(1), uint(50), uint(49), uint(48)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT \\* FROM `moment`").
+		WithArgs(uint8(1), uint(50), uint(49), uint(48), 3).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(47, now, now, nil, 1, "随机碎语", 1, 1, 0, false))
+	expectEmptyRelations(mock, now, uint(47), uint(1))
+
+	resp, err := repo.List(momentrepo.ListFilter{
+		Random:     true,
+		ExcludeIDs: []uint{50, 49, 48},
+		Page:       9,
+		PageSize:   3,
+	}, nil)
+
+	require.NoError(t, err)
+	require.Len(t, resp.Moments, 1)
+	assert.Equal(t, uint(47), resp.Moments[0].Moment.ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

@@ -20,6 +20,10 @@ type MomentListReq struct {
 	UserID *uint `form:"user_id" binding:"omitempty,min=1" example:"1"`
 	// RoleID 作者角色 ID；传入后查询该角色下所有用户的公开碎语。
 	RoleID *uint `form:"role_id" binding:"omitempty,min=1" example:"2"`
+	// Random 是否启用随机抽样模式；启用后忽略 page，仅随机返回 page_size 条。
+	Random bool `form:"random" binding:"omitempty" example:"true"`
+	// ExcludeIDs 随机抽样时排除的碎语 ID，由 handler 从逗号分隔的 exclude_ids 解析。
+	ExcludeIDs []uint `form:"-" swaggerignore:"true"`
 	// Page 页码，从 1 开始。
 	Page int `form:"page" binding:"omitempty,min=1" example:"1"`
 	// PageSize 每页数量，默认 10，最大 50。

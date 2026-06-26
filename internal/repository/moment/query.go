@@ -17,14 +17,19 @@ func (r *momentRepo) List(filter ListFilter, viewerID *uint) (*PageResult, error
 	}
 
 	var moments []model.Moment
-	offset := (page - 1) * pageSize
-	if err := r.publicMomentQuery(filter).
-		Order("is_top DESC").
-		Order("created_at DESC").
-		Order("id DESC").
-		Limit(pageSize).
-		Offset(offset).
-		Find(&moments).Error; err != nil {
+	query := r.publicMomentQuery(filter)
+	if filter.Random {
+		query = query.Order("RAND()").Limit(pageSize)
+	} else {
+		offset := (page - 1) * pageSize
+		query = query.
+			Order("is_top DESC").
+			Order("created_at DESC").
+			Order("id DESC").
+			Limit(pageSize).
+			Offset(offset)
+	}
+	if err := query.Find(&moments).Error; err != nil {
 		return nil, err
 	}
 
@@ -82,6 +87,16 @@ func (r *momentRepo) FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate
 	return &aggregates[0], nil
 }
 
+// CountPublicByUser 统计某用户发布的公开碎语总数。
+func (r *momentRepo) CountPublicByUser(userID uint) (int64, error) {
+	var total int64
+	filter := ListFilter{UserID: &userID}
+	if err := r.publicMomentQuery(filter).Count(&total).Error; err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
 	query := r.db.Model(&model.Moment{}).Where("status = ?", uint8(1))
 	if filter.UserID != nil {
@@ -90,6 +105,9 @@ func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
 	if filter.RoleID != nil {
 		query = query.Joins("JOIN user_role ON user_role.user_id = moment.user_id").
 			Where("user_role.role_id = ?", *filter.RoleID)
+	}
+	if len(filter.ExcludeIDs) > 0 {
+		query = query.Where("id NOT IN ?", filter.ExcludeIDs)
 	}
 	return query
 }

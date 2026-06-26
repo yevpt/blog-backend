@@ -110,6 +110,10 @@ func (s *stubMomentService) ToggleLike(id uint, userID uint) (*dto.MomentItemRes
 	return s.likeResp, s.likeErr
 }
 
+func (s *stubMomentService) CountByUser(uint) (*dto.UserMomentsCountResp, error) {
+	return &dto.UserMomentsCountResp{}, nil
+}
+
 func newMomentRouter(svc momentservice.MomentService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -164,6 +168,20 @@ func TestMomentHandler_List_AllowsOptionalAuth(t *testing.T) {
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestMomentHandler_List_BindsRandomAndExcludeIDs(t *testing.T) {
+	stub := &stubMomentService{listResp: &dto.MomentPageResp{Page: 1, PageSize: 3}}
+	r := newMomentRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/moments?random=true&exclude_ids=50,49,48&page_size=3", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, stub.listReq.Random)
+	assert.Equal(t, []uint{50, 49, 48}, stub.listReq.ExcludeIDs)
+	assert.Equal(t, 3, stub.listReq.PageSize)
 }
 
 func TestMomentHandler_Feed_BindsScopeAndSort(t *testing.T) {
