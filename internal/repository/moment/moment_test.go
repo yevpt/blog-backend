@@ -80,7 +80,7 @@ func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestMomentRepository_ListFeed_FriendsLatestOrdersByUpdatedAt(t *testing.T) {
+func TestMomentRepository_ListFeed_FriendsLatestOrdersByCreatedAt(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
 	repo := momentrepo.NewMomentRepository(db)

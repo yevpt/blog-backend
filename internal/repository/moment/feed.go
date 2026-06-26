@@ -64,9 +64,13 @@ func (r *momentRepo) applyFeedOrder(query *gorm.DB, sort FeedSort) *gorm.DB {
 			Joins("LEFT JOIN (?) AS feed_comment_stats ON feed_comment_stats.moment_id = moment.id", commentSub).
 			Joins("LEFT JOIN (?) AS feed_like_stats ON feed_like_stats.target_id = moment.id", likeSub).
 			Order(scoreExpr).
-			Order("moment.updated_at DESC").
+			Order("moment.is_top DESC").
+			Order("moment.created_at DESC").
 			Order("moment.id DESC")
 	default:
-		return query.Order("moment.updated_at DESC").Order("moment.id DESC")
+		return query.
+			Order("moment.is_top DESC").
+			Order("moment.created_at DESC").
+			Order("moment.id DESC")
 	}
 }

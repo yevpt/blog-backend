@@ -6301,7 +6301,7 @@ const docTemplate = `{
         },
         "/moments/feed": {
             "get": {
-                "description": "碎语独立页专用列表，支持全部/博主/朋友们范围与最新/最热排序；不考虑置顶，最新按 updated_at 倒序，最热按评论×10+点赞×3+阅读综合分倒序。",
+                "description": "碎语独立页专用列表，支持全部/博主/朋友们范围与最新/最热排序；最新按置顶优先、发布时间倒序，最热按评论×10+点赞×3+阅读综合分倒序。",
                 "consumes": [
                     "application/json"
                 ],
