@@ -34,7 +34,6 @@ func (h *NotificationHandler) Stream(c *gin.Context) {
 	// 设置 SSE 响应头，禁用缓冲与缓存。
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 
 	// 注册在线连接，函数退出时注销并关闭通道。

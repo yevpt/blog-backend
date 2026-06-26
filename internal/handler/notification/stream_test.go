@@ -55,6 +55,7 @@ func TestStreamHandler_SetsHeadersAndExitsOnCancel(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
 	assert.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
+	assert.Empty(t, w.Header().Get("Connection"))
 }
 
 // hub 为 nil（未启用 SSE）时返回 500。
