@@ -77,6 +77,18 @@ type FunnelStep struct {
 	ConversionRate float64 `json:"conversion_rate"`
 }
 
+// RealtimeStat 后台实时概览：当前在线 + 最近活跃路径（仅聚合）。
+type RealtimeStat struct {
+	Online      int64          `json:"online"`
+	RecentPaths []RealtimePath `json:"recent_paths"`
+}
+
+// RealtimePath 最近活跃路径及其活跃访客数。
+type RealtimePath struct {
+	Path   string `json:"path"`
+	Active int    `json:"active"`
+}
+
 // PublicSummary 前台公开总览：仅聚合数字。
 type PublicSummary struct {
 	TodayPV      int64 `json:"today_pv"`

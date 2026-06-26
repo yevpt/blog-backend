@@ -2,7 +2,9 @@ package analytics_test
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,6 +22,9 @@ type fakeQueryRepo struct {
 	totalPV  int64
 	totalUV  int64
 	paths    []repo.SessionPath
+
+	recentPaths []repo.RecentActivePath
+	recentErr   error
 }
 
 func (f *fakeQueryRepo) QueryDailyRange(_ context.Context, _, _ string) ([]model.AnalyticsDaily, error) {
@@ -40,6 +45,10 @@ func (f *fakeQueryRepo) QueryDimRange(_ context.Context, _, _, _ string) ([]mode
 
 func (f *fakeQueryRepo) QuerySessionPaths(_ context.Context, _, _ string, _ int) ([]repo.SessionPath, error) {
 	return f.paths, nil
+}
+
+func (f *fakeQueryRepo) QueryRecentActivePaths(_ context.Context, _ time.Time, _ int) ([]repo.RecentActivePath, error) {
+	return f.recentPaths, f.recentErr
 }
 
 // fakeRealtime 手写假实时层。
@@ -75,6 +84,30 @@ func TestOverview(t *testing.T) {
 	assert.Equal(t, int64(8), got.Registered.TodayUV)
 	assert.Equal(t, int64(20), got.Anonymous.TodayPV)
 	assert.Equal(t, int64(12), got.Anonymous.TodayUV)
+}
+
+func TestRealtime_MapsOnlineAndRecentPaths(t *testing.T) {
+	r := &fakeQueryRepo{recentPaths: []repo.RecentActivePath{
+		{Path: "/articles", Active: 5},
+		{Path: "/", Active: 3},
+	}}
+	rt := &fakeRealtime{online: 9}
+	got, err := newQuerySvc(r, rt).Realtime(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(9), got.Online)
+	require.Len(t, got.RecentPaths, 2)
+	assert.Equal(t, "/articles", got.RecentPaths[0].Path)
+	assert.Equal(t, 5, got.RecentPaths[0].Active)
+}
+
+// 最近活跃路径出错时仍返回在线数（主信号），RecentPaths 为空。
+func TestRealtime_RecentPathsErrorStillReturnsOnline(t *testing.T) {
+	r := &fakeQueryRepo{recentErr: errors.New("boom")}
+	rt := &fakeRealtime{online: 4}
+	got, err := newQuerySvc(r, rt).Realtime(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), got.Online)
+	assert.Empty(t, got.RecentPaths)
 }
 
 func TestTrendFieldSelection(t *testing.T) {

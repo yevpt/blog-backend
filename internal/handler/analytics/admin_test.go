@@ -54,6 +54,10 @@ func (f *fakeQuery) Funnel(_ context.Context, from, to string, steps []string) (
 	return []dto.FunnelStep{{Step: "/", Sessions: 2, ConversionRate: 1}}, nil
 }
 
+func (f *fakeQuery) Realtime(context.Context) (dto.RealtimeStat, error) {
+	return dto.RealtimeStat{Online: 6, RecentPaths: []dto.RealtimePath{{Path: "/articles", Active: 3}}}, nil
+}
+
 type fakeBackfill struct {
 	lastFrom, lastTo string
 }
@@ -67,6 +71,7 @@ func newRouter(h *hdl.AdminHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/admin/analytics/overview", h.Overview)
+	r.GET("/admin/analytics/realtime", h.Realtime)
 	r.GET("/admin/analytics/trend", h.Trend)
 	r.GET("/admin/analytics/pages", h.Pages)
 	r.GET("/admin/analytics/dimensions", h.Dimensions)
@@ -105,6 +110,17 @@ func TestAdminOverview(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "today_pv")
 	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+}
+
+func TestAdminRealtime_HappyPath(t *testing.T) {
+	r := newRouter(hdl.NewAdminHandler(&fakeQuery{}, &fakeBackfill{}))
+
+	w := doGET(r, "/admin/analytics/realtime")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, response.CodeOK, decode(t, w).Code)
+	assert.Contains(t, w.Body.String(), "online")
+	assert.Contains(t, w.Body.String(), "recent_paths")
 }
 
 func TestAdminTrend_HappyPathDefaults(t *testing.T) {

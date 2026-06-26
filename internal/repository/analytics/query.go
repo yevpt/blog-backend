@@ -120,6 +120,22 @@ func (r *repository) QuerySessionPaths(ctx context.Context, from, to string, lim
 	return rows, nil
 }
 
+// QueryRecentActivePaths 统计 since 至今每条路径的活跃访客数（DISTINCT visitor_id），
+// 按活跃数降序取前 limit 条。复用 eventScope 的 is_bot=0 AND is_suspect=0 口径，仅返回聚合结果。
+func (r *repository) QueryRecentActivePaths(ctx context.Context, since time.Time, limit int) ([]RecentActivePath, error) {
+	var rows []RecentActivePath
+	err := r.eventScope(ctx, since, time.Now().UTC()).
+		Select("path, COUNT(DISTINCT visitor_id) as active").
+		Group("path").
+		Order("active DESC").
+		Limit(limit).
+		Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("查询最近活跃路径失败: %w", err)
+	}
+	return rows, nil
+}
+
 // aggregateDims 列出需要逐列 GROUP BY 的维度及其源列表达式。
 // user_type 由 is_authenticated 推导出 registered/anonymous。
 var aggregateDims = []struct {

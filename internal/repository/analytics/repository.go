@@ -30,7 +30,14 @@ type Repository interface {
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
 	QueryTotalsSegmented(ctx context.Context) (total, registered, anonymous int64, err error)
 	QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]SessionPath, error)
+	QueryRecentActivePaths(ctx context.Context, since time.Time, limit int) ([]RecentActivePath, error)
 	AggregateDay(ctx context.Context, date string) (DayAggregate, error)
+}
+
+// RecentActivePath 是某路径在最近时间窗内的活跃访客数，仅聚合，不含个体信息。
+type RecentActivePath struct {
+	Path   string
+	Active int
 }
 
 // SessionPath 是单个会话按时间排序拼接的访问路径序列，仅含聚合后字段，

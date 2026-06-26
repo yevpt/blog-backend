@@ -433,6 +433,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/analytics/realtime": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "analytics"
+                ],
+                "summary": "实时概览",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/analytics.RealtimeStat"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/analytics/trend": {
             "get": {
                 "produces": [
@@ -8994,6 +9043,31 @@ const docTemplate = `{
                 },
                 "total_uv": {
                     "type": "integer"
+                }
+            }
+        },
+        "analytics.RealtimePath": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "path": {
+                    "type": "string"
+                }
+            }
+        },
+        "analytics.RealtimeStat": {
+            "type": "object",
+            "properties": {
+                "online": {
+                    "type": "integer"
+                },
+                "recent_paths": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/analytics.RealtimePath"
+                    }
                 }
             }
         },

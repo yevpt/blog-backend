@@ -124,6 +124,22 @@ definitions:
       total_uv:
         type: integer
     type: object
+  analytics.RealtimePath:
+    properties:
+      active:
+        type: integer
+      path:
+        type: string
+    type: object
+  analytics.RealtimeStat:
+    properties:
+      online:
+        type: integer
+      recent_paths:
+        items:
+          $ref: '#/definitions/analytics.RealtimePath'
+        type: array
+    type: object
   analytics.SegmentStat:
     properties:
       today_pv:
@@ -3110,6 +3126,35 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 访问路径序列
+      tags:
+      - analytics
+  /admin/analytics/realtime:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/analytics.RealtimeStat'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 实时概览
       tags:
       - analytics
   /admin/analytics/trend:

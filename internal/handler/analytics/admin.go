@@ -67,6 +67,24 @@ func (h *AdminHandler) Overview(c *gin.Context) {
 	response.Success(c, data)
 }
 
+// Realtime 实时概览（管理员）：当前在线数 + 最近活跃路径。
+// @Summary  实时概览
+// @Tags     analytics
+// @Produce  json
+// @Success  200 {object} response.Response{data=dto.RealtimeStat} "统一响应；code=0 成功"
+// @Failure  401 {object} response.Response "未登录或 token 已过期"
+// @Failure  403 {object} response.Response "权限不足"
+// @Failure  500 {object} response.Response "服务器内部错误"
+// @Router   /admin/analytics/realtime [get]
+func (h *AdminHandler) Realtime(c *gin.Context) {
+	data, err := h.svc.Realtime(c.Request.Context())
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, data)
+}
+
 // Trend 趋势图：按 metric/segment 返回区间内逐日取值。
 // @Summary  站点访问趋势
 // @Tags     analytics

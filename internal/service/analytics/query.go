@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	dto "github.com/vpt/blog-backend/internal/dto/analytics"
 	"github.com/vpt/blog-backend/internal/model"
@@ -19,10 +20,17 @@ type QueryReader interface {
 	QueryTotals(ctx context.Context) (pv, uv int64, err error)
 	QueryDimRange(ctx context.Context, dimension, from, to string) ([]model.AnalyticsDailyDim, error)
 	QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]repo.SessionPath, error)
+	QueryRecentActivePaths(ctx context.Context, since time.Time, limit int) ([]repo.RecentActivePath, error)
 }
 
 // funnelMaxSessions 漏斗计算时从原始事件读取的会话上限，避免大区间扫描全表。
 const funnelMaxSessions = 5000
+
+// recentActiveWindow 实时概览「最近活跃」回看窗口。
+const recentActiveWindow = 5 * time.Minute
+
+// recentActiveLimit 实时概览返回的活跃路径条数上限。
+const recentActiveLimit = 10
 
 // pathSep 在拼接去重路径序列时使用的分隔符（单元分隔符，路径中不会出现）。
 const pathSep = "\x1f"
@@ -30,6 +38,7 @@ const pathSep = "\x1f"
 // QueryService 提供后台只读统计：总览、趋势、热门页面。返回 dto.*，不外泄 model。
 type QueryService interface {
 	Overview(ctx context.Context) (dto.Overview, error)
+	Realtime(ctx context.Context) (dto.RealtimeStat, error)
 	Trend(ctx context.Context, from, to, metric, segment string) ([]dto.TrendPoint, error)
 	TopPages(ctx context.Context, from, to string, limit int) ([]dto.PageStat, error)
 	Dimensions(ctx context.Context, dimension, from, to string) ([]dto.DimensionPoint, error)
@@ -71,6 +80,26 @@ func (s *queryService) Overview(ctx context.Context) (dto.Overview, error) {
 		Registered: dto.SegmentStat{TodayPV: today.RegisteredPV, TodayUV: today.RegisteredUV},
 		Anonymous:  dto.SegmentStat{TodayPV: today.AnonymousPV, TodayUV: today.AnonymousUV},
 	}, nil
+}
+
+// Realtime 返回实时概览：当前在线数 + 最近活跃路径（聚合）。
+// online 为主信号，读取失败直接返回错误；最近活跃路径出错则降级为空并告警。
+func (s *queryService) Realtime(ctx context.Context) (dto.RealtimeStat, error) {
+	online, err := s.realtime.OnlineCount(ctx)
+	if err != nil {
+		return dto.RealtimeStat{}, fmt.Errorf("读取在线人数失败: %w", err)
+	}
+	out := dto.RealtimeStat{Online: online, RecentPaths: []dto.RealtimePath{}}
+
+	rows, err := s.repo.QueryRecentActivePaths(ctx, time.Now().Add(-recentActiveWindow), recentActiveLimit)
+	if err != nil {
+		s.logger.Warn("读取最近活跃路径失败，降级为空", zap.Error(err))
+		return out, nil
+	}
+	for _, row := range rows {
+		out.RecentPaths = append(out.RecentPaths, dto.RealtimePath{Path: row.Path, Active: row.Active})
+	}
+	return out, nil
 }
 
 // Trend 读取日聚合区间，按 metric/segment 选取对应字段映射成趋势点。

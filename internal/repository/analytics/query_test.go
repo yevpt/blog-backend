@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -103,6 +104,23 @@ func TestQuerySessionPaths(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, "/,/articles,/articles/1", got[0].Sequence)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestQueryRecentActivePaths(t *testing.T) {
+	r, mock := newRepo(t)
+	rows := sqlmock.NewRows([]string{"path", "active"}).
+		AddRow("/articles", 5).
+		AddRow("/", 3)
+	// 须命中事件表、按 path 分组、按 active 降序并限幅；eventScope 带 is_bot/is_suspect 过滤。
+	mock.ExpectQuery("COUNT\\(DISTINCT visitor_id\\).*FROM `analytics_events`.*is_bot.*is_suspect.*GROUP BY.*`path`.*ORDER BY active DESC.*LIMIT").
+		WillReturnRows(rows)
+
+	got, err := r.QueryRecentActivePaths(context.Background(), time.Now().Add(-5*time.Minute), 10)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, "/articles", got[0].Path)
+	assert.Equal(t, 5, got[0].Active)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
