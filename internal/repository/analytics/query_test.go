@@ -99,8 +99,13 @@ func TestQuerySessionPaths(t *testing.T) {
 	r, mock := newRepo(t)
 	rows := sqlmock.NewRows([]string{"session_id", "sequence", "steps"}).
 		AddRow("s1", "/,/articles,/articles/1", 3)
+	mock.ExpectBegin()
+	mock.ExpectExec("SET SESSION group_concat_max_len").
+		WithArgs(64 * 1024).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery("GROUP_CONCAT\\(path ORDER BY created_at SEPARATOR ','\\).*FROM `analytics_events`").
 		WillReturnRows(rows)
+	mock.ExpectCommit()
 	got, err := r.QuerySessionPaths(context.Background(), "2026-06-01", "2026-06-02", 1000)
 	require.NoError(t, err)
 	require.Len(t, got, 1)

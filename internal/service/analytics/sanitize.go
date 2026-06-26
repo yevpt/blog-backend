@@ -19,10 +19,26 @@ func SanitizePath(rawURL string) string {
 	if p == "" {
 		p = "/"
 	}
-	if len(p) > maxPathLen {
-		p = p[:maxPathLen]
+	return truncateUTF8Bytes(p, maxPathLen)
+}
+
+// truncateUTF8Bytes 按 UTF-8 字节数截断，并确保不会切断多字节字符。
+func truncateUTF8Bytes(s string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
 	}
-	return p
+	if len(s) <= maxBytes {
+		return s
+	}
+	used := 0
+	for index, r := range s {
+		size := len(string(r))
+		if used+size > maxBytes {
+			return s[:index]
+		}
+		used += size
+	}
+	return s
 }
 
 // RefererHost 从完整 referer 取小写 host，失败返回空串。

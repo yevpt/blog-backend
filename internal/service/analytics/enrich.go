@@ -27,9 +27,7 @@ func (e *enricher) Enrich(raw RawEvent) model.AnalyticsEvent {
 	geo := e.geo.Resolve(raw.IP)
 
 	title := raw.Title
-	if len(title) > maxTitleLen {
-		title = title[:maxTitleLen]
-	}
+	title = truncateUTF8Bytes(title, maxTitleLen)
 
 	return model.AnalyticsEvent{
 		EventType:       raw.EventType,

@@ -1,7 +1,9 @@
 package analytics_test
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/vpt/blog-backend/internal/model"
@@ -74,4 +76,21 @@ func TestEnrichPassesThroughSuspect(t *testing.T) {
 		Path: "/", IP: "1.2.3.4", IsSuspect: true, SuspectReason: "origin_denied"})
 	assert.True(t, suspect.IsSuspect)
 	assert.Equal(t, "origin_denied", suspect.SuspectReason)
+}
+
+func TestEnrich_TruncatesTitleWithoutBreakingUTF8(t *testing.T) {
+	e := svc.NewEnricher(fakeGeo{}, "example.com", "salt")
+
+	got := e.Enrich(svc.RawEvent{
+		EventType: "page_view",
+		VisitorID: "v",
+		SessionID: "s",
+		Path:      "/",
+		Title:     strings.Repeat("题", 120),
+		IP:        "1.2.3.4",
+	})
+
+	assert.LessOrEqual(t, len(got.Title), 255)
+	assert.True(t, utf8.ValidString(got.Title))
+	assert.NotContains(t, got.Title, "�")
 }

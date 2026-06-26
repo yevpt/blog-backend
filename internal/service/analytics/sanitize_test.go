@@ -1,7 +1,9 @@
 package analytics_test
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	svc "github.com/vpt/blog-backend/internal/service/analytics"
@@ -10,6 +12,16 @@ import (
 func TestSanitizePath(t *testing.T) {
 	assert.Equal(t, "/articles/1", svc.SanitizePath("/articles/1?token=secret#x"))
 	assert.Equal(t, "/", svc.SanitizePath("/"))
+}
+
+func TestSanitizePath_TruncatesWithoutBreakingUTF8(t *testing.T) {
+	path := "/" + strings.Repeat("你", 300)
+
+	got := svc.SanitizePath(path)
+
+	assert.LessOrEqual(t, len(got), 512)
+	assert.True(t, utf8.ValidString(got))
+	assert.NotContains(t, got, "�")
 }
 
 func TestRefererHost(t *testing.T) {

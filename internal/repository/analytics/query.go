@@ -18,6 +18,8 @@ var shanghai = func() *time.Location {
 	return loc
 }()
 
+const sessionPathConcatMaxLen = 64 * 1024
+
 func (r *repository) QueryDailyRange(ctx context.Context, from, to string) ([]model.AnalyticsDaily, error) {
 	var out []model.AnalyticsDaily
 	err := r.db.WithContext(ctx).
@@ -120,16 +122,21 @@ func (r *repository) QueryTotals(ctx context.Context) (pv, uv int64, err error) 
 // 在日界处存在轻微时区近似，对仅供后台的路径分析可接受。
 func (r *repository) QuerySessionPaths(ctx context.Context, from, to string, limit int) ([]SessionPath, error) {
 	var rows []SessionPath
-	err := r.db.WithContext(ctx).
-		Model(&model.AnalyticsEvent{}).
-		Select("session_id, GROUP_CONCAT(path ORDER BY created_at SEPARATOR ',') as sequence, COUNT(*) as steps").
-		Where("created_at >= ? AND created_at < ?", from, to).
-		Where("is_bot = ? AND is_suspect = ?", false, false).
-		Where("path NOT LIKE ?", "/admin/%").
-		Group("session_id").
-		Having("COUNT(*) >= ?", 2).
-		Limit(limit).
-		Scan(&rows).Error
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec("SET SESSION group_concat_max_len = ?", sessionPathConcatMaxLen).Error; err != nil {
+			return err
+		}
+		return tx.
+			Model(&model.AnalyticsEvent{}).
+			Select("session_id, GROUP_CONCAT(path ORDER BY created_at SEPARATOR ',') as sequence, COUNT(*) as steps").
+			Where("created_at >= ? AND created_at < ?", from, to).
+			Where("is_bot = ? AND is_suspect = ?", false, false).
+			Where("path NOT LIKE ?", "/admin/%").
+			Group("session_id").
+			Having("COUNT(*) >= ?", 2).
+			Limit(limit).
+			Scan(&rows).Error
+	})
 	if err != nil {
 		return nil, fmt.Errorf("查询访问路径失败: %w", err)
 	}
