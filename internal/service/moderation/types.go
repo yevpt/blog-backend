@@ -1,14 +1,5 @@
 package moderation
 
-import "errors"
-
-var (
-	// ErrContentTooLong 表示清洗后的纯文本超过业务字符上限。
-	ErrContentTooLong = errors.New("content exceeds character limit")
-	// ErrEmptyRuleset 表示 enforce 分类器没有可安全启用的规则。
-	ErrEmptyRuleset = errors.New("moderation ruleset cannot be empty")
-)
-
 // RiskLevel 表示文本规则判定出的最高风险等级。
 type RiskLevel string
 
