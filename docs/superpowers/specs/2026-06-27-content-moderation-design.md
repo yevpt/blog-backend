@@ -92,10 +92,11 @@
 - 新的公开状态和版本指针。
 - 要物化到业务表的正文与图片快照来源。
 - 新增或更新的审核版本。
+- 业务内容软删除、硬删除或审核墓碑写入动作。
 - 用户处置事件。
 - 事务提交后执行的通知、图片清理和缓存失效任务。
 
-触发事件使用封闭枚举：`submit`、`resubmit`、`approve`、`correct_and_approve`、`reject`、`emergency_hide`、`restore`。新增事件必须同时补充状态矩阵、非法转换用例和 API 行为说明。
+触发事件使用封闭枚举：`submit`、`resubmit`、`approve`、`correct_and_approve`、`reject`、`delete`、`admin_delete`、`emergency_hide`、`restore`。`delete` 表示作者或业务规则允许的所有者删除，`admin_delete` 表示管理员强制删除；两者只在权限、操作日志和通知语义上不同，均令 `lifecycle_state` 进入不可逆的 `deleted` 终止态。新增事件必须同时补充状态矩阵、非法转换用例和 API 行为说明。
 
 所有状态不变量集中在该纯函数及表驱动测试中。业务 service 不允许直接拼装版本指针或自行判断公开状态。
 
@@ -115,11 +116,14 @@
 
 - `content_type`、`content_id`：业务内容多态标识，联合唯一。
 - `author_id`：内容发布者。
+- `lifecycle_state`：`active`、`deleted`，只表达内容生命周期；`deleted` 是不可恢复的终止态，不复用 `public_state` 表达。
 - `public_state`：`visible`、`placeholder`、`hidden`、`emergency_hidden`，只表达公开展示状态。
 - `materialized_revision_id`：当前已物化到业务可见快照的版本，可为空。
 - `approved_revision_id`：最后一次正式通过版本，可为空。
 - `pending_revision_id`：当前唯一待审版本，可为空。
+- `state_before_emergency`：进入紧急隔离前的 `visible`、`placeholder` 或 `hidden`；非紧急隔离状态必须为空。
 - `emergency_hidden_reason`、`emergency_hidden_at`：紧急隔离原因和时间。
+- `deleted_at`：进入删除终止态的时间；未删除时为空，不能使用 GORM `DeletedAt` 隐藏审核墓碑。
 - 乐观锁版本号及标准时间字段。
 
 `moment.status` 继续表达作者设置的公开/隐藏状态，不复用为审核状态。
@@ -128,8 +132,8 @@
 
 - 审核状态只属于具体版本，由 `moderation_revision.review_status` 表达。
 - `has_pending_revision` 由 `pending_revision_id != NULL` 派生。
-- `display_version` 由三个版本指针与 `public_state` 派生，不落库。
-- 公开列表只依据 `public_state` 判断能否展示，不能依据待审状态推断可见性。
+- `display_version` 由生命周期、三个版本指针与 `public_state` 派生，不落库；已删除时固定为 `none`。
+- 公开列表只依据 `lifecycle_state=active` 与 `public_state` 判断能否展示，不能依据待审状态推断可见性。
 
 ### 5.2 `moderation_revision`
 
@@ -180,7 +184,7 @@
 - `moderation_attempt`：高风险阻断尝试，保存作者、内容类型、可选审核项、受限正文快照、命中规则和时间。
 - `moderation_report`：举报者、目标、原因、说明、处理状态和处理结果。
 - `moderation_appeal`：版本、申诉人、理由、序号和处理结果。
-- `moderation_action_log`：通过、修正、驳回、回退、举报处理等操作留痕。
+- `moderation_action_log`：通过、修正、驳回、用户删除、管理员删除、紧急隔离、恢复和举报处理等操作留痕。
 - `moderation_visible_image`：为评论、回复和留言物化当前可展示图片 key、指纹和顺序；碎语继续使用 `moment_media`。
 - `user_moderation_profile`：用户当前信任、处罚状态、滚动分数投影和释放控制。
 - `user_moderation_event`：通过、修正、驳回、高风险阻断、举报成立等不可变事件，作为自动评级依据。
@@ -343,17 +347,20 @@
 
 ### 8.1 状态指针不变量
 
-| 业务状态 | `public_state` | `materialized_revision_id` | `approved_revision_id` | `pending_revision_id` |
-| --- | --- | --- | --- | --- |
-| 首次先发后审 | `visible` | 新待审版本 | `NULL` | 新待审版本 |
-| 首次先审后发 | `placeholder` | `NULL` | `NULL` | 新待审版本 |
-| 已正式通过 | `visible` | 通过版本 | 同一通过版本 | `NULL` |
-| 已通过后先发后审编辑 | `visible` | 新待审版本 | 旧通过版本 | 新待审版本 |
-| 已通过后先审后发编辑 | `visible` | 旧通过版本 | 旧通过版本 | 新待审版本 |
-| 首次发布被驳回 | `hidden` | `NULL` | `NULL` | `NULL` |
-| 紧急隔离 | `emergency_hidden` | 保留原指针 | 保留原指针 | 保留原指针 |
+| 业务状态 | `lifecycle_state` | `public_state` | `materialized_revision_id` | `approved_revision_id` | `pending_revision_id` | `state_before_emergency` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 首次先发后审 | `active` | `visible` | 新待审版本 | `NULL` | 新待审版本 | `NULL` |
+| 首次先审后发 | `active` | `placeholder` | `NULL` | `NULL` | 新待审版本 | `NULL` |
+| 已正式通过 | `active` | `visible` | 通过版本 | 同一通过版本 | `NULL` | `NULL` |
+| 已通过后先发后审编辑 | `active` | `visible` | 新待审版本 | 旧通过版本 | 新待审版本 | `NULL` |
+| 已通过后先审后发编辑 | `active` | `visible` | 旧通过版本 | 旧通过版本 | 新待审版本 | `NULL` |
+| 首次发布被驳回 | `active` | `hidden` | `NULL` | `NULL` | `NULL` | `NULL` |
+| 紧急隔离 | `active` | `emergency_hidden` | 保留原指针 | 保留原指针 | 保留原指针 | 隔离前状态 |
+| 已删除 | `deleted` | `hidden` | `NULL` | 保留最后通过版本供审计 | `NULL` | `NULL` |
 
 任何不符合表中不变量的组合都视为数据错误，状态转换器拒绝生成计划并记录错误。`review_status` 只能从版本读取；列表查询不得用版本待审状态决定可见性。
+
+数据库约束与状态机共同保证：`lifecycle_state=active` 时 `deleted_at` 为空；`lifecycle_state=deleted` 时 `deleted_at` 非空；`public_state=emergency_hidden` 当且仅当 `state_before_emergency` 非空，且删除态的紧急隔离字段必须全部为空。
 
 ### 8.2 业务表是公开事实源
 
@@ -365,9 +372,20 @@
 - 新的先审后发内容在业务表保存空可见正文，公众只获得占位文案和允许展示的低清图片投影。
 - 通过、修正、驳回和先发后审回退必须在同一事务中同步更新业务可见快照、版本指针和 `moderation_item`。
 
-这样普通读取只需读取业务可见快照并检查 `public_state`；复杂版本选择只发生在写入和管理审核路径。
+这样普通读取只需读取业务可见快照并检查 `lifecycle_state` 与 `public_state`；复杂版本选择只发生在写入和管理审核路径。
+
+### 8.3 删除终止态与紧急恢复
+
+- `delete` 和 `admin_delete` 可从任意 `lifecycle_state=active` 状态进入 `deleted`。转换时把 `public_state` 固定为 `hidden`，清空 `materialized_revision_id`、`pending_revision_id` 和紧急隔离字段；若存在待审版本则标记为 `superseded`，`approved_revision_id` 仅作为审计指针保留。
+- 删除业务行与写入 `lifecycle_state=deleted` 审核墓碑必须由 `ApplyTransition` 在同一事务完成。现有软删除表同步写入业务行 `deleted_at`；需要硬删除的碎语及关联数据可以继续硬删除，但 `moderation_item`、审核版本和操作日志不得级联删除，避免旧审核请求重新创建或公开内容。
+- `lifecycle_state=deleted` 是终止态：`submit`、`resubmit`、`approve`、`correct_and_approve`、`reject`、`emergency_hide`、`restore` 均为非法转换。重复 `delete` 或 `admin_delete` 作为幂等空操作处理，但不得重复通知或清理资源。
+- 从 `visible`、`placeholder` 或 `hidden` 执行 `emergency_hide` 时，原子写入当前状态到 `state_before_emergency`，再切换为 `emergency_hidden`。对已处于 `emergency_hidden` 的内容重复隔离是幂等操作，不覆盖首次快照。
+- `restore` 只允许从 `emergency_hidden` 执行，且 `state_before_emergency` 必须是 `visible`、`placeholder` 或 `hidden`。恢复目标只能取该快照，禁止根据版本指针、当前规则或管理员请求参数推导；成功后清空紧急隔离快照、原因和时间。
+- 删除与审核、隔离、恢复并发时，通过审核项行锁或乐观锁版本串行化。删除先提交时，后续审核和恢复返回内容已删除冲突；其他动作先提交时，删除仍可继续进入终止态，任何竞态都不能使已删除内容重新公开。
 
 ## 9. 人工审核
+
+人工审核入口在读取待审版本后仍必须交由状态机校验审核项当前状态。若内容的 `lifecycle_state=deleted`，通过、修正后通过和驳回统一返回 `CONTENT_ALREADY_DELETED` 冲突，不修改版本、图片通过记录或业务快照。
 
 ### 9.1 通过
 
@@ -420,6 +438,7 @@
 - 新版本只新增自己的图片引用；从新版本移除旧图不代表立即删除对象。
 - 驳回时按最后通过版本恢复正文、图片和顺序。
 - 只有新版本真正通过后，才可清理旧版本中已移除的图片。
+- 内容的 `lifecycle_state` 进入 `deleted` 后，先在事务中提交终止态和引用变化，再异步清理不再被公开、待审、申诉或其他内容引用的图片；对象清理不能删除审核墓碑。
 - 图片仍被其他公开、待审或可申诉版本引用时只减少引用，不删除对象。
 - 数据库状态先提交，再异步删除零引用对象；删除任务必须幂等。
 
@@ -475,10 +494,10 @@
 - 临时禁言并指定截止时间和理由。
 - 调整 `restricted` 等信任等级，或设置 `muted`、`banned` 处罚状态并手工释放。
 - 一键将某用户全部公开内容的 `public_state` 切换为 `emergency_hidden`。
-- 恢复该批被隔离内容原有的展示状态。
+- 恢复该批被隔离内容各自 `state_before_emergency` 记录的展示状态。
 - 封禁用户时可选择是否同时隔离其全部公开内容。
 
-批量隔离只改变公开状态并保存原状态快照，不直接软删除或删除图片，确保误操作可恢复。
+批量隔离只改变公开状态并保存首次隔离前快照，不直接软删除或删除图片。重复隔离不得覆盖快照；恢复任务必须逐条重新锁定审核项，只恢复仍为 `emergency_hidden` 且快照合法的内容，跳过并记录已删除或已发生其他状态变化的内容。
 
 ### 12.3 IP 网段批量处置
 
@@ -497,6 +516,7 @@ IP 网段处置采用两阶段流程：
 - `pre_review_all` 高于 `trusted` 的自动通过。
 - 用户禁言或封禁高于单条内容风险。
 - `public_state=emergency_hidden` 高于普通 `visible`，但不修改版本审核结果和回退指针。
+- `lifecycle_state=deleted` 是最高优先级终止态，不允许紧急恢复、人工审核或重新提交覆盖。
 
 ## 13. HTTP 接口
 
@@ -521,7 +541,9 @@ IP 网段处置采用两阶段流程：
 
 图片响应增加 `display_mode`：`original`、`blurred` 或 `gif_placeholder`。前端只按服务端字段渲染，不自行推断审核状态。
 
-公开响应只提供展示状态和派生字段：`public_state` 决定是否展示，`display_version` 明确正文来源，`has_pending_revision` 表示是否存在待审版本。先发后审编辑时 `display_version=pending`，先审后发编辑时为 `last_approved`。公开响应不得包含先审后发的待审正文、命中规则或驳回原因。
+公开响应只提供展示状态和派生字段：仅 `lifecycle_state=active` 的内容可进入公开查询，`public_state` 决定展示方式，`display_version` 明确正文来源，`has_pending_revision` 表示是否存在待审版本。先发后审编辑时 `display_version=pending`，先审后发编辑时为 `last_approved`。公开响应不得包含先审后发的待审正文、命中规则或驳回原因。
+
+原有用户删除接口按权限触发 `delete`，管理员强制删除触发 `admin_delete`，不得绕过状态机直接删除业务行。重复删除保持接口幂等；管理审核或紧急恢复命中 `lifecycle_state=deleted` 时返回 `409 / CONTENT_ALREADY_DELETED`，不暴露内部状态组合。
 
 作者和管理员可额外获得 `pending_revision.review_status`、`pending_revision.risk_level`、自己的待审正文、可见处理理由，以及被驳回版本的 `appeal_count` 和配置上限。API 不再返回语义含糊的顶层审核 `status`。
 
@@ -700,7 +722,7 @@ moderation:
 
 配置使用嵌套强类型结构并在启动时统一校验：时长与数量必须为正、限制阈值小于封禁阈值、策略动作必须属于允许枚举、封禁时长列表不能为空。安全下限不能被配置放宽：生产环境必须 `enabled=true` 且配置来源 HMAC 密钥，所有 `high` 必须为 `block`、未审核图片不能 `auto_approve`、`restricted` 不能先发后审或自动通过。生产正式启用前将 `mode` 从 `observe` 切换为 `enforce`。
 
-适合运维调整的阈值、时长、开关、策略矩阵、提示文案和批量大小放入 config；状态枚举、状态不变量、事务边界、权限、脱敏规则、哈希算法和幂等语义固定在代码中。配置结构、默认值和“删除记录不等于删除仍被引用原图”等边界必须写中文注释。
+适合运维调整的阈值、时长、开关、策略矩阵、提示文案和批量大小放入 config；状态枚举、删除终止态、紧急恢复只能使用隔离前快照等状态不变量，以及事务边界、权限、脱敏规则、哈希算法和幂等语义固定在代码中，不允许通过配置放宽。配置结构、默认值和“删除记录不等于删除仍被引用原图”等边界必须写中文注释。
 
 config 在进程启动时加载，修改后通过重启生效；需要即时生效的审核规则、用户手工处置和全站紧急开关仍存数据库并主动失效缓存，不实现不透明的文件热加载。
 
@@ -739,13 +761,18 @@ config 在进程启动时加载，修改后通过重启生效；需要即时生�
 ### 17.2 状态机
 
 - 首次发布和已通过内容编辑的低、中、高风险矩阵。
-- `public_state` 与三个版本指针的全部合法组合和非法组合拒绝。
+- `lifecycle_state`、`public_state`、三个版本指针和 `state_before_emergency` 的全部合法组合及非法组合拒绝。
 - `auto_approve`、`post_review`、`pre_review`、`block` 四种动作。
 - 先发后审编辑驳回后正文与图片完整回退。
 - 先审后发编辑始终展示最后通过版本。
 - 待审再编辑使旧版本失效。
 - 管理员修正保留原文、理由、管理员和时间。
 - 过期版本审核返回冲突。
+- `delete` 与 `admin_delete` 从各非删除状态进入相同终止态，并分别记录操作者语义。
+- 删除待审内容会使待审版本失效、清空待审和物化指针，并保留最后通过指针供审计。
+- `deleted` 拒绝通过、修正、驳回、重投、紧急隔离和恢复；重复删除不产生重复副作用。
+- 首次紧急隔离保存原状态，重复隔离不覆盖快照，恢复只能回到该快照并清空紧急字段。
+- 删除与审核或恢复并发时，任何提交顺序都不能重新公开已删除内容。
 
 ### 17.3 用户等级与处置
 
@@ -783,14 +810,14 @@ config 在进程启动时加载，修改后通过重启生效；需要即时生�
 
 - 全站开放、强制先审后发和关闭发布的优先级。
 - 关闭注册同时覆盖邮箱注册和 OAuth 自动建号。
-- 用户全部内容隔离与恢复保持原状态快照。
+- 用户全部内容隔离与恢复保持首次隔离前状态快照；重复隔离不覆盖，已删除内容不恢复。
 - IP 网段预览令牌一次性、过期和条件绑定校验。
 - 批任务断点续跑、重复执行幂等和部分失败恢复。
 - 永久清理必须满足隔离保留期，不允许直接绕过。
 
 ### 17.7 分层验证
 
-- Repository：使用 `go-sqlmock` 验证事务、查询和迁移幂等。
+- Repository：使用 `go-sqlmock` 验证事务、查询和迁移幂等，覆盖业务删除与审核墓碑原子提交。
 - Service：使用 `gomock` 覆盖状态流、权限和异常降级。
 - Handler：使用 `httptest` 与 `testify` 验证绑定、鉴权、响应脱敏和错误码。
 - 完成后运行相关包测试、`go test ./...`、`go vet ./...` 和 Swagger 更新验证。
