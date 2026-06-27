@@ -1,7 +1,9 @@
 package model_test
 
 import (
+	"os"
 	"reflect"
+	"regexp"
 	"testing"
 	"time"
 
@@ -39,6 +41,21 @@ func TestModerationItemUsesExplicitDeletedAt(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, reflect.TypeOf((*time.Time)(nil)), field.Type)
 	assert.NotContains(t, field.Tag.Get("gorm"), "softDelete")
+}
+
+func TestModerationControlSingletonIDDoesNotAutoIncrement(t *testing.T) {
+	typ := reflect.TypeOf(model.ModerationControl{})
+	field, ok := typ.FieldByName("ID")
+	require.True(t, ok)
+	assert.Contains(t, field.Tag.Get("gorm"), "autoIncrement:false")
+
+	migration, err := os.ReadFile("../../migrations/20260627_content_moderation_core.sql")
+	require.NoError(t, err)
+	tablePattern := regexp.MustCompile("(?s)CREATE TABLE IF NOT EXISTS `moderation_control` \\((.*?)\\) ENGINE")
+	match := tablePattern.FindSubmatch(migration)
+	require.Len(t, match, 2)
+	assert.Regexp(t, "(?m)^\\s*`id` bigint unsigned NOT NULL,$", string(match[1]))
+	assert.NotContains(t, string(match[1]), "AUTO_INCREMENT")
 }
 
 func TestModerationModelsDeclareRequiredUniqueIndexes(t *testing.T) {

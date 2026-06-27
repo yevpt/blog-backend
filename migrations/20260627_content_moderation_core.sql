@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS `user_moderation_profile` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `moderation_control` (
-  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `id` bigint unsigned NOT NULL,
   `registration_mode` varchar(16) NOT NULL DEFAULT 'open',
   `publishing_mode` varchar(24) NOT NULL DEFAULT 'open',
   `reason` varchar(1000) NULL,

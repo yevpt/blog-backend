@@ -12,7 +12,7 @@ const (
 
 // ModerationControl 保存全站唯一的注册和发布控制状态。
 type ModerationControl struct {
-	ID               uint64    `gorm:"primaryKey;check:chk_moderation_control_singleton,id = 1"`
+	ID               uint64    `gorm:"primaryKey;autoIncrement:false;check:chk_moderation_control_singleton,id = 1"`
 	RegistrationMode string    `gorm:"size:16;not null;default:open;check:chk_moderation_registration_mode,registration_mode IN ('open','closed')"`
 	PublishingMode   string    `gorm:"size:24;not null;default:open;check:chk_moderation_publishing_mode,publishing_mode IN ('open','pre_review_all','closed')"`
 	Reason           *string   `gorm:"size:1000"`
