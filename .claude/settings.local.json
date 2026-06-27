@@ -50,7 +50,6 @@
       "Bash(curl -X POST http://h.yevpt.com:19800/v1/models -H 'Authorization: Bearer Lryyld527' -H 'Content-Type: application/json')",
       "Bash(curl -X GET http://h.yevpt.com:19800/v1/models -H 'Authorization: Bearer Lryyld527' -H 'Content-Type: application/json')",
       "mcp__mcp-registry__list_connectors",
-      "mcp__houtini-lm__list_models",
       "Bash(jq '.mcpServers.houtini-lm = { *)",
       "Bash(mv /tmp/.claude.json /Users/vpt/.claude.json)",
       "Bash(jq '.mcpServers[\"houtini-lm\"] = { *)",
