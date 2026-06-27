@@ -7,7 +7,7 @@ import (
 
 // AutoMigrate 按当前代码模型创建或补齐数据库结构。
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&model.Role{},
 		&model.User{},
 		&model.UserRole{},
@@ -54,5 +54,21 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.AnalyticsDailyDim{},
 		&model.AnalyticsPageDaily{},
 		&model.AnalyticsFriendLinkDaily{},
-	)
+	); err != nil {
+		return err
+	}
+	return db.AutoMigrate(moderationModels()...)
+}
+
+func moderationModels() []any {
+	return []any{
+		&model.ModerationItem{},
+		&model.ModerationRevision{},
+		&model.ModerationAttempt{},
+		&model.ModerationRule{},
+		&model.ModerationActionLog{},
+		&model.ModerationVisibleImage{},
+		&model.UserModerationProfile{},
+		&model.ModerationControl{},
+	}
 }

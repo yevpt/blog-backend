@@ -27,6 +27,8 @@ type defaultSeedData struct {
 	UserSettings           []model.UserSetting
 	EmailQuotaPolicies     []model.EmailQuotaPolicy
 	EmailRoleQuotaPolicies []model.EmailRoleQuotaPolicy
+	ModerationRules        []model.ModerationRule
+	ModerationControls     []model.ModerationControl
 }
 
 type roleSeed struct {
@@ -70,7 +72,13 @@ func SeedDefaults(db *gorm.DB, opts SeedOptions) error {
 	if err := insertSeeds(db, data.EmailQuotaPolicies, "email_quota_policy"); err != nil {
 		return err
 	}
-	return insertSeeds(db, data.EmailRoleQuotaPolicies, "email_role_quota_policy")
+	if err := insertSeeds(db, data.EmailRoleQuotaPolicies, "email_role_quota_policy"); err != nil {
+		return err
+	}
+	if err := insertSeeds(db, data.ModerationRules, "moderation_rule"); err != nil {
+		return err
+	}
+	return insertSeeds(db, data.ModerationControls, "moderation_control")
 }
 
 func hashAdminPassword(password string) (string, error) {
@@ -131,6 +139,36 @@ func buildDefaultSeedData(adminPasswordHash string, opts SeedOptions) defaultSee
 			{Role: "normal", ScopeType: "recipient", DailyLimit: 5, MaxPerHour: 0, Enabled: true},
 			{Role: "vip", ScopeType: "recipient", DailyLimit: 20, MaxPerHour: 0, Enabled: true},
 			{Role: "admin", ScopeType: "recipient", DailyLimit: 50, MaxPerHour: 0, Enabled: true},
+		},
+		ModerationRules: []model.ModerationRule{
+			{
+				ID:             1,
+				Name:           "礼貌用语基线",
+				RuleType:       model.ModerationRuleKeyword,
+				Pattern:        "谢谢",
+				RiskLevel:      model.ModerationRiskLow,
+				Priority:       1000,
+				Enabled:        true,
+				RulesetVersion: 1,
+			},
+			{
+				ID:             2,
+				Name:           "停用规则示例",
+				RuleType:       model.ModerationRuleKeyword,
+				Pattern:        "示例停用词",
+				RiskLevel:      model.ModerationRiskMedium,
+				Priority:       1000,
+				Enabled:        false,
+				RulesetVersion: 1,
+			},
+		},
+		ModerationControls: []model.ModerationControl{
+			{
+				ID:               1,
+				RegistrationMode: model.ModerationRegistrationOpen,
+				PublishingMode:   model.ModerationPublishingOpen,
+				LockVersion:      1,
+			},
 		},
 	}
 }

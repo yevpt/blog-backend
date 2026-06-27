@@ -1,10 +1,12 @@
 package dbschema
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -35,6 +37,45 @@ func TestBuildDefaultSeedData_IncludesAdminUserWithIDOne(t *testing.T) {
 	assert.Equal(t, uint(1), data.UserMetas[0].UserID)
 	require.Len(t, data.UserSettings, 1)
 	assert.Equal(t, uint(1), data.UserSettings[0].UserID)
+}
+
+func TestModerationModelsRegisterInDependencyOrder(t *testing.T) {
+	models := moderationModels()
+	want := []reflect.Type{
+		reflect.TypeOf(&model.ModerationItem{}),
+		reflect.TypeOf(&model.ModerationRevision{}),
+		reflect.TypeOf(&model.ModerationAttempt{}),
+		reflect.TypeOf(&model.ModerationRule{}),
+		reflect.TypeOf(&model.ModerationActionLog{}),
+		reflect.TypeOf(&model.ModerationVisibleImage{}),
+		reflect.TypeOf(&model.UserModerationProfile{}),
+		reflect.TypeOf(&model.ModerationControl{}),
+	}
+
+	got := make([]reflect.Type, 0, len(models))
+	for _, value := range models {
+		got = append(got, reflect.TypeOf(value))
+	}
+	assert.Equal(t, want, got)
+}
+
+func TestBuildDefaultSeedData_IncludesModerationDefaults(t *testing.T) {
+	data := buildDefaultSeedData("$2a$12$hash", SeedOptions{})
+
+	require.Len(t, data.ModerationRules, 2)
+	assert.Equal(t, model.ModerationRiskLow, data.ModerationRules[0].RiskLevel)
+	assert.True(t, data.ModerationRules[0].Enabled)
+	assert.False(t, data.ModerationRules[1].Enabled)
+	for _, rule := range data.ModerationRules {
+		assert.NotEmpty(t, rule.Name)
+		assert.NotZero(t, rule.RulesetVersion)
+	}
+
+	require.Len(t, data.ModerationControls, 1)
+	control := data.ModerationControls[0]
+	assert.Equal(t, uint64(1), control.ID)
+	assert.Equal(t, model.ModerationRegistrationOpen, control.RegistrationMode)
+	assert.Equal(t, model.ModerationPublishingOpen, control.PublishingMode)
 }
 
 func TestHashAdminPassword_UsesBcrypt(t *testing.T) {
