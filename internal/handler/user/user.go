@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
@@ -12,10 +13,14 @@ import (
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
+// maxPresenceIDs 是 /users/presence 单次查询接受的最大 id 数量（前端订阅集硬上限同为 100，这里是双保险）。
+const maxPresenceIDs = 100
+
 // UserHandler 用户资料 HTTP 入口，只负责读取登录态和写统一响应。
 type UserHandler struct {
-	svc     userservice.UserService
-	moments UserMomentsCounter
+	svc      userservice.UserService
+	moments  UserMomentsCounter
+	presence userservice.PresenceProvider
 }
 
 // UserMomentsCounter 供个人页 Tab 展示碎语总数，避免 handler 依赖完整 MomentService。
@@ -24,8 +29,8 @@ type UserMomentsCounter interface {
 }
 
 // NewUserHandler 创建用户资料处理器。
-func NewUserHandler(svc userservice.UserService, moments UserMomentsCounter) *UserHandler {
-	return &UserHandler{svc: svc, moments: moments}
+func NewUserHandler(svc userservice.UserService, moments UserMomentsCounter, presence userservice.PresenceProvider) *UserHandler {
+	return &UserHandler{svc: svc, moments: moments, presence: presence}
 }
 
 // GetDetail 返回当前登录用户完整资料。
@@ -75,6 +80,62 @@ func (h *UserHandler) ListRecent(c *gin.Context) {
 		return
 	}
 	response.Success(c, resp)
+}
+
+// BatchPresence 批量查询用户在线感知
+// @Summary 批量查询用户在线感知
+// @Description 公开接口；按 ids 批量返回在线状态与最近活跃/登录时间，最多 100 个 id，超出截断，重复去重，非数字静默丢弃；未知 id 在 data 中整条缺席
+// @Tags 用户
+// @Accept json
+// @Produce json
+// @Param ids query string false "用户 ID 列表，逗号分隔，最多 100 个"
+// @Success 200 {object} response.Response{data=dto.BatchPresenceResp} "成功"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /users/presence [get]
+func (h *UserHandler) BatchPresence(c *gin.Context) {
+	ids := parsePresenceIDs(c.Query("ids"))
+	if len(ids) == 0 {
+		response.Success(c, dto.BatchPresenceResp{Data: map[uint]dto.UserPresenceResp{}})
+		return
+	}
+
+	data, err := h.presence.BatchPresence(c.Request.Context(), ids)
+	if err != nil {
+		response.ServerError(c)
+		return
+	}
+
+	resp := dto.BatchPresenceResp{Data: make(map[uint]dto.UserPresenceResp, len(data))}
+	for id, item := range data {
+		resp.Data[id] = *item
+	}
+	response.Success(c, resp)
+}
+
+// parsePresenceIDs 解析 ids 查询参数：逗号分隔、去重、丢弃非数字、截断到 maxPresenceIDs。
+func parsePresenceIDs(raw string) []uint {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	seen := make(map[uint]struct{}, len(parts))
+	ids := make([]uint, 0, len(parts))
+	for _, p := range parts {
+		v, err := strconv.ParseUint(strings.TrimSpace(p), 10, 64)
+		if err != nil {
+			continue
+		}
+		id := uint(v)
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+		if len(ids) >= maxPresenceIDs {
+			break
+		}
+	}
+	return ids
 }
 
 // ListAll 获取全部用户列表

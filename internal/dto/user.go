@@ -268,3 +268,15 @@ type AdminUserRolesResp struct {
 	UserID uint     `json:"user_id" example:"42"`
 	Roles  []string `json:"roles" example:"ROLE_NORMAL,ROLE_VIP"`
 }
+
+// UserPresenceResp 单个用户的在线感知片段；时间字段为 unix 秒，缺省表示无记录。
+type UserPresenceResp struct {
+	IsOnline     bool   `json:"is_online"`
+	LastActiveAt *int64 `json:"last_active_at,omitempty"`
+	LastLoginAt  *int64 `json:"last_login_at,omitempty"`
+}
+
+// BatchPresenceResp 批量在线感知响应；data 以 user_id 为 key，未知 id 整条缺席。
+type BatchPresenceResp struct {
+	Data map[uint]UserPresenceResp `json:"data"`
+}

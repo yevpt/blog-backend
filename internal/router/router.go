@@ -224,6 +224,7 @@ func newRouteHandlers(
 		Mailer:  mailer,
 		Captcha: captchaSvc,
 	})
+	presenceProvider := userservice.NewPresenceProvider(userPresence, userRepo)
 	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc)
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
@@ -287,7 +288,7 @@ func newRouteHandlers(
 		moment:            momenthandler.NewMomentHandler(momentSvc),
 		notification:      notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin: notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
-		user:              userhandler.NewUserHandler(userSvc, momentSvc),
+		user:              userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
 		userAdmin:         userhandler.NewUserAdminHandler(userAdminSvc, log),
 		category:          categoryhandler.NewCategoryHandler(categorySvc),
 		tag:               taghandler.NewTagHandler(tagSvc),
@@ -417,6 +418,7 @@ func registerPublicRoutes(
 	r.GET("/friend-links/:id", middleware.RateLimitPublic(redisClient), handlers.friendLink.GetPublic)
 	r.GET("/users", middleware.RateLimitPublic(redisClient), handlers.user.ListAll)
 	r.GET("/users/recent", middleware.RateLimitPublic(redisClient), handlers.user.ListRecent)
+	r.GET("/users/presence", middleware.RateLimitPublic(redisClient), middleware.OptionalAuth(jwtManager), handlers.user.BatchPresence)
 	r.GET("/users/:id/likes/count", middleware.RateLimitPublic(redisClient), handlers.user.CountLikedContent)
 	r.GET("/users/:id/moments/count", middleware.RateLimitPublic(redisClient), handlers.user.CountMoments)
 	r.GET("/users/:id/likes", middleware.RateLimitPublic(redisClient), handlers.user.ListLikedContent)

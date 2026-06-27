@@ -70,6 +70,9 @@ func (r *stubUserRepo) UpsertUserSetting(userID uint, updates map[string]any) er
 func (r *stubUserRepo) CountByAvatarURL(avatarURL string) (int64, error) { return 0, nil }
 func (r *stubUserRepo) GrantVipRole(userID uint) error                   { return nil }
 func (r *stubUserRepo) RevokeVipRole(userID uint) error                  { return nil }
+func (r *stubUserRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
+	return nil, nil
+}
 
 func newTestRedis(t *testing.T) *redis.Client {
 	t.Helper()

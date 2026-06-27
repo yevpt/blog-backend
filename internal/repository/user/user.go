@@ -147,6 +147,8 @@ type UserRepository interface {
 	GrantVipRole(userID uint) error
 	// RevokeVipRole 移除目标用户的 ROLE_VIP；本就不是 VIP 时幂等成功。
 	RevokeVipRole(userID uint) error
+	// BatchFetchActiveLogin 批量查询用户最近活跃/登录时间，供在线感知端点使用；未知 id 不在返回结果中。
+	BatchFetchActiveLogin(ids []uint) (map[uint]*ActiveLogin, error)
 }
 
 type userRepo struct {

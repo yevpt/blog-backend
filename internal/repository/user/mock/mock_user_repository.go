@@ -41,6 +41,21 @@ func (m *MockUserRepository) EXPECT() *MockUserRepositoryMockRecorder {
 	return m.recorder
 }
 
+// BatchFetchActiveLogin mocks base method.
+func (m *MockUserRepository) BatchFetchActiveLogin(ids []uint) (map[uint]*user.ActiveLogin, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BatchFetchActiveLogin", ids)
+	ret0, _ := ret[0].(map[uint]*user.ActiveLogin)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// BatchFetchActiveLogin indicates an expected call of BatchFetchActiveLogin.
+func (mr *MockUserRepositoryMockRecorder) BatchFetchActiveLogin(ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchFetchActiveLogin", reflect.TypeOf((*MockUserRepository)(nil).BatchFetchActiveLogin), ids)
+}
+
 // CountByAvatarURL mocks base method.
 func (m *MockUserRepository) CountByAvatarURL(avatarURL string) (int64, error) {
 	m.ctrl.T.Helper()
@@ -339,20 +354,6 @@ func (mr *MockUserRepositoryMockRecorder) RevokeVipRole(userID any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeVipRole", reflect.TypeOf((*MockUserRepository)(nil).RevokeVipRole), userID)
 }
 
-// Update mocks base method.
-func (m *MockUserRepository) Update(id uint, updates map[string]any) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Update", id, updates)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Update indicates an expected call of Update.
-func (mr *MockUserRepositoryMockRecorder) Update(id, updates any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUserRepository)(nil).Update), id, updates)
-}
-
 // TouchLoginPresence mocks base method.
 func (m *MockUserRepository) TouchLoginPresence(userID uint) error {
 	m.ctrl.T.Helper()
@@ -367,6 +368,20 @@ func (mr *MockUserRepositoryMockRecorder) TouchLoginPresence(userID any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TouchLoginPresence", reflect.TypeOf((*MockUserRepository)(nil).TouchLoginPresence), userID)
 }
 
+// Update mocks base method.
+func (m *MockUserRepository) Update(id uint, updates map[string]any) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Update", id, updates)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockUserRepositoryMockRecorder) Update(id, updates any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockUserRepository)(nil).Update), id, updates)
+}
+
 // UpdateLastActiveAt mocks base method.
 func (m *MockUserRepository) UpdateLastActiveAt(userID uint) error {
 	m.ctrl.T.Helper()
@@ -379,20 +394,6 @@ func (m *MockUserRepository) UpdateLastActiveAt(userID uint) error {
 func (mr *MockUserRepositoryMockRecorder) UpdateLastActiveAt(userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateLastActiveAt", reflect.TypeOf((*MockUserRepository)(nil).UpdateLastActiveAt), userID)
-}
-
-// UpdateLastLoginAt mocks base method.
-func (m *MockUserRepository) UpdateLastLoginAt(userID uint) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateLastLoginAt", userID)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateLastLoginAt indicates an expected call of UpdateLastLoginAt.
-func (mr *MockUserRepositoryMockRecorder) UpdateLastLoginAt(userID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateLastLoginAt", reflect.TypeOf((*MockUserRepository)(nil).UpdateLastLoginAt), userID)
 }
 
 // UpdatePassword mocks base method.

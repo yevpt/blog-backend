@@ -76,6 +76,9 @@ func (r *changeAvatarRepo) UpsertUserSetting(userID uint, updates map[string]any
 }
 func (r *changeAvatarRepo) GrantVipRole(userID uint) error  { return nil }
 func (r *changeAvatarRepo) RevokeVipRole(userID uint) error { return nil }
+func (r *changeAvatarRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
+	return nil, nil
+}
 
 type changeAvatarStore struct {
 	deleted []string
