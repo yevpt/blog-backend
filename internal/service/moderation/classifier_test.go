@@ -46,6 +46,26 @@ func TestNormalizeCanonicalizesClassificationText(t *testing.T) {
 	assert.Equal(t, "abc测试加微", got)
 }
 
+func TestNormalizeRemovesDefaultIgnorableEvasionCharacters(t *testing.T) {
+	tests := []struct {
+		name      string
+		separator string
+	}{
+		{name: "combining grapheme joiner", separator: "\u034f"},
+		{name: "BMP variation selector", separator: "\ufe0f"},
+		{name: "supplementary variation selector", separator: "\U000E0100"},
+		{name: "zero width format", separator: "\u200b"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := moderation.NormalizeText("违" + tt.separator + "禁")
+
+			assert.Equal(t, "违禁", got)
+		})
+	}
+}
+
 func TestClassifierMatchesKeywordRegexAndCompositeRules(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
 		rule(1, moderation.RuleKeyword, moderation.RiskMedium, "加 微"),
@@ -57,6 +77,40 @@ func TestClassifierMatchesKeywordRegexAndCompositeRules(t *testing.T) {
 
 	assert.Equal(t, moderation.RiskHigh, got.Risk)
 	assert.ElementsMatch(t, []uint64{1, 2, 3}, got.RuleMatchIDs)
+}
+
+func TestClassifierNormalizesRegexpLiteralRunes(t *testing.T) {
+	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
+		rule(1, moderation.RuleRegexp, moderation.RiskHigh, `違禁`),
+		rule(2, moderation.RuleRegexp, moderation.RiskMedium, `VX\d+`),
+	))
+
+	got := classifier.Classify(processed("违禁 vx123"))
+
+	assert.Equal(t, moderation.RiskHigh, got.Risk)
+	assert.ElementsMatch(t, []uint64{1, 2}, got.RuleMatchIDs)
+}
+
+func TestClassifierPreservesRegexpEscapesClassesAndUnicodeProperties(t *testing.T) {
+	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
+		rule(1, moderation.RuleRegexp, moderation.RiskHigh, `\A\x56\x58\d+[a-z]\p{Han}\z`),
+	))
+
+	got := classifier.Classify(processed("VX123q禁"))
+
+	assert.Equal(t, moderation.RiskHigh, got.Risk)
+	assert.Equal(t, []uint64{1}, got.RuleMatchIDs)
+}
+
+func TestClassifierRemovesDefaultIgnorablesFromRegexpLiteralAndContent(t *testing.T) {
+	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
+		rule(1, moderation.RuleRegexp, moderation.RiskHigh, "違\u034f禁"),
+	))
+
+	got := classifier.Classify(processed("违\ufe0f\U000E0100禁"))
+
+	assert.Equal(t, moderation.RiskHigh, got.Risk)
+	assert.Equal(t, []uint64{1}, got.RuleMatchIDs)
 }
 
 func TestClassifierUsesHighestRiskAndExactMatchedRuleIDs(t *testing.T) {

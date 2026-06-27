@@ -6,11 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"sync/atomic"
-	"unicode"
 
-	"github.com/caiguanhao/opencc"
 	"go.uber.org/zap"
-	"golang.org/x/text/unicode/norm"
 )
 
 type classifier struct {
@@ -123,7 +120,7 @@ func compileRule(source CompiledRule) (runtimeRule, error) {
 			return runtimeRule{}, errors.New("keyword cannot be empty")
 		}
 	case RuleRegexp:
-		compiled, err := regexp.Compile(source.Pattern)
+		compiled, err := compileNormalizedRegexp(source.Pattern)
 		if err != nil {
 			return runtimeRule{}, fmt.Errorf("invalid RE2 pattern: %w", err)
 		}
@@ -183,32 +180,4 @@ func riskRank(risk RiskLevel) int {
 	default:
 		return 0
 	}
-}
-
-// NormalizeText 仅为分类生成稳定文本，不修改对外展示正文。
-func NormalizeText(text string) string {
-	text = norm.NFKC.String(text)
-	text = opencc.Convert("t2s", text)
-	text = strings.ToLower(text)
-
-	var normalized strings.Builder
-	var previous rune
-	hasPrevious := false
-	for _, current := range text {
-		if isIgnoredForClassification(current) {
-			continue
-		}
-		if hasPrevious && current == previous {
-			continue
-		}
-		normalized.WriteRune(current)
-		previous = current
-		hasPrevious = true
-	}
-	return normalized.String()
-}
-
-func isIgnoredForClassification(value rune) bool {
-	return unicode.IsSpace(value) || unicode.Is(unicode.Cf, value) ||
-		unicode.IsPunct(value) || unicode.IsSymbol(value)
 }
