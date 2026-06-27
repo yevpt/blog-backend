@@ -685,7 +685,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "排序字段：created_at、updated_at、category、status、recommended",
+                        "description": "排序字段：created_at、updated_at、category、status、recommended；默认 updated_at",
                         "name": "sort_by",
                         "in": "query"
                     },
@@ -8966,6 +8966,55 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/presence": {
+            "get": {
+                "description": "公开接口；按 ids 批量返回在线状态与最近活跃/登录时间，最多 100 个 id，超出截断，重复去重，非数字静默丢弃；未知 id 在 data 中整条缺席",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户"
+                ],
+                "summary": "批量查询用户在线感知",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "用户 ID 列表，逗号分隔，最多 100 个",
+                        "name": "ids",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.BatchPresenceResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/users/recent": {
             "get": {
                 "description": "默认按最后登录时间降序，支持分页",
@@ -9572,6 +9621,13 @@ const docTemplate = `{
         "dto.AdminArticleDetailResp": {
             "type": "object",
             "properties": {
+                "ai_models": {
+                    "description": "AiModels 参与创作的 AI 模型列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleAiModelResp"
+                    }
+                },
                 "categories": {
                     "description": "Categories 分类列表。",
                     "type": "array",
@@ -9607,6 +9663,16 @@ const docTemplate = `{
                 "content": {
                     "description": "Content 文章正文。",
                     "type": "string"
+                },
+                "content_ai_referenced": {
+                    "description": "ContentAiReferenced 正文是否 AI 参考（对外披露）。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "cover_ai_generated": {
+                    "description": "CoverAiGenerated 封面是否 AI 生成（对外披露）。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "cover_img_url": {
                     "description": "CoverImgUrl 封面图地址。",
@@ -9719,6 +9785,13 @@ const docTemplate = `{
         "dto.AdminArticleListItemResp": {
             "type": "object",
             "properties": {
+                "ai_models": {
+                    "description": "AiModels 参与创作的 AI 模型列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleAiModelResp"
+                    }
+                },
                 "category": {
                     "description": "Category 文章所属分类（每篇文章归属一个分类）。",
                     "allOf": [
@@ -9736,6 +9809,16 @@ const docTemplate = `{
                     "description": "CommentStatus 评论状态。",
                     "type": "integer",
                     "example": 1
+                },
+                "content_ai_referenced": {
+                    "description": "ContentAiReferenced 正文是否 AI 参考（对外披露）。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "cover_ai_generated": {
+                    "description": "CoverAiGenerated 封面是否 AI 生成（对外披露）。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "cover_img_url": {
                     "description": "CoverImgUrl 封面图地址。",
@@ -10265,6 +10348,55 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ArticleAiModelResp": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "description": "Name 模型名称。",
+                    "type": "string",
+                    "example": "Claude Sonnet 4"
+                },
+                "scope": {
+                    "description": "Scope 用途：cover 配图，content 正文。",
+                    "type": "string",
+                    "example": "content"
+                },
+                "seq": {
+                    "description": "Seq 展示顺序。",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "dto.ArticleAiModelSaveReq": {
+            "type": "object",
+            "required": [
+                "name",
+                "scope"
+            ],
+            "properties": {
+                "name": {
+                    "description": "Name 模型名称。",
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "Claude Sonnet 4"
+                },
+                "scope": {
+                    "description": "Scope 用途：cover 配图，content 正文。",
+                    "type": "string",
+                    "enum": [
+                        "cover",
+                        "content"
+                    ],
+                    "example": "content"
+                },
+                "seq": {
+                    "description": "Seq 展示顺序，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
         "dto.ArticleDeleteResp": {
             "type": "object",
             "properties": {
@@ -10278,6 +10410,13 @@ const docTemplate = `{
         "dto.ArticleDetailResp": {
             "type": "object",
             "properties": {
+                "ai_models": {
+                    "description": "AiModels 参与创作的 AI 模型列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleAiModelResp"
+                    }
+                },
                 "categories": {
                     "description": "Categories 分类列表。",
                     "type": "array",
@@ -10313,6 +10452,16 @@ const docTemplate = `{
                 "content": {
                     "description": "Content 文章正文。",
                     "type": "string"
+                },
+                "content_ai_referenced": {
+                    "description": "ContentAiReferenced 正文是否 AI 参考（对外披露）。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "cover_ai_generated": {
+                    "description": "CoverAiGenerated 封面是否 AI 生成（对外披露）。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "cover_img_url": {
                     "description": "CoverImgUrl 封面图地址。",
@@ -10453,6 +10602,13 @@ const docTemplate = `{
         "dto.ArticleListItemResp": {
             "type": "object",
             "properties": {
+                "ai_models": {
+                    "description": "AiModels 参与创作的 AI 模型列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleAiModelResp"
+                    }
+                },
                 "category": {
                     "description": "Category 文章所属分类（每篇文章归属一个分类）。",
                     "allOf": [
@@ -10470,6 +10626,16 @@ const docTemplate = `{
                     "description": "CommentStatus 评论状态。",
                     "type": "integer",
                     "example": 1
+                },
+                "content_ai_referenced": {
+                    "description": "ContentAiReferenced 正文是否 AI 参考（对外披露）。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "cover_ai_generated": {
+                    "description": "CoverAiGenerated 封面是否 AI 生成（对外披露）。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "cover_img_url": {
                     "description": "CoverImgUrl 封面图地址。",
@@ -10609,6 +10775,13 @@ const docTemplate = `{
                 "title"
             ],
             "properties": {
+                "ai_models": {
+                    "description": "AiModels 参与创作的 AI 模型列表。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ArticleAiModelSaveReq"
+                    }
+                },
                 "category_ids": {
                     "description": "CategoryIDs 分类 ID 列表，至少一个；当前每篇文章只归属第一个有效分类。",
                     "type": "array",
@@ -10633,6 +10806,16 @@ const docTemplate = `{
                     "description": "Content Markdown 正文内容。",
                     "type": "string",
                     "example": "Markdown 正文"
+                },
+                "content_ai_referenced": {
+                    "description": "ContentAiReferenced 正文是否 AI 参考（对外披露）。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "cover_ai_generated": {
+                    "description": "CoverAiGenerated 封面是否 AI 生成（对外披露）。",
+                    "type": "boolean",
+                    "example": false
                 },
                 "cover_img_url": {
                     "description": "CoverImgUrl 封面图地址。",
@@ -10771,6 +10954,17 @@ const docTemplate = `{
                     "description": "ViewCount 阅读数量。",
                     "type": "integer",
                     "example": 21
+                }
+            }
+        },
+        "dto.BatchPresenceResp": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.UserPresenceResp"
+                    }
                 }
             }
         },
@@ -13231,6 +13425,20 @@ const docTemplate = `{
                 "total": {
                     "type": "integer",
                     "example": 100
+                }
+            }
+        },
+        "dto.UserPresenceResp": {
+            "type": "object",
+            "properties": {
+                "is_online": {
+                    "type": "boolean"
+                },
+                "last_active_at": {
+                    "type": "integer"
+                },
+                "last_login_at": {
+                    "type": "integer"
                 }
             }
         },

@@ -215,6 +215,11 @@ definitions:
     type: object
   dto.AdminArticleDetailResp:
     properties:
+      ai_models:
+        description: AiModels 参与创作的 AI 模型列表。
+        items:
+          $ref: '#/definitions/dto.ArticleAiModelResp'
+        type: array
       categories:
         description: Categories 分类列表。
         items:
@@ -240,6 +245,14 @@ definitions:
       content:
         description: Content 文章正文。
         type: string
+      content_ai_referenced:
+        description: ContentAiReferenced 正文是否 AI 参考（对外披露）。
+        example: false
+        type: boolean
+      cover_ai_generated:
+        description: CoverAiGenerated 封面是否 AI 生成（对外披露）。
+        example: false
+        type: boolean
       cover_img_url:
         description: CoverImgUrl 封面图地址。
         type: string
@@ -322,6 +335,11 @@ definitions:
     type: object
   dto.AdminArticleListItemResp:
     properties:
+      ai_models:
+        description: AiModels 参与创作的 AI 模型列表。
+        items:
+          $ref: '#/definitions/dto.ArticleAiModelResp'
+        type: array
       category:
         allOf:
         - $ref: '#/definitions/dto.ArticleRelationResp'
@@ -334,6 +352,14 @@ definitions:
         description: CommentStatus 评论状态。
         example: 1
         type: integer
+      content_ai_referenced:
+        description: ContentAiReferenced 正文是否 AI 参考（对外披露）。
+        example: false
+        type: boolean
+      cover_ai_generated:
+        description: CoverAiGenerated 封面是否 AI 生成（对外披露）。
+        example: false
+        type: boolean
       cover_img_url:
         description: CoverImgUrl 封面图地址。
         type: string
@@ -720,6 +746,43 @@ definitions:
         example: 42
         type: integer
     type: object
+  dto.ArticleAiModelResp:
+    properties:
+      name:
+        description: Name 模型名称。
+        example: Claude Sonnet 4
+        type: string
+      scope:
+        description: Scope 用途：cover 配图，content 正文。
+        example: content
+        type: string
+      seq:
+        description: Seq 展示顺序。
+        example: 0
+        type: integer
+    type: object
+  dto.ArticleAiModelSaveReq:
+    properties:
+      name:
+        description: Name 模型名称。
+        example: Claude Sonnet 4
+        maxLength: 100
+        type: string
+      scope:
+        description: Scope 用途：cover 配图，content 正文。
+        enum:
+        - cover
+        - content
+        example: content
+        type: string
+      seq:
+        description: Seq 展示顺序，越小越靠前。
+        example: 0
+        type: integer
+    required:
+    - name
+    - scope
+    type: object
   dto.ArticleDeleteResp:
     properties:
       id:
@@ -729,6 +792,11 @@ definitions:
     type: object
   dto.ArticleDetailResp:
     properties:
+      ai_models:
+        description: AiModels 参与创作的 AI 模型列表。
+        items:
+          $ref: '#/definitions/dto.ArticleAiModelResp'
+        type: array
       categories:
         description: Categories 分类列表。
         items:
@@ -754,6 +822,14 @@ definitions:
       content:
         description: Content 文章正文。
         type: string
+      content_ai_referenced:
+        description: ContentAiReferenced 正文是否 AI 参考（对外披露）。
+        example: false
+        type: boolean
+      cover_ai_generated:
+        description: CoverAiGenerated 封面是否 AI 生成（对外披露）。
+        example: false
+        type: boolean
       cover_img_url:
         description: CoverImgUrl 封面图地址。
         type: string
@@ -856,6 +932,11 @@ definitions:
     type: object
   dto.ArticleListItemResp:
     properties:
+      ai_models:
+        description: AiModels 参与创作的 AI 模型列表。
+        items:
+          $ref: '#/definitions/dto.ArticleAiModelResp'
+        type: array
       category:
         allOf:
         - $ref: '#/definitions/dto.ArticleRelationResp'
@@ -868,6 +949,14 @@ definitions:
         description: CommentStatus 评论状态。
         example: 1
         type: integer
+      content_ai_referenced:
+        description: ContentAiReferenced 正文是否 AI 参考（对外披露）。
+        example: false
+        type: boolean
+      cover_ai_generated:
+        description: CoverAiGenerated 封面是否 AI 生成（对外披露）。
+        example: false
+        type: boolean
       cover_img_url:
         description: CoverImgUrl 封面图地址。
         type: string
@@ -967,6 +1056,11 @@ definitions:
     type: object
   dto.ArticleSaveReq:
     properties:
+      ai_models:
+        description: AiModels 参与创作的 AI 模型列表。
+        items:
+          $ref: '#/definitions/dto.ArticleAiModelSaveReq'
+        type: array
       category_ids:
         description: CategoryIDs 分类 ID 列表，至少一个；当前每篇文章只归属第一个有效分类。
         example:
@@ -986,6 +1080,14 @@ definitions:
         description: Content Markdown 正文内容。
         example: Markdown 正文
         type: string
+      content_ai_referenced:
+        description: ContentAiReferenced 正文是否 AI 参考（对外披露）。
+        example: false
+        type: boolean
+      cover_ai_generated:
+        description: CoverAiGenerated 封面是否 AI 生成（对外披露）。
+        example: false
+        type: boolean
       cover_img_url:
         description: CoverImgUrl 封面图地址。
         example: https://example.com/cover.jpg
@@ -1095,6 +1197,13 @@ definitions:
         description: ViewCount 阅读数量。
         example: 21
         type: integer
+    type: object
+  dto.BatchPresenceResp:
+    properties:
+      data:
+        additionalProperties:
+          $ref: '#/definitions/dto.UserPresenceResp'
+        type: object
     type: object
   dto.CaptchaChallengeResp:
     properties:
@@ -2873,6 +2982,15 @@ definitions:
         example: 100
         type: integer
     type: object
+  dto.UserPresenceResp:
+    properties:
+      is_online:
+        type: boolean
+      last_active_at:
+        type: integer
+      last_login_at:
+        type: integer
+    type: object
   dto.UserPublicProfileResp:
     properties:
       avatar_url:
@@ -3401,7 +3519,7 @@ paths:
         in: query
         name: search
         type: string
-      - description: 排序字段：created_at、updated_at、category、status、recommended
+      - description: 排序字段：created_at、updated_at、category、status、recommended；默认 updated_at
         in: query
         name: sort_by
         type: string
@@ -8677,6 +8795,36 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 修改用户名
+      tags:
+      - 用户
+  /users/presence:
+    get:
+      consumes:
+      - application/json
+      description: 公开接口；按 ids 批量返回在线状态与最近活跃/登录时间，最多 100 个 id，超出截断，重复去重，非数字静默丢弃；未知
+        id 在 data 中整条缺席
+      parameters:
+      - description: 用户 ID 列表，逗号分隔，最多 100 个
+        in: query
+        name: ids
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.BatchPresenceResp'
+              type: object
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 批量查询用户在线感知
       tags:
       - 用户
   /users/recent:
