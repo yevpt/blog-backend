@@ -159,14 +159,16 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 	}
 
 	article := model.Article{
-		Title:         strings.TrimSpace(req.Title),
-		CoverImgUrl:   req.CoverImgUrl,
-		ShortContent:  req.ShortContent,
-		Content:       req.Content,
-		UserID:        authorID,
-		Status:        req.Status,
-		CommentStatus: req.CommentStatus,
-		Password:      password,
+		Title:               strings.TrimSpace(req.Title),
+		CoverImgUrl:         req.CoverImgUrl,
+		ShortContent:        req.ShortContent,
+		Content:             req.Content,
+		UserID:              authorID,
+		Status:              req.Status,
+		CommentStatus:       req.CommentStatus,
+		Password:            password,
+		CoverAiGenerated:    req.CoverAiGenerated,
+		ContentAiReferenced: req.ContentAiReferenced,
 	}
 	if req.ID != nil {
 		article.ID = *req.ID
@@ -232,6 +234,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		CategoryIDs:    categoryIDs,
 		Tags:           normalizeArticleTagRelations(req),
 		MusicIDs:       musicIDs,
+		AiModels:       normalizeArticleAiModels(req),
 		Recommend:      req.Recommend,
 		RecommendSeq:   req.RecommendSeq,
 		PrepareArticle: prepareArticle,

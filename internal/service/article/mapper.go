@@ -210,16 +210,19 @@ func articleDetailToDTO(
 
 func deletedArticleToDTO(article *model.Article) *dto.ArticleDetailResp {
 	return &dto.ArticleDetailResp{ArticleListItemResp: dto.ArticleListItemResp{
-		ID:            article.ID,
-		Title:         article.Title,
-		CoverImgUrl:   article.CoverImgUrl,
-		ShortContent:  article.ShortContent,
-		UserID:        article.UserID,
-		Status:        article.Status,
-		CommentStatus: article.CommentStatus,
-		ReadCount:     article.ReadCount,
-		CreatedAt:     article.CreatedAt,
-		UpdatedAt:     article.UpdatedAt,
+		ID:                  article.ID,
+		Title:               article.Title,
+		CoverImgUrl:         article.CoverImgUrl,
+		ShortContent:        article.ShortContent,
+		UserID:              article.UserID,
+		Status:              article.Status,
+		CommentStatus:       article.CommentStatus,
+		ReadCount:           article.ReadCount,
+		CoverAiGenerated:    article.CoverAiGenerated,
+		ContentAiReferenced: article.ContentAiReferenced,
+		AiModels:            nil,
+		CreatedAt:           article.CreatedAt,
+		UpdatedAt:           article.UpdatedAt,
 	}}
 }
 
@@ -243,22 +246,25 @@ func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleLi
 		category = &rel
 	}
 	return dto.ArticleListItemResp{
-		ID:            article.ID,
-		Title:         article.Title,
-		CoverImgUrl:   article.CoverImgUrl,
-		ShortContent:  article.ShortContent,
-		UserID:        article.UserID,
-		User:          articleUserToDTO(aggregate.User),
-		Status:        article.Status,
-		CommentStatus: article.CommentStatus,
-		ReadCount:     article.ReadCount,
-		LikeCount:     aggregate.LikeCount,
-		CommentCount:  aggregate.CommentCount,
-		IsLiked:       aggregate.IsLiked,
-		IsRecommended: aggregate.Recommend != nil,
-		Category:      category,
-		CreatedAt:     article.CreatedAt,
-		UpdatedAt:     article.UpdatedAt,
+		ID:                  article.ID,
+		Title:               article.Title,
+		CoverImgUrl:         article.CoverImgUrl,
+		ShortContent:        article.ShortContent,
+		UserID:              article.UserID,
+		User:                articleUserToDTO(aggregate.User),
+		Status:              article.Status,
+		CommentStatus:       article.CommentStatus,
+		ReadCount:           article.ReadCount,
+		LikeCount:           aggregate.LikeCount,
+		CommentCount:        aggregate.CommentCount,
+		IsLiked:             aggregate.IsLiked,
+		IsRecommended:       aggregate.Recommend != nil,
+		Category:            category,
+		CoverAiGenerated:    article.CoverAiGenerated,
+		ContentAiReferenced: article.ContentAiReferenced,
+		AiModels:            articleAiModelsToDTO(article, aggregate.AiModels),
+		CreatedAt:           article.CreatedAt,
+		UpdatedAt:           article.UpdatedAt,
 	}
 }
 
@@ -490,4 +496,62 @@ func firstCategoryID(ids []uint) []uint {
 		}
 	}
 	return nil
+}
+
+func normalizeArticleAiModels(req dto.ArticleSaveReq) []articlerepo.ArticleAiModelSaveData {
+	includeCover := req.CoverAiGenerated
+	includeContent := req.ContentAiReferenced
+	if len(req.AiModels) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(req.AiModels))
+	models := make([]articlerepo.ArticleAiModelSaveData, 0, len(req.AiModels))
+	for _, item := range req.AiModels {
+		if item.Scope == model.ArticleAiModelScopeCover && !includeCover {
+			continue
+		}
+		if item.Scope == model.ArticleAiModelScopeContent && !includeContent {
+			continue
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			continue
+		}
+		key := item.Scope + "\x00" + strings.ToLower(name)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		models = append(models, articlerepo.ArticleAiModelSaveData{
+			Scope:     item.Scope,
+			ModelName: name,
+			Seq:       item.Seq,
+		})
+	}
+	return models
+}
+
+func articleAiModelsToDTO(article model.Article, models []model.ArticleAiModel) []dto.ArticleAiModelResp {
+	if len(models) == 0 {
+		return nil
+	}
+	items := make([]dto.ArticleAiModelResp, 0, len(models))
+	for _, item := range models {
+		if item.Scope == model.ArticleAiModelScopeCover && !article.CoverAiGenerated {
+			continue
+		}
+		if item.Scope == model.ArticleAiModelScopeContent && !article.ContentAiReferenced {
+			continue
+		}
+		items = append(items, dto.ArticleAiModelResp{
+			Scope: item.Scope,
+			Name:  item.ModelName,
+			Seq:   item.Seq,
+		})
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	return items
 }

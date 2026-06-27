@@ -359,6 +359,55 @@ func TestArticleService_SaveKeepsFirstCategoryAndNormalizesRelations(t *testing.
 	assert.Equal(t, uint(9), resp.ID)
 }
 
+func TestArticleService_SaveStripsAiModelsWhenDisclosureOff(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	repo := mock.NewMockArticleRepository(ctrl)
+	svc := articleservice.NewArticleService(repo, nil, nil, nil, nil)
+
+	now := time.Now()
+	repo.EXPECT().
+		Save(gomock.Any()).
+		DoAndReturn(func(data articlerepo.ArticleSaveData) (*articlerepo.ArticleAggregate, error) {
+			assert.False(t, data.Article.CoverAiGenerated)
+			assert.True(t, data.Article.ContentAiReferenced)
+			assert.Equal(t, []articlerepo.ArticleAiModelSaveData{
+				{Scope: model.ArticleAiModelScopeContent, ModelName: "Claude Sonnet 4", Seq: 0},
+			}, data.AiModels)
+			return &articlerepo.ArticleAggregate{
+				Article: model.Article{
+					Base:                model.Base{ID: 9, CreatedAt: now, UpdatedAt: now},
+					Title:               data.Article.Title,
+					Content:             data.Article.Content,
+					UserID:              data.Article.UserID,
+					Status:              data.Article.Status,
+					CommentStatus:       data.Article.CommentStatus,
+					ContentAiReferenced: true,
+				},
+				AiModels: []model.ArticleAiModel{
+					{ArticleID: 9, Scope: model.ArticleAiModelScopeContent, ModelName: "Claude Sonnet 4"},
+				},
+			}, nil
+		})
+
+	resp, err := svc.Save(dto.ArticleSaveReq{
+		Title:               "A",
+		Content:             "body",
+		Status:              1,
+		CommentStatus:       1,
+		CategoryIDs:         []uint{1},
+		ContentAiReferenced: true,
+		AiModels: []dto.ArticleAiModelSaveReq{
+			{Scope: model.ArticleAiModelScopeCover, Name: "Midjourney v6"},
+			{Scope: model.ArticleAiModelScopeContent, Name: "Claude Sonnet 4"},
+			{Scope: model.ArticleAiModelScopeContent, Name: "  Claude Sonnet 4  "},
+		},
+	}, 7)
+	require.NoError(t, err)
+	require.Len(t, resp.AiModels, 1)
+	assert.Equal(t, "Claude Sonnet 4", resp.AiModels[0].Name)
+}
+
 func TestArticleService_SaveUsesLegacyTagIDsWithDefaultSeq(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
