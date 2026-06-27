@@ -20,6 +20,8 @@ type Config struct {
 	CDN    CDNConfig    `mapstructure:"cdn"`    // CDN 私有读签名配置
 	Email  EmailConfig  `mapstructure:"email"`  // 邮件发送配置
 	OAuth  OAuthConfig  `mapstructure:"oauth"`  // 第三方 OAuth 登录配置
+	// Moderation 是内容审核策略、安全边界和提示配置。
+	Moderation ModerationConfig `mapstructure:"moderation"`
 
 	Analytics AnalyticsConfig `mapstructure:"analytics"` // 站点统计采集与聚合配置
 }

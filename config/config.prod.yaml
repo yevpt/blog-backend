@@ -8,6 +8,11 @@ log:
   level: info
   format: json
 
+moderation:
+  # 生产环境固定开启并强制执行审核策略
+  enabled: true
+  mode: enforce
+
 analytics:
   # 生产容器内 ip2region IPv4/IPv6 xdb 路径，可经 env 覆盖；为空则关闭对应版本地理解析
   geoip_v4_path: "/app/geoip/ip2region_v4.xdb"

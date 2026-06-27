@@ -8,6 +8,11 @@ log:
   level: debug
   format: console
 
+moderation:
+  # 测试环境执行真实策略；有效规则集由审核核心数据迁移负责初始化
+  enabled: true
+  mode: enforce
+
 analytics:
   timezone: "Asia/Shanghai"
   retention_days: 90

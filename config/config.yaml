@@ -68,6 +68,109 @@ email:
   # worker 任务租约秒数，超期后任务可被其他实例重新领取
   lease_seconds: 300
 
+moderation:
+  # 审核总开关；生产环境必须开启
+  enabled: true
+  # enforce 实际执行审核决策；observe 仅用于本地规则调试
+  mode: enforce
+
+  # 不同用户等级在各风险场景下的处理动作
+  policy:
+    new:
+      clean_low: post_review
+      unapproved_image: pre_review
+      external_link_or_ad: pre_review
+      medium: pre_review
+      high: block
+    normal:
+      clean_low: post_review
+      unapproved_image: post_review
+      external_link_or_ad: post_review
+      medium: pre_review
+      high: block
+    trusted:
+      clean_low: auto_approve
+      unapproved_image: post_review
+      external_link_or_ad: pre_review
+      medium: pre_review
+      high: block
+    restricted:
+      clean_low: pre_review
+      unapproved_image: pre_review
+      external_link_or_ad: pre_review
+      medium: pre_review
+      high: block
+
+  rules:
+    max_pattern_chars: 500
+    max_enabled_regex_rules: 200
+    require_non_empty_in_enforce: true
+
+  content:
+    moment_max_chars: 800
+    comment_max_chars: 2000
+    guestbook_max_chars: 2000
+    reply_max_chars: 2000
+    max_images_per_content: 9
+    max_links_per_content: 10
+
+  # Media & Review 阶段使用的图片处理边界
+  image:
+    max_upload_bytes: 1048576
+    max_gif_bytes: 307200
+    max_stored_bytes: 512000
+    max_pixels: 12000000
+    processing_concurrency: 2
+    preview_max_edge: 48
+    static_placeholder_key: "system/moderation/image-review.jpg"
+    gif_placeholder_key: "system/moderation/gif-review.jpg"
+    approval_retention_days: 180
+    temp_retention: 24h
+    orphan_min_age: 24h
+    cleanup_interval: 24h
+    cleanup_batch_size: 500
+
+  # Governance & Operations 阶段使用的等级与计分门槛
+  governance:
+    new_to_normal:
+      min_age_days: 7
+      clean_approvals: 3
+    normal_to_trusted:
+      min_age_days: 30
+      clean_approvals: 20
+    restricted_score_threshold: 6
+    restricted_duration: 168h
+    violation_weights:
+      corrected: 1
+      rejected: 3
+      high_risk_blocked: 5
+
+  rate_limit:
+    publish_per_minute: 10
+    edit_per_minute: 10
+    temp_upload_per_minute: 10
+
+  # Governance & Operations 阶段使用的全站控制默认值
+  control:
+    default_registration_mode: open
+    default_publishing_mode: open
+    cache_ttl: 30s
+    user_hide_batch_size: 200
+    user_hide_max_items_per_request: 1000
+
+  audit:
+    attempt_retention_days: 180
+    action_log_retention_days: 365
+    # 不清理当前物化、最后通过或待审版本
+    obsolete_revision_retention_days: 365
+    cleanup_interval: 24h
+    cleanup_batch_size: 500
+
+  notices:
+    low_submitted: "发布成功，内容会被审核。"
+    review_required: "内容已提交，等待人工审核。"
+    high_rejected: "内容存在较高风险，未能发布，请修改后重试。"
+
 analytics:
   # 切天时区，统计聚合与在线判定均按此时区计算
   timezone: "Asia/Shanghai"

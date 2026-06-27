@@ -4,11 +4,222 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/pkg/config"
 )
+
+// TestLoad_ReadsModerationConfig 验证审核配置能完整解析为强类型字段。
+func TestLoad_ReadsModerationConfig(t *testing.T) {
+	// 记录当前工作目录，测试结束后恢复，避免影响其他测试。
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(cwd))
+	})
+
+	// 写入覆盖全部审核配置段的配置文件，确保嵌套字段不会被静默忽略。
+	configDir := filepath.Join(t.TempDir(), "config")
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+moderation:
+  enabled: true
+  mode: enforce
+  policy:
+    new: {clean_low: post_review, unapproved_image: pre_review, external_link_or_ad: pre_review, medium: pre_review, high: block}
+    normal: {clean_low: post_review, unapproved_image: post_review, external_link_or_ad: post_review, medium: pre_review, high: block}
+    trusted: {clean_low: auto_approve, unapproved_image: post_review, external_link_or_ad: pre_review, medium: pre_review, high: block}
+    restricted: {clean_low: pre_review, unapproved_image: pre_review, external_link_or_ad: pre_review, medium: pre_review, high: block}
+  rules:
+    max_pattern_chars: 500
+    max_enabled_regex_rules: 200
+    require_non_empty_in_enforce: true
+  content:
+    moment_max_chars: 800
+    comment_max_chars: 2000
+    guestbook_max_chars: 2000
+    reply_max_chars: 2000
+    max_images_per_content: 9
+    max_links_per_content: 10
+  image:
+    max_upload_bytes: 1048576
+    max_gif_bytes: 307200
+    max_stored_bytes: 512000
+    max_pixels: 12000000
+    processing_concurrency: 2
+    preview_max_edge: 48
+    static_placeholder_key: system/moderation/image-review.jpg
+    gif_placeholder_key: system/moderation/gif-review.jpg
+    approval_retention_days: 180
+    temp_retention: 24h
+    orphan_min_age: 24h
+    cleanup_interval: 24h
+    cleanup_batch_size: 500
+  governance:
+    new_to_normal: {min_age_days: 7, clean_approvals: 3}
+    normal_to_trusted: {min_age_days: 30, clean_approvals: 20}
+    restricted_score_threshold: 6
+    restricted_duration: 168h
+    violation_weights: {corrected: 1, rejected: 3, high_risk_blocked: 5}
+  rate_limit:
+    publish_per_minute: 10
+    edit_per_minute: 10
+    temp_upload_per_minute: 10
+  control:
+    default_registration_mode: open
+    default_publishing_mode: open
+    cache_ttl: 30s
+    user_hide_batch_size: 200
+    user_hide_max_items_per_request: 1000
+  audit:
+    attempt_retention_days: 180
+    action_log_retention_days: 365
+    obsolete_revision_retention_days: 365
+    cleanup_interval: 24h
+    cleanup_batch_size: 500
+  notices:
+    low_submitted: 发布成功，内容会被审核。
+    review_required: 内容已提交，等待人工审核。
+    high_rejected: 内容存在较高风险，未能发布，请修改后重试。
+`), 0o644))
+
+	t.Setenv("APP_ENV", "")
+	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
+
+	// 加载并校验 Core 及后续阶段使用的代表字段。
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	require.NoError(t, cfg.Moderation.Validate("test"))
+	assert.True(t, cfg.Moderation.Enabled)
+	assert.Equal(t, config.ModerationModeEnforce, cfg.Moderation.Mode)
+	assert.Equal(t, config.ModerationActionAutoApprove, cfg.Moderation.Policy.Trusted.CleanLow)
+	assert.Equal(t, 500, cfg.Moderation.Rules.MaxPatternChars)
+	assert.Equal(t, 800, cfg.Moderation.Content.MomentMaxChars)
+	assert.Equal(t, int64(1_048_576), cfg.Moderation.Image.MaxUploadBytes)
+	assert.Equal(t, 168*time.Hour, cfg.Moderation.Governance.RestrictedDuration)
+	assert.Equal(t, 10, cfg.Moderation.RateLimit.PublishPerMinute)
+	assert.Equal(t, 30*time.Second, cfg.Moderation.Control.CacheTTL)
+	assert.Equal(t, 365, cfg.Moderation.Audit.ActionLogRetentionDays)
+	assert.Equal(t, "发布成功，内容会被审核。", cfg.Moderation.Notices.LowSubmitted)
+}
+
+// TestValidateModeration 验证审核配置拒绝不安全策略和无效边界。
+func TestValidateModeration(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*config.ModerationConfig)
+		env     string
+		wantErr string
+	}{
+		{name: "valid defaults", env: "production"},
+		{name: "production disabled", env: "production", mutate: func(c *config.ModerationConfig) {
+			c.Enabled = false
+		}, wantErr: "moderation.enabled"},
+		{name: "production requires enforce", env: "production", mutate: func(c *config.ModerationConfig) {
+			c.Mode = config.ModerationModeObserve
+		}, wantErr: "moderation.mode"},
+		{name: "empty notices", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Notices.ReviewRequired = ""
+		}, wantErr: "moderation.notices.review_required"},
+		{name: "invalid action", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Policy.Normal.Medium = "publish"
+		}, wantErr: "moderation.policy.normal.medium"},
+		{name: "high is always blocked", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Policy.Normal.High = config.ModerationActionPreReview
+		}, wantErr: "moderation.policy.normal.high"},
+		{name: "restricted cannot post review", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Policy.Restricted.CleanLow = config.ModerationActionPostReview
+		}, wantErr: "moderation.policy.restricted.clean_low"},
+		{name: "restricted cannot auto approve", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Policy.Restricted.Medium = config.ModerationActionAutoApprove
+		}, wantErr: "moderation.policy.restricted.medium"},
+		{name: "unapproved image cannot auto approve", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Policy.Trusted.UnapprovedImage = config.ModerationActionAutoApprove
+		}, wantErr: "moderation.policy.trusted.unapproved_image"},
+		{name: "rules bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Rules.MaxPatternChars = 0
+		}, wantErr: "moderation.rules.max_pattern_chars"},
+		{name: "content bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Content.ReplyMaxChars = -1
+		}, wantErr: "moderation.content.reply_max_chars"},
+		{name: "rate limits are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.RateLimit.EditPerMinute = 0
+		}, wantErr: "moderation.rate_limit.edit_per_minute"},
+		{name: "image bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Image.MaxPixels = 0
+		}, wantErr: "moderation.image.max_pixels"},
+		{name: "governance bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Governance.NewToNormal.CleanApprovals = 0
+		}, wantErr: "moderation.governance.new_to_normal.clean_approvals"},
+		{name: "control bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Control.CacheTTL = 0
+		}, wantErr: "moderation.control.cache_ttl"},
+		{name: "audit bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Audit.CleanupBatchSize = 0
+		}, wantErr: "moderation.audit.cleanup_batch_size"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validModerationConfig()
+			if tt.mutate != nil {
+				tt.mutate(&cfg)
+			}
+
+			err := cfg.Validate(tt.env)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+}
+
+func validModerationConfig() config.ModerationConfig {
+	return config.ModerationConfig{
+		Enabled: true,
+		Mode:    config.ModerationModeEnforce,
+		Policy: config.ModerationPolicyConfig{
+			New:        config.ModerationPolicyActionsConfig{CleanLow: "post_review", UnapprovedImage: "pre_review", ExternalLinkOrAd: "pre_review", Medium: "pre_review", High: "block"},
+			Normal:     config.ModerationPolicyActionsConfig{CleanLow: "post_review", UnapprovedImage: "post_review", ExternalLinkOrAd: "post_review", Medium: "pre_review", High: "block"},
+			Trusted:    config.ModerationPolicyActionsConfig{CleanLow: "auto_approve", UnapprovedImage: "post_review", ExternalLinkOrAd: "pre_review", Medium: "pre_review", High: "block"},
+			Restricted: config.ModerationPolicyActionsConfig{CleanLow: "pre_review", UnapprovedImage: "pre_review", ExternalLinkOrAd: "pre_review", Medium: "pre_review", High: "block"},
+		},
+		Rules: config.ModerationRulesConfig{MaxPatternChars: 500, MaxEnabledRegexRules: 200, RequireNonEmptyInEnforce: true},
+		Content: config.ModerationContentConfig{
+			MomentMaxChars: 800, CommentMaxChars: 2000, GuestbookMaxChars: 2000, ReplyMaxChars: 2000,
+			MaxImagesPerContent: 9, MaxLinksPerContent: 10,
+		},
+		Image: config.ModerationImageConfig{
+			MaxUploadBytes: 1_048_576, MaxGIFBytes: 307_200, MaxStoredBytes: 512_000, MaxPixels: 12_000_000,
+			ProcessingConcurrency: 2, PreviewMaxEdge: 48, StaticPlaceholderKey: "system/moderation/image-review.jpg",
+			GIFPlaceholderKey: "system/moderation/gif-review.jpg", ApprovalRetentionDays: 180, TempRetention: 24 * time.Hour,
+			OrphanMinAge: 24 * time.Hour, CleanupInterval: 24 * time.Hour, CleanupBatchSize: 500,
+		},
+		Governance: config.ModerationGovernanceConfig{
+			NewToNormal:              config.ModerationPromotionConfig{MinAgeDays: 7, CleanApprovals: 3},
+			NormalToTrusted:          config.ModerationPromotionConfig{MinAgeDays: 30, CleanApprovals: 20},
+			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
+			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3, HighRiskBlocked: 5},
+		},
+		RateLimit: config.ModerationRateLimitConfig{PublishPerMinute: 10, EditPerMinute: 10, TempUploadPerMinute: 10},
+		Control: config.ModerationControlConfig{
+			DefaultRegistrationMode: "open", DefaultPublishingMode: "open", CacheTTL: 30 * time.Second,
+			UserHideBatchSize: 200, UserHideMaxItemsPerRequest: 1000,
+		},
+		Audit: config.ModerationAuditConfig{
+			AttemptRetentionDays: 180, ActionLogRetentionDays: 365, ObsoleteRevisionRetentionDays: 365,
+			CleanupInterval: 24 * time.Hour, CleanupBatchSize: 500,
+		},
+		Notices: config.ModerationNoticesConfig{
+			LowSubmitted: "发布成功，内容会被审核。", ReviewRequired: "内容已提交，等待人工审核。",
+			HighRejected: "内容存在较高风险，未能发布，请修改后重试。",
+		},
+	}
+}
 
 // TestLoad_ReadsGarageAndCDNConfig 验证配置加载能解析 Garage 和 CDN 配置。
 func TestLoad_ReadsGarageAndCDNConfig(t *testing.T) {

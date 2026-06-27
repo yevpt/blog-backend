@@ -9,6 +9,11 @@ log:
   level: debug
   format: console
 
+moderation:
+  # 本地默认强制执行；调试规则命中时可临时改为 observe
+  enabled: true
+  mode: enforce
+
 db:
   host: localhost
   port: 3306
