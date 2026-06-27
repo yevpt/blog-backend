@@ -92,7 +92,7 @@ func TestArticleRepository_ListAdmin_IncludesSoftDeletedArticles(t *testing.T) {
 
 	mock.ExpectQuery("SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-	mock.ExpectQuery("SELECT article\\.\\* FROM `article` ORDER BY article\\.created_at DESC,article\\.id DESC LIMIT \\?").
+	mock.ExpectQuery("SELECT article\\.\\* FROM `article` ORDER BY article\\.updated_at DESC,article\\.id DESC LIMIT \\?").
 		WithArgs(10).
 		WillReturnRows(articleRows)
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
@@ -147,7 +147,7 @@ func TestArticleRepository_ListAdmin_SearchesTitleAndShortContent(t *testing.T) 
 	mock.ExpectQuery("SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article` WHERE \\(article.title LIKE \\? OR article.short_content LIKE \\?\\)$").
 		WithArgs(likeSearch, likeSearch).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
-	mock.ExpectQuery("SELECT article\\.\\* FROM `article` WHERE \\(article.title LIKE \\? OR article.short_content LIKE \\?\\) ORDER BY article\\.created_at DESC,article\\.id DESC LIMIT \\?").
+	mock.ExpectQuery("SELECT article\\.\\* FROM `article` WHERE \\(article.title LIKE \\? OR article.short_content LIKE \\?\\) ORDER BY article\\.updated_at DESC,article\\.id DESC LIMIT \\?").
 		WithArgs(likeSearch, likeSearch, 10).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",

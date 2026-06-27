@@ -199,7 +199,12 @@ func (r *articleRepo) applyAdminArticleOrder(query *gorm.DB, filter ArticleListF
 			Order("sort_article_recommend.article_id IS NOT NULL " + direction).
 			Order("article.id DESC")
 	default:
-		return r.applyArticleOrder(query, filter)
+		if filter.Recommend != nil && *filter.Recommend {
+			return query.Order("article_recommend.seq ASC").
+				Order("article.updated_at " + direction).
+				Order("article.id DESC")
+		}
+		return query.Order("article.updated_at " + direction).Order("article.id DESC")
 	}
 }
 
