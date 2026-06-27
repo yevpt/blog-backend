@@ -225,7 +225,10 @@ func newRouteHandlers(
 		Captcha: captchaSvc,
 	})
 	presenceProvider := userservice.NewPresenceProvider(userPresence, userRepo)
-	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc)
+	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc, userservice.AdminDeps{
+		Store:  objectStore,
+		Avatar: avatarSvc,
+	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
 	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc, userPresence)
@@ -556,6 +559,8 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
 	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)
+	admin.POST("/users/avatars/normalize", middleware.RateLimitNormal(redisClient), handlers.userAdmin.NormalizeAvatars)
+	admin.POST("/users/:id/avatar/clear", handlers.userAdmin.ClearUserAvatar)
 	admin.GET("/overview/summary", handlers.dashboard.Overview)
 	admin.GET("/analytics/overview", handlers.analyticsAdmin.Overview)
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)

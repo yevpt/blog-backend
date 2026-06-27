@@ -32,6 +32,8 @@ func (r *changeAvatarRepo) CountByAvatarURL(avatarURL string) (int64, error) {
 	r.countKey = avatarURL
 	return r.count, nil
 }
+func (r *changeAvatarRepo) ListAllWithManagedAvatar() ([]model.User, error) { return nil, nil }
+func (r *changeAvatarRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) { return 0, nil }
 
 func (r *changeAvatarRepo) FindByIdentifier(id string) (*model.User, error) { return nil, nil }
 func (r *changeAvatarRepo) FindByUsername(username string) (*model.User, error) {

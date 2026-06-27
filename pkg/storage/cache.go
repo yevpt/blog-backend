@@ -92,3 +92,14 @@ func (r *CachedObjectURLResolver) cacheKey(objectName string) string {
 
 	return objectURLCachePrefixGarage + ":" + objectName
 }
+
+func (r *CachedObjectURLResolver) invalidateObjectURLCache(ctx context.Context, objectName string) {
+	if r.cacheDisabled() {
+		return
+	}
+	objectName = normalizeObjectName(objectName)
+	if objectName == "" {
+		return
+	}
+	_ = r.impl.rdb.Del(ctx, r.cacheKey(objectName)).Err()
+}

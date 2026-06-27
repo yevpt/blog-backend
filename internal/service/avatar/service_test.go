@@ -22,18 +22,31 @@ type fakeObjectStore struct {
 	existsErr  error
 	putErr     error
 	putCalled  bool
+	getCalled  bool
+	useGet     bool
+	getBody    []byte
 	objectName string
 	content    []byte
 	contentTyp string
+	url        string
 }
 
 func (s *fakeObjectStore) ObjectURL(ctx context.Context, objectName string) (string, error) {
+	if s.url != "" {
+		return s.url, nil
+	}
 	return "", nil
 }
 
 func (s *fakeObjectStore) ObjectExists(ctx context.Context, objectName string) (bool, error) {
 	s.objectName = objectName
 	return s.exists, s.existsErr
+}
+
+func (s *fakeObjectStore) GetObject(ctx context.Context, objectName string) ([]byte, error) {
+	s.getCalled = true
+	s.objectName = objectName
+	return append([]byte(nil), s.getBody...), nil
 }
 
 func (s *fakeObjectStore) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {

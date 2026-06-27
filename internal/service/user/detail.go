@@ -15,6 +15,12 @@ import (
 // ErrUserNotFound 表示当前 token 对应的用户已不存在。
 var ErrUserNotFound = errors.New("用户不存在")
 
+// ErrAvatarNormalizeUnavailable 表示头像归一化依赖未配置。
+var ErrAvatarNormalizeUnavailable = errors.New("头像归一化依赖未配置")
+
+// ErrAvatarNotManaged 表示用户头像不是本站托管对象。
+var ErrAvatarNotManaged = errors.New("头像不是本站托管对象")
+
 // assembleUserDetail 将 DB 聚合模型转换为对外响应 DTO，供 UserCacheService 调用。
 func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *userrepo.UserDetailAggregate) *dto.UserDetailResp {
 	user := aggregate.User

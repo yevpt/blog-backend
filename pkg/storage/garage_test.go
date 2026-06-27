@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -30,11 +31,18 @@ type fakePresigner struct {
 
 type fakeObjectAPI struct {
 	headErr      error
+	getErr       error
+	listErr      error
 	putErr       error
 	copyErr      error
 	deleteErr    error
 	headBucket   string
 	headKey      string
+	getBucket    string
+	getKey       string
+	getBody      []byte
+	listPrefix   string
+	listKeys     []string
 	putBucket    string
 	putKey       string
 	putType      string
@@ -45,6 +53,8 @@ type fakeObjectAPI struct {
 	deleteBucket string
 	deleteKey    string
 	headCalls    int
+	getCalls     int
+	listCalls    int
 	putCalls     int
 	copyCalls    int
 	deleteCalls  int
@@ -58,6 +68,29 @@ func (f *fakeObjectAPI) HeadObject(_ context.Context, in *s3.HeadObjectInput, _ 
 		return nil, f.headErr
 	}
 	return &s3.HeadObjectOutput{}, nil
+}
+
+func (f *fakeObjectAPI) GetObject(_ context.Context, in *s3.GetObjectInput, _ ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
+	f.getCalls++
+	f.getBucket = aws.ToString(in.Bucket)
+	f.getKey = aws.ToString(in.Key)
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(f.getBody))}, nil
+}
+
+func (f *fakeObjectAPI) ListObjectsV2(_ context.Context, in *s3.ListObjectsV2Input, _ ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
+	f.listCalls++
+	f.listPrefix = aws.ToString(in.Prefix)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	contents := make([]types.Object, 0, len(f.listKeys))
+	for _, key := range f.listKeys {
+		contents = append(contents, types.Object{Key: aws.String(key)})
+	}
+	return &s3.ListObjectsV2Output{Contents: contents}, nil
 }
 
 func (f *fakeObjectAPI) PutObject(_ context.Context, in *s3.PutObjectInput, _ ...func(*s3.Options)) (*s3.PutObjectOutput, error) {

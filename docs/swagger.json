@@ -3770,6 +3770,161 @@
                 }
             }
         },
+        "/admin/users/avatars/normalize": {
+            "post": {
+                "description": "管理员检查本站托管头像是否超出 120px / 20KB JPEG 规范；超出则压缩替换、更新 avatar_url 并清理旧对象。可指定 user_id 处理单个用户，不传则处理全部；clear_invalid=true 时无法处理的头像会被清空。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "归一化老用户头像",
+                "parameters": [
+                    {
+                        "description": "可选筛选条件",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.NormalizeAvatarsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示任务执行完成（含部分失败明细）",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.NormalizeAvatarsResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误，如 limit 超出上限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "指定用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "429": {
+                        "description": "请求过于频繁",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/avatar/clear": {
+            "post": {
+                "description": "管理员清空目标用户 avatar_url，并在无其他引用时删除对象存储中的头像文件。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "清除用户头像",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示清除成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.ClearUserAvatarResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "目标头像不是本站托管对象",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "目标用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users/{id}/roles/vip": {
             "post": {
                 "description": "管理员为目标用户追加 ROLE_VIP，保留 ROLE_NORMAL；已是 VIP 时幂等成功。",
@@ -11261,6 +11416,19 @@
                 }
             }
         },
+        "dto.ClearUserAvatarResp": {
+            "type": "object",
+            "properties": {
+                "old_key": {
+                    "type": "string",
+                    "example": "avatar/user/broken.bin"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
         "dto.CommentCreateReq": {
             "type": "object",
             "required": [
@@ -12474,6 +12642,79 @@
                 "url": {
                     "type": "string",
                     "example": "https://cdn.example.com/music/audio/hash.mp3"
+                }
+            }
+        },
+        "dto.NormalizeAvatarItem": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "example": "头像对象不存在"
+                },
+                "new_key": {
+                    "type": "string",
+                    "example": "avatar/user/abc123.jpg"
+                },
+                "old_key": {
+                    "type": "string",
+                    "example": "avatar/user/old.png"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "updated"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "dto.NormalizeAvatarsReq": {
+            "type": "object",
+            "properties": {
+                "clear_invalid": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 42
+                }
+            }
+        },
+        "dto.NormalizeAvatarsResp": {
+            "type": "object",
+            "properties": {
+                "cleared": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "failed": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.NormalizeAvatarItem"
+                    }
+                },
+                "ok": {
+                    "type": "integer",
+                    "example": 14
+                },
+                "scanned": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "skipped": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "updated": {
+                    "type": "integer",
+                    "example": 3
                 }
             }
         },

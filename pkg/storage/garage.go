@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -19,7 +20,10 @@ import (
 	appconfig "github.com/vpt/blog-backend/pkg/config"
 )
 
-const defaultPresignExpires = 7 * 24 * time.Hour
+const (
+	defaultPresignExpires = 7 * 24 * time.Hour
+	maxObjectReadBytes    = 2 * 1024 * 1024
+)
 
 // objectPresigner 抽象 S3 预签名能力，仅供内部实现和单元测试替换。
 type objectPresigner interface {
@@ -33,6 +37,8 @@ type objectPresigner interface {
 // objectAPI 抽象对象存在性检查和上传能力，便于业务层复用和单元测试替换。
 type objectAPI interface {
 	HeadObject(ctx context.Context, in *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	GetObject(ctx context.Context, in *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	ListObjectsV2(ctx context.Context, in *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
 	PutObject(ctx context.Context, in *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
 	CopyObject(ctx context.Context, in *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error)
 	DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
@@ -189,6 +195,68 @@ func (c *Client) putObject(ctx context.Context, objectName string, data []byte, 
 		ContentType: aws.String(contentType),
 	})
 	return err
+}
+
+func (c *Client) getObject(ctx context.Context, objectName string) ([]byte, error) {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return nil, errors.New("对象存储客户端未初始化")
+	}
+	objectName = normalizeObjectName(objectName)
+	if objectName == "" {
+		return nil, errors.New("对象名不能为空")
+	}
+
+	out, err := c.impl.objectAPI.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(c.impl.bucket),
+		Key:    aws.String(objectName),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer out.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(out.Body, maxObjectReadBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxObjectReadBytes {
+		return nil, fmt.Errorf("对象超过 %d 字节", maxObjectReadBytes)
+	}
+	return body, nil
+}
+
+func (c *Client) listObjectKeys(ctx context.Context, prefix string) ([]string, error) {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return nil, errors.New("对象存储客户端未初始化")
+	}
+	prefix = normalizeObjectName(prefix)
+	if prefix == "" {
+		return nil, nil
+	}
+
+	keys := make([]string, 0, 32)
+	var continuationToken *string
+	for {
+		out, err := c.impl.objectAPI.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+			Bucket:            aws.String(c.impl.bucket),
+			Prefix:            aws.String(prefix),
+			ContinuationToken: continuationToken,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range out.Contents {
+			key := strings.TrimSpace(aws.ToString(item.Key))
+			if key != "" && !strings.HasSuffix(key, "/") {
+				keys = append(keys, key)
+			}
+		}
+		if !aws.ToBool(out.IsTruncated) {
+			break
+		}
+		continuationToken = out.NextContinuationToken
+	}
+	return keys, nil
 }
 
 func (c *Client) deleteObject(ctx context.Context, objectName string) error {

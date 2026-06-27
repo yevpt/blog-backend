@@ -5,22 +5,32 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 // AdminService 管理端用户用例。
 type AdminService interface {
 	GrantVip(targetUserID uint) (*dto.AdminUserRolesResp, error)
 	RevokeVip(targetUserID uint) (*dto.AdminUserRolesResp, error)
+	NormalizeAvatars(ctx context.Context, req *dto.NormalizeAvatarsReq) (*dto.NormalizeAvatarsResp, error)
+	ClearUserAvatar(ctx context.Context, userID uint) (*dto.ClearUserAvatarResp, error)
 }
 
 type adminService struct {
-	repo  userrepo.UserRepository
-	cache UserCacheService
+	repo   userrepo.UserRepository
+	cache  UserCacheService
+	store  storage.ObjectStore
+	avatar AvatarNormalizer
 }
 
 // NewAdminService 创建管理端用户服务。
-func NewAdminService(repo userrepo.UserRepository, cache UserCacheService) AdminService {
-	return &adminService{repo: repo, cache: cache}
+func NewAdminService(repo userrepo.UserRepository, cache UserCacheService, deps ...AdminDeps) AdminService {
+	svc := &adminService{repo: repo, cache: cache}
+	if len(deps) > 0 {
+		svc.store = deps[0].Store
+		svc.avatar = deps[0].Avatar
+	}
+	return svc
 }
 
 func (s *adminService) GrantVip(targetUserID uint) (*dto.AdminUserRolesResp, error) {

@@ -1429,6 +1429,15 @@ definitions:
         example: programming
         type: string
     type: object
+  dto.ClearUserAvatarResp:
+    properties:
+      old_key:
+        example: avatar/user/broken.bin
+        type: string
+      user_id:
+        example: 42
+        type: integer
+    type: object
   dto.CommentCreateReq:
     properties:
       content:
@@ -2313,6 +2322,58 @@ definitions:
       url:
         example: https://cdn.example.com/music/audio/hash.mp3
         type: string
+    type: object
+  dto.NormalizeAvatarItem:
+    properties:
+      message:
+        example: 头像对象不存在
+        type: string
+      new_key:
+        example: avatar/user/abc123.jpg
+        type: string
+      old_key:
+        example: avatar/user/old.png
+        type: string
+      status:
+        example: updated
+        type: string
+      user_id:
+        example: 42
+        type: integer
+    type: object
+  dto.NormalizeAvatarsReq:
+    properties:
+      clear_invalid:
+        example: false
+        type: boolean
+      user_id:
+        example: 42
+        type: integer
+    type: object
+  dto.NormalizeAvatarsResp:
+    properties:
+      cleared:
+        example: 1
+        type: integer
+      failed:
+        example: 1
+        type: integer
+      items:
+        items:
+          $ref: '#/definitions/dto.NormalizeAvatarItem'
+        type: array
+      ok:
+        example: 14
+        type: integer
+      scanned:
+        example: 20
+        type: integer
+      skipped:
+        example: 2
+        type: integer
+      updated:
+        example: 3
+        type: integer
     type: object
   dto.NotificationActorUserResp:
     properties:
@@ -5456,6 +5517,52 @@ paths:
       summary: 给文章添加标签
       tags:
       - 标签
+  /admin/users/{id}/avatar/clear:
+    post:
+      consumes:
+      - application/json
+      description: 管理员清空目标用户 avatar_url，并在无其他引用时删除对象存储中的头像文件。
+      parameters:
+      - description: 目标用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示清除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.ClearUserAvatarResp'
+              type: object
+        "400":
+          description: 目标头像不是本站托管对象
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 目标用户不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 清除用户头像
+      tags:
+      - 用户管理
   /admin/users/{id}/roles/vip:
     delete:
       consumes:
@@ -5537,6 +5644,57 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 赋予用户 VIP 角色
+      tags:
+      - 用户管理
+  /admin/users/avatars/normalize:
+    post:
+      consumes:
+      - application/json
+      description: 管理员检查本站托管头像是否超出 120px / 20KB JPEG 规范；超出则压缩替换、更新 avatar_url 并清理旧对象。可指定
+        user_id 处理单个用户，不传则处理全部；clear_invalid=true 时无法处理的头像会被清空。
+      parameters:
+      - description: 可选筛选条件
+        in: body
+        name: body
+        schema:
+          $ref: '#/definitions/dto.NormalizeAvatarsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示任务执行完成（含部分失败明细）
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.NormalizeAvatarsResp'
+              type: object
+        "400":
+          description: 参数错误，如 limit 超出上限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 需要管理员权限
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: 指定用户不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "429":
+          description: 请求过于频繁
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 归一化老用户头像
       tags:
       - 用户管理
   /analytics/public/popular:

@@ -143,6 +143,10 @@ type UserRepository interface {
 	UpsertUserSetting(userID uint, updates map[string]any) error
 	// CountByAvatarURL 统计使用指定头像 key 的用户数量。
 	CountByAvatarURL(avatarURL string) (int64, error)
+	// ReplaceAvatarURL 将仍引用旧头像值的记录批量替换为新 key。
+	ReplaceAvatarURL(oldURL, newURL string) (int64, error)
+	// ListAllWithManagedAvatar 返回全部带有头像的用户，按 ID 升序（含 URL 形式，由 service 解析 key）。
+	ListAllWithManagedAvatar() ([]model.User, error)
 	// GrantVipRole 为目标用户追加 ROLE_VIP；已拥有时幂等成功。
 	GrantVipRole(userID uint) error
 	// RevokeVipRole 移除目标用户的 ROLE_VIP；本就不是 VIP 时幂等成功。
@@ -453,6 +457,16 @@ func (r *userRepo) CountByAvatarURL(avatarURL string) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.User{}).Where("avatar_url = ?", avatarURL).Count(&count).Error
 	return count, err
+}
+
+func (r *userRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) {
+	oldURL = strings.TrimSpace(oldURL)
+	newURL = strings.TrimSpace(newURL)
+	if oldURL == "" || newURL == "" || oldURL == newURL {
+		return 0, nil
+	}
+	result := r.db.Model(&model.User{}).Where("avatar_url = ?", oldURL).Update("avatar_url", newURL)
+	return result.RowsAffected, result.Error
 }
 
 func (r *userRepo) findUserMetaByUserID(userID uint) (*model.UserMeta, error) {

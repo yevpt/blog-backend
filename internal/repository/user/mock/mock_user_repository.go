@@ -309,6 +309,21 @@ func (mr *MockUserRepositoryMockRecorder) ListAll(offset, limit any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockUserRepository)(nil).ListAll), offset, limit)
 }
 
+// ListAllWithManagedAvatar mocks base method.
+func (m *MockUserRepository) ListAllWithManagedAvatar() ([]model.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListAllWithManagedAvatar")
+	ret0, _ := ret[0].([]model.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListAllWithManagedAvatar indicates an expected call of ListAllWithManagedAvatar.
+func (mr *MockUserRepositoryMockRecorder) ListAllWithManagedAvatar() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAllWithManagedAvatar", reflect.TypeOf((*MockUserRepository)(nil).ListAllWithManagedAvatar))
+}
+
 // ListLikedContent mocks base method.
 func (m *MockUserRepository) ListLikedContent(filter user.LikedContentFilter) (*user.LikedContentPageResult, error) {
 	m.ctrl.T.Helper()
@@ -338,6 +353,21 @@ func (m *MockUserRepository) ListRecent(offset, limit int) ([]model.User, int64,
 func (mr *MockUserRepositoryMockRecorder) ListRecent(offset, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRecent", reflect.TypeOf((*MockUserRepository)(nil).ListRecent), offset, limit)
+}
+
+// ReplaceAvatarURL mocks base method.
+func (m *MockUserRepository) ReplaceAvatarURL(oldURL, newURL string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReplaceAvatarURL", oldURL, newURL)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReplaceAvatarURL indicates an expected call of ReplaceAvatarURL.
+func (mr *MockUserRepositoryMockRecorder) ReplaceAvatarURL(oldURL, newURL any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplaceAvatarURL", reflect.TypeOf((*MockUserRepository)(nil).ReplaceAvatarURL), oldURL, newURL)
 }
 
 // RevokeVipRole mocks base method.

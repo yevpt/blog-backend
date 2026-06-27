@@ -66,6 +66,16 @@ func (c *Client) PutObject(ctx context.Context, objectName string, data []byte, 
 	return c.putObject(ctx, objectName, data, contentType)
 }
 
+// GetObject 从 Garage 直读对象内容，供管理端归一化等需要绕过 CDN 的场景使用。
+func (c *Client) GetObject(ctx context.Context, objectName string) ([]byte, error) {
+	return c.getObject(ctx, objectName)
+}
+
+// ListObjectKeys 列出指定前缀下的对象 key。
+func (c *Client) ListObjectKeys(ctx context.Context, prefix string) ([]string, error) {
+	return c.listObjectKeys(ctx, prefix)
+}
+
 // DeleteObject 从 Garage 删除对象。
 func (c *Client) DeleteObject(ctx context.Context, objectName string) error {
 	return c.deleteObject(ctx, objectName)
@@ -123,7 +133,21 @@ func (r *CachedObjectURLResolver) ObjectExists(ctx context.Context, objectName s
 
 // PutObject 将对象内容写入 Garage。
 func (r *CachedObjectURLResolver) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {
-	return r.impl.client.PutObject(ctx, objectName, data, contentType)
+	if err := r.impl.client.PutObject(ctx, objectName, data, contentType); err != nil {
+		return err
+	}
+	r.invalidateObjectURLCache(ctx, objectName)
+	return nil
+}
+
+// GetObject 从 Garage 直读对象内容。
+func (r *CachedObjectURLResolver) GetObject(ctx context.Context, objectName string) ([]byte, error) {
+	return r.impl.client.GetObject(ctx, objectName)
+}
+
+// ListObjectKeys 列出指定前缀下的对象 key。
+func (r *CachedObjectURLResolver) ListObjectKeys(ctx context.Context, prefix string) ([]string, error) {
+	return r.impl.client.ListObjectKeys(ctx, prefix)
 }
 
 // DeleteObject 从 Garage 删除对象。

@@ -8,6 +8,7 @@ import (
 	"image"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func (s *Service) SaveRemoteAvatar(ctx context.Context, avatarURL string) (strin
 		return "", err
 	}
 
-	result, err := s.compressAndStore(ctx, body)
+	result, err := s.compressAndStore(ctx, body, false)
 	if err != nil {
 		return "", err
 	}
@@ -106,10 +107,10 @@ func (s *Service) SaveUploadedAvatar(ctx context.Context, name string, data []by
 	if err != nil {
 		return SaveResult{}, err
 	}
-	return s.compressAndStore(ctx, validated.Data)
+	return s.compressAndStore(ctx, validated.Data, false)
 }
 
-func (s *Service) compressAndStore(ctx context.Context, data []byte) (SaveResult, error) {
+func (s *Service) compressAndStore(ctx context.Context, data []byte, forcePut bool) (SaveResult, error) {
 	result, err := imageutil.Process(bytes.NewReader(data), s.opts.ImageOptions)
 	if err != nil {
 		return SaveResult{}, mapProcessErr(err)
@@ -119,14 +120,44 @@ func (s *Service) compressAndStore(ctx context.Context, data []byte) (SaveResult
 	}
 
 	objectName := strings.Trim(s.opts.ObjectKeyPrefix, "/") + "/" + result.MD5 + result.Ext
-	exists, err := s.store.ObjectExists(ctx, objectName)
-	if err == nil && exists {
-		return SaveResult{ObjectKey: objectName, Created: false}, nil
+	if !forcePut {
+		exists, err := s.store.ObjectExists(ctx, objectName)
+		if err == nil && exists {
+			return SaveResult{ObjectKey: objectName, Created: false}, nil
+		}
 	}
 	if err := s.store.PutObject(ctx, objectName, result.Bytes, result.ContentType); err != nil {
 		return SaveResult{}, err
 	}
 	return SaveResult{ObjectKey: objectName, Created: true}, nil
+}
+
+func (s *Service) compressAndStoreAt(ctx context.Context, data []byte, targetKey string) (SaveResult, error) {
+	result, err := imageutil.Process(bytes.NewReader(data), s.opts.ImageOptions)
+	if err != nil {
+		return SaveResult{}, mapProcessErr(err)
+	}
+	if len(result.Bytes) > s.opts.ImageOptions.MaxBytes {
+		return SaveResult{}, ErrAvatarCompressedTooLarge
+	}
+
+	objectName := outputKeyForNormalize(targetKey, result, s.opts.ObjectKeyPrefix)
+	if err := s.store.PutObject(ctx, objectName, result.Bytes, result.ContentType); err != nil {
+		return SaveResult{}, err
+	}
+	return SaveResult{ObjectKey: objectName, Created: true}, nil
+}
+
+func outputKeyForNormalize(targetKey string, result *imageutil.Result, prefix string) string {
+	targetKey = strings.TrimLeft(strings.TrimSpace(targetKey), "/")
+	if targetKey == "" || !IsManagedAvatarKey(targetKey) {
+		return strings.Trim(prefix, "/") + "/" + result.MD5 + result.Ext
+	}
+	currentExt := filepath.Ext(targetKey)
+	if currentExt != "" && !strings.EqualFold(currentExt, result.Ext) {
+		return strings.TrimSuffix(targetKey, currentExt) + result.Ext
+	}
+	return targetKey
 }
 
 func validateUploadedAvatar(name string, data []byte) (imagefile.Result, error) {
