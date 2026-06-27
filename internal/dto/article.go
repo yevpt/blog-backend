@@ -21,8 +21,8 @@ type ArticleListReq struct {
 // AdminArticleListReq 管理端文章分页查询参数。
 type AdminArticleListReq struct {
 	ArticleListReq
-	// SortBy 排序字段：created_at、updated_at、category、status、recommended。
-	SortBy *string `form:"sort_by" binding:"omitempty,oneof=created_at updated_at category status recommended" example:"created_at"`
+	// SortBy 排序字段：created_at、updated_at、category、status、recommended；未传时默认 updated_at。
+	SortBy *string `form:"sort_by" binding:"omitempty,oneof=created_at updated_at category status recommended" example:"updated_at"`
 	// SortOrder 排序方向：asc 或 desc。
 	SortOrder *string `form:"sort_order" binding:"omitempty,oneof=asc desc" example:"desc"`
 }

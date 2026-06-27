@@ -73,7 +73,7 @@ func (h *ArticleHandler) ListPublic(c *gin.Context) {
 // @Param category_id query int false "分类 ID"
 // @Param tag_id query int false "标签 ID"
 // @Param search query string false "搜索关键词，匹配标题和摘要"
-// @Param sort_by query string false "排序字段：created_at、updated_at、category、status、recommended"
+// @Param sort_by query string false "排序字段：created_at、updated_at、category、status、recommended；默认 updated_at"
 // @Param sort_order query string false "排序方向：asc 或 desc，默认 desc"
 // @Success 200 {object} response.Response{data=dto.AdminArticlePageResp} "统一响应；code=0 表示查询成功，code=400 表示参数错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
