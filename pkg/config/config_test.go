@@ -105,6 +105,74 @@ moderation:
 	assert.Equal(t, "发布成功，内容会被审核。", cfg.Moderation.Notices.LowSubmitted)
 }
 
+// TestLoad_ValidatesModerationForActualEnvironment 验证 Load 使用 APP_ENV 对应的最终配置执行审核校验。
+func TestLoad_ValidatesModerationForActualEnvironment(t *testing.T) {
+	tests := []struct {
+		name         string
+		prodOverride string
+		wantErr      string
+	}{
+		{
+			name:         "valid production config loads",
+			prodOverride: projectConfigFile(t, "config.prod.yaml"),
+		},
+		{
+			name: "invalid production mode is rejected after overlay",
+			prodOverride: `
+moderation:
+  enabled: true
+  mode: observe
+`,
+			wantErr: "校验审核配置失败: moderation.mode",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 保存工作目录并构造不受本地私有配置影响的完整配置目录。
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				require.NoError(t, os.Chdir(cwd))
+			})
+
+			configDir := filepath.Join(t.TempDir(), "config")
+			require.NoError(t, os.MkdirAll(configDir, 0o755))
+			require.NoError(t, os.WriteFile(
+				filepath.Join(configDir, "config.yaml"),
+				[]byte(projectConfigFile(t, "config.yaml")),
+				0o644,
+			))
+			require.NoError(t, os.WriteFile(
+				filepath.Join(configDir, "config.prod.yaml"),
+				[]byte(tt.prodOverride),
+				0o644,
+			))
+
+			t.Setenv("APP_ENV", "prod")
+			require.NoError(t, os.Chdir(filepath.Dir(configDir)))
+
+			cfg, err := config.Load()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				assert.Nil(t, cfg)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			assert.Equal(t, config.ModerationModeEnforce, cfg.Moderation.Mode)
+		})
+	}
+}
+
+func projectConfigFile(t *testing.T, name string) string {
+	t.Helper()
+
+	content, err := os.ReadFile(filepath.Join("..", "..", "config", name))
+	require.NoError(t, err)
+	return string(content)
+}
+
 // TestValidateModeration 验证审核配置拒绝不安全策略和无效边界。
 func TestValidateModeration(t *testing.T) {
 	tests := []struct {
@@ -232,8 +300,7 @@ func TestLoad_ReadsGarageAndCDNConfig(t *testing.T) {
 
 	// 在临时目录创建最小配置文件，避免读取开发机本地 config.local.yaml。
 	configDir := filepath.Join(t.TempDir(), "config")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+	writeProjectConfigFixture(t, configDir, `
 garage:
   endpoint: "https://garage.example.com"
   bucket: "blog"
@@ -246,7 +313,7 @@ cdn:
   secret: "cdn-secret"
   signQueryName: "a"
   timestampQueryName: "b"
-`), 0o644))
+`)
 
 	// 清空环境配置并切换工作目录，让 Load 只读取临时配置。
 	t.Setenv("APP_ENV", "")
@@ -276,8 +343,7 @@ func TestLoad_ReadsOAuthProvidersConfig(t *testing.T) {
 
 	// 在临时目录创建最小配置文件，避免读取开发机本地 config.local.yaml。
 	configDir := filepath.Join(t.TempDir(), "config")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+	writeProjectConfigFixture(t, configDir, `
 oauth:
   state_ttl_minutes: 10
   providers:
@@ -293,7 +359,7 @@ oauth:
       token_url: "https://github.com/login/oauth/access_token"
       user_url: "https://api.github.com/user"
       openid_url: "https://graph.qq.com/oauth2.0/me"
-`), 0o644))
+`)
 
 	// 清空环境配置并切换工作目录，让 Load 只读取临时配置。
 	t.Setenv("APP_ENV", "")
@@ -328,8 +394,7 @@ func TestLoad_ReadsEmailWorkerConfig(t *testing.T) {
 
 	// 在临时目录写入含完整 email 配置的最小配置文件。
 	configDir := filepath.Join(t.TempDir(), "config")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+	writeProjectConfigFixture(t, configDir, `
 email:
   provider: aliyun_enterprise
   host: smtp.qiye.aliyun.com
@@ -345,7 +410,7 @@ email:
   planner_enabled: true
   worker_batch_size: 20
   lease_seconds: 300
-`), 0o644))
+`)
 
 	// 清空环境配置并切换工作目录，让 Load 只读取临时配置。
 	t.Setenv("APP_ENV", "")
@@ -379,12 +444,7 @@ func TestLoad_ReadsEmailWorkerEnvOverride(t *testing.T) {
 
 	// 基础配置默认开启 worker，准备用环境变量关闭。
 	configDir := filepath.Join(t.TempDir(), "config")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
-email:
-  worker_enabled: true
-  planner_enabled: true
-`), 0o644))
+	writeProjectConfigFixture(t, configDir, "")
 
 	// 通过环境变量关闭 worker 与 planner，模拟生产差异化部署。
 	t.Setenv("APP_ENV", "")
@@ -412,8 +472,7 @@ func TestLoad_ReadsEnvOnlyRuntimeConfig(t *testing.T) {
 
 	// 创建接近生产镜像内的基础配置：敏感连接信息不写入 YAML，只通过环境变量注入。
 	configDir := filepath.Join(t.TempDir(), "config")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+	writeProjectConfigFixture(t, configDir, `
 server:
   port: 8080
 db:
@@ -424,7 +483,7 @@ redis:
   db: 0
 garage:
   cdn: false
-`), 0o644))
+`)
 
 	// 通过环境变量模拟 Docker Compose 注入的生产连接信息。
 	t.Setenv("APP_ENV", "")
@@ -459,4 +518,20 @@ garage:
 	assert.Equal(t, "garage-secret", cfg.Garage.SecretAccessKey)
 	assert.Equal(t, "/app/geoip/ip2region_v4.xdb", cfg.Analytics.GeoIPV4Path)
 	assert.Equal(t, "/app/geoip/ip2region_v6.xdb", cfg.Analytics.GeoIPV6Path)
+}
+
+func writeProjectConfigFixture(t *testing.T, configDir, localOverride string) {
+	t.Helper()
+
+	require.NoError(t, os.MkdirAll(configDir, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(configDir, "config.yaml"),
+		[]byte(projectConfigFile(t, "config.yaml")),
+		0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(configDir, "config.local.yaml"),
+		[]byte(localOverride),
+		0o644,
+	))
 }

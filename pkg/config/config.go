@@ -179,6 +179,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("解析配置结构体失败: %w", err)
 	}
 
+	// 使用实际 APP_ENV 校验最终叠加结果，避免覆盖配置绕过生产审核约束。
+	if err := cfg.Moderation.Validate(env); err != nil {
+		return nil, fmt.Errorf("校验审核配置失败: %w", err)
+	}
+
 	return &cfg, nil
 }
 
