@@ -24,3 +24,19 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 
 	return gormDB, mock, sqlDB
 }
+
+func articleTableColumns() []string {
+	return []string{
+		"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+		"short_content", "content", "user_id", "status", "comment_status",
+		"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+	}
+}
+
+func expectArticleAiModels(mock sqlmock.Sqlmock, articleIDs ...uint) {
+	mock.ExpectQuery("SELECT \\* FROM `article_ai_model`").
+		WithArgs(uintArgs(articleIDs)...).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "article_id", "scope", "model_name", "seq",
+		}))
+}

@@ -282,6 +282,10 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 	if err != nil {
 		return nil, err
 	}
+	aiModels, err := r.articleAiModels(ids)
+	if err != nil {
+		return nil, err
+	}
 	users, err := r.articleUsers(articleUserIDs(articles))
 	if err != nil {
 		return nil, err
@@ -301,6 +305,7 @@ func (r *articleRepo) attachArticleCollections(articles []model.Article, viewerI
 			Categories:   categories[article.ID],
 			Tags:         tags[article.ID],
 			Music:        music[article.ID],
+			AiModels:     aiModels[article.ID],
 			Recommend:    recommends[article.ID],
 			LikeCount:    likeCounts[article.ID],
 			CommentCount: commentCounts[article.ID],
@@ -520,6 +525,20 @@ func (r *articleRepo) articleMusic(ids []uint) (map[uint][]model.Music, error) {
 	result := make(map[uint][]model.Music)
 	for _, row := range rows {
 		result[row.ArticleID] = append(result[row.ArticleID], row.Music)
+	}
+	return result, err
+}
+
+func (r *articleRepo) articleAiModels(ids []uint) (map[uint][]model.ArticleAiModel, error) {
+	var rows []model.ArticleAiModel
+	err := r.db.Where("article_id IN ?", ids).
+		Order("scope ASC").
+		Order("seq ASC").
+		Order("id ASC").
+		Find(&rows).Error
+	result := make(map[uint][]model.ArticleAiModel)
+	for _, row := range rows {
+		result[row.ArticleID] = append(result[row.ArticleID], row)
 	}
 	return result, err
 }

@@ -44,6 +44,7 @@ type ArticleAggregate struct {
 	Categories   []model.Category
 	Tags         []model.Tag
 	Music        []model.Music
+	AiModels     []model.ArticleAiModel
 	Recommend    *model.ArticleRecommend
 	LikeCount    int64
 	CommentCount int64
@@ -56,6 +57,7 @@ type ArticleSaveData struct {
 	CategoryIDs    []uint
 	Tags           []ArticleTagSaveData
 	MusicIDs       []uint
+	AiModels       []ArticleAiModelSaveData
 	Recommend      bool
 	RecommendSeq   uint
 	PrepareArticle func(article model.Article) (model.Article, error)
@@ -65,6 +67,13 @@ type ArticleSaveData struct {
 type ArticleTagSaveData struct {
 	TagID uint
 	Seq   uint
+}
+
+// ArticleAiModelSaveData 表示待保存的文章 AI 模型关联。
+type ArticleAiModelSaveData struct {
+	Scope     string
+	ModelName string
+	Seq       uint
 }
 
 // ArticleRepository 文章数据访问接口，只返回 model 或聚合模型。

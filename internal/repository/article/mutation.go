@@ -45,6 +45,9 @@ func (r *articleRepo) Save(data ArticleSaveData) (*ArticleAggregate, error) {
 		if err := replaceArticleMusic(tx, articleID, data.MusicIDs); err != nil {
 			return err
 		}
+		if err := replaceArticleAiModels(tx, articleID, data.AiModels); err != nil {
+			return err
+		}
 		return replaceArticleRecommend(tx, articleID, data.Recommend, data.RecommendSeq)
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -206,6 +209,9 @@ func hardDeleteArticleRelations(tx *gorm.DB, articleID uint) error {
 	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleMusic{}).Error; err != nil {
 		return err
 	}
+	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleAiModel{}).Error; err != nil {
+		return err
+	}
 	return tx.Unscoped().Where("article_id = ?", articleID).Delete(&model.ArticleRecommend{}).Error
 }
 
@@ -257,8 +263,10 @@ func articleUpdateFields(article model.Article) map[string]any {
 		"content":        article.Content,
 		"user_id":        article.UserID,
 		"status":         article.Status,
-		"comment_status": article.CommentStatus,
-		"password":       article.Password,
+		"comment_status":        article.CommentStatus,
+		"password":              article.Password,
+		"cover_ai_generated":    article.CoverAiGenerated,
+		"content_ai_referenced": article.ContentAiReferenced,
 	}
 }
 
@@ -297,6 +305,25 @@ func replaceArticleMusic(tx *gorm.DB, articleID uint, musicIDs []uint) error {
 	rows := make([]model.ArticleMusic, 0, len(musicIDs))
 	for _, musicID := range musicIDs {
 		rows = append(rows, model.ArticleMusic{ArticleID: articleID, MusicID: musicID})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return tx.Create(&rows).Error
+}
+
+func replaceArticleAiModels(tx *gorm.DB, articleID uint, models []ArticleAiModelSaveData) error {
+	if err := tx.Where("article_id = ?", articleID).Delete(&model.ArticleAiModel{}).Error; err != nil {
+		return err
+	}
+	rows := make([]model.ArticleAiModel, 0, len(models))
+	for _, item := range models {
+		rows = append(rows, model.ArticleAiModel{
+			ArticleID: articleID,
+			Scope:     item.Scope,
+			ModelName: item.ModelName,
+			Seq:       item.Seq,
+		})
 	}
 	if len(rows) == 0 {
 		return nil

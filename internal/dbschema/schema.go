@@ -22,6 +22,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.ArticleCategory{},
 		&model.ArticleTag{},
 		&model.ArticleMusic{},
+		&model.ArticleAiModel{},
 		&model.Category{},
 		&model.Tag{},
 		&model.MusicArtist{},

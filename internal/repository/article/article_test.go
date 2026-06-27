@@ -22,8 +22,8 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 	articleRows := sqlmock.NewRows([]string{
 		"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 		"short_content", "content", "user_id", "status", "comment_status",
-		"password", "read_count",
-	}).AddRow(2, now, now, nil, "B", nil, "short", "body", 1, 1, 1, nil, 8)
+		"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+	}).AddRow(2, now, now, nil, "B", nil, "short", "body", 1, 1, 1, nil, 8, false, false)
 	recommend := true
 
 	mock.ExpectQuery("SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article` JOIN article_recommend ON article_recommend.article_id = article.id AND article_recommend.deleted_at IS NULL WHERE article.status = \\? AND `article`.`deleted_at` IS NULL").
@@ -62,6 +62,7 @@ func TestArticleRepository_ListPublic_SortsAndPaginates(t *testing.T) {
 			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleAiModels(mock, 2)
 	expectArticleUsers(mock, 1)
 
 	result, err := repo.ListPublic(article.ArticleListFilter{Page: 2, PageSize: 10, Recommend: &recommend}, nil)
@@ -85,10 +86,10 @@ func TestArticleRepository_ListAdmin_IncludesSoftDeletedArticles(t *testing.T) {
 	articleRows := sqlmock.NewRows([]string{
 		"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 		"short_content", "content", "user_id", "status", "comment_status",
-		"password", "read_count",
+		"password", "read_count", "cover_ai_generated", "content_ai_referenced",
 	}).
-		AddRow(1, now, now, nil, "Hidden", nil, nil, "body", 7, 0, 1, nil, 1).
-		AddRow(2, now, now, deletedAt, "Deleted", nil, nil, "body", 7, 1, 1, nil, 2)
+		AddRow(1, now, now, nil, "Hidden", nil, nil, "body", 7, 0, 1, nil, 1, false, false).
+		AddRow(2, now, now, deletedAt, "Deleted", nil, nil, "body", 7, 1, 1, nil, 2, false, false)
 
 	mock.ExpectQuery("SELECT COUNT\\(DISTINCT\\(`article`.`id`\\)\\) FROM `article`$").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
@@ -125,6 +126,7 @@ func TestArticleRepository_ListAdmin_IncludesSoftDeletedArticles(t *testing.T) {
 			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleAiModels(mock, 1, 2)
 	expectArticleUsers(mock, 7)
 
 	result, err := repo.ListAdmin(article.ArticleListFilter{Page: 1, PageSize: 10})
@@ -152,7 +154,7 @@ func TestArticleRepository_ListAdmin_SearchesTitleAndShortContent(t *testing.T) 
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
 		}))
 
 	result, err := repo.ListAdmin(article.ArticleListFilter{Page: 1, PageSize: 10, Search: &search})
@@ -220,7 +222,7 @@ func TestArticleRepository_ListAdmin_SortsBySupportedFields(t *testing.T) {
 				WillReturnRows(sqlmock.NewRows([]string{
 					"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 					"short_content", "content", "user_id", "status", "comment_status",
-					"password", "read_count",
+					"password", "read_count", "cover_ai_generated", "content_ai_referenced",
 				}))
 
 			result, err := repo.ListAdmin(article.ArticleListFilter{Page: 1, PageSize: 10, SortBy: tc.sortBy, SortOrder: tc.sortOrder})
@@ -241,7 +243,7 @@ func TestArticleRepository_FindPublicDetail_NotFound(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
 		}))
 
 	detail, err := repo.FindPublicDetail(99, nil)
@@ -262,8 +264,8 @@ func TestArticleRepository_FindAdminDetail_IncludesSoftDeletedArticle(t *testing
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(2, now, now, deletedAt, "Deleted", nil, "summary", "body", 1, 0, 1, nil, 5))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(2, now, now, deletedAt, "Deleted", nil, "summary", "body", 1, 0, 1, nil, 5, false, false))
 	expectEmptyArticleAggregateQueries(mock, 2, 1)
 
 	detail, err := repo.FindAdminDetail(2, nil)
@@ -286,8 +288,8 @@ func TestArticleRepository_FindPublicDetail_ReturnsEncryptedArticleShell(t *test
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(11, now, now, nil, "Locked", nil, "summary", "secret", 1, 2, 1, "pwd", 5))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(11, now, now, nil, "Locked", nil, "summary", "secret", 1, 2, 1, "pwd", 5, false, false))
 	expectEmptyArticleAggregateQueries(mock, 11, 1)
 
 	detail, err := repo.FindPublicDetail(11, nil)
@@ -311,8 +313,8 @@ func TestArticleRepository_FindPublicDetail_LoadsAuthorUser(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(12, now, now, nil, "With Author", nil, "summary", "body", 7, 1, 1, nil, 5))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(12, now, now, nil, "With Author", nil, "summary", "body", 7, 1, 1, nil, 5, false, false))
 	expectEmptyArticleAggregateQueries(mock, 12)
 	expectArticleUsers(mock, 7).AddRow(7, now, now, nil, "vpt", "hash", nickname, nil, nil, nil, avatar, nil, 1, nil)
 
@@ -344,7 +346,7 @@ func TestArticleRepository_ListPublic_FiltersIgnoreDeletedCategoryAndTag(t *test
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
 		}))
 
 	result, err := repo.ListPublic(article.ArticleListFilter{
@@ -374,8 +376,8 @@ func TestArticleRepository_IncrementReadCount_UsesAtomicUpdate(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 1, 1, 1, nil, 12))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 1, 1, 1, nil, 12, false, false))
 	mock.ExpectCommit()
 
 	article, err := repo.IncrementReadCount(7)
@@ -425,6 +427,9 @@ func TestArticleRepository_Save_PreparesArticleAfterIDAllocated(t *testing.T) {
 	mock.ExpectExec("DELETE FROM `article_music` WHERE article_id = \\?").
 		WithArgs(uint(45)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM `article_ai_model` WHERE article_id = \\?").
+		WithArgs(uint(45)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("UPDATE `article_recommend` SET `deleted_at`=\\? WHERE article_id = \\? AND `article_recommend`.`deleted_at` IS NULL").
 		WithArgs(sqlmock.AnyArg(), uint(45)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -434,8 +439,8 @@ func TestArticleRepository_Save_PreparesArticleAfterIDAllocated(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(45, now, now, nil, "T", nil, nil, "normalized 45", 7, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(45, now, now, nil, "T", nil, nil, "normalized 45", 7, 1, 1, nil, 0, false, false))
 	expectEmptyArticleAggregateQueries(mock, 45, 7)
 
 	_, err := repo.Save(article.ArticleSaveData{
@@ -483,6 +488,9 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 	mock.ExpectExec("INSERT INTO `article_music`").
 		WithArgs(uint(7), uint(9)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("DELETE FROM `article_ai_model` WHERE article_id = \\?").
+		WithArgs(uint(7)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("INSERT INTO `article_recommend`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -491,8 +499,8 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", cover, shortContent, "body", 1, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", cover, shortContent, "body", 1, 1, 1, nil, 0, false, false))
 	expectEmptyArticleAggregateQueries(mock, 7, 1)
 
 	result, err := repo.Save(article.ArticleSaveData{
@@ -548,8 +556,8 @@ func TestArticleRepository_ToggleLike_CreatesLike(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0, false, false))
 	mock.ExpectQuery("SELECT \\* FROM `user_like`").
 		WithArgs(uint(7), uint(1), uint8(1), 1).
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -563,8 +571,8 @@ func TestArticleRepository_ToggleLike_CreatesLike(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0, false, false))
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
 		WithArgs(uint8(1), uint(7)).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}).AddRow(7, 1))
@@ -595,6 +603,7 @@ func TestArticleRepository_ToggleLike_CreatesLike(t *testing.T) {
 			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleAiModels(mock, 7)
 	expectArticleUsers(mock, 2)
 	mock.ExpectQuery("SELECT `target_id` FROM `user_like`").
 		WithArgs(uint8(1), uint(1), uint(7)).
@@ -621,8 +630,8 @@ func TestArticleRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0, false, false))
 	mock.ExpectQuery("SELECT \\* FROM `user_like`").
 		WithArgs(uint(7), uint(1), uint8(1), 1).
 		WillReturnRows(sqlmock.NewRows([]string{
@@ -637,8 +646,8 @@ func TestArticleRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 2, 1, 1, nil, 0, false, false))
 	mock.ExpectQuery("SELECT target_id, count\\(\\*\\) as count FROM `user_like`").
 		WithArgs(uint8(1), uint(7)).
 		WillReturnRows(sqlmock.NewRows([]string{"target_id", "count"}))
@@ -669,6 +678,7 @@ func TestArticleRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleAiModels(mock, 7)
 	expectArticleUsers(mock, 2)
 	mock.ExpectQuery("SELECT `target_id` FROM `user_like`").
 		WithArgs(uint8(1), uint(1), uint(7)).
@@ -708,6 +718,9 @@ func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *t
 	mock.ExpectExec("DELETE FROM `article_music` WHERE article_id = \\?").
 		WithArgs(uint(7)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("DELETE FROM `article_ai_model` WHERE article_id = \\?").
+		WithArgs(uint(7)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("UPDATE `article_recommend` SET `deleted_at`=\\? WHERE article_id = \\? AND `article_recommend`.`deleted_at` IS NULL").
 		WithArgs(sqlmock.AnyArg(), uint(7)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -717,8 +730,8 @@ func TestArticleRepository_Save_AllowsRelationOnlyUpdateWhenFieldsUnchanged(t *t
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 1, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(7, now, now, nil, "A", nil, nil, "body", 1, 1, 1, nil, 0, false, false))
 	expectEmptyArticleAggregateQueries(mock, 7, 1)
 
 	result, err := repo.Save(article.ArticleSaveData{
@@ -752,8 +765,8 @@ func TestArticleRepository_PermanentDelete_HardDeletesArticleRelations(t *testin
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
 			"short_content", "content", "user_id", "status", "comment_status",
-			"password", "read_count",
-		}).AddRow(9, now, now, deletedAt, "A", nil, nil, "body", 7, 1, 1, nil, 0))
+			"password", "read_count", "cover_ai_generated", "content_ai_referenced",
+		}).AddRow(9, now, now, deletedAt, "A", nil, nil, "body", 7, 1, 1, nil, 0, false, false))
 	mock.ExpectQuery("SELECT `id` FROM `article_comment`").
 		WithArgs(uint(9)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(21).AddRow(22))
@@ -776,6 +789,9 @@ func TestArticleRepository_PermanentDelete_HardDeletesArticleRelations(t *testin
 		WithArgs(uint(9)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `article_music` WHERE article_id = \\?").
+		WithArgs(uint(9)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM `article_ai_model` WHERE article_id = \\?").
 		WithArgs(uint(9)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM `article_recommend` WHERE article_id = \\?").
@@ -831,6 +847,7 @@ func expectEmptyArticleAggregateQueries(mock sqlmock.Sqlmock, articleID uint, us
 			"singer", "album", "song_date", "audio_key", "cover_img_url", "description",
 			"lyric", "duration", "seq",
 		}))
+	expectArticleAiModels(mock, articleID)
 	if len(userIDs) > 0 {
 		expectArticleUsers(mock, userIDs...)
 	}

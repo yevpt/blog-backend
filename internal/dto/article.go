@@ -57,6 +57,32 @@ type ArticleSaveReq struct {
 	Recommend bool `json:"recommend" example:"false"`
 	// RecommendSeq 推荐排序值。
 	RecommendSeq uint `json:"recommend_seq" example:"10"`
+	// CoverAiGenerated 封面是否 AI 生成（对外披露）。
+	CoverAiGenerated bool `json:"cover_ai_generated" example:"false"`
+	// ContentAiReferenced 正文是否 AI 参考（对外披露）。
+	ContentAiReferenced bool `json:"content_ai_referenced" example:"false"`
+	// AiModels 参与创作的 AI 模型列表。
+	AiModels []ArticleAiModelSaveReq `json:"ai_models"`
+}
+
+// ArticleAiModelSaveReq 文章 AI 模型保存请求。
+type ArticleAiModelSaveReq struct {
+	// Scope 用途：cover 配图，content 正文。
+	Scope string `json:"scope" binding:"required,oneof=cover content" example:"content"`
+	// Name 模型名称。
+	Name string `json:"name" binding:"required,max=100" example:"Claude Sonnet 4"`
+	// Seq 展示顺序，越小越靠前。
+	Seq uint `json:"seq" example:"0"`
+}
+
+// ArticleAiModelResp 文章 AI 模型响应。
+type ArticleAiModelResp struct {
+	// Scope 用途：cover 配图，content 正文。
+	Scope string `json:"scope" example:"content"`
+	// Name 模型名称。
+	Name string `json:"name" example:"Claude Sonnet 4"`
+	// Seq 展示顺序。
+	Seq uint `json:"seq" example:"0"`
 }
 
 // ArticleTagSaveReq 文章标签关联保存请求。
@@ -133,6 +159,12 @@ type ArticleListItemResp struct {
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt 更新时间。
 	UpdatedAt time.Time `json:"updated_at"`
+	// CoverAiGenerated 封面是否 AI 生成（对外披露）。
+	CoverAiGenerated bool `json:"cover_ai_generated" example:"false"`
+	// ContentAiReferenced 正文是否 AI 参考（对外披露）。
+	ContentAiReferenced bool `json:"content_ai_referenced" example:"false"`
+	// AiModels 参与创作的 AI 模型列表。
+	AiModels []ArticleAiModelResp `json:"ai_models"`
 }
 
 // ArticleDetailResp 文章详情响应。
