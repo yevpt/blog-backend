@@ -1,532 +1,427 @@
-# 用户内容审核系统设计
+# 用户内容审核系统设计（个人博客实用版）
 
-## 1. 背景与目标
+## 1. 目标与边界
 
-当前评论、回复、留言和碎语由登录用户提交后直接进入业务表，评论与留言没有审核状态，碎语的公开/隐藏状态也不能表达待审、驳回、申诉等审核语义。
+本站是个人生活与技术分享博客。本设计只为登录用户发布的评论、回复、留言和碎语增加敏感内容过滤，不建设通用内容治理平台。
 
-本设计为非管理角色提交的用户内容增加统一审核能力，目标是：
+核心目标：
 
-- 以零外部 API 成本完成文本风险分级。
-- 在低风险内容可用性和违法、不良内容处置之间取得平衡。
-- 统一支持首次发布、再次编辑、人工审核、管理员修正、举报和申诉。
-- 根据用户历史行为自动调整信任等级，并支持禁言、限制发布和封禁。
-- 提供全站发布开关、强制先审后发和批量隔离等紧急止血能力。
-- 未审核图片不做机器识别，通过低清模糊预览或 GIF 占位图半屏蔽展示。
-- 保留完整版本和图片引用，保证驳回时能够真实回退。
-- 复用全站已通过图片，减少重复人工审核，并控制审核图片记录增长。
+- 使用零外部 API 成本的本地文本规则完成低、中、高风险分级。
+- 低风险先展示后审核，中风险先审后发，高风险直接拒绝。
+- 支持管理员通过、修正后通过、驳回，并保存审核记录。
+- 编辑待审内容时能够回退最后通过版本，包括正文、图片和顺序。
+- 未审核图片只展示低清预览，GIF 展示固定审核占位图。
+- 复用全站已通过图片，减少重复审核。
+- 用少量可配置规则自动调整用户信任等级，管理员可手工禁言或封禁。
+- 保持状态、事务和配置清楚，便于后续 AI 阅读与维护。
 
-本方案不是法律意见。由于站点不要求手机号、身份证或已验证邮箱，仍存在真实身份认证方面的合规缺口；不能对外宣称已经实现完全合规。
+当前不实现：
 
-## 2. 适用范围
+- 举报和申诉。
+- 手机号、身份证等真实身份认证。
+- 付费审核 API、本地大模型或图片识别。
+- IP 网段批处理、设备画像和封禁账号关联识别。
+- 自动禁言、自动封禁和递进式封禁。
+- 通用批量任务平台。
+- 线上旧版本兼容和灰度双写；上线时直接部署完整新版。
+- 已签发 CDN 授权 URL 的即时撤销。
+- 用户昵称、头像、简介和站点链接审核。
 
-### 2.1 纳入审核的内容
+本方案不是法律意见，也不宣称实现完整监管合规。
 
-- 碎语 `moment`
-- 文章评论 `article_comment`
-- 碎语评论 `moment_comment`
-- 留言 `guestbook`
-- 文章评论回复 `article_comment_reply`
-- 碎语评论回复 `moment_comment_reply`
-- 留言回复 `guestbook_reply`
+## 2. 适用内容与角色
 
-### 2.2 角色范围
+纳入审核：
 
-- 普通注册用户：必须经过本设计的审核流程。
-- 管理员：发布内容及所带图片直接视为通过；人工审核操作仍需留痕。
-- 举报与申诉：仅限已登录注册用户。
+- `moment`
+- `article_comment`
+- `moment_comment`
+- `guestbook`
+- `article_comment_reply`
+- `moment_comment_reply`
+- `guestbook_reply`
 
-### 2.3 非目标
+角色规则：
 
-- 不接入收费文本或图片审核 API。
-- 不部署本地大模型或图片识别模型。
-- 不审核文章正文等管理员生产内容。
-- 首版不开放匿名举报。
-- 不以本系统替代 ICP、实名、隐私保护等其他合规工作。
-- 不承诺仅凭 IP、设备或 OAuth 信息可以彻底阻止被封用户重新注册。
+- 所有普通注册用户均可发布，不设白名单，但必须进入统一审核流程。
+- 管理员发布内容及图片直接通过；人工审核仍记录管理员 ID 和时间。
+- 历史用户迁移为 `trusted`。
+- 历史公开内容及其当前图片迁移为已通过。
 
-## 3. 合规设计依据
+## 3. 总体架构
 
-设计重点参考以下现行规定：
-
-- [互联网跟帖评论服务管理规定](https://www.cac.gov.cn/2022-11/16/c_1670253725725039.htm)：覆盖评论、回复、留言、点赞等服务，要求建立审核管理、实时巡查、举报申诉、用户分级和处置留痕机制。
-- [网络信息内容生态治理规定](https://www.cac.gov.cn/2019-12/20/c_1578375159509309.htm)：要求网络信息内容服务平台履行内容治理主体责任。
-- [互联网信息服务管理办法](https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/bgt/art/2023/art_483f0dd8eb1b4dc5961e4e008bd4a083.html)：发现明显违法内容时应停止传输、保存记录并报告。
-- [互联网用户账号信息管理规定](https://www.cac.gov.cn/2022-06/26/c_1657868775042841.htm)：规定信息发布账号的真实身份认证、账号管理和举报处理要求。
-
-产品已明确不增加手机号或邮箱验证。该决定仅是成本和体验取舍，不消除相关合规要求。
-
-## 4. 总体架构
-
-新增统一 `moderation` 模块，原评论、留言和碎语模块继续负责各自业务关系；审核模块统一负责风险判定、状态转换、图片审核缓存、用户治理、举报申诉和紧急控制，但禁止实现为单个巨型 `ModerationService`。
-
-建议组件边界：
+新增独立 `moderation` 模块，原评论、留言和碎语模块继续维护业务关系。
 
 - `internal/service/moderation`
-  - `Classifier`：文本归一化、本地规则匹配和内容信号提取。
-  - `PolicyDecider`：根据风险、用户等级和全站控制计算最终动作。
-  - `TransitionEngine`：纯函数状态机，输入快照与事件，输出 `TransitionPlan`。
-  - `ReviewService`：通过、修正、驳回和版本冲突处理。
-  - `GovernanceService`：用户事件、信任等级和处罚状态。
-  - `CaseService`：举报与申诉。
-  - `ControlService`：全站控制和批量任务。
-  - 包入口文件只保留类型、构造函数和门面接口；实现按上述职责拆文件。
+  - `Classifier`：文本归一化、规则匹配和风险分级。
+  - `PolicyDecider`：根据风险、用户等级和全站控制计算动作。
+  - `TransitionEngine`：纯函数状态机，输入快照和事件，输出 `TransitionPlan`。
+  - `ReviewService`：管理员通过、修正、驳回。
+  - `GovernanceService`：轻量用户等级、禁言和封禁。
+  - `ControlService`：全站开关和用户内容紧急隐藏。
 - `internal/repository/moderation`
-  - 审核项、版本、规则、图片、举报和申诉持久化。
-  - `ApplyTransition(ctx, plan)` 以粗粒度命令在单事务中物化业务快照、版本指针和用户事件。
-  - 按 `comment`、`guestbook`、`moment` 拆分内部 subject adapter；service 不接触 `gorm.DB` 或事务回调。
+  - 持久化审核项、版本、规则、图片、日志和用户档案。
+  - `ApplyTransition(ctx, plan)` 在单个 MySQL 事务中更新业务快照和审核状态。
+  - 内部按 `comment`、`guestbook`、`moment` 拆分 subject adapter。
 - `internal/handler/moderation`
-  - 按审核、举报、申诉、规则、用户治理、全站控制和批量任务拆文件，避免单个 handler 汇集全部接口。
+  - 管理审核、规则、用户治理和全站控制接口。
 - `internal/worker/moderation`
-  - 幂等通知补偿、对象清理重试、过期图片审核记录清理。
-  - 用户等级周期评估、临时限制释放和批量处置任务。
-- 原有 `comment`、`guestbook`、`moment` service
-  - 通过构造注入的审核接口提交内容，不直接实现审核规则。
-  - 不直接访问审核表或持有数据库全局变量。
+  - 仅负责临时对象、孤儿对象、模糊预览和过期图片审核记录清理。
 
-业务可见快照、审核记录和用户处置事件必须在同一数据库事务中创建或切换，避免出现内容已公开但没有审核状态，或违规已成立但用户档案未更新的中间态。
+原业务 service 通过构造注入的审核门面提交操作，不直接读审核表或拼接状态。
 
-### 4.1 纯状态转换计划
+### 3.1 状态转换计划
 
-`TransitionEngine` 不访问数据库、Redis、对象存储或通知服务。输入至少包含当前审核项、版本、业务可见快照、用户策略、全站控制和触发事件；输出的 `TransitionPlan` 至少包含：
+`TransitionEngine` 不访问数据库、Redis、对象存储或通知服务。`TransitionPlan` 描述：
 
-- 新的公开状态和版本指针。
-- 要物化到业务表的正文与图片快照来源。
+- 新的生命周期、公开状态和版本指针。
+- 要物化到业务表的正文与图片版本。
 - 新增或更新的审核版本。
-- 业务内容软删除、硬删除或审核墓碑写入动作。
-- 用户处置事件。
-- 事务提交后执行的通知、图片清理和缓存失效任务。
+- 用户档案计数和等级变化。
+- 操作日志与站内通知意图。
+- 事务提交后需要清理的对象。
 
-触发事件使用封闭枚举：`submit`、`resubmit`、`approve`、`correct_and_approve`、`reject`、`delete`、`admin_delete`、`emergency_hide`、`restore`。`delete` 表示作者或业务规则允许的所有者删除，`admin_delete` 表示管理员强制删除；两者只在权限、操作日志和通知语义上不同，均令 `lifecycle_state` 进入不可逆的 `deleted` 终止态。新增事件必须同时补充状态矩阵、非法转换用例和 API 行为说明。
+封闭事件枚举：
 
-所有状态不变量集中在该纯函数及表驱动测试中。业务 service 不允许直接拼装版本指针或自行判断公开状态。
+- `submit`、`resubmit`
+- `approve`、`correct_and_approve`、`reject`
+- `delete`、`admin_delete`
+- `emergency_hide`、`restore`
 
-### 4.2 AI 可理解性约束
+新增事件必须同时补充状态矩阵、非法转换和表驱动测试。业务 service 不允许绕过状态机更新版本指针。
 
-- 状态、动作、事件和内容类型全部使用具名类型常量，禁止跨层传递魔法字符串或数字。
-- `doc.go` 说明每个 moderation 包的职责、依赖和禁止事项。
-- 复杂原因写中文注释；显而易见的语句不重复注释。
-- 单文件只承担一个职责；门面文件保持短小，状态机、用户策略、图片、举报申诉和批量控制互不混写。
-- 状态矩阵和策略矩阵必须有对应表驱动测试，作为后续 AI 修改时的可执行规格。
+### 3.2 代码可理解性
 
-## 5. 数据模型
+- 状态、动作、事件和内容类型使用具名常量，禁止魔法字符串。
+- moderation 各包使用 `doc.go` 说明职责和禁止事项。
+- 状态机、规则、图片、治理和控制分别放在小文件中。
+- 中文注释只解释事务、回退、清理和安全边界。
+- 状态矩阵和策略矩阵以表驱动测试作为可执行规格。
 
-### 5.1 `moderation_item`
+## 4. 数据模型
 
-每个已创建的业务内容对应一条审核项：
+### 4.1 `moderation_item`
 
-- `content_type`、`content_id`：业务内容多态标识，联合唯一。
-- `author_id`：内容发布者。
-- `lifecycle_state`：`active`、`deleted`，只表达内容生命周期；`deleted` 是不可恢复的终止态，不复用 `public_state` 表达。
-- `public_state`：`visible`、`placeholder`、`hidden`、`emergency_hidden`，只表达公开展示状态。
-- `materialized_revision_id`：当前已物化到业务可见快照的版本，可为空。
-- `approved_revision_id`：最后一次正式通过版本，可为空。
+- `content_type`、`content_id`：联合唯一业务标识。
+- `author_id`
+- `lifecycle_state`：`active`、`deleted`
+- `public_state`：`visible`、`placeholder`、`hidden`、`emergency_hidden`
+- `materialized_revision_id`：当前物化到业务表的版本，可为空。
+- `approved_revision_id`：最后正式通过版本，可为空。
 - `pending_revision_id`：当前唯一待审版本，可为空。
-- `state_before_emergency`：进入紧急隔离前的 `visible`、`placeholder` 或 `hidden`；非紧急隔离状态必须为空。
-- `emergency_hidden_reason`、`emergency_hidden_at`：紧急隔离原因和时间。
-- `deleted_at`：进入删除终止态的时间；未删除时为空，不能使用 GORM `DeletedAt` 隐藏审核墓碑。
-- 乐观锁版本号及标准时间字段。
+- `state_before_emergency`：紧急隐藏前状态；其他时间为空。
+- `emergency_hidden_reason`、`emergency_hidden_at`
+- `deleted_at`：删除终止态时间；不使用 GORM `DeletedAt` 隐藏审核墓碑。
+- `lock_version` 与标准创建、更新时间。
 
-`moment.status` 继续表达作者设置的公开/隐藏状态，不复用为审核状态。
+派生字段不落库：
 
-审核项不保存通用 `status`、`current_revision_id` 或 `has_pending_revision` 字段：
+- `has_pending_revision = pending_revision_id != NULL`
+- `display_version`：`pending`、`last_approved`、`none`
+- `can_interact`：仅未删除、公开可见、没有待审版本且存在通过版本时为真。
 
-- 审核状态只属于具体版本，由 `moderation_revision.review_status` 表达。
-- `has_pending_revision` 由 `pending_revision_id != NULL` 派生。
-- `display_version` 由生命周期、三个版本指针与 `public_state` 派生，不落库；已删除时固定为 `none`。
-- 公开列表只依据 `lifecycle_state=active` 与 `public_state` 判断能否展示，不能依据待审状态推断可见性。
+### 4.2 `moderation_revision`
 
-### 5.2 `moderation_revision`
+用户每次首次发布或编辑产生一个版本：
 
-每次首次发布、再次编辑和管理员修正均产生版本：
+- `item_id`、`version`；`(item_id, version)` 唯一。
+- `submitter_id`、`idempotency_key`；`(submitter_id, idempotency_key)` 唯一。
+- `submitted_content`：用户原文，创建后不修改。
+- `published_content`：经过安全清洗的实际发布文本；未修正时等于用户原文的安全清洗结果。
+- `risk_level`：`low`、`medium`、`high`
+- `policy_action`：`auto_approve`、`post_review`、`pre_review`、`block`
+- `review_status`：`pending`、`approved`、`rejected`、`superseded`
+- `ruleset_version`、`rule_match_ids`
+- `decision_type`：待审时为空，处理后为 `approved`、`corrected`、`rejected` 或 `legacy_migration`。
+- `decision_reason`、`reviewer_id`、`reviewed_at`
 
-- `item_id`：关联审核项，不可为空。
-- `version`：同一审核项内单调递增。
-- `submitted_content`：用户提交原文。
-- `published_content`：实际发布文本；管理员未修正时与原文相同。
-- `risk_level`：`low`、`medium`、`high`。
-- `review_status`：`pending`、`approved`、`rejected`、`superseded`。
-- `rule_match_ids`：命中规则 ID 集合，仅管理端可见。
-- `decision_type`：`approved`、`corrected`、`rejected`、`legacy_migration`。
-- `decision_reason`：修正、驳回或申诉处理理由。
-- `reviewer_id`、`reviewed_at`：处理管理员和时间。
-- `appeal_count`：当前被驳回版本的申诉次数，上限读取 `moderation.appeal.max_per_revision`，默认 3。
+管理员修正不覆盖 `submitted_content`，只写 `published_content` 和决策字段，因此同一版本同时保存原文、修正文、理由、管理员和时间。
 
-高风险首次发布不创建业务内容、审核项或版本；高风险编辑也不创建新业务版本。两者均写入独立的受限安全记录，原业务版本不变。安全记录保留期读取 `moderation.audit.retention_days`，默认 180 天。
+高风险首次发布不创建业务内容、审核项或版本；高风险编辑不改变旧版本。只保存最小 `moderation_attempt`：
 
-### 5.3 `moderation_revision_image`
+- 用户、内容类型、可选审核项。
+- `idempotency_key`。
+- 规则集版本、命中规则和时间；不保存完整高风险正文或可用于猜测正文的无密钥摘要。
 
-保存每个版本完整的图片快照：
+`(user_id, idempotency_key)` 唯一，网络重试只返回首次阻断结果，不重复计分。
+
+### 4.3 图片表
+
+`moderation_revision_image` 保存版本完整图片快照：
 
 - `revision_id`、`seq`
 - `object_key`
 - `sha256`、`md5`、`size`
-- `media_type`
-- `is_gif`：是否为 GIF。实际 `display_mode` 根据图片通过状态和版本状态在响应时计算。
+- `media_type`、`is_gif`
 
-正文回退时必须同时恢复该版本的图片集合和顺序。
+`moderation_image` 保存全站图片审核状态：
 
-### 5.4 `moderation_image`
+- `sha256 + size` 联合唯一，作为最终可信指纹。
+- `md5` 只兼容现有 32 位 MD5 文件名并查找候选。
+- `status`：`pending`、`approved`；新图保存预览后为待审，任一引用版本通过后全站转为已通过。
+- `preview_object_key`
+- `approved_at`、`approved_by`、`last_used_at`
 
-全站图片审核缓存，以 `sha256 + size` 唯一识别图片内容：
+每次命中已通过图片时更新 `last_used_at`。正文回退必须同时恢复图片集合和顺序。
 
-- `sha256`、`size`：最终可信指纹。
-- `md5`：兼容现有 32 位 MD5 文件名，用作候选快速查找，不能单独作为通过依据。
-- `status`：首版主要使用 `approved`。
-- `preview_object_key`：未通过前生成的低清预览对象。
-- `approved_at`、`approved_by`
-- `last_used_at`：每次审核判断命中该记录时更新。
+### 4.4 其他表
 
-现有对象 key 保持兼容；新上传在已有 MD5 的同时计算 SHA-256 和大小。正式对象禁止覆盖，内容变化必须生成新对象。
+- `moderation_rule`：规则、风险、优先级、启用状态和规则集版本。
+- `moderation_attempt`：高风险阻断最小记录。
+- `moderation_action_log`：提交、通过、修正、驳回、删除、隐藏、恢复和用户等级调整。
+- `moderation_visible_image`：评论、回复和留言当前物化图片；碎语继续使用 `moment_media`。
+- `user_moderation_profile`：用户当前信任、处罚和简单计数。
+- `moderation_control`：全站注册和发布模式。
 
-### 5.5 其他表
+不创建举报、申诉、用户事件、批量任务和来源画像表。
 
-- `moderation_rule`：规则类型、模式、风险级别、优先级、启用状态和说明。
-- `moderation_attempt`：高风险阻断尝试，保存作者、内容类型、可选审核项、受限正文快照、命中规则和时间。
-- `moderation_report`：举报者、目标、原因、说明、处理状态和处理结果。
-- `moderation_appeal`：版本、申诉人、理由、序号和处理结果。
-- `moderation_action_log`：通过、修正、驳回、用户删除、管理员删除、紧急隔离、恢复和举报处理等操作留痕。
-- `moderation_visible_image`：为评论、回复和留言物化当前可展示图片 key、指纹和顺序；碎语继续使用 `moment_media`。
-- `user_moderation_profile`：用户当前信任、处罚状态、滚动分数投影和释放控制。
-- `user_moderation_event`：通过、修正、驳回、高风险阻断、举报成立等不可变事件，作为自动评级依据。
-- `moderation_control`：全站注册和发布控制状态，数据库为事实源，Redis 仅作短期缓存。
-- `moderation_bulk_action`：批量隔离、恢复和永久删除任务及其确认、进度、操作者和结果。
+### 4.5 `user_moderation_profile`
 
-至少建立以下约束和索引：审核项 `(content_type, content_id)` 联合唯一、图片 `(sha256, size)` 联合唯一、同一举报者和目标只有一条有效举报，并为待审状态、风险级别、创建时间及图片 `last_used_at` 建立查询索引。
+- `user_id`：唯一。
+- `trust_level`：`new`、`normal`、`trusted`、`restricted`
+- `trust_source`：`auto`、`manual`
+- `manual_trust_locked`
+- `sanction_state`：`active`、`muted`、`banned`
+- `sanction_until`、`sanction_reason`
+- `clean_approval_streak`、`corrected_count`、`rejected_count`、`high_risk_count`
+- `violation_score`、`last_violation_at`、`restricted_until`
+- 标准时间字段。
 
-### 5.6 `user_moderation_profile`
+操作日志是审核事实，档案计数是查询投影。审核事务同时追加日志和更新计数；漂移时可从日志重建。
 
-`user.status` 继续表示整个账号是否允许登录；内容治理使用独立档案，避免“禁止发言”意外变成“无法登录和查看通知”。档案以 `user_id` 唯一，至少包含：
+注册完成后尽力执行幂等 `EnsureNewProfile`。首次审核交互再次补建；档案缺失按 `new + active` 处理。
 
-- `trust_level`：`new`、`normal`、`trusted`、`restricted`，只表达内容信任策略。
-- `trust_source`：`auto` 或 `manual`。
-- `manual_trust_locked`：管理员手工信任等级是否阻止自动评估覆盖。
-- `sanction_state`：`active`、`muted`、`banned`，只表达当前处罚能力。
-- `sanction_until`、`sanction_reason`：临时处罚截止时间和原因；永久封禁截止时间为空。
-- `violation_score`：当前配置观察窗口内的滚动违规分投影。
-- `clean_approval_streak`：连续未经修正通过次数投影。
-- `last_violation_at`、`last_evaluated_at`、`trust_changed_at`。
-- `restricted_until`：自动限制等级的下一次释放评估时间。
-- `ban_count`：累计实际封禁次数。
-- `manual_release_only`：多次封禁后只能由管理员解除。
+## 5. 文本规则引擎
 
-详细通过、修正、驳回、高风险和举报成立次数从 `user_moderation_event` 聚合，不在档案中重复保存，避免事件与计数漂移。
+处理顺序：
 
-邮箱注册或 OAuth 自动建号提交后尽力调用幂等 `EnsureNewProfile`，不把 auth/socialauth repository 与审核事务耦合。首次审核交互再次执行幂等补建；运行时缺少档案始终按 `new + active` 处理，不能默认可信。历史用户迁移为 `trusted + active`。
+1. 校验正文长度、链接和图片数量。
+2. 使用安全 Markdown/HTML 解析器清洗展示内容，移除脚本、事件属性、危险协议和非允许标签。
+3. 从清洗后内容提取纯文本、链接和广告信号。
+4. 执行 Unicode、繁简、全半角和大小写归一。
+5. 去除零宽字符，折叠异常分隔符和重复字符。
+6. 执行关键词、Go RE2 正则和组合规则。
+7. 取所有命中规则的最高风险。
 
-### 5.7 用户处置事件
+管理员修正文也执行相同的长度、图片归属和安全清洗，但不进入普通用户风险决策。
 
-自动等级以幂等 `user_moderation_event` 为事实源；档案只缓存决策所需的滚动违规分和连续干净次数。事件至少包括：
+- `low`：未命中风险规则。
+- `medium`：广告、辱骂、上下文不明确或需要人工判断。
+- `high`：明确需要阻断的敏感规则。
 
-- `clean_approved`
-- `corrected`
-- `rejected`
-- `high_risk_blocked`
-- `report_upheld`
-- `manual_adjusted`
-- `restricted`
-- `muted`
-- `banned`
-- `released`
+规则集要求：
 
-同一审核版本和处置原因使用唯一幂等键，避免“举报成立后又驳回内容”对同一次违规重复计分。中风险机器判定本身不记违规，只有人工修正、驳回、高风险阻断或举报成立才记入。
+- 规则变更先校验、编译并生成单调递增 `ruleset_version`。
+- 成功后原子替换内存不可变快照。
+- 规则内容不可原地覆盖；修改时创建新规则记录并停用旧记录，删除也只停用，确保历史版本能按 ID 追溯。
+- `enforce` 模式下有效规则集不能为空。
+- 冷启动加载失败或规则集为空时，普通用户发布降级为中风险。
+- 运行期数据库失败时继续使用最后成功快照并告警。
 
-### 5.8 请求来源摘要
+## 6. 风险与用户策略
 
-为紧急批量处置和重复注册风险判断，版本、举报、申诉及高风险尝试保存：
+动作：
 
-- 精确 IP 的 HMAC-SHA256 摘要。
-- IPv4 `/24` 或 IPv6 `/64` 网段的 HMAC-SHA256 摘要。
-- 可选的站点设备标识摘要。
+- `auto_approve`：直接正式通过。
+- `post_review`：先展示待审内容。
+- `pre_review`：保存待审版本，不向公众返回正文。
+- `block`：拒绝操作。
 
-摘要使用独立的生产密钥，不保存明文 IP，不复用公开可猜测的无密钥哈希。共享 IP 或网段只能触发限流、批量候选和新账号降为 `restricted`，不能单独作为永久封禁依据。
-
-来源摘要保留期读取 `moderation.source.hash_retention_days`，默认 180 天；到期后从长期版本记录中清空。IP 网段批量处置仅覆盖该保留窗口内的新数据。历史迁移内容没有可靠来源摘要，不伪造也不反推。
-
-## 6. 本地文本风险引擎
-
-### 6.1 判定步骤
-
-1. 从用户内容提取纯文本，不改变最终展示文本。
-2. 执行 Unicode 规范化、繁简兼容、全半角转换、大小写归一。
-3. 去除零宽字符，折叠刻意插入的分隔符和异常重复字符。
-4. 执行精确关键词、受限正则和组合条件规则。
-5. 取所有命中规则的最高风险级别。
-
-判定规则：
-
-- 明确阻断规则：`high`。
-- 模糊、上下文不确定、广告、辱骂等需要人工判断的规则：`medium`。
-- 未命中：`low`。
-
-管理员保存规则时先校验和编译。无效规则拒绝保存，当前内存规则快照保持不变。规则更新成功后原子替换不可变快照。
-
-### 6.2 降级
-
-- 冷启动无法加载规则：发布统一降级为中风险，读取接口正常提供服务。
-- 运行期间数据库暂时不可用：继续使用最后一次成功加载的规则快照。
-- 不允许审核组件异常时默认低风险放行。
-
-## 7. 用户等级与决策策略
-
-### 7.1 等级行为
-
-风险判定结果只描述文本风险；最终发布动作由用户等级、内容信号和全站控制共同决定。动作统一为：
-
-- `auto_approve`：直接成为正式通过版本。
-- `post_review`：先公开为待审，再由管理员处理。
-- `pre_review`：保存但不公开新内容，等待人工审核。
-- `block`：拒绝本次操作。
-
-默认策略：
-
-| 用户等级 | 干净低风险 | 含未审核图片 | 外链或低级广告信号 | 中风险 | 高风险 |
+| 用户等级 | 干净低风险 | 含未审核图片 | 外链或广告 | 中风险 | 高风险 |
 | --- | --- | --- | --- | --- | --- |
 | `new` | `post_review` | `pre_review` | `pre_review` | `pre_review` | `block` |
 | `normal` | `post_review` | `post_review` | `post_review` | `pre_review` | `block` |
 | `trusted` | `auto_approve` | `post_review` | `pre_review` | `pre_review` | `block` |
 | `restricted` | `pre_review` | `pre_review` | `pre_review` | `pre_review` | `block` |
 
-已通过图片不算“未审核图片”；可信用户仅使用全站已通过图片且文本干净时仍可自动通过。未审核图片无论用户等级如何都不能直接成为图片通过记录，至少进入先发后审或先审后发流程。
+决策优先级：
 
-`sanction_state=muted` 或 `banned` 时直接阻断发布、编辑、举报和申诉，不再进入信任策略矩阵。处罚用户仍可登录、阅读公开内容、查看自己的处置通知和删除自己内容。
-
-用户处置检查必须早于图片复制和预览生成；被禁言、封禁或全站关闭发布时，同时拒绝非管理员临时图片上传，避免在最终提交前消耗存储和 CPU。
-
-### 7.2 自动升级与降级
-
-评级器在产生用户处置事件后即时评估，并由后台任务定期复核：
-
-- `new -> normal`：达到账号年龄和干净通过次数，且观察窗口内无违规。
-- `normal -> trusted`：达到更高账号年龄、连续干净通过次数，且观察窗口内无修正、驳回、高风险或举报成立。
-- 任意可发布等级达到限制分数：进入 `restricted`。
-- 任意可发布等级达到封禁分数且自动封禁已开启：把信任等级降为 `restricted`，处罚状态改为临时 `banned`。
-- `restricted` 到期时重新计算滚动违规分：低于限制阈值则恢复 `normal`，仍超限则续期。
-- 前两次临时封禁到期后把处罚状态恢复为 `active`，信任等级保持 `restricted`；经过限制观察期且分数下降后才可恢复 `normal`。
-- 达到配置的累计封禁次数后设置 `manual_release_only=true`，不再自动释放。
-
-默认违规权重：管理员修正 `+1`、举报成立 `+2`、人工驳回 `+3`、高风险阻断 `+5`。干净通过用于升级条件，不直接抵消违规分，避免用户通过大量正常内容“洗掉”严重违规。
-
-管理员可以手工调整等级、禁言、封禁或释放，并选择是否锁定等级。自动评估不得覆盖已锁定的手工决定。
-
-等级变化默认只影响后续提交，不改写已经正式通过或正在审核的版本。管理员封禁时可选择同时隔离全部公开内容；自动封禁是否隔离历史内容由配置控制，默认不自动隔离，降低误判造成的扩大影响。
-
-### 7.3 防止封禁绕过
-
-- 相同 OAuth `source + UUID` 继续绑定原账号，不能创建新账号绕过。
-- 已绑定且唯一的验证邮箱继续归属原账号。
-- 新身份若命中被封账号的设备摘要或近期 IP 网段风险，只自动降为 `restricted` 并通知管理员，不自动永久封禁。
-- 无手机号或实名信息时无法可靠识别所有重新注册行为，必须在管理端明确展示这一限制。
-
-### 7.4 决策优先级
-
-最终动作按以下顺序计算，前项优先于后项：
-
-1. 管理员发布：直接通过。
-2. 用户处于封禁或禁言期：阻断。
-3. 全站发布模式为 `closed`：阻断非管理员发布和编辑。
-4. 全站发布模式为 `pre_review_all`：把 `auto_approve`、`post_review` 强制降为 `pre_review`。
+1. 管理员发布直接通过。
+2. `muted` 或 `banned` 阻断发布、编辑和临时图片上传。
+3. 全站 `closed` 阻断普通用户发布和编辑。
+4. `pre_review_all` 把自动通过、先发后审降为先审后发。
 5. 用户等级策略。
 6. 文本风险、图片、链接和广告信号。
 
-## 8. 发布与编辑状态流
+处罚用户仍可登录、阅读、查看通知和删除自己内容。
 
-风险级别、用户等级、审核状态和公开展示状态彼此独立。下表描述 `normal` 用户；`new`、`trusted`、`restricted` 及全站控制按第 7 节覆盖最终动作。
+### 6.1 轻量自动等级
 
-| 场景 | 决策动作 | 公众展示 | 图片展示 | 返回提示 |
-| --- | --- | --- | --- | --- |
-| 首次发布被判为先发后审 | `post_review` | 新正文，标记待审 | 已通过图返回原图；新静态图返回模糊图；新 GIF 返回占位图 | 发布成功，内容会被审核 |
-| 首次发布被判为先审后发 | `pre_review` | 不返回正文，显示风险占位 | 返回新图的模糊图或 GIF 占位图 | 内容已提交，等待人工审核 |
-| 首次发布被阻断 | `block` | 无 | 清理本次临时对象 | 内容存在较高风险，未能发布 |
-| 已通过内容编辑后先发后审 | `post_review` | 立即展示新正文并标记待审 | 已通过图正常，新图模糊/GIF 占位 | 修改成功，内容会被审核 |
-| 已通过内容编辑后先审后发 | `pre_review` | 继续展示最后通过版本 | 继续展示最后通过版本图片 | 修改已提交，等待人工审核 |
-| 已通过内容编辑被阻断 | `block` | 原版本不变 | 清理本次新临时对象 | 内容存在较高风险，原版本不受影响 |
+只在通过、修正、驳回或高风险阻断后同步评估，不运行复杂评分 Worker：
 
-表中用户提示分别读取 `moderation.notices` 配置，并保留代码内非空安全默认值；业务错误码和 HTTP 状态不配置化。
+- `new -> normal`：达到配置的账号年龄和干净通过次数，当前违规分为零。
+- `normal -> trusted`：达到更高账号年龄和干净通过次数，当前违规分为零。
+- 达到限制分数：进入 `restricted` 并设置 `restricted_until`。
+- 修正、驳回和高风险阻断会把连续干净次数清零；受限期内再次违规会把期限顺延为“本次违规时间 + 配置时长”。
+- 限制到期后，在下一次发布或读取本人档案时懒恢复为 `normal`，同时重置违规分。
+- 管理员锁定的信任等级不被自动覆盖。
+- `muted`、`banned` 仅由管理员设置和释放。
+- 手工处罚可设置截止时间；到期后在下一次权限检查时懒恢复为 `active`，截止时间为空表示必须由管理员释放。
 
-每条内容同一时间只有一个当前待审版本。作者再次编辑待审内容时重新判定风险，新版本取代旧版本进入队列，旧版本标记为 `superseded` 并仅保留审计记录。
+默认计分：
 
-### 8.1 状态指针不变量
+- 管理员修正：`+1`
+- 人工驳回：`+3`
+- 高风险阻断：`+5`
 
-| 业务状态 | `lifecycle_state` | `public_state` | `materialized_revision_id` | `approved_revision_id` | `pending_revision_id` | `state_before_emergency` |
-| --- | --- | --- | --- | --- | --- | --- |
-| 首次先发后审 | `active` | `visible` | 新待审版本 | `NULL` | 新待审版本 | `NULL` |
-| 首次先审后发 | `active` | `placeholder` | `NULL` | `NULL` | 新待审版本 | `NULL` |
-| 已正式通过 | `active` | `visible` | 通过版本 | 同一通过版本 | `NULL` | `NULL` |
-| 已通过后先发后审编辑 | `active` | `visible` | 新待审版本 | 旧通过版本 | 新待审版本 | `NULL` |
-| 已通过后先审后发编辑 | `active` | `visible` | 旧通过版本 | 旧通过版本 | 新待审版本 | `NULL` |
-| 首次发布被驳回 | `active` | `hidden` | `NULL` | `NULL` | `NULL` | `NULL` |
-| 紧急隔离 | `active` | `emergency_hidden` | 保留原指针 | 保留原指针 | 保留原指针 | 隔离前状态 |
-| 已删除 | `deleted` | `hidden` | `NULL` | 保留最后通过版本供审计 | `NULL` | `NULL` |
+同一审核版本或同一高风险请求幂等键只能计分一次。
 
-任何不符合表中不变量的组合都视为数据错误，状态转换器拒绝生成计划并记录错误。`review_status` 只能从版本读取；列表查询不得用版本待审状态决定可见性。
+## 7. 发布、编辑与互动
 
-数据库约束与状态机共同保证：`lifecycle_state=active` 时 `deleted_at` 为空；`lifecycle_state=deleted` 时 `deleted_at` 非空；`public_state=emergency_hidden` 当且仅当 `state_before_emergency` 非空，且删除态的紧急隔离字段必须全部为空。
+### 7.1 首次发布
 
-### 8.2 业务表是公开事实源
+| 动作 | 公众正文 | 图片 | 提示 |
+| --- | --- | --- | --- |
+| `auto_approve` | 直接展示 | 原图 | 发布成功 |
+| `post_review` | 展示全文并标记待审核 | 已通过图用原图；新静态图用预览；GIF 用占位 | 发布成功，内容会被审核 |
+| `pre_review` | 不返回正文，只显示审核占位 | 静态图用预览；GIF 用占位 | 内容已提交，等待人工审核 |
+| `block` | 不创建内容 | 清理临时对象 | 内容存在较高风险，未能发布，请修改后重试 |
 
-- 原业务表中的 `content` 明确定义为当前可展示正文；待审但不可见的正文只存于审核版本。
-- 碎语当前可展示图片由 `moment_media` 物化；评论、回复和留言的嵌入图片由各自可见正文及统一可见图片投影物化。
-- 各业务 repository 对外提供统一 `VisibleSnapshot` 语义，包含正文、图片 key、指纹和顺序；物理表结构可按内容类型适配，图片展示模式在 DTO 映射时派生。
-- 可见快照保存稳定对象 key、图片指纹和顺序，不保存预签名 URL；DTO 映射使用审核感知的解析器，未通过时只能解析为低清预览或 GIF 占位，通过后才解析原图。
-- `moderation_revision` 是提交、审计和回退依据，不是普通公开列表的正文事实源。
-- 新的先审后发内容在业务表保存空可见正文，公众只获得占位文案和允许展示的低清图片投影。
-- 通过、修正、驳回和先发后审回退必须在同一事务中同步更新业务可见快照、版本指针和 `moderation_item`。
+### 7.2 编辑
 
-这样普通读取只需读取业务可见快照并检查 `lifecycle_state` 与 `public_state`；复杂版本选择只发生在写入和管理审核路径。
+- 低风险先发后审：立即展示新正文并标记待审核。
+- 中风险先审后发：继续展示最后通过正文和图片。
+- 高风险：拒绝编辑，最后通过版本不变。
+- 再次编辑待审内容创建新版本，旧待审版本标记 `superseded`。
+- 同一审核项只能有一个 `pending_revision_id`。
 
-### 8.3 删除终止态与紧急恢复
+### 7.3 互动限制
 
-- `delete` 和 `admin_delete` 可从任意 `lifecycle_state=active` 状态进入 `deleted`。转换时把 `public_state` 固定为 `hidden`，清空 `materialized_revision_id`、`pending_revision_id` 和紧急隔离字段；若存在待审版本则标记为 `superseded`，`approved_revision_id` 仅作为审计指针保留。
-- 删除业务行与写入 `lifecycle_state=deleted` 审核墓碑必须由 `ApplyTransition` 在同一事务完成。现有软删除表同步写入业务行 `deleted_at`；需要硬删除的碎语及关联数据可以继续硬删除，但 `moderation_item`、审核版本和操作日志不得级联删除，避免旧审核请求重新创建或公开内容。
-- `lifecycle_state=deleted` 是终止态：`submit`、`resubmit`、`approve`、`correct_and_approve`、`reject`、`emergency_hide`、`restore` 均为非法转换。重复 `delete` 或 `admin_delete` 作为幂等空操作处理，但不得重复通知或清理资源。
-- 从 `visible`、`placeholder` 或 `hidden` 执行 `emergency_hide` 时，原子写入当前状态到 `state_before_emergency`，再切换为 `emergency_hidden`。对已处于 `emergency_hidden` 的内容重复隔离是幂等操作，不覆盖首次快照。
-- `restore` 只允许从 `emergency_hidden` 执行，且 `state_before_emergency` 必须是 `visible`、`placeholder` 或 `hidden`。恢复目标只能取该快照，禁止根据版本指针、当前规则或管理员请求参数推导；成功后清空紧急隔离快照、原因和时间。
-- 删除与审核、隔离、恢复并发时，通过审核项行锁或乐观锁版本串行化。删除先提交时，后续审核和恢复返回内容已删除冲突；其他动作先提交时，删除仍可继续进入终止态，任何竞态都不能使已删除内容重新公开。
+存在待审版本的内容可以按规则展示，但不可点赞、回复或作为新评论目标。公开 DTO 返回 `can_interact=false`，后端必须重复校验。
+
+只有同时满足以下条件才允许互动：
+
+- 内容未删除且 `public_state=visible`。
+- `pending_revision_id=NULL`。
+- `approved_revision_id` 非空。
+- 原业务内容本身允许评论或点赞。
+
+这样首次先发后审内容被驳回时不会留下新回复、点赞和通知。
+
+## 8. 状态不变量
+
+| 场景 | 生命周期 | 公开状态 | 物化版本 | 通过版本 | 待审版本 |
+| --- | --- | --- | --- | --- | --- |
+| 首次先发后审 | `active` | `visible` | 新待审 | `NULL` | 新待审 |
+| 首次先审后发 | `active` | `placeholder` | `NULL` | `NULL` | 新待审 |
+| 已正式通过 | `active` | `visible` | 通过版本 | 同一版本 | `NULL` |
+| 通过后先发后审编辑 | `active` | `visible` | 新待审 | 旧通过 | 新待审 |
+| 通过后先审后发编辑 | `active` | `visible` | 旧通过 | 旧通过 | 新待审 |
+| 首次发布被驳回 | `active` | `hidden` | `NULL` | `NULL` | `NULL` |
+| 紧急隐藏 | `active` | `emergency_hidden` | 保留 | 保留 | `NULL` |
+| 已删除 | `deleted` | `hidden` | `NULL` | 保留供审计 | `NULL` |
+
+约束：
+
+- 活动态 `deleted_at` 为空；删除态非空。
+- `emergency_hidden` 只用于无待审版本的已通过公开内容。
+- 紧急隐藏时 `state_before_emergency=visible`，其他状态为空。
+- `display_version` 和 `can_interact` 只由状态字段派生。
+- 非法组合由状态机拒绝并记录。
+
+### 8.1 删除
+
+- `delete` 与 `admin_delete` 从任意活动状态进入不可逆 `deleted`。
+- 删除时清空物化、待审和紧急隐藏字段；待审版本标记 `superseded`。
+- 业务删除和审核墓碑在同一 MySQL 事务提交。
+- 重复删除幂等，不重复通知或清理。
+- 已删除内容禁止提交、重投、通过、修正、驳回、隐藏和恢复。
+- 管理审核命中删除态返回 `409 / CONTENT_ALREADY_DELETED`。
+
+删除父内容时，同一事务把直接和间接子评论、回复审核项一并转为 `deleted`，再复用业务模块的关联清理，不能只硬删除业务行。
+
+### 8.2 紧急隐藏
+
+- 仅管理员可隐藏已通过、无待审版本且当前公开的内容。
+- 首次隐藏保存 `visible`，重复隐藏不覆盖。
+- `restore` 只能恢复该快照，成功后清空原因、时间和快照。
+- 删除状态不能恢复。
+- 一键隐藏或恢复某用户内容在请求内按固定批次同步执行，每批幂等并返回处理数量；不保存后台批任务。个人博客超过单次总量上限时停止后续批次并返回已处理游标，管理员携带游标继续执行。
 
 ## 9. 人工审核
 
-人工审核入口在读取待审版本后仍必须交由状态机校验审核项当前状态。若内容的 `lifecycle_state=deleted`，通过、修正后通过和驳回统一返回 `CONTENT_ALREADY_DELETED` 冲突，不修改版本、图片通过记录或业务快照。
+审核请求携带当前待审版本 ID。版本被再次编辑替换时返回 `409 Conflict`。
 
 ### 9.1 通过
 
-- 待审版本成为最后通过版本和可见版本。
-- 版本引用图片全部登记为全站已通过。
-- 数据库事务提交图片通过状态后，所有同指纹引用会自动解析为原图；随后删除对应模糊预览图，失败时写入幂等清理任务重试。
-- 通过站内通知告知发布者，不发送邮件。
-- 未经修正通过时写入幂等 `clean_approved` 用户事件，供等级升级评估。
+- 待审版本成为通过和物化版本，公开状态变为 `visible`。
+- 图片登记为全站已通过。
+- 事务提交后删除模糊预览；失败由定期清理补偿。
+- 写操作日志、站内通知并增加干净通过计数。
 
 ### 9.2 修正后通过
 
-- 保留用户原文。
-- 保存管理员修正文、修正理由、管理员 ID 和修正时间。
-- 管理员可以移除风险图片；修正后的图片集合随修正文一起成为版本快照。
-- 修正文成为通过版本。
-- 站内通知文案说明内容经管理员修正后发布，并包含修正理由。
-- 写入幂等 `corrected` 用户事件并按配置增加违规分。
+- 保留 `submitted_content` 原文。
+- `published_content` 保存管理员修正文。
+- 保存修正理由、管理员 ID 和时间。
+- 管理员可移除版本图片，不能引用无关用户对象。
+- 修正文和最终图片成为通过快照。
+- 通知发布者内容经修正后发布，并包含修正理由。
+- 增加修正次数和违规分。
 
 ### 9.3 驳回
 
-- 首次发布：内容不再对公众展示。
-- 先发后审编辑：正文和图片引用一起原子回退到最后通过版本。
-- 先审后发编辑：丢弃当前待审版本，业务可见快照保持最后通过版本。
-- 通过站内通知告知发布者原因。
-- 写入幂等 `rejected` 用户事件并按配置增加违规分。
+- 首次发布：改为 `hidden`，清空业务正文和可见图片。
+- 先发后审编辑：正文和图片原子回退最后通过版本。
+- 先审后发编辑：业务快照保持最后通过版本。
+- 清空待审指针，版本标记 `rejected`。
+- 通知发布者公开驳回理由，增加驳回次数和违规分。
 
-发布者不能直接恢复被驳回原文，可以发起申诉或重新编辑后再次提交。
+发布者不能恢复被驳回版本，只能重新编辑并提交新版本。
 
-## 10. 图片处理与生命周期
+## 10. 图片处理
 
-### 10.1 未审核图片展示
+### 10.1 展示与复用
 
-- 图片不参与低、中、高文本风险判定。
-- 静态图上传时只生成一次最长边约 32–48 像素的低清预览，并存入 Garage。
-- 前端可叠加模糊样式；即使移除样式也只能获取不可恢复的低清图。
-- 未审核 GIF 不解码生成预览，统一返回固定 GIF 审核占位图。
-- 未审核响应永远不返回原图访问地址。
-- 预览生成失败时返回统一静态审核占位图，不能回退为原图。
+- 图片不参与文本风险判定。
+- 未审核静态图生成一次最长边默认 48 像素的低清预览。
+- 前端可叠加模糊样式，但未通过响应不返回原图地址。
+- 未审核 GIF 返回固定 GIF 审核占位图。
+- 预览失败返回固定静态占位图。
+- 先用 MD5 文件名查候选，再以 SHA-256 和大小确认已通过图片。
+- 命中后使用原图并更新 `last_used_at`。
+- 图片通过后删除模糊预览。
 
-### 10.2 全站复用
+### 10.2 版本和对象生命周期
 
-- 审核时先从现有 MD5 文件名快速查找候选，再以 SHA-256 和大小确认。
-- 命中已通过记录后直接使用原图，不生成模糊图。
-- 每次命中均更新 `last_used_at`。
-- 同一图片可跨作者、内容类型和版本复用通过结果。
+- 编辑只新增版本引用，不覆盖旧对象。
+- 新版本通过前不得删除最后通过版本图片。
+- 驳回按最后通过版本恢复图片和顺序。
+- 新版本真正通过后才清理已移除图片。
+- 仍被公开、待审或审计保留期内版本引用的对象不得删除。
+- 清理过期审核记录时跳过仍被有效版本引用的记录。
 
-### 10.3 版本保留与删除
+对象存储与 MySQL 不做伪事务：
 
-- 编辑提交后，最后通过版本的原图不移动、不覆盖、不删除。
-- 新版本只新增自己的图片引用；从新版本移除旧图不代表立即删除对象。
-- 驳回时按最后通过版本恢复正文、图片和顺序。
-- 只有新版本真正通过后，才可清理旧版本中已移除的图片。
-- 内容的 `lifecycle_state` 进入 `deleted` 后，先在事务中提交终止态和引用变化，再异步清理不再被公开、待审、申诉或其他内容引用的图片；对象清理不能删除审核墓碑。
-- 图片仍被其他公开、待审或可申诉版本引用时只减少引用，不删除对象。
-- 数据库状态先提交，再异步删除零引用对象；删除任务必须幂等。
+1. 先校验图片、准备正式对象和预览。
+2. 再执行 MySQL 状态事务。
+3. 事务失败时尽力删除本次新对象。
+4. 定期扫描过期 `temp/`、无数据库引用的正式对象和孤儿预览。
 
-### 10.4 资源限制
+扫描使用固定前缀、有界批次和最小对象年龄，避免误删请求中的上传。
 
-- 完整解码前读取图片宽高并限制总像素，防止压缩炸弹。
-- 图片处理使用有界并发，不按 HTTP 请求无限创建处理任务。
-- 列表和详情请求只返回预生成预览 URL，不进行实时模糊处理。
+## 11. 全站控制与用户处置
 
-## 11. 举报与申诉
+`moderation_control`：
 
-### 11.1 举报
+- `registration_mode`：`open`、`closed`
+- `publishing_mode`：`open`、`pre_review_all`、`closed`
+- `reason`、`operator_id`、`changed_at`、`lock_version`
 
-- 仅登录用户可以举报。
-- 请求必须通过验证码，并按账号和 IP 限频。
-- 同一用户对同一内容只能存在一条有效举报。
-- 举报原因使用 `illegal`、`porn`、`violence`、`fraud`、`privacy`、`abuse`、`spam`、`minor`、`other` 枚举；补充说明上限读取 `moderation.report.detail_max_chars`，默认 500 字符。
-- 举报只创建高优先级复核任务并通知管理员，不自动隐藏内容。
-- 作者无法看到举报者身份。
-- 处理结果通过站内消息通知举报者和发布者。
+数据库是事实源，Redis 只缓存短 TTL。缓存失败回源数据库，更新后主动失效。
 
-管理员可以维持原决定、修正后通过或驳回下架。
-
-举报被判定成立时写入幂等 `report_upheld` 用户事件；举报本身、重复举报和不成立举报均不增加被举报用户违规分。
-
-### 11.2 申诉
-
-- 申诉针对具体被驳回版本，而不是整个内容的永久累计次数。
-- 每个被驳回版本的申诉上限读取 `moderation.appeal.max_per_revision`，默认 3 次。
-- 申诉期间维持当前展示状态。
-- 管理员可以维持驳回、通过原文或修正后通过。
-- 待审期间作者正常编辑不会消耗申诉次数。
-
-## 12. 紧急控制与批量处置
-
-### 12.1 全站控制
-
-`moderation_control` 保存以下运行状态：
-
-- `registration_mode`：`open`、`closed`。
-- `publishing_mode`：`open`、`pre_review_all`、`closed`。
-- `reason`、`operator_id`、`changed_at`、可选 `expires_at`。
-- `version` 以及本次临时控制对应的 `restore_registration_mode`、`restore_publishing_mode`。
-
-数据库是事实源，Redis 只缓存短 TTL 副本；缓存失效或读取失败时回源数据库。到达 `expires_at` 后，后台任务仅在当前 `version` 仍与该临时控制匹配时恢复显式保存的目标模式，避免旧定时任务覆盖管理员的新操作。管理员发布、用户删除自己内容和已有内容读取不受发布总开关影响。
-
-`registration_mode=closed` 同时阻止邮箱注册和 OAuth 回调中的自动建号，但不影响已有用户登录、刷新令牌或绑定新的 OAuth 身份。
-
-### 12.2 用户级止血
+`registration_mode=closed` 同时阻止邮箱注册和 OAuth 自动建号，不影响已有用户登录。
 
 管理端支持：
 
-- 临时禁言并指定截止时间和理由。
-- 调整 `restricted` 等信任等级，或设置 `muted`、`banned` 处罚状态并手工释放。
-- 一键将某用户全部公开内容的 `public_state` 切换为 `emergency_hidden`。
-- 恢复该批被隔离内容各自 `state_before_emergency` 记录的展示状态。
-- 封禁用户时可选择是否同时隔离其全部公开内容。
+- 手工设置和锁定信任等级。
+- 设置、解除 `muted` 和 `banned`。
+- 隐藏或恢复某用户全部已通过公开内容。
+- 关闭注册、关闭发布或强制全部先审后发。
 
-批量隔离只改变公开状态并保存首次隔离前快照，不直接软删除或删除图片。重复隔离不得覆盖快照；恢复任务必须逐条重新锁定审核项，只恢复仍为 `emergency_hidden` 且快照合法的内容，跳过并记录已删除或已发生其他状态变化的内容。
+## 12. HTTP 响应与接口
 
-### 12.3 IP 网段批量处置
-
-IP 网段处置采用两阶段流程：
-
-1. `preview`：按 IPv4 `/24`、IPv6 `/64` 摘要、时间范围和内容类型返回命中数量及有限样例。
-2. `execute`：携带预览生成的一次性确认令牌，将命中内容批量隔离。
-
-默认动作是可恢复的 `quarantine`，不是不可逆“清空”。永久删除必须另行提交 `purge` 任务，要求再次确认、记录理由并经过配置的隔离保留期。所有批任务分批执行、可续跑、可审计，单批失败不影响已完成批次。
-
-`purge` 必须复用各内容类型的永久删除和关联资源清理语义，处理点赞、回复、通知、媒体和对象引用；禁止用跨表原始 SQL 直接清空内容行。
-
-### 12.4 紧急处置优先级
-
-- 全站 `closed` 高于用户信任等级。
-- `pre_review_all` 高于 `trusted` 的自动通过。
-- 用户禁言或封禁高于单条内容风险。
-- `public_state=emergency_hidden` 高于普通 `visible`，但不修改版本审核结果和回退指针。
-- `lifecycle_state=deleted` 是最高优先级终止态，不允许紧急恢复、人工审核或重新提交覆盖。
-
-## 13. HTTP 接口
-
-### 13.1 用户接口
-
-- `GET /moderation/me`：返回自己的等级、禁言/封禁期限及当前允许的操作，不返回内部评分阈值。
-- `POST /moderation/reports`
-- `POST /moderation/appeals`
-
-原有内容接口保持路径不变，响应增加统一审核摘要：
+原内容接口增加：
 
 ```json
 {
@@ -534,92 +429,56 @@ IP 网段处置采用两阶段流程：
     "public_state": "visible",
     "display_version": "pending",
     "has_pending_revision": true,
-    "pending_risk_level": "low"
+    "pending_risk_level": "low",
+    "can_interact": false
   }
 }
 ```
 
-图片响应增加 `display_mode`：`original`、`blurred` 或 `gif_placeholder`。前端只按服务端字段渲染，不自行推断审核状态。
+图片增加 `display_mode`：`original`、`blurred`、`gif_placeholder`。
 
-公开响应只提供展示状态和派生字段：仅 `lifecycle_state=active` 的内容可进入公开查询，`public_state` 决定展示方式，`display_version` 明确正文来源，`has_pending_revision` 表示是否存在待审版本。先发后审编辑时 `display_version=pending`，先审后发编辑时为 `last_approved`。公开响应不得包含先审后发的待审正文、命中规则或驳回原因。
+公开接口不得返回先审后发正文、命中规则、内部评分和高风险记录。作者和管理员可查看自己的待审正文、`review_status`、风险级别和公开处理理由，供编辑器显示审核标识。
 
-原有用户删除接口按权限触发 `delete`，管理员强制删除触发 `admin_delete`，不得绕过状态机直接删除业务行。重复删除保持接口幂等；管理审核或紧急恢复命中 `lifecycle_state=deleted` 时返回 `409 / CONTENT_ALREADY_DELETED`，不暴露内部状态组合。
-
-作者和管理员可额外获得 `pending_revision.review_status`、`pending_revision.risk_level`、自己的待审正文、可见处理理由，以及被驳回版本的 `appeal_count` 和配置上限。API 不再返回语义含糊的顶层审核 `status`。
-
-其他用户的信任等级、违规分、来源摘要和处置历史均不进入公开用户 DTO 或 Swagger 示例。
-
-### 13.2 管理接口
+管理接口：
 
 - `GET /admin/moderation/items`
 - `GET /admin/moderation/items/:id`
 - `POST /admin/moderation/items/:id/approve`
 - `POST /admin/moderation/items/:id/correct`
 - `POST /admin/moderation/items/:id/reject`
-- `GET /admin/moderation/reports`
-- `POST /admin/moderation/reports/:id/resolve`
-- `GET /admin/moderation/appeals`
-- `POST /admin/moderation/appeals/:id/approve`
-- `POST /admin/moderation/appeals/:id/correct`
-- `POST /admin/moderation/appeals/:id/reject`
-- `GET /admin/moderation/rules`
-- `POST /admin/moderation/rules`
-- `PATCH /admin/moderation/rules/:id`
-- `DELETE /admin/moderation/rules/:id`
+- `GET|POST|PATCH|DELETE /admin/moderation/rules...`
 - `GET /admin/moderation/users/:id`
 - `PATCH /admin/moderation/users/:id/profile`
-- `POST /admin/moderation/users/:id/mute`
-- `POST /admin/moderation/users/:id/ban`
-- `POST /admin/moderation/users/:id/release`
-- `POST /admin/moderation/users/:id/hide-content`
-- `POST /admin/moderation/users/:id/restore-content`
-- `GET /admin/moderation/control`
-- `PATCH /admin/moderation/control`
-- `POST /admin/moderation/bulk-actions/preview`
-- `POST /admin/moderation/bulk-actions/execute`
-- `GET /admin/moderation/bulk-actions/:id`
+- `POST /admin/moderation/users/:id/mute|ban|release`
+- `POST /admin/moderation/users/:id/hide-content|restore-content`
+- `GET|PATCH /admin/moderation/control`
 
-审核动作必须携带待审版本 ID。版本不再是当前版本时返回 `409 Conflict`，防止管理员审核旧版本覆盖作者的新编辑。
-
-禁言、封禁、全站关闭和强制先审后发均返回稳定业务错误码或能力字段，前端不得仅凭按钮隐藏代替后端权限校验。
-
-### 13.3 高风险错误
-
-高风险统一返回 HTTP `422 Unprocessable Entity` 和固定业务错误码 `CONTENT_RISK_REJECTED`。提示文案读取 `moderation.notices.high_rejected`，默认：
+高风险统一返回 HTTP `422`、业务码 `CONTENT_RISK_REJECTED` 和提示：
 
 > 内容存在较高风险，未能发布，请修改后重试。
 
-编辑场景额外说明原已通过版本不受影响。响应不返回命中词、规则 ID、匹配位置或具体风险标签。
+编辑失败时额外说明原版本不受影响。
 
-## 14. 通知、事务与幂等
+## 13. 事务、通知与幂等
 
-- 业务可见正文、可见图片投影、审核版本、版本指针和用户处置事件在同一事务内写入。
-- 用户事件使用唯一幂等键；事务内锁定对应 `user_moderation_profile` 行并更新投影，防止并发违规丢分或重复计分。
-- 用户档案和全站控制缓存只用于加速读取，数据库更新提交后必须主动失效缓存。
-- 审核状态先提交，再发布现有通知系统的站内事件。
-- `auto_approve` 和 `post_review` 内容可在首次公开时通知目标用户；`pre_review` 只通知作者已提交，待通过后再通知目标用户，驳回时不向目标用户暴露该内容。
-- 用户等级变化、禁言、封禁、释放和管理员手工校正均发送站内通知，包含原因和期限。
-- 不产生任何审核邮件任务。
-- 审核动作、通知、图片预览删除和旧图片清理均使用稳定幂等键。
-- 通知或对象删除失败不回滚已提交的审核结果，由后台任务重试。
-- 数据库事务失败时不得产生可见内容，并清理本次新增对象。
-- 高风险审计写入失败时仍必须拒绝内容，并使用 `zap.Logger` 记录异常。
+- 业务正文、可见图片、审核版本、指针、用户计数和日志在同一 MySQL 事务写入。
+- 审核项使用行锁或 `lock_version` 串行化并发编辑、审核和删除。
+- 发布、编辑和高风险阻断统一接受 `Idempotency-Key`，防止重试重复创建版本或计分。
+- 站内通知意图使用现有 `notification_event` 持久化，不创建审核邮件。
+- `post_review` 正式通过前只通知作者，不通知被回复者或根内容作者。
+- 驳回和删除后，通知读取根据审核状态隐藏不可用正文摘要。
+- 对象清理、通知和重复审核请求使用稳定幂等键。
+- 高风险审计失败仍拒绝内容并记录结构化错误。
 
-## 15. 配置默认值
+## 14. 配置
 
 ```yaml
 moderation:
-  # 是否启用用户内容审核。关闭时仅建议用于本地排障，生产环境应保持开启。
   enabled: true
-  # observe 仅记录判定；enforce 执行拦截和待审展示。
-  mode: observe
-  audit:
-    # 高风险阻断尝试和审核操作日志保留天数。
-    retention_days: 180
-    cleanup_interval: 24h
-    cleanup_batch_size: 500
+  # production 必须为 enforce；observe 仅用于本地规则调试。
+  mode: enforce
+
   policy:
-    # 信任等级到最终动作的策略矩阵；动作仅允许 auto_approve/post_review/pre_review/block。
     new:
       clean_low: post_review
       unapproved_image: pre_review
@@ -644,46 +503,36 @@ moderation:
       external_link_or_ad: pre_review
       medium: pre_review
       high: block
+
   rules:
-    # 限制单条模式长度和启用正则数量，避免规则快照无界增长。
     max_pattern_chars: 500
     max_enabled_regex_rules: 200
+    require_non_empty_in_enforce: true
+
+  content:
+    moment_max_chars: 800
+    comment_max_chars: 2000
+    guestbook_max_chars: 2000
+    reply_max_chars: 2000
+    max_images_per_content: 9
+    max_links_per_content: 10
+
   image:
-    # 完整解码前允许的最大总像素数，防止压缩炸弹。
+    max_upload_bytes: 1048576
+    max_gif_bytes: 307200
+    max_stored_bytes: 512000
     max_pixels: 12000000
-    # 同时执行低清预览处理的最大任务数。
     processing_concurrency: 2
-    # 低清预览最长边像素；前端可在此基础上增加模糊样式。
     preview_max_edge: 48
     static_placeholder_key: "system/moderation/image-review.jpg"
     gif_placeholder_key: "system/moderation/gif-review.jpg"
-    # 已通过图片连续未参与审核判断后的缓存记录保留天数。
     approval_retention_days: 180
+    temp_retention: 24h
+    orphan_min_age: 24h
     cleanup_interval: 24h
     cleanup_batch_size: 500
-  report:
-    account_hourly_limit: 10
-    ip_hourly_limit: 30
-    detail_max_chars: 500
-  appeal:
-    max_per_revision: 3
-    reason_max_chars: 1000
-  source:
-    # 生产环境必须通过 BLOG_MODERATION_SOURCE_HMAC_SECRET 注入。
-    hmac_secret: ""
-    # 到期只清空来源摘要，不删除内容和审核记录。
-    hash_retention_days: 180
-    cleanup_interval: 24h
-    cleanup_batch_size: 500
+
   governance:
-    evaluation_interval: 1h
-    evaluation_batch_size: 500
-    evaluation_window_days: 90
-    event_retention_days: 365
-    auto_promotion_enabled: true
-    auto_restriction_enabled: true
-    # 本地规则存在误判，默认关闭自动封禁；观察稳定后再显式开启。
-    auto_ban_enabled: false
     new_to_normal:
       min_age_days: 7
       clean_approvals: 3
@@ -691,170 +540,116 @@ moderation:
       min_age_days: 30
       clean_approvals: 20
     restricted_score_threshold: 6
-    banned_score_threshold: 12
     restricted_duration: 168h
-    # 前两次封禁分别持续 7 天和 30 天。
-    ban_durations:
-      - 168h
-      - 720h
-    permanent_after_ban_count: 3
-    hide_content_on_auto_ban: false
-    # 调整权重只影响后续评估，不重写历史事件。
     violation_weights:
       corrected: 1
-      report_upheld: 2
       rejected: 3
-      high_risk_blocked: 3
+      high_risk_blocked: 5
+
+  rate_limit:
+    publish_per_minute: 10
+    edit_per_minute: 10
+    temp_upload_per_minute: 10
+
   control:
     default_registration_mode: open
     default_publishing_mode: open
     cache_ttl: 30s
-    expiry_check_interval: 1m
-  bulk:
-    batch_size: 200
-    preview_token_ttl: 10m
-    quarantine_retention_days: 7
+    user_hide_batch_size: 200
+    user_hide_max_items_per_request: 1000
+
+  audit:
+    attempt_retention_days: 180
+    action_log_retention_days: 365
+    # 不清理当前物化、最后通过或待审版本。
+    obsolete_revision_retention_days: 365
+    cleanup_interval: 24h
+    cleanup_batch_size: 500
+
   notices:
     low_submitted: "发布成功，内容会被审核。"
     review_required: "内容已提交，等待人工审核。"
     high_rejected: "内容存在较高风险，未能发布，请修改后重试。"
 ```
 
-配置使用嵌套强类型结构并在启动时统一校验：时长与数量必须为正、限制阈值小于封禁阈值、策略动作必须属于允许枚举、封禁时长列表不能为空。安全下限不能被配置放宽：生产环境必须 `enabled=true` 且配置来源 HMAC 密钥，所有 `high` 必须为 `block`、未审核图片不能 `auto_approve`、`restricted` 不能先发后审或自动通过。生产正式启用前将 `mode` 从 `observe` 切换为 `enforce`。
+适合维护的阈值、时长、限频、策略和文案进入强类型 config。以下固定在代码中：
 
-适合运维调整的阈值、时长、开关、策略矩阵、提示文案和批量大小放入 config；状态枚举、删除终止态、紧急恢复只能使用隔离前快照等状态不变量，以及事务边界、权限、脱敏规则、哈希算法和幂等语义固定在代码中，不允许通过配置放宽。配置结构、默认值和“删除记录不等于删除仍被引用原图”等边界必须写中文注释。
+- 状态枚举和不变量。
+- `high` 必须 `block`。
+- `restricted` 不能自动通过或先发后审。
+- 未审核图片不能 `auto_approve`。
+- 删除终止态不能恢复。
+- 待审内容不能互动。
+- 生产环境必须启用审核并使用 `enforce`。
 
-config 在进程启动时加载，修改后通过重启生效；需要即时生效的审核规则、用户手工处置和全站紧急开关仍存数据库并主动失效缓存，不实现不透明的文件热加载。
+启动校验数量、时长、阈值、动作、非空规则集、占位图存在性、安全图片范围和非空提示文案；正文上限不得超过现有数据库列容量。
 
-## 16. 历史数据迁移与上线
+config 启动时加载，修改后重启生效。审核规则、手工用户处置和全站控制保存在数据库并即时生效。
 
-本文档是总设计，不生成一个覆盖全部功能的巨型实施计划。实施时按依赖关系分别编写四份计划，前一份完成验证后再创建和执行下一份：
+## 15. 迁移与实施阶段
 
-1. **Core**：审核表、纯状态机、业务可见快照、subject adapter、规则引擎和发布/编辑流程。
-2. **Media & Review**：图片预览与复用、版本图片回退、管理审核、站内通知、举报和申诉。
-3. **Governance**：用户事件、信任与处罚双状态、配置策略矩阵、自动限制和手工治理。
-4. **Operations**：全站控制、批量隔离、IP 网段任务、历史迁移、观察模式和正式启用。
+迁移：
 
-每份计划只加载本阶段需要的包和设计章节，明确入口文件、依赖接口、事务命令、测试矩阵和阶段验收命令，避免后续 AI 在一次上下文中同时修改整个审核系统。
+1. 回填历史内容为 `approved / legacy_migration`。
+2. 回填当前正文和图片版本快照。
+3. 分批计算历史图片 SHA-256 和大小并登记通过。
+4. 历史用户建立 `trusted + active` 档案。
+5. 初始化全站控制。
+6. 部署完整新版并完成迁移校验后再开放发布。
 
-最终上线顺序：
+迁移可重复、可断点续跑，不修改业务 ID 和对象 key，不兼容旧版应用写入。
 
-1. 以可重复执行的批处理回填历史内容、图片和用户档案。
-2. 历史内容统一建立 `approved / legacy_migration` 版本。
-3. 历史图片分批补算 SHA-256 和大小，登记为全站已通过图片。
-4. 全部历史用户建立 `trusted / legacy_migration` 档案，并按已有内容回填通过计数；历史可信等级不会因缺少旧事件而自动降级。
-5. 初始化全站控制为 config 指定的默认注册和发布模式。
-6. 启用 `observe` 运行 3–7 天，统计规则命中、用户评分和策略决策，但不执行自动封禁。
-7. 切换为 `enforce`，分阶段启用三级展示、用户治理、举报申诉和紧急控制。
+实施拆为三份计划：
 
-迁移必须支持断点续跑和重复执行，不修改历史业务 ID、对象 key 或现有 URL。
+1. **Core**：表、规则、状态机、业务 adapter、发布编辑、互动限制和删除级联。
+2. **Media & Review**：图片、版本回退、人工审核、修正、通知和对象清理。
+3. **Governance & Operations**：轻量等级、手工处罚、全站控制、迁移和上线验证。
 
-## 17. 测试与验证
+## 16. 测试与验收
 
-### 17.1 规则引擎
+### 16.1 规则与状态
 
-- Unicode、繁简、全半角、零宽字符、分隔符和重复字符归一化。
-- 精确、正则、组合规则的优先级和最高风险合并。
-- 无效规则不替换当前快照。
-- 冷启动加载失败降级为中风险。
+- Unicode、繁简、全半角、零宽字符和分隔符归一化。
+- 关键词、正则、组合规则和最高风险合并。
+- HTML/Markdown 危险标签、属性和协议清理。
+- 无效规则不替换快照；空规则集和加载失败降级中风险。
+- 首次发布和编辑的低、中、高风险矩阵。
+- 生命周期、公开状态和版本指针合法组合。
+- 待审再编辑、正文图片回退、过期审核冲突。
+- 修正保留原文、修正文、理由、管理员和时间。
+- 删除、审核和编辑并发不能恢复删除内容。
+- 紧急隐藏只接受无待审已通过内容。
 
-### 17.2 状态机
+### 16.2 互动、图片和治理
 
-- 首次发布和已通过内容编辑的低、中、高风险矩阵。
-- `lifecycle_state`、`public_state`、三个版本指针和 `state_before_emergency` 的全部合法组合及非法组合拒绝。
-- `auto_approve`、`post_review`、`pre_review`、`block` 四种动作。
-- 先发后审编辑驳回后正文与图片完整回退。
-- 先审后发编辑始终展示最后通过版本。
-- 待审再编辑使旧版本失效。
-- 管理员修正保留原文、理由、管理员和时间。
-- 过期版本审核返回冲突。
-- `delete` 与 `admin_delete` 从各非删除状态进入相同终止态，并分别记录操作者语义。
-- 删除待审内容会使待审版本失效、清空待审和物化指针，并保留最后通过指针供审计。
-- `deleted` 拒绝通过、修正、驳回、重投、紧急隔离和恢复；重复删除不产生重复副作用。
-- 首次紧急隔离保存原状态，重复隔离不覆盖快照，恢复只能回到该快照并清空紧急字段。
-- 删除与审核或恢复并发时，任何提交顺序都不能重新公开已删除内容。
+- 所有待审内容后端拒绝点赞和回复。
+- `can_interact` 与后端判断一致。
+- 父内容删除同步删除子审核项。
+- MD5 候选必须经 SHA-256 和大小确认。
+- 图片复用更新 `last_used_at`。
+- 静态预览、GIF 占位、回退和孤儿清理。
+- 缺失档案按 `new + active`。
+- 晋级、限制、到期懒恢复、手工锁定和幂等计分。
+- 禁言、封禁和全站模式优先于等级策略。
 
-### 17.3 用户等级与处置
+### 16.3 分层验证
 
-- 邮箱注册和 OAuth 自动建号提交后尽力补建档案，补建失败不回滚注册。
-- `EnsureNewProfile` 幂等，首次审核交互能补齐缺失档案；缺失期间始终按 `new + active` 决策。
-- 历史用户迁移为可信用户且重复执行不重复累计。
-- 各等级对纯文本、图片、链接、广告信号及三档风险的策略矩阵。
-- 违规事件幂等计分，举报成立与内容驳回不会重复计同一违规。
-- 自动晋级、限制、封禁、到期释放和第三次封禁转人工释放。
-- 信任等级与处罚状态互不混用；处罚结束后仍按受限信任策略观察。
-- 管理员手工信任锁阻止自动任务覆盖。
-- 被封用户仍可登录读取通知，但不能发布、举报和申诉。
-- 缺失档案时按新用户降级，不按可信用户放行。
+- Repository 使用 `go-sqlmock` 验证事务、锁和迁移幂等。
+- Service 使用 `gomock` 覆盖状态和策略矩阵。
+- Handler 使用 `httptest` 与 `testify` 验证鉴权、绑定、脱敏和错误码。
+- 完成后运行相关测试、`go test ./...`、`go vet ./...` 和 `make swag`。
 
-### 17.4 图片
+## 17. 监控与已知风险
 
-- MD5 候选与 SHA-256、大小的最终校验。
-- 全站已通过图片复用并更新 `last_used_at`。
-- 静态图低清预览、GIF 占位和处理失败占位。
-- 图片通过后删除模糊图，失败任务可重试。
-- 旧图片在新版本通过前不会删除。
-- 引用计数为零后才清理对象。
-- 按 `moderation.image.approval_retention_days` 清理时跳过仍被有效版本引用的记录。
-- 像素上限、并发限制及关键处理基准测试。
+记录风险动作数量、待审队列、审核结果、图片处理与清理、用户等级、全站控制、孤儿对象和通知重试失败。
 
-### 17.5 举报、申诉与通知
+日志使用注入的 `zap.Logger`，不记录完整高风险正文、图片二进制、认证信息或具体规则内容。
 
-- 举报登录、验证码、账号/IP 限频和唯一有效举报约束。
-- 举报不自动隐藏内容。
-- 每版本申诉次数遵守配置上限，默认三次。
-- 通知仅进入站内收件箱，不创建邮件任务。
-- 重复审核请求不产生重复通知和重复清理。
+接受的剩余风险：
 
-### 17.6 紧急控制与批量任务
-
-- 全站开放、强制先审后发和关闭发布的优先级。
-- 关闭注册同时覆盖邮箱注册和 OAuth 自动建号。
-- 用户全部内容隔离与恢复保持首次隔离前状态快照；重复隔离不覆盖，已删除内容不恢复。
-- IP 网段预览令牌一次性、过期和条件绑定校验。
-- 批任务断点续跑、重复执行幂等和部分失败恢复。
-- 永久清理必须满足隔离保留期，不允许直接绕过。
-
-### 17.7 分层验证
-
-- Repository：使用 `go-sqlmock` 验证事务、查询和迁移幂等，覆盖业务删除与审核墓碑原子提交。
-- Service：使用 `gomock` 覆盖状态流、权限和异常降级。
-- Handler：使用 `httptest` 与 `testify` 验证绑定、鉴权、响应脱敏和错误码。
-- 完成后运行相关包测试、`go test ./...`、`go vet ./...` 和 Swagger 更新验证。
-
-### 17.8 配置验证
-
-- 默认配置完整映射到嵌套强类型结构。
-- `BLOG_` 环境变量能覆盖敏感值和常用阈值。
-- 非法动作、非正数时长、倒置阈值、空封禁时长列表和空提示文案启动失败。
-- 任何等级把高风险配置为非 `block`、未审核图片配置为 `auto_approve` 或受限用户配置为先发后审时启动失败。
-- 生产环境关闭审核或缺少来源 HMAC 密钥时启动失败。
-
-## 18. 监控与运维
-
-至少记录以下指标或结构化日志：
-
-- 低、中、高风险判定数量。
-- 待审队列长度和最老等待时长。
-- 人工通过、修正、驳回和申诉结果数量。
-- 举报数量、重复举报和限频拒绝数量。
-- 图片预览耗时、处理失败、像素限制拒绝数量。
-- 模糊图删除、旧图清理和通知重试失败数量。
-- 图片审核缓存命中率及定期清理数量。
-- 各信任等级与处罚状态数量、变化原因、禁言、限制、封禁和自动释放数量。
-- 全站控制模式变化、批量隔离命中数、进度、失败和恢复数量。
-- 按来源网段摘要聚合的异常注册与发布趋势，不输出原始 IP。
-
-所有日志使用注入的 `zap.Logger`，不记录完整高风险正文、图片二进制、认证信息或具体敏感规则内容。
-
-## 19. 已知风险
-
-- 本地规则不能完整理解上下文，必然存在误判和漏判，需要持续维护规则与人工队列。
-- 低风险正文会在人工通过前公开，存在短时间传播风险。
-- 图片没有机器内容识别，只通过低清预览、GIF 占位和人工审核降低公开风险。
-- 注册用户不要求手机号、身份证或已验证邮箱，真实身份认证要求尚未满足。
-- 举报不自动隐藏内容，管理员需要及时处理高优先级复核任务。
-- 自动评级依赖可配置阈值，配置过严会误伤用户，配置过松会失去处置效果；上线观察期必须先记录决策再启用自动封禁。
-- IP 网段和设备摘要存在共享、变化和伪造问题，只能用于风险降级与批量候选，不能证明两个账号属于同一自然人。
-- 紧急批量处置影响范围大，必须使用预览、一次性确认令牌、可恢复隔离和完整操作日志降低误操作风险。
-- 无实名条件下可以通过养号获取可信等级；账号年龄、连续干净审核和可配置阈值只能提高成本，不能彻底阻止协同养号。
+- 本地规则无法理解完整上下文，会有误判和漏判。
+- 低风险内容在管理员处理前短暂公开。
+- 图片不做识别，低清预览仍可能表达轮廓。
+- 只有一名管理员，待审积压时处置速度有限。
+- 无手机号或实名信息，无法可靠阻止重新注册。
+- 举报、申诉、IP 批量止血和自动封禁以后按实际需要另行设计。
