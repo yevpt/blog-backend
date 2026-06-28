@@ -23,6 +23,11 @@ var (
 	htmlImagePattern     = regexp.MustCompile(`(?i)<img\b[^>]*\bsrc\s*=\s*['"]([^'"]+)['"][^>]*>`)
 )
 
+// ContainsImage 判断正文是否包含 Markdown 或 HTML 图片语法。
+func ContainsImage(content string) bool {
+	return markdownImagePattern.MatchString(content) || htmlImagePattern.MatchString(content)
+}
+
 type NormalizeInput struct {
 	UserID       uint
 	Content      string

@@ -3,6 +3,7 @@ package comment_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +16,7 @@ import (
 	commenthandler "github.com/vpt/blog-backend/internal/handler/comment"
 	"github.com/vpt/blog-backend/internal/middleware"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -32,6 +34,9 @@ type stubCommentService struct {
 	createUserID          uint
 	createResp            *dto.CommentItemResp
 	createErr             error
+	editCommentID         uint
+	editCommentReq        dto.CommentCreateReq
+	editCommentUserID     uint
 	listRepliesTargetType string
 	listRepliesCommentID  uint
 	listRepliesReq        dto.CommentReplyListReq
@@ -75,6 +80,13 @@ func (s *stubCommentService) Create(targetType string, targetID uint, req dto.Co
 	return s.createResp, s.createErr
 }
 
+func (s *stubCommentService) EditComment(_ string, id uint, req dto.CommentCreateReq, userID uint, _ []string) (*dto.CommentItemResp, error) {
+	s.editCommentID = id
+	s.editCommentReq = req
+	s.editCommentUserID = userID
+	return &dto.CommentItemResp{ID: id}, nil
+}
+
 func (s *stubCommentService) ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error) {
 	s.listRepliesTargetType = targetType
 	s.listRepliesCommentID = commentID
@@ -89,6 +101,10 @@ func (s *stubCommentService) Reply(targetType string, commentID uint, req dto.Co
 	s.replyReq = req
 	s.replyUserID = userID
 	return s.replyResp, s.replyErr
+}
+
+func (s *stubCommentService) EditReply(string, uint, dto.CommentReplyCreateReq, uint, []string) (*dto.CommentReplyResp, error) {
+	return nil, nil
 }
 
 func (s *stubCommentService) ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error) {
@@ -122,6 +138,11 @@ func newCommentRouter(svc commentservice.CommentService) *gin.Engine {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "vpt", Status: 1})
 		h.CreateArticle(c)
+	})
+	r.PATCH("/articles/comments/:id", func(c *gin.Context) {
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
+		h.EditArticle(c)
 	})
 	r.GET("/articles/comments/:id/replies", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
@@ -169,6 +190,7 @@ func TestCommentHandler_CreateArticle_UsesClaimsUserID(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/articles/3/comments", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "comment-1")
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
@@ -177,9 +199,90 @@ func TestCommentHandler_CreateArticle_UsesClaimsUserID(t *testing.T) {
 	assert.Equal(t, uint(3), stub.createTargetID)
 	assert.Equal(t, uint(7), stub.createUserID)
 	assert.Equal(t, "好文章", stub.createReq.Content)
+	assert.Equal(t, "comment-1", stub.createReq.IdempotencyKey)
 	var resp response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
 	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestCommentHandlerCreateRequiresIdempotencyKey(t *testing.T) {
+	stub := &stubCommentService{}
+	router := newCommentRouter(stub)
+	body, _ := json.Marshal(dto.CommentCreateReq{Content: "好文章"})
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/articles/3/comments", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	router.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"code":400`)
+	assert.Zero(t, stub.createUserID)
+}
+
+func TestCommentHandlerEditUsesAuthenticatedActorAndIdempotencyKey(t *testing.T) {
+	stub := &stubCommentService{}
+	router := newCommentRouter(stub)
+	body, _ := json.Marshal(dto.CommentCreateReq{Content: "编辑内容"})
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest("PATCH", "/articles/comments/9", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "edit-1")
+
+	router.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, uint(9), stub.editCommentID)
+	assert.Equal(t, uint(7), stub.editCommentUserID)
+	assert.Equal(t, "edit-1", stub.editCommentReq.IdempotencyKey)
+}
+
+func TestCommentHandlerReturnsModerationSuccessMessageAndHidesMediumContent(t *testing.T) {
+	stub := &stubCommentService{createResp: &dto.CommentItemResp{
+		ID: 9, Moderation: dto.ModerationView{
+			Notice: "内容已提交，等待人工审核。", PublicState: "placeholder", HasPendingRevision: true,
+		},
+	}}
+	router := newCommentRouter(stub)
+	body, _ := json.Marshal(dto.CommentCreateReq{Content: "待审内容"})
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/articles/3/comments", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "medium-1")
+
+	router.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), "内容已提交，等待人工审核。")
+	assert.Contains(t, recorder.Body.String(), `"content":""`)
+}
+
+func TestCommentHandlerMapsModerationRiskAndImageErrors(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		statusCode int
+		errorCode  string
+	}{
+		{name: "risk", err: fmt.Errorf("%w: 内容存在风险，已拒绝发布。", moderationservice.ErrContentRiskRejected), statusCode: http.StatusUnprocessableEntity, errorCode: response.CodeContentRiskRejected},
+		{name: "image", err: moderationservice.ErrImageReviewUnavailable, statusCode: http.StatusConflict, errorCode: response.CodeImageReviewUnavailable},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stub := &stubCommentService{createErr: test.err}
+			router := newCommentRouter(stub)
+			body, _ := json.Marshal(dto.CommentCreateReq{Content: "正文"})
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/articles/3/comments", bytes.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Idempotency-Key", "error-1")
+
+			router.ServeHTTP(recorder, req)
+
+			assert.Equal(t, test.statusCode, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), test.errorCode)
+		})
+	}
 }
 
 func TestCommentHandler_ListArticleReplies_BindsCommentIDAndPaging(t *testing.T) {
@@ -208,6 +311,7 @@ func TestCommentHandler_ReplyArticle_BindsCommentID(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/articles/comments/9/replies", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "reply-1")
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 

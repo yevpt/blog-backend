@@ -52,6 +52,9 @@ func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (
 	}
 
 	ownerUserID := normalizeOwnerUserID(req.OwnerUserID)
+	if s.moderation != nil {
+		return s.submit(ownerUserID, fromUserID, content, req.IdempotencyKey)
+	}
 	normalized, store, err := s.normalizeGuestbookImages(content, fromUserID, guestbookImageTargetPrefix(ownerUserID))
 	if err != nil {
 		return nil, err

@@ -1,8 +1,17 @@
 package moderation
 
-import "errors"
+import (
+	"errors"
+	"strings"
+
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+)
 
 var (
+	// ErrSubjectNotFound 对外统一表示内容不存在或当前用户无权编辑。
+	ErrSubjectNotFound = moderationrepo.ErrSubjectNotFound
+	// ErrItemNotFound 表示内容尚无审核记录。
+	ErrItemNotFound = moderationrepo.ErrItemNotFound
 	// ErrContentTooLong 表示清洗后的纯文本超过业务字符上限。
 	ErrContentTooLong = errors.New("content exceeds character limit")
 	// ErrEmptyRuleset 表示 enforce 分类器没有可安全启用的规则。
@@ -28,3 +37,22 @@ var (
 	// ErrInteractionNotAllowed 表示目标内容尚在审核或不可公开互动。
 	ErrInteractionNotAllowed = errors.New("moderation subject cannot be interacted with")
 )
+
+// PublicErrorMessage 返回可安全暴露给前端的审核错误提示，不包含规则命中细节。
+func PublicErrorMessage(err error) string {
+	switch {
+	case errors.Is(err, ErrContentRiskRejected):
+		if _, message, ok := strings.Cut(err.Error(), ": "); ok && message != "" {
+			return message
+		}
+		return "内容存在风险，已拒绝发布。"
+	case errors.Is(err, ErrImageReviewUnavailable):
+		return "图片内容审核暂不可用，请移除图片后重试。"
+	case errors.Is(err, ErrAlreadyDeleted):
+		return "内容已删除，不能继续操作。"
+	case errors.Is(err, ErrInteractionNotAllowed):
+		return "内容正在审核，暂时不能互动。"
+	default:
+		return "内容审核失败，请稍后重试。"
+	}
+}

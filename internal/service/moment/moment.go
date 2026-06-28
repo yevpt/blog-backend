@@ -60,16 +60,9 @@ type momentService struct {
 
 // NewMomentService 创建碎语业务服务实例。
 // publisher 用于点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderationServices ...moderationservice.Service) MomentService {
+func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderation moderationservice.Service) MomentService {
 	return &momentService{
 		repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver,
-		uvSvc: uvSvc, publisher: publisher, moderation: firstModerationService(moderationServices),
+		uvSvc: uvSvc, publisher: publisher, moderation: moderation,
 	}
-}
-
-func firstModerationService(services []moderationservice.Service) moderationservice.Service {
-	if len(services) == 0 {
-		return nil
-	}
-	return services[0]
 }

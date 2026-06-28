@@ -1,12 +1,14 @@
 package moderation
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"sync/atomic"
 
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	"go.uber.org/zap"
 )
 
@@ -38,6 +40,30 @@ func NewClassifier(logger *zap.Logger, initial RuleSnapshot) Classifier {
 		logger.Warn("初始化文本审核规则失败，启用中风险降级", zap.Error(err))
 	}
 	return result
+}
+
+// NewClassifierFromRepository 从数据库加载当前启用规则并构造运行时分类器。
+func NewClassifierFromRepository(ctx context.Context, repo moderationrepo.Repository, logger *zap.Logger) (Classifier, error) {
+	records, err := repo.LoadEnabledRules(ctx)
+	if err != nil {
+		return nil, err
+	}
+	snapshot := RuleSnapshot{Rules: make([]CompiledRule, 0, len(records))}
+	for _, record := range records {
+		if record.RulesetVersion > snapshot.Version {
+			snapshot.Version = record.RulesetVersion
+		}
+		snapshot.Rules = append(snapshot.Rules, CompiledRule{
+			ID: record.ID, Type: RuleType(record.RuleType), Risk: RiskLevel(record.RiskLevel), Pattern: record.Pattern,
+		})
+	}
+	if snapshot.Version == 0 {
+		snapshot.Version = 1
+	}
+	if _, err := compileSnapshot(snapshot); err != nil {
+		return nil, err
+	}
+	return NewClassifier(logger, snapshot), nil
 }
 
 func (c *classifier) Classify(processed ProcessedContent) Classification {

@@ -232,6 +232,7 @@ func TestMomentHandler_Save_UsesClaimsUserAndRoles(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Idempotency-Key", "moment-1")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	r.ServeHTTP(w, req)
 
@@ -262,6 +263,7 @@ func TestMomentHandler_Save_RejectsImageOverOneMBBeforeService(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Idempotency-Key", "moment-2")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	r.ServeHTTP(w, req)
 
@@ -291,6 +293,7 @@ func TestMomentHandler_Save_RejectsGifOverThreeHundredKBBeforeService(t *testing
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Idempotency-Key", "moment-3")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	r.ServeHTTP(w, req)
 
@@ -318,6 +321,7 @@ func TestMomentHandler_Save_ReturnsSpecificImageErrorFromService(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/moments", body)
+	req.Header.Set("Idempotency-Key", "moment-4")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	r.ServeHTTP(w, req)
 

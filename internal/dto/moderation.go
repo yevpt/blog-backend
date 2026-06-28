@@ -2,6 +2,8 @@ package dto
 
 // ModerationView 描述内容当前公开形态和作者可见的待审状态。
 type ModerationView struct {
+	// Notice 是提交后可直接展示给用户的稳定提示。
+	Notice string `json:"notice,omitempty" example:"发布成功，内容会被审核。"`
 	// PublicState 是 visible、placeholder、hidden 或 emergency_hidden。
 	PublicState string `json:"public_state" example:"visible"`
 	// DisplayVersion 表示公开正文来自 pending、last_approved 或 none。

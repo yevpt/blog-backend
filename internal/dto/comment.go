@@ -32,6 +32,8 @@ type CommentDeleteReq struct {
 type CommentCreateReq struct {
 	// Content 评论内容，去除首尾空白后不能为空，最多 2000 字符。
 	Content string `json:"content" binding:"required,max=2000" example:"写得真好"`
+	// IdempotencyKey 由 handler 从请求头注入。
+	IdempotencyKey string `json:"-" swaggerignore:"true"`
 }
 
 // CommentReplyCreateReq 新增评论回复请求。
@@ -40,6 +42,8 @@ type CommentReplyCreateReq struct {
 	ParentReplyID uint `json:"parent_reply_id" example:"0"`
 	// Content 回复内容，去除首尾空白后不能为空，最多 2000 字符。
 	Content string `json:"content" binding:"required,max=2000" example:"收到"`
+	// IdempotencyKey 由 handler 从请求头注入。
+	IdempotencyKey string `json:"-" swaggerignore:"true"`
 }
 
 // CommentReplyListReq 评论回复分页查询参数。
@@ -100,6 +104,8 @@ type CommentReplyResp struct {
 	Moderation ModerationView `json:"moderation"`
 }
 
+func (r *CommentReplyResp) ResponseMessage() string { return r.Moderation.Notice }
+
 // CommentItemResp 一级评论响应。
 type CommentItemResp struct {
 	// ID 评论 ID。
@@ -127,6 +133,8 @@ type CommentItemResp struct {
 	// Moderation 当前审核展示状态。
 	Moderation ModerationView `json:"moderation"`
 }
+
+func (r *CommentItemResp) ResponseMessage() string { return r.Moderation.Notice }
 
 // CommentPageResp 评论分页响应。
 type CommentPageResp struct {

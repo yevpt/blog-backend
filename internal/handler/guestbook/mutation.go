@@ -29,8 +29,46 @@ func (h *GuestbookHandler) Create(c *gin.Context) {
 	if !reqbind.JSON(c, &req) {
 		return
 	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
+	req.IdempotencyKey = key
 
 	resp, err := h.svc.Create(req, userID)
+	writeGuestbookResponse(c, resp, err)
+}
+
+// Edit 编辑留言。
+// @Summary 编辑留言
+// @Tags 留言板
+// @Accept json
+// @Produce json
+// @Param id path int true "留言 ID"
+// @Param request body dto.GuestbookCreateReq true "留言编辑请求"
+// @Success 200 {object} response.Response{data=dto.GuestbookItemResp}
+// @Failure 409 {object} response.Response
+// @Failure 422 {object} response.Response
+// @Router /guestbook/{id} [patch]
+func (h *GuestbookHandler) Edit(c *gin.Context) {
+	userID, roleNames, ok := requiredUser(c)
+	if !ok {
+		return
+	}
+	id, ok := bindGuestbookID(c, "id")
+	if !ok {
+		return
+	}
+	var req dto.GuestbookCreateReq
+	if !reqbind.JSON(c, &req) {
+		return
+	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
+	req.IdempotencyKey = key
+	resp, err := h.svc.Edit(id, req, userID, roleNames)
 	writeGuestbookResponse(c, resp, err)
 }
 

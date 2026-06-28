@@ -70,6 +70,8 @@ type MomentSaveReq struct {
 	ImageOrder []string `form:"image_order" json:"image_order" example:"url:0,file:0"`
 	// ImageFiles multipart 中的新图片文件。
 	ImageFiles []MomentImageFileReq `json:"-" swaggerignore:"true"`
+	// IdempotencyKey 由 handler 从请求头注入。
+	IdempotencyKey string `form:"-" json:"-" swaggerignore:"true"`
 }
 
 // MomentUserResp 碎语作者摘要。
@@ -141,6 +143,8 @@ type MomentItemResp struct {
 	// Moderation 当前审核展示状态。
 	Moderation ModerationView `json:"moderation"`
 }
+
+func (r *MomentItemResp) ResponseMessage() string { return r.Moderation.Notice }
 
 // MomentPageResp 碎语分页响应。
 type MomentPageResp struct {

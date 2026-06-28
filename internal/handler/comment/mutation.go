@@ -41,6 +41,35 @@ func (h *CommentHandler) CreateMoment(c *gin.Context) {
 	h.createTargetComment(c, targetTypeMoment, "id", "碎语 ID")
 }
 
+// EditArticle 编辑文章评论。
+// @Summary 编辑文章评论
+// @Tags 评论
+// @Accept json
+// @Produce json
+// @Param id path int true "文章评论 ID"
+// @Param request body dto.CommentCreateReq true "评论编辑请求"
+// @Success 200 {object} response.Response{data=dto.CommentItemResp}
+// @Failure 401 {object} response.Response
+// @Failure 409 {object} response.Response
+// @Failure 422 {object} response.Response
+// @Router /articles/comments/{id} [patch]
+func (h *CommentHandler) EditArticle(c *gin.Context) {
+	h.editTargetComment(c, targetTypeArticle, "id", "文章评论 ID")
+}
+
+// EditMoment 编辑碎语评论。
+// @Summary 编辑碎语评论
+// @Tags 评论
+// @Accept json
+// @Produce json
+// @Param id path int true "碎语评论 ID"
+// @Param request body dto.CommentCreateReq true "评论编辑请求"
+// @Success 200 {object} response.Response{data=dto.CommentItemResp}
+// @Router /moments/comments/{id} [patch]
+func (h *CommentHandler) EditMoment(c *gin.Context) {
+	h.editTargetComment(c, targetTypeMoment, "id", "碎语评论 ID")
+}
+
 // ReplyArticle 新增文章评论回复。
 // @Summary 新增文章评论回复
 // @Description 登录用户回复文章评论或其回复；parent_reply_id 为 0 时直接回复一级评论。
@@ -90,6 +119,45 @@ func (h *CommentHandler) ReplyMoment(c *gin.Context) {
 // @Router /guestbook/comments/{id}/replies [post]
 func (h *CommentHandler) ReplyGuestbook(c *gin.Context) {
 	h.replyTargetComment(c, targetTypeGuestbook, "id", "留言 ID")
+}
+
+// EditArticleReply 编辑文章评论回复。
+// @Summary 编辑文章评论回复
+// @Tags 评论
+// @Accept json
+// @Produce json
+// @Param id path int true "回复 ID"
+// @Param request body dto.CommentReplyCreateReq true "回复编辑请求"
+// @Success 200 {object} response.Response{data=dto.CommentReplyResp}
+// @Router /articles/comment-replies/{id} [patch]
+func (h *CommentHandler) EditArticleReply(c *gin.Context) {
+	h.editTargetReply(c, targetTypeArticle, "id", "文章评论回复 ID")
+}
+
+// EditMomentReply 编辑碎语评论回复。
+// @Summary 编辑碎语评论回复
+// @Tags 评论
+// @Accept json
+// @Produce json
+// @Param id path int true "回复 ID"
+// @Param request body dto.CommentReplyCreateReq true "回复编辑请求"
+// @Success 200 {object} response.Response{data=dto.CommentReplyResp}
+// @Router /moments/comment-replies/{id} [patch]
+func (h *CommentHandler) EditMomentReply(c *gin.Context) {
+	h.editTargetReply(c, targetTypeMoment, "id", "碎语评论回复 ID")
+}
+
+// EditGuestbookReply 编辑留言回复。
+// @Summary 编辑留言回复
+// @Tags 评论
+// @Accept json
+// @Produce json
+// @Param id path int true "回复 ID"
+// @Param request body dto.CommentReplyCreateReq true "回复编辑请求"
+// @Success 200 {object} response.Response{data=dto.CommentReplyResp}
+// @Router /guestbook/comment-replies/{id} [patch]
+func (h *CommentHandler) EditGuestbookReply(c *gin.Context) {
+	h.editTargetReply(c, targetTypeGuestbook, "id", "留言回复 ID")
 }
 
 // ToggleArticleLike 切换文章评论点赞状态。
@@ -288,8 +356,35 @@ func (h *CommentHandler) createTargetComment(c *gin.Context, targetType string, 
 	if !reqbind.JSON(c, &req) {
 		return
 	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
+	req.IdempotencyKey = key
 
 	resp, err := h.svc.Create(targetType, targetID, req, userID)
+	writeCommentResponse(c, resp, err)
+}
+
+func (h *CommentHandler) editTargetComment(c *gin.Context, targetType string, paramName string, fieldName string) {
+	userID, roleNames, ok := requiredCommentClaims(c)
+	if !ok {
+		return
+	}
+	id, ok := reqbind.PathUint(c, paramName, fieldName)
+	if !ok {
+		return
+	}
+	var req dto.CommentCreateReq
+	if !reqbind.JSON(c, &req) {
+		return
+	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
+	req.IdempotencyKey = key
+	resp, err := h.svc.EditComment(targetType, id, req, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -307,8 +402,35 @@ func (h *CommentHandler) replyTargetComment(c *gin.Context, targetType string, p
 	if !reqbind.JSON(c, &req) {
 		return
 	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
+	req.IdempotencyKey = key
 
 	resp, err := h.svc.Reply(targetType, commentID, req, userID)
+	writeCommentResponse(c, resp, err)
+}
+
+func (h *CommentHandler) editTargetReply(c *gin.Context, targetType string, paramName string, fieldName string) {
+	userID, roleNames, ok := requiredCommentClaims(c)
+	if !ok {
+		return
+	}
+	id, ok := reqbind.PathUint(c, paramName, fieldName)
+	if !ok {
+		return
+	}
+	var req dto.CommentReplyCreateReq
+	if !reqbind.JSON(c, &req) {
+		return
+	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
+	req.IdempotencyKey = key
+	resp, err := h.svc.EditReply(targetType, id, req, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }
 

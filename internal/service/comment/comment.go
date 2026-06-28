@@ -35,8 +35,10 @@ type CommentService interface {
 	List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error)
 	ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error)
 	Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error)
+	EditComment(targetType string, commentID uint, req dto.CommentCreateReq, userID uint, roleNames []string) (*dto.CommentItemResp, error)
 	ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error)
 	Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error)
+	EditReply(targetType string, replyID uint, req dto.CommentReplyCreateReq, userID uint, roleNames []string) (*dto.CommentReplyResp, error)
 	ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error)
 	ToggleReplyLike(targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error)
 	DeleteComment(targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
@@ -53,16 +55,9 @@ type commentService struct {
 
 // NewCommentService 创建评论业务服务实例。
 // publisher 用于评论、回复成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewCommentService(repo commentrepo.CommentRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderationServices ...moderationservice.Service) CommentService {
+func NewCommentService(repo commentrepo.CommentRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderation moderationservice.Service) CommentService {
 	return &commentService{
 		repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver, publisher: publisher,
-		moderation: firstModerationService(moderationServices),
+		moderation: moderation,
 	}
-}
-
-func firstModerationService(services []moderationservice.Service) moderationservice.Service {
-	if len(services) == 0 {
-		return nil
-	}
-	return services[0]
 }

@@ -1,8 +1,10 @@
 package router
 
 import (
+	"context"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -34,6 +36,7 @@ import (
 	dashboardrepo "github.com/vpt/blog-backend/internal/repository/dashboard"
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	musicrepo "github.com/vpt/blog-backend/internal/repository/music"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
@@ -50,6 +53,7 @@ import (
 	dashboardservice "github.com/vpt/blog-backend/internal/service/dashboard"
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
@@ -66,36 +70,36 @@ import (
 	"github.com/vpt/blog-backend/pkg/storage"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
-	"time"
 )
 
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health            *handler.HealthHandler
-	test              *handler.TestHandler
-	auth              *authhandler.AuthHandler
-	oauth             *oauthhandler.OAuthHandler
-	captcha           *captchahandler.CaptchaHandler
-	article           *articlehandler.ArticleHandler
-	comment           *commenthandler.CommentHandler
-	guestbook         *guestbookhandler.GuestbookHandler
-	moment            *momenthandler.MomentHandler
-	notification      *notificationhandler.NotificationHandler
-	notificationAdmin *notificationhandler.NotificationAdminHandler
-	user              *userhandler.UserHandler
-	userAdmin         *userhandler.UserAdminHandler
-	category          *categoryhandler.CategoryHandler
-	tag               *taghandler.TagHandler
-	music             *musichandler.MusicHandler
-	friendLink        *friendlinkhandler.FriendLinkHandler
-	upload            *uploadhandler.Handler
-	analyticsCollect  *analyticshandler.CollectHandler
-	analyticsAdmin    *analyticshandler.AdminHandler
-	analyticsPublic   *analyticshandler.PublicHandler
-	analyticsRuntime  AnalyticsRuntime
-	dashboard         *dashboardhandler.Handler
-	userCache         userservice.UserCacheService
+	health              *handler.HealthHandler
+	test                *handler.TestHandler
+	auth                *authhandler.AuthHandler
+	oauth               *oauthhandler.OAuthHandler
+	captcha             *captchahandler.CaptchaHandler
+	article             *articlehandler.ArticleHandler
+	comment             *commenthandler.CommentHandler
+	guestbook           *guestbookhandler.GuestbookHandler
+	moment              *momenthandler.MomentHandler
+	notification        *notificationhandler.NotificationHandler
+	notificationAdmin   *notificationhandler.NotificationAdminHandler
+	user                *userhandler.UserHandler
+	userAdmin           *userhandler.UserAdminHandler
+	category            *categoryhandler.CategoryHandler
+	tag                 *taghandler.TagHandler
+	music               *musichandler.MusicHandler
+	friendLink          *friendlinkhandler.FriendLinkHandler
+	upload              *uploadhandler.Handler
+	analyticsCollect    *analyticshandler.CollectHandler
+	analyticsAdmin      *analyticshandler.AdminHandler
+	analyticsPublic     *analyticshandler.PublicHandler
+	analyticsRuntime    AnalyticsRuntime
+	dashboard           *dashboardhandler.Handler
+	userCache           userservice.UserCacheService
+	moderationRateLimit config.ModerationRateLimitConfig
 }
 
 // AnalyticsRuntime 暴露统计上报链路中需要被 worker 复用的实例。
@@ -257,12 +261,21 @@ func newRouteHandlers(
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
+	moderationRepo := moderationrepo.NewRepository(db)
+	moderationClassifier, moderationErr := moderationservice.NewClassifierFromRepository(context.Background(), moderationRepo, log)
+	if moderationErr != nil {
+		panic(moderationErr)
+	}
+	moderationSvc := moderationservice.NewService(
+		moderationRepo, moderationservice.NewContentProcessor(), moderationClassifier,
+		moderationservice.NewPolicyDecider(), cfg.Moderation, log, nil,
+	)
 	commentRepo := commentrepo.NewCommentRepository(db)
-	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo)
+	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
-	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher, userRepo)
+	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	momentRepo := momentrepo.NewMomentRepository(db)
-	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo)
+	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo, moderationSvc)
 	uploadSvc := uploadservice.NewService(objectStore)
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
@@ -278,30 +291,31 @@ func newRouteHandlers(
 	)
 
 	return routeHandlers{
-		health:            handler.NewHealthHandler(db, redisClient),
-		test:              handler.NewTestHandler(jwtManager),
-		auth:              authhandler.NewAuthHandler(authSvc),
-		oauth:             oauthhandler.NewOAuthHandler(oauthSvc),
-		captcha:           captchahandler.NewCaptchaHandler(captchaSvc),
-		article:           articlehandler.NewArticleHandler(articleSvc),
-		comment:           commenthandler.NewCommentHandler(commentSvc),
-		guestbook:         guestbookhandler.NewGuestbookHandler(guestbookSvc),
-		moment:            momenthandler.NewMomentHandler(momentSvc),
-		notification:      notificationhandler.NewNotificationHandler(notificationInboxSvc),
-		notificationAdmin: notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
-		user:              userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
-		userAdmin:         userhandler.NewUserAdminHandler(userAdminSvc, log),
-		category:          categoryhandler.NewCategoryHandler(categorySvc),
-		tag:               taghandler.NewTagHandler(tagSvc),
-		music:             musichandler.NewMusicHandler(musicSvc),
-		friendLink:        friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
-		upload:            uploadhandler.NewHandler(uploadSvc),
-		analyticsCollect:  analyticsCollectHandler,
-		analyticsAdmin:    analyticsAdminHandler,
-		analyticsPublic:   analyticsPublicHandler,
-		analyticsRuntime:  analyticsRuntime,
-		dashboard:         dashboardHandler,
-		userCache:         userCacheSvc,
+		health:              handler.NewHealthHandler(db, redisClient),
+		test:                handler.NewTestHandler(jwtManager),
+		auth:                authhandler.NewAuthHandler(authSvc),
+		oauth:               oauthhandler.NewOAuthHandler(oauthSvc),
+		captcha:             captchahandler.NewCaptchaHandler(captchaSvc),
+		article:             articlehandler.NewArticleHandler(articleSvc),
+		comment:             commenthandler.NewCommentHandler(commentSvc),
+		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc),
+		moment:              momenthandler.NewMomentHandler(momentSvc),
+		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
+		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
+		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
+		userAdmin:           userhandler.NewUserAdminHandler(userAdminSvc, log),
+		category:            categoryhandler.NewCategoryHandler(categorySvc),
+		tag:                 taghandler.NewTagHandler(tagSvc),
+		music:               musichandler.NewMusicHandler(musicSvc),
+		friendLink:          friendlinkhandler.NewFriendLinkHandler(friendLinkSvc),
+		upload:              uploadhandler.NewHandler(uploadSvc),
+		analyticsCollect:    analyticsCollectHandler,
+		analyticsAdmin:      analyticsAdminHandler,
+		analyticsPublic:     analyticsPublicHandler,
+		analyticsRuntime:    analyticsRuntime,
+		dashboard:           dashboardHandler,
+		userCache:           userCacheSvc,
+		moderationRateLimit: cfg.Moderation.RateLimit,
 	}
 }
 
@@ -470,22 +484,32 @@ func registerAuthedRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt
 	authed.POST("/uploads/temp", middleware.RateLimitTempUpload(redisClient), handlers.upload.TempImage)
 	authed.GET("/articles/:id/like", handlers.article.IsLiked)
 	authed.POST("/articles/:id/like", handlers.article.ToggleLike)
-	authed.POST("/articles/:id/comments", handlers.comment.CreateArticle)
-	authed.POST("/articles/comments/:id/replies", handlers.comment.ReplyArticle)
+	publishLimit := middleware.RateLimitModerationWrite(redisClient, handlers.moderationRateLimit.PublishPerMinute, "publish")
+	editLimit := middleware.RateLimitModerationWrite(redisClient, handlers.moderationRateLimit.EditPerMinute, "edit")
+	authed.POST("/articles/:id/comments", publishLimit, handlers.comment.CreateArticle)
+	authed.POST("/articles/comments/:id/replies", publishLimit, handlers.comment.ReplyArticle)
+	authed.PATCH("/articles/comments/:id", editLimit, handlers.comment.EditArticle)
+	authed.PATCH("/articles/comment-replies/:id", editLimit, handlers.comment.EditArticleReply)
 	authed.POST("/articles/comments/:id/like", handlers.comment.ToggleArticleLike)
 	authed.POST("/articles/comments/:id/replies/:replyId/like", handlers.comment.ToggleArticleReplyLike)
 	authed.DELETE("/articles/comments/:id", handlers.comment.DeleteArticle)
 	authed.DELETE("/articles/comment-replies/:id", handlers.comment.DeleteArticleReply)
-	authed.POST("/guestbook", handlers.guestbook.Create)
+	authed.POST("/guestbook", publishLimit, handlers.guestbook.Create)
+	authed.PATCH("/guestbook/:id", editLimit, handlers.guestbook.Edit)
 	authed.POST("/guestbook/:id/like", handlers.guestbook.ToggleLike)
-	authed.POST("/guestbook/comments/:id/replies", handlers.comment.ReplyGuestbook)
+	authed.POST("/guestbook/comments/:id/replies", publishLimit, handlers.comment.ReplyGuestbook)
+	authed.PATCH("/guestbook/comment-replies/:id", editLimit, handlers.comment.EditGuestbookReply)
 	authed.POST("/guestbook/comments/:id/replies/:replyId/like", handlers.comment.ToggleGuestbookReplyLike)
 	authed.DELETE("/guestbook/comments/:id", handlers.comment.DeleteGuestbook)
 	authed.DELETE("/guestbook/comment-replies/:id", handlers.comment.DeleteGuestbookReply)
 	authed.DELETE("/guestbook/:id", handlers.guestbook.Delete)
-	authed.POST("/moments", middleware.RateLimitMomentUpload(redisClient), handlers.moment.Save)
-	authed.POST("/moments/:id/comments", handlers.comment.CreateMoment)
-	authed.POST("/moments/comments/:id/replies", handlers.comment.ReplyMoment)
+	authed.POST("/moments", middleware.RateLimitMomentUpload(redisClient), middleware.RateLimitModerationSave(
+		redisClient, handlers.moderationRateLimit.PublishPerMinute, handlers.moderationRateLimit.EditPerMinute,
+	), handlers.moment.Save)
+	authed.POST("/moments/:id/comments", publishLimit, handlers.comment.CreateMoment)
+	authed.POST("/moments/comments/:id/replies", publishLimit, handlers.comment.ReplyMoment)
+	authed.PATCH("/moments/comments/:id", editLimit, handlers.comment.EditMoment)
+	authed.PATCH("/moments/comment-replies/:id", editLimit, handlers.comment.EditMomentReply)
 	authed.POST("/moments/comments/:id/like", handlers.comment.ToggleMomentLike)
 	authed.POST("/moments/comments/:id/replies/:replyId/like", handlers.comment.ToggleMomentReplyLike)
 	authed.DELETE("/moments/comments/:id", handlers.comment.DeleteMoment)

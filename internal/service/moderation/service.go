@@ -74,16 +74,18 @@ type DeleteCommand struct {
 
 // SubmitResult 是业务 service 和 handler 使用的安全审核结果。
 type SubmitResult struct {
-	Subject            SubjectRef
-	ItemID             uint64
-	RevisionID         uint64
-	RevisionVersion    uint64
-	LockVersion        uint64
-	RiskLevel          RiskLevel
-	Action             PolicyAction
-	PublicState        PublicState
-	ReviewStatus       ReviewStatus
-	Content            string
+	Subject         SubjectRef
+	ItemID          uint64
+	RevisionID      uint64
+	RevisionVersion uint64
+	LockVersion     uint64
+	RiskLevel       RiskLevel
+	Action          PolicyAction
+	PublicState     PublicState
+	ReviewStatus    ReviewStatus
+	Content         string
+	// PendingContent 仅供作者提交响应和编辑器回显，公开展示不得读取该字段。
+	PendingContent     *string
 	Message            string
 	HasPendingRevision bool
 	CanInteract        bool

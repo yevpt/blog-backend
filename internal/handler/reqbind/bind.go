@@ -2,11 +2,15 @@ package reqbind
 
 import (
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/pkg/response"
 )
+
+const maxIdempotencyKeyChars = 128
 
 // JSON 绑定并校验 JSON 请求体；失败时直接返回可读错误响应。
 func JSON(c *gin.Context, req any) bool {
@@ -54,4 +58,14 @@ func PathUint(c *gin.Context, name string, label string) (uint, bool) {
 	}
 
 	return uint(id), true
+}
+
+// IdempotencyKey 读取并校验审核写接口要求的幂等键。
+func IdempotencyKey(c *gin.Context) (string, bool) {
+	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
+	if key == "" || len([]rune(key)) > maxIdempotencyKeyChars || strings.IndexFunc(key, unicode.IsControl) >= 0 {
+		response.Fail(c, response.CodeBadRequest, "Idempotency-Key 请求头缺失或格式不正确")
+		return "", false
+	}
+	return key, true
 }

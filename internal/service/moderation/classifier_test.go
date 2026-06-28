@@ -1,15 +1,34 @@
 package moderation_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	repositorymock "github.com/vpt/blog-backend/internal/repository/moderation/mock"
 	"github.com/vpt/blog-backend/internal/service/moderation"
 )
+
+func TestNewClassifierFromRepositoryLoadsCurrentRuleSnapshot(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	repo.EXPECT().LoadEnabledRules(gomock.Any()).Return([]moderationrepo.RuleRecord{
+		{ID: 1, RuleType: "keyword", Pattern: "风险词", RiskLevel: moderationrepo.RiskMedium, RulesetVersion: 3},
+	}, nil)
+
+	classifier, err := moderation.NewClassifierFromRepository(context.Background(), repo, zap.NewNop())
+
+	require.NoError(t, err)
+	got := classifier.Classify(processed("命中风险词"))
+	assert.Equal(t, moderation.RiskMedium, got.Risk)
+	assert.Equal(t, uint64(3), got.RulesetVersion)
+}
 
 func TestSanitizeRemovesExecutableHTML(t *testing.T) {
 	processor := moderation.NewContentProcessor()

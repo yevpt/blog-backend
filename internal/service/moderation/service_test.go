@@ -302,9 +302,10 @@ func TestServiceEditLowAndMediumBuildExpectedTransitions(t *testing.T) {
 			classifier := &classifierStub{out: moderation.Classification{Risk: tt.risk, RulesetVersion: 3}}
 			decider := &deciderStub{action: tt.action}
 			cmd := moderation.EditCommand{
-				ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 41, RootID: 11},
+				ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 41},
 				Content: "<p>edit</p>", IdempotencyKey: "edit-1",
 			}
+			canonicalRef := moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 41, RootID: 11}
 			approvedID := uint64(10)
 			item := moderationrepo.ItemStateRecord{
 				ItemID: 20, AuthorID: 7, LockVersion: 4,
@@ -319,14 +320,14 @@ func TestServiceEditLowAndMediumBuildExpectedTransitions(t *testing.T) {
 				repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
 				repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(item, nil),
 				repo.EXPECT().LoadSubject(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(
-					moderationrepo.SubjectSnapshot{Ref: moderationrepo.SubjectRef(cmd.Subject), AuthorID: 7, Content: "旧正文"}, nil,
+					moderationrepo.SubjectSnapshot{Ref: canonicalRef, AuthorID: 7, Content: "旧正文"}, nil,
 				),
 				repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
 						assert.Equal(t, uint64(4), persisted.ExpectedLockVersion)
 						assert.Equal(t, tt.wantMaterialized, persisted.Next.Materialized.IsNew)
 						return moderationrepo.AppliedTransition{
-							Subject: moderationrepo.SubjectRef(cmd.Subject), ItemID: 20,
+							Subject: canonicalRef, ItemID: 20,
 							RevisionID: 30, RevisionVersion: 2, LockVersion: 5,
 						}, nil
 					},

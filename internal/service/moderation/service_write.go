@@ -46,7 +46,6 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 	if len(input.imageKeys) > 0 {
 		return SubmitResult{}, ErrImageReviewUnavailable
 	}
-
 	stored, err := s.repo.FindResultByIdempotencyKey(ctx, input.actorID, input.idempotencyKey)
 	if err != nil {
 		return SubmitResult{}, err
@@ -95,6 +94,7 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 		if subject.AuthorID != item.AuthorID {
 			return SubmitResult{}, moderationrepo.ErrSubjectNotFound
 		}
+		input.subject = subject.Ref
 		previousContent = subject.Content
 	}
 	if action == ActionBlock {
@@ -140,7 +140,20 @@ func (s *applicationService) validateWrite(input writeInput) error {
 	if input.isEdit == (input.subject.ID == 0) {
 		return fmt.Errorf("%w: subject ID does not match operation", ErrInvalidRequest)
 	}
+	if input.isEdit && validSubjectType(input.subject.Type) {
+		return nil
+	}
 	return validateSubjectRef(input.subject)
+}
+
+func validSubjectType(subjectType SubjectType) bool {
+	switch subjectType {
+	case SubjectMoment, SubjectArticleComment, SubjectMomentComment, SubjectGuestbook,
+		SubjectArticleCommentReply, SubjectMomentCommentReply, SubjectGuestbookReply:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateSubjectRef(ref SubjectRef) error {

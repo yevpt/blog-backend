@@ -138,12 +138,14 @@ func (s *applicationService) resultFromApplied(
 		result.Message = s.cfg.Notices.ReviewRequired
 		result.ReviewStatus = ReviewPending
 		result.Content = previousContent
+		result.PendingContent = cloneString(&processed.Published)
 		return result
 	}
 	result.Content = processed.Published
 	if action == ActionPostReview {
 		result.Message = s.cfg.Notices.LowSubmitted
 		result.ReviewStatus = ReviewPending
+		result.PendingContent = cloneString(&processed.Published)
 		return result
 	}
 	result.Message = s.cfg.Notices.Approved
@@ -162,8 +164,12 @@ func (s *applicationService) resultFromStored(stored moderationrepo.StoredResult
 	if stored.Subject.Type != requested.Type || (requested.ID != 0 && stored.Subject.ID != requested.ID) {
 		return SubmitResult{}, moderationrepo.ErrIdempotencyDomainConflict
 	}
-	stored.Subject.RootID = requested.RootID
-	stored.Subject.ParentID = cloneUint64(requested.ParentID)
+	if requested.RootID != 0 {
+		stored.Subject.RootID = requested.RootID
+	}
+	if requested.ParentID != nil {
+		stored.Subject.ParentID = cloneUint64(requested.ParentID)
+	}
 	action := PolicyAction(stored.PolicyAction)
 	result := SubmitResult{
 		Subject: stored.Subject, ItemID: stored.ItemID, RevisionID: stored.RevisionID,
@@ -174,6 +180,9 @@ func (s *applicationService) resultFromStored(stored moderationrepo.StoredResult
 	}
 	if action != ActionPreReview {
 		result.Content = stored.Content
+	}
+	if stored.ReviewStatus == moderationrepo.ReviewPending {
+		result.PendingContent = cloneString(&stored.Content)
 	}
 	switch action {
 	case ActionPostReview:

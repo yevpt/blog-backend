@@ -23,3 +23,29 @@ func ProjectView(view View) (string, dto.ModerationView) {
 	}
 	return view.VisibleContent, result
 }
+
+// ProjectSubmitResult 把一次写入结果转换为作者可见的安全审核状态。
+func ProjectSubmitResult(result SubmitResult) (string, dto.ModerationView) {
+	displayVersion := DisplayNone
+	switch {
+	case result.Action == ActionPostReview && result.PublicState == PublicVisible:
+		displayVersion = DisplayPending
+	case result.Content != "" && result.PublicState == PublicVisible:
+		displayVersion = DisplayLastApproved
+	}
+	pendingRisk := string(result.RiskLevel)
+	reviewStatus := string(result.ReviewStatus)
+	view := dto.ModerationView{
+		Notice:             result.Message,
+		PublicState:        string(result.PublicState),
+		DisplayVersion:     string(displayVersion),
+		HasPendingRevision: result.HasPendingRevision,
+		PendingContent:     cloneString(result.PendingContent),
+		CanInteract:        result.CanInteract,
+	}
+	if result.HasPendingRevision {
+		view.PendingRiskLevel = &pendingRisk
+		view.ReviewStatus = &reviewStatus
+	}
+	return result.Content, view
+}

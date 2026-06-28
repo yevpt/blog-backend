@@ -122,6 +122,12 @@ func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames [
 	if force && req.UserID != nil && *req.UserID > 0 {
 		authorID = *req.UserID
 	}
+	if s.moderation != nil && req.ID == nil {
+		return s.submit(req, operatorID, force, content)
+	}
+	if s.moderation != nil {
+		return s.edit(req, operatorID, force, content)
+	}
 
 	moment := model.Moment{
 		UserID:        authorID,

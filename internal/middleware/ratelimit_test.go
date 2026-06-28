@@ -201,6 +201,25 @@ func TestRateLimitMomentUpload_BlocksByUserID(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
+func TestRateLimitModerationWriteUsesConfiguredPerUserLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rdb, mr := newTestRedis(t)
+	defer mr.Close()
+	router := gin.New()
+	router.POST("/comments", func(c *gin.Context) {
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7})
+		c.Next()
+	}, middleware.RateLimitModerationWrite(rdb, 2, "publish"), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	for i, want := range []int{http.StatusOK, http.StatusOK, http.StatusTooManyRequests} {
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, httptest.NewRequest("POST", "/comments", nil))
+		assert.Equal(t, want, recorder.Code, "request %d", i+1)
+	}
+}
+
 func TestRateLimitTempUpload_NormalUserBlockedAfterSoftLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rdb, mr := newTestRedis(t)

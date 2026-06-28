@@ -178,6 +178,33 @@ func RateLimitMomentUpload(rdb *redis.Client) gin.HandlerFunc {
 	}, momentUploadRateLimitPrincipal, momentUploadRateLimitBanKey)
 }
 
+// RateLimitModerationWrite 按登录用户和发布/编辑动作执行配置化审核写限流。
+func RateLimitModerationWrite(rdb *redis.Client, perMinute int, operation string) gin.HandlerFunc {
+	if rdb == nil || perMinute <= 0 {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return newPrincipalRateLimiter(rdb, RateLimitConfig{
+		Window: time.Minute, SoftLimit: perMinute, HardLimit: perMinute * 4,
+	}, func(c *gin.Context) string {
+		return avatarUploadRateLimitPrincipal(c) + "|op:" + operation
+	}, func(principal string) string {
+		return fmt.Sprintf("ban:moderation-%s:%s", operation, principal)
+	})
+}
+
+// RateLimitModerationSave 为保留 POST /moments 保存形态的接口按表单 id 区分发布和编辑额度。
+func RateLimitModerationSave(rdb *redis.Client, publishPerMinute int, editPerMinute int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		operation := "publish"
+		limit := publishPerMinute
+		if c.PostForm("id") != "" {
+			operation = "edit"
+			limit = editPerMinute
+		}
+		RateLimitModerationWrite(rdb, limit, operation)(c)
+	}
+}
+
 // RateLimitTempUpload 按登录用户限制文章临时图片上传频率，管理员放宽阈值。
 func RateLimitTempUpload(rdb *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {

@@ -33,6 +33,7 @@ type GuestbookService interface {
 	List(req dto.GuestbookListReq, viewerID *uint) (*dto.GuestbookPageResp, error)
 	ListAdmin(req dto.AdminGuestbookListReq) (*dto.AdminGuestbookPageResp, error)
 	Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error)
+	Edit(id uint, req dto.GuestbookCreateReq, userID uint, roleNames []string) (*dto.GuestbookItemResp, error)
 	ToggleLike(id uint, userID uint) (*dto.GuestbookLikeResp, error)
 	Delete(id uint, userID uint, roleNames []string) (*dto.GuestbookDeleteResp, error)
 }
@@ -47,16 +48,9 @@ type guestbookService struct {
 
 // NewGuestbookService 创建留言板业务服务实例。
 // publisher 用于留言、点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderationServices ...moderationservice.Service) GuestbookService {
+func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderation moderationservice.Service) GuestbookService {
 	return &guestbookService{
 		repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver, publisher: publisher,
-		moderation: firstModerationService(moderationServices),
+		moderation: moderation,
 	}
-}
-
-func firstModerationService(services []moderationservice.Service) moderationservice.Service {
-	if len(services) == 0 {
-		return nil
-	}
-	return services[0]
 }

@@ -43,11 +43,16 @@ func (h *MomentHandler) Save(c *gin.Context) {
 	if !ok {
 		return
 	}
+	key, ok := reqbind.IdempotencyKey(c)
+	if !ok {
+		return
+	}
 
 	req, ok := bindMomentSaveReq(c)
 	if !ok {
 		return
 	}
+	req.IdempotencyKey = key
 
 	resp, err := h.svc.Save(*req, userID, roleNames)
 	writeMomentResponse(c, resp, err)

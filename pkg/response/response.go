@@ -22,10 +22,18 @@ func FormatRetryAfter(seconds int) string {
 
 // Response 所有 API 接口的统一响应包装
 type Response struct {
-	Code    int         `json:"code"` // 0 表示成功，非 0 为业务错误码
-	Message string      `json:"message"`
-	Data    any `json:"data,omitempty"` // 失败时省略，不输出 null
+	Code      int    `json:"code"` // 0 表示成功，非 0 为业务错误码
+	ErrorCode string `json:"error_code,omitempty"`
+	Message   string `json:"message"`
+	Data      any    `json:"data,omitempty"` // 失败时省略，不输出 null
 }
+
+const (
+	CodeContentRiskRejected         = "CONTENT_RISK_REJECTED"
+	CodeImageReviewUnavailable      = "CONTENT_IMAGE_REVIEW_UNAVAILABLE"
+	CodeContentAlreadyDeleted       = "CONTENT_ALREADY_DELETED"
+	CodeContentPendingNoInteraction = "CONTENT_PENDING_NO_INTERACTION"
+)
 
 // 业务错误码，与 HTTP 状态码对齐，便于客户端统一处理
 const (
@@ -40,9 +48,18 @@ const (
 
 // Success 返回成功响应，HTTP 200
 func Success(c *gin.Context, data any) {
+	message := "ok"
+	if provider, ok := data.(interface{ ResponseMessage() string }); ok && provider.ResponseMessage() != "" {
+		message = provider.ResponseMessage()
+	}
+	SuccessWithMessage(c, data, message)
+}
+
+// SuccessWithMessage 返回带业务提示的成功响应。
+func SuccessWithMessage(c *gin.Context, data any, message string) {
 	c.JSON(http.StatusOK, Response{
 		Code:    CodeOK,
-		Message: "ok",
+		Message: message,
 		Data:    data,
 	})
 }
@@ -104,4 +121,14 @@ func TooManyRequests(c *gin.Context, message string, retryAfterSeconds int) {
 		Code:    CodeTooManyRequests,
 		Message: message,
 	})
+}
+
+// Conflict 返回审核状态冲突。
+func Conflict(c *gin.Context, errorCode string, message string) {
+	c.JSON(http.StatusConflict, Response{Code: http.StatusConflict, ErrorCode: errorCode, Message: message})
+}
+
+// UnprocessableEntity 返回内容可解析但因风险不能接受。
+func UnprocessableEntity(c *gin.Context, errorCode string, message string) {
+	c.JSON(http.StatusUnprocessableEntity, Response{Code: http.StatusUnprocessableEntity, ErrorCode: errorCode, Message: message})
 }

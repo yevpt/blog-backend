@@ -33,6 +33,9 @@ type stubGuestbookService struct {
 	createUserID uint
 	createResp   *dto.GuestbookItemResp
 	createErr    error
+	editID       uint
+	editReq      dto.GuestbookCreateReq
+	editUserID   uint
 
 	likeID     uint
 	likeUserID uint
@@ -63,6 +66,13 @@ func (s *stubGuestbookService) Create(req dto.GuestbookCreateReq, fromUserID uin
 	return s.createResp, s.createErr
 }
 
+func (s *stubGuestbookService) Edit(id uint, req dto.GuestbookCreateReq, userID uint, _ []string) (*dto.GuestbookItemResp, error) {
+	s.editID = id
+	s.editReq = req
+	s.editUserID = userID
+	return &dto.GuestbookItemResp{ID: id}, nil
+}
+
 func (s *stubGuestbookService) ToggleLike(id uint, userID uint) (*dto.GuestbookLikeResp, error) {
 	s.likeID = id
 	s.likeUserID = userID
@@ -86,6 +96,11 @@ func newGuestbookRouter(svc guestbookservice.GuestbookService) *gin.Engine {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
 		h.Create(c)
+	})
+	r.PATCH("/guestbook/:id", func(c *gin.Context) {
+		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
+		middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 7, Username: "alice", Status: 1})
+		h.Edit(c)
 	})
 	r.POST("/guestbook/:id/like", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
@@ -143,6 +158,7 @@ func TestGuestbookHandler_Create_UsesClaimsUserID(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("POST", "/guestbook", bytes.NewReader(body))
+	req.Header.Set("Idempotency-Key", "guestbook-1")
 	req.Header.Set("Content-Type", "application/json")
 	r.ServeHTTP(w, req)
 
@@ -150,6 +166,23 @@ func TestGuestbookHandler_Create_UsesClaimsUserID(t *testing.T) {
 	assert.Equal(t, uint(7), stub.createUserID)
 	assert.Equal(t, uint(0), stub.createReq.OwnerUserID)
 	assert.Equal(t, "你好", stub.createReq.Content)
+}
+
+func TestGuestbookHandlerEditUsesAuthenticatedActor(t *testing.T) {
+	stub := &stubGuestbookService{}
+	router := newGuestbookRouter(stub)
+	body, _ := json.Marshal(dto.GuestbookCreateReq{Content: "新留言"})
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest("PATCH", "/guestbook/9", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "guestbook-edit")
+
+	router.ServeHTTP(recorder, req)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, uint(9), stub.editID)
+	assert.Equal(t, uint(7), stub.editUserID)
+	assert.Equal(t, "guestbook-edit", stub.editReq.IdempotencyKey)
 }
 
 func TestGuestbookHandler_ToggleLike_BindsID(t *testing.T) {

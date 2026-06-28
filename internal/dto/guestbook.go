@@ -28,6 +28,8 @@ type GuestbookCreateReq struct {
 	OwnerUserID uint `json:"owner_user_id" binding:"omitempty,min=1" example:"1"`
 	// Content 留言内容，去除首尾空白后不能为空，最多 2000 字符。
 	Content string `json:"content" binding:"required,max=2000" example:"来踩踩，博客很棒"`
+	// IdempotencyKey 由 handler 从请求头注入。
+	IdempotencyKey string `json:"-" swaggerignore:"true"`
 }
 
 // GuestbookUserResp 留言用户摘要。
@@ -73,6 +75,8 @@ type GuestbookItemResp struct {
 	// Moderation 当前审核展示状态。
 	Moderation ModerationView `json:"moderation"`
 }
+
+func (r *GuestbookItemResp) ResponseMessage() string { return r.Moderation.Notice }
 
 // GuestbookPageResp 留言分页响应。
 type GuestbookPageResp struct {

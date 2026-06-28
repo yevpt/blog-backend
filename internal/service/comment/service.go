@@ -65,6 +65,9 @@ func (s *commentService) Create(targetType string, targetID uint, req dto.Commen
 	if err != nil {
 		return nil, err
 	}
+	if s.moderation != nil {
+		return s.submitComment(target, targetID, userID, content, req.IdempotencyKey)
+	}
 	normalized, store, err := s.normalizeCommentImages(content, userID, commentImageTargetPrefix(targetType, targetID))
 	if err != nil {
 		return nil, err
@@ -117,6 +120,9 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 	content, err := cleanCommentContent(req.Content)
 	if err != nil {
 		return nil, err
+	}
+	if s.moderation != nil {
+		return s.submitReply(commentType, commentID, userID, req, content)
 	}
 	normalized, store, err := s.normalizeCommentImages(content, userID, replyImageTargetPrefix(targetType, commentID))
 	if err != nil {
