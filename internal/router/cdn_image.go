@@ -14,7 +14,7 @@ import (
 )
 
 type cdnObjectGetter interface {
-	GetObject(ctx context.Context, objectName string) ([]byte, error)
+	GetImageObject(ctx context.Context, objectName string) ([]byte, error)
 }
 
 // registerCDNImageRoutes 注册腾讯云 CDN 回源图片路由。
@@ -32,7 +32,7 @@ func registerCDNImageRoutes(r *gin.Engine, objectStore storage.ObjectStore, cfg 
 	getter, ok := objectStore.(cdnObjectGetter)
 	if !ok {
 		if log != nil {
-			log.Warn("CDN 图片回源未启用：对象存储不支持 GetObject")
+			log.Warn("CDN 图片回源未启用：对象存储不支持 GetImageObject")
 		}
 		return
 	}

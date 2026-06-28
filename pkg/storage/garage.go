@@ -23,7 +23,12 @@ import (
 const (
 	defaultPresignExpires = 7 * 24 * time.Hour
 	maxObjectReadBytes    = 2 * 1024 * 1024
+	// maxCDNImageReadBytes 供 CDN 回源读原图并变换，需覆盖常见封面/手机封面 PNG。
+	maxCDNImageReadBytes = 20 * 1024 * 1024
 )
+
+// ErrObjectTooLarge 表示对象内容超过调用方允许读取的字节上限。
+var ErrObjectTooLarge = errors.New("对象超过读取上限")
 
 // objectPresigner 抽象 S3 预签名能力，仅供内部实现和单元测试替换。
 type objectPresigner interface {
@@ -155,14 +160,14 @@ func (c *Client) objectExists(ctx context.Context, objectName string) (bool, err
 		return true, nil
 	}
 
-	if isObjectNotFound(err) {
+	if IsObjectNotFound(err) {
 		return false, nil
 	}
 	return false, err
 }
 
-// isObjectNotFound 兼容 AWS SDK 和 Garage/S3 endpoint 返回的多种 404 错误形态。
-func isObjectNotFound(err error) bool {
+// IsObjectNotFound 兼容 AWS SDK 和 Garage/S3 endpoint 返回的多种 404 错误形态。
+func IsObjectNotFound(err error) bool {
 	var notFound *types.NotFound
 	if errors.As(err, &notFound) {
 		return true
@@ -198,12 +203,23 @@ func (c *Client) putObject(ctx context.Context, objectName string, data []byte, 
 }
 
 func (c *Client) getObject(ctx context.Context, objectName string) ([]byte, error) {
+	return c.getObjectWithMaxBytes(ctx, objectName, maxObjectReadBytes)
+}
+
+func (c *Client) getImageObject(ctx context.Context, objectName string) ([]byte, error) {
+	return c.getObjectWithMaxBytes(ctx, objectName, maxCDNImageReadBytes)
+}
+
+func (c *Client) getObjectWithMaxBytes(ctx context.Context, objectName string, maxBytes int) ([]byte, error) {
 	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
 		return nil, errors.New("对象存储客户端未初始化")
 	}
 	objectName = normalizeObjectName(objectName)
 	if objectName == "" {
 		return nil, errors.New("对象名不能为空")
+	}
+	if maxBytes <= 0 {
+		return nil, errors.New("读取上限无效")
 	}
 
 	out, err := c.impl.objectAPI.GetObject(ctx, &s3.GetObjectInput{
@@ -215,12 +231,12 @@ func (c *Client) getObject(ctx context.Context, objectName string) ([]byte, erro
 	}
 	defer out.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(out.Body, maxObjectReadBytes+1))
+	body, err := io.ReadAll(io.LimitReader(out.Body, int64(maxBytes)+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(body) > maxObjectReadBytes {
-		return nil, fmt.Errorf("对象超过 %d 字节", maxObjectReadBytes)
+	if len(body) > maxBytes {
+		return nil, fmt.Errorf("%w: %d", ErrObjectTooLarge, maxBytes)
 	}
 	return body, nil
 }

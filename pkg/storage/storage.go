@@ -71,6 +71,11 @@ func (c *Client) GetObject(ctx context.Context, objectName string) ([]byte, erro
 	return c.getObject(ctx, objectName)
 }
 
+// GetImageObject 从 Garage 直读图片原图，供 CDN 回源变换使用，读取上限高于 GetObject。
+func (c *Client) GetImageObject(ctx context.Context, objectName string) ([]byte, error) {
+	return c.getImageObject(ctx, objectName)
+}
+
 // ListObjectKeys 列出指定前缀下的对象 key。
 func (c *Client) ListObjectKeys(ctx context.Context, prefix string) ([]string, error) {
 	return c.listObjectKeys(ctx, prefix)
@@ -143,6 +148,11 @@ func (r *CachedObjectURLResolver) PutObject(ctx context.Context, objectName stri
 // GetObject 从 Garage 直读对象内容。
 func (r *CachedObjectURLResolver) GetObject(ctx context.Context, objectName string) ([]byte, error) {
 	return r.impl.client.GetObject(ctx, objectName)
+}
+
+// GetImageObject 从 Garage 直读图片原图，供 CDN 回源变换使用。
+func (r *CachedObjectURLResolver) GetImageObject(ctx context.Context, objectName string) ([]byte, error) {
+	return r.impl.client.GetImageObject(ctx, objectName)
 }
 
 // ListObjectKeys 列出指定前缀下的对象 key。

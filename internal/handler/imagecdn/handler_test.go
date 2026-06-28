@@ -23,7 +23,7 @@ type fakeStore struct {
 	data map[string][]byte
 }
 
-func (f *fakeStore) GetObject(_ context.Context, objectName string) ([]byte, error) {
+func (f *fakeStore) GetImageObject(_ context.Context, objectName string) ([]byte, error) {
 	data, ok := f.data[objectName]
 	if !ok {
 		return nil, errors.New("missing")

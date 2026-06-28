@@ -13,13 +13,14 @@ import (
 	"github.com/stretchr/testify/require"
 	appconfig "github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/internal/service/imagecdn"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 type fakeObjectStore struct {
 	data map[string][]byte
 }
 
-func (f *fakeObjectStore) GetObject(_ context.Context, objectName string) ([]byte, error) {
+func (f *fakeObjectStore) GetImageObject(_ context.Context, objectName string) ([]byte, error) {
 	data, ok := f.data[objectName]
 	if !ok {
 		return nil, assert.AnError
@@ -61,4 +62,21 @@ func TestService_ServeObject_PassthroughWithoutTransform(t *testing.T) {
 
 	assert.Equal(t, raw, rr.Body.Bytes())
 	assert.Contains(t, rr.Header().Get("Cache-Control"), "max-age=60")
+}
+
+func TestService_ServeObject_MapsOversizedSourceToErrSourceTooLarge(t *testing.T) {
+	svc := imagecdn.NewService(oversizedObjectStore{}, appconfig.ImageConfig{ResponseCacheMaxAge: 60})
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	err := svc.ServeObject(rr, req, "a.jpg", 0, 0, false)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, imagecdn.ErrSourceTooLarge)
+}
+
+type oversizedObjectStore struct{}
+
+func (oversizedObjectStore) GetImageObject(_ context.Context, _ string) ([]byte, error) {
+	return nil, storage.ErrObjectTooLarge
 }

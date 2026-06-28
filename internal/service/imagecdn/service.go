@@ -11,15 +11,19 @@ import (
 
 	appconfig "github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/imageutil"
+	"github.com/vpt/blog-backend/pkg/storage"
 	"golang.org/x/sync/singleflight"
 )
 
 // ErrNotFound 表示对象不存在或无法读取。
 var ErrNotFound = errors.New("图片对象不存在")
 
-// objectGetter 从对象存储直读内容。
+// ErrSourceTooLarge 表示源图超过 CDN 回源读取上限。
+var ErrSourceTooLarge = errors.New("源图超过读取上限")
+
+// objectGetter 从对象存储直读图片原图。
 type objectGetter interface {
-	GetObject(ctx context.Context, objectName string) ([]byte, error)
+	GetImageObject(ctx context.Context, objectName string) ([]byte, error)
 }
 
 // Service 处理 CDN 回源图片直传与变换。
@@ -62,9 +66,9 @@ func (s *Service) ServeObject(
 		return nil
 	}
 
-	data, err := s.store.GetObject(r.Context(), objectKey)
+	data, err := s.store.GetImageObject(r.Context(), objectKey)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrNotFound, err)
+		return mapReadObjectError(err)
 	}
 	if len(data) == 0 {
 		return fmt.Errorf("对象为空")
@@ -82,9 +86,9 @@ func (s *Service) ServeObject(
 func (s *Service) serveTransformed(ctx context.Context, objectKey string, width, quality int) (servePayload, error) {
 	key := fmt.Sprintf("%s:w%d:q%d", objectKey, width, quality)
 	value, err, _ := s.group.Do(key, func() (any, error) {
-		data, err := s.store.GetObject(ctx, objectKey)
+		data, err := s.store.GetImageObject(ctx, objectKey)
 		if err != nil {
-			return servePayload{}, fmt.Errorf("%w: %w", ErrNotFound, err)
+			return servePayload{}, mapReadObjectError(err)
 		}
 
 		result, err := imageutil.Process(bytes.NewReader(data), imageutil.Options{
@@ -146,4 +150,17 @@ func hashETag(data []byte) string {
 // ResetTransformGroup 仅供测试重置 singleflight 状态。
 func (s *Service) ResetTransformGroup() {
 	s.group = singleflight.Group{}
+}
+
+func mapReadObjectError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, storage.ErrObjectTooLarge) {
+		return ErrSourceTooLarge
+	}
+	if storage.IsObjectNotFound(err) {
+		return fmt.Errorf("%w: %w", ErrNotFound, err)
+	}
+	return err
 }

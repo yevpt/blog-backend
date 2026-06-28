@@ -46,6 +46,10 @@ func (h *Handler) Serve(c *gin.Context) {
 			c.Status(http.StatusNotFound)
 			return
 		}
+		if errors.Is(err, imagecdnservice.ErrSourceTooLarge) {
+			c.Status(http.StatusRequestEntityTooLarge)
+			return
+		}
 		c.Status(http.StatusInternalServerError)
 		return
 	}

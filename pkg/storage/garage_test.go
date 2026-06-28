@@ -339,3 +339,36 @@ func TestClientMoveObject_CopiesThenDeletesSource(t *testing.T) {
 	assert.Equal(t, "blog", api.deleteBucket)
 	assert.Equal(t, "articles/9/images/a b.png", api.deleteKey)
 }
+
+func TestClientGetObject_RejectsContentOverDefaultLimit(t *testing.T) {
+	body := bytes.Repeat([]byte("a"), maxObjectReadBytes+1)
+	api := &fakeObjectAPI{getBody: body}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	_, err := client.GetObject(context.Background(), "articles/1/cover/big.png")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrObjectTooLarge)
+}
+
+func TestClientGetImageObject_AllowsContentAboveDefaultLimit(t *testing.T) {
+	body := bytes.Repeat([]byte("a"), maxObjectReadBytes+1)
+	api := &fakeObjectAPI{getBody: body}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	got, err := client.GetImageObject(context.Background(), "articles/1/mobile-cover/big.png")
+
+	require.NoError(t, err)
+	assert.Equal(t, body, got)
+}
+
+func TestClientGetImageObject_RejectsContentOverImageLimit(t *testing.T) {
+	body := bytes.Repeat([]byte("a"), maxCDNImageReadBytes+1)
+	api := &fakeObjectAPI{getBody: body}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	_, err := client.GetImageObject(context.Background(), "articles/1/mobile-cover/huge.png")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrObjectTooLarge)
+}
