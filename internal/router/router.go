@@ -130,6 +130,8 @@ func Setup(
 	// 注册全局基础中间件，统一处理请求追踪、恢复和请求日志。
 	r.Use(middleware.RequestID(), middleware.Recovery(log), middleware.Logger(log))
 
+	registerCDNImageRoutes(r, objectStore, cfg, log)
+
 	// 组装路由所需的 handler，保持 Setup 只关心注册流程。
 	handlers := newRouteHandlers(log, db, redisClient, jwtManager, mailer, objectStore, cfg)
 
