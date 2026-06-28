@@ -14,9 +14,12 @@ import (
 // @Accept json
 // @Produce json
 // @Param request body dto.GuestbookCreateReq true "留言发表请求"
+// @Param Idempotency-Key header string true "幂等键，重试时保持不变"
 // @Success 200 {object} response.Response{data=dto.GuestbookItemResp} "统一响应；code=0 表示发表成功，code=400 表示参数错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 404 {object} response.Response "留言板主人不存在"
+// @Failure 409 {object} response.Response "图片审核未启用或内容状态冲突"
+// @Failure 422 {object} response.Response "内容存在风险，拒绝发布"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /guestbook [post]
 func (h *GuestbookHandler) Create(c *gin.Context) {
@@ -46,6 +49,7 @@ func (h *GuestbookHandler) Create(c *gin.Context) {
 // @Produce json
 // @Param id path int true "留言 ID"
 // @Param request body dto.GuestbookCreateReq true "留言编辑请求"
+// @Param Idempotency-Key header string true "幂等键，重试时保持不变"
 // @Success 200 {object} response.Response{data=dto.GuestbookItemResp}
 // @Failure 409 {object} response.Response
 // @Failure 422 {object} response.Response

@@ -23,7 +23,7 @@ func FormatRetryAfter(seconds int) string {
 // Response 所有 API 接口的统一响应包装
 type Response struct {
 	Code      int    `json:"code"` // 0 表示成功，非 0 为业务错误码
-	ErrorCode string `json:"error_code,omitempty"`
+	ErrorCode string `json:"error_code,omitempty" example:"CONTENT_RISK_REJECTED"`
 	Message   string `json:"message"`
 	Data      any    `json:"data,omitempty"` // 失败时省略，不输出 null
 }

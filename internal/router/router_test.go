@@ -139,6 +139,34 @@ func TestRegisterAuthedRoutes_RegistersTempUpload(t *testing.T) {
 	assert.True(t, slices.Contains(paths, "/uploads/temp"))
 }
 
+func TestRegisterAuthedRoutesRegistersModerationEditRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	jwtManager := jwt.NewManager("test-secret", 2, 24)
+
+	registerAuthedRoutes(router, routeHandlers{}, jwtManager, nil)
+
+	want := map[string]bool{
+		"/articles/comments/:id": false, "/articles/comment-replies/:id": false,
+		"/moments/comments/:id": false, "/moments/comment-replies/:id": false,
+		"/guestbook/:id": false, "/guestbook/comment-replies/:id": false,
+	}
+	for _, route := range router.Routes() {
+		if route.Method == http.MethodPatch {
+			if _, ok := want[route.Path]; ok {
+				want[route.Path] = true
+			}
+		}
+	}
+	for path, registered := range want {
+		assert.True(t, registered, path)
+	}
+}
+
+func TestCORSAllowsModerationIdempotencyHeader(t *testing.T) {
+	assert.Contains(t, newCORSConfig().AllowHeaders, "Idempotency-Key")
+}
+
 func TestRegisterAdminRoutes_RegistersFriendLinkMutationRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()

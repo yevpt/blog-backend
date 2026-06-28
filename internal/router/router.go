@@ -36,7 +36,6 @@ import (
 	dashboardrepo "github.com/vpt/blog-backend/internal/repository/dashboard"
 	friendlinkrepo "github.com/vpt/blog-backend/internal/repository/friendlink"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
-	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	musicrepo "github.com/vpt/blog-backend/internal/repository/music"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
@@ -53,7 +52,6 @@ import (
 	dashboardservice "github.com/vpt/blog-backend/internal/service/dashboard"
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
-	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
@@ -170,8 +168,8 @@ func newCORSConfig() cors.Config {
 		corsCfg.AllowOrigins = splitCORSOrigins(allowedOrigins)
 	}
 
-	// Authorization header 不在 DefaultConfig 的默认允许列表中，需要显式添加
-	corsCfg.AllowHeaders = append(corsCfg.AllowHeaders, "Authorization")
+	// 登录和审核写接口使用的自定义请求头必须通过浏览器预检。
+	corsCfg.AllowHeaders = append(corsCfg.AllowHeaders, "Authorization", "Idempotency-Key")
 
 	return corsCfg
 }
@@ -261,15 +259,10 @@ func newRouteHandlers(
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
-	moderationRepo := moderationrepo.NewRepository(db)
-	moderationClassifier, moderationErr := moderationservice.NewClassifierFromRepository(context.Background(), moderationRepo, log)
+	moderationSvc, moderationErr := newModerationService(context.Background(), db, cfg.Moderation, log)
 	if moderationErr != nil {
 		panic(moderationErr)
 	}
-	moderationSvc := moderationservice.NewService(
-		moderationRepo, moderationservice.NewContentProcessor(), moderationClassifier,
-		moderationservice.NewPolicyDecider(), cfg.Moderation, log, nil,
-	)
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)

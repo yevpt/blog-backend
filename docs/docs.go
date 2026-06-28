@@ -4419,6 +4419,75 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "编辑文章评论回复",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "回复 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "回复编辑请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentReplyCreateReq"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentReplyResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
             }
         },
         "/articles/comments/{id}": {
@@ -4482,6 +4551,81 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "编辑文章评论",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "文章评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "评论编辑请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentCreateReq"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -4652,6 +4796,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/dto.CommentReplyCreateReq"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -4681,6 +4832,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "评论或回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "父内容不可互动、图片审核未启用或状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -4960,6 +5123,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/dto.CommentCreateReq"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -4989,6 +5159,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "评论目标不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -5830,6 +6012,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/dto.GuestbookCreateReq"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -5859,6 +6048,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "留言板主人不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -5933,6 +6134,75 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "编辑留言回复",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "回复 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "回复编辑请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentReplyCreateReq"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentReplyResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6109,6 +6379,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/dto.CommentReplyCreateReq"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -6138,6 +6415,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "评论或回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "父内容不可互动、图片审核未启用或状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6274,6 +6563,75 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "留言板"
+                ],
+                "summary": "编辑留言",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "留言 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "留言编辑请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.GuestbookCreateReq"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.GuestbookItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6498,6 +6856,13 @@ const docTemplate = `{
                         "description": "新图片文件，可重复传入",
                         "name": "images",
                         "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -6533,6 +6898,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "碎语或作者不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6612,6 +6989,75 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "编辑碎语评论回复",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "回复 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "回复编辑请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentReplyCreateReq"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentReplyResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
             }
         },
         "/moments/comments/{id}": {
@@ -6675,6 +7121,75 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "评论"
+                ],
+                "summary": "编辑碎语评论",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "碎语评论 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "评论编辑请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CommentCreateReq"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CommentItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -6845,6 +7360,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/dto.CommentReplyCreateReq"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -6874,6 +7396,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "评论或回复不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "父内容不可互动、图片审核未启用或状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -7253,6 +7787,13 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/dto.CommentCreateReq"
                         }
+                    },
+                    {
+                        "type": "string",
+                        "description": "幂等键，重试时保持不变",
+                        "name": "Idempotency-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
                 "responses": {
@@ -7282,6 +7823,18 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "评论目标不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "图片审核未启用或内容状态冲突",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "422": {
+                        "description": "内容存在风险，拒绝发布",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
                         }
@@ -14121,6 +14674,10 @@ const docTemplate = `{
                 },
                 "data": {
                     "description": "失败时省略，不输出 null"
+                },
+                "error_code": {
+                    "type": "string",
+                    "example": "CONTENT_RISK_REJECTED"
                 },
                 "message": {
                     "type": "string"

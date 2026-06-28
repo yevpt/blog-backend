@@ -3276,6 +3276,9 @@ definitions:
         type: integer
       data:
         description: 失败时省略，不输出 null
+      error_code:
+        example: CONTENT_RISK_REJECTED
+        type: string
       message:
         type: string
     type: object
@@ -6087,6 +6090,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.CommentCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -6105,6 +6113,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -6265,6 +6281,49 @@ paths:
       summary: 删除文章评论回复
       tags:
       - 评论
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复编辑请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 编辑文章评论回复
+      tags:
+      - 评论
   /articles/comments/{id}:
     delete:
       consumes:
@@ -6305,6 +6364,53 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 删除文章评论
+      tags:
+      - 评论
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 文章评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 评论编辑请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 编辑文章评论
       tags:
       - 评论
   /articles/comments/{id}/like:
@@ -6407,6 +6513,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.CommentReplyCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -6425,6 +6536,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 父内容不可互动、图片审核未启用或状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -6897,6 +7016,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.GuestbookCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -6915,6 +7039,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 留言板主人不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -6964,6 +7096,49 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 删除留言
+      tags:
+      - 留言板
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 留言 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 留言编辑请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GuestbookCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.GuestbookItemResp'
+              type: object
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 编辑留言
       tags:
       - 留言板
   /guestbook/{id}/like:
@@ -7044,6 +7219,49 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 删除留言回复
+      tags:
+      - 评论
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复编辑请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 编辑留言回复
       tags:
       - 评论
   /guestbook/comments/{id}:
@@ -7150,6 +7368,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.CommentReplyCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -7168,6 +7391,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 父内容不可互动、图片审核未启用或状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -7315,6 +7546,11 @@ paths:
         in: formData
         name: images
         type: file
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -7337,6 +7573,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 碎语或作者不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -7487,6 +7731,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.CommentCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -7505,6 +7754,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 评论目标不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":
@@ -7752,6 +8009,49 @@ paths:
       summary: 删除碎语评论回复
       tags:
       - 评论
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 回复 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 回复编辑请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentReplyCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentReplyResp'
+              type: object
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 编辑碎语评论回复
+      tags:
+      - 评论
   /moments/comments/{id}:
     delete:
       consumes:
@@ -7792,6 +8092,49 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 删除碎语评论
+      tags:
+      - 评论
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 碎语评论 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 评论编辑请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CommentCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.CommentItemResp'
+              type: object
+        "409":
+          description: 图片审核未启用或内容状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 编辑碎语评论
       tags:
       - 评论
   /moments/comments/{id}/like:
@@ -7894,6 +8237,11 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/dto.CommentReplyCreateReq'
+      - description: 幂等键，重试时保持不变
+        in: header
+        name: Idempotency-Key
+        required: true
+        type: string
       produces:
       - application/json
       responses:
@@ -7912,6 +8260,14 @@ paths:
             $ref: '#/definitions/response.Response'
         "404":
           description: 评论或回复不存在
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 父内容不可互动、图片审核未启用或状态冲突
+          schema:
+            $ref: '#/definitions/response.Response'
+        "422":
+          description: 内容存在风险，拒绝发布
           schema:
             $ref: '#/definitions/response.Response'
         "500":

@@ -32,10 +32,13 @@ const (
 // @Param image_urls formData []string false "已上传图片对象 key 或 URL，可重复传入"
 // @Param image_order formData []string false "图片顺序引用，可重复传入；url:N 指向第 N 个 image_urls，file:N 指向第 N 个 images"
 // @Param images formData file false "新图片文件，可重复传入"
+// @Param Idempotency-Key header string true "幂等键，重试时保持不变"
 // @Success 200 {object} response.Response{data=dto.MomentItemResp} "统一响应；code=0 表示保存成功，code=400 表示参数错误或业务错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 403 {object} response.Response "无权操作碎语"
 // @Failure 404 {object} response.Response "碎语或作者不存在"
+// @Failure 409 {object} response.Response "图片审核未启用或内容状态冲突"
+// @Failure 422 {object} response.Response "内容存在风险，拒绝发布"
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /moments [post]
 func (h *MomentHandler) Save(c *gin.Context) {
