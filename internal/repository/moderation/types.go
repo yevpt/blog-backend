@@ -261,6 +261,7 @@ type ApplyTransitionCommand struct {
 	Review              *RevisionReview
 	Materialize         RevisionRef
 	DeleteSubject       bool
+	SyncImages          bool
 	Log                 *ActionLog
 	ProfileChange       *ProfileChange
 	Notification        *NotificationIntent

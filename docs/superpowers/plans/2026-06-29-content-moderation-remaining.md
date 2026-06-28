@@ -90,12 +90,12 @@
 - `SubmitResult` and `View` expose safe ordered display image keys only; business DTO mappers resolve those keys to signed URLs.
 - Medium edits keep the old approved content and images; low edits expose the new content with preview/placeholder images.
 
-- [ ] Write service tests for first publish and edit across approved/unapproved/static/GIF combinations, preserving old images for medium edits and restoring them on rejection.
-- [ ] Run moment/comment/guestbook/moderation tests and confirm RED on `ErrImageReviewUnavailable` or missing image projections.
-- [ ] Normalize comment temp images into durable owner-scoped keys, prepare moment files before submission with compensation, call the media service, and persist real ordered snapshots.
-- [ ] Remove the unconditional image rejection, feed `HasUnapprovedImage` into policy selection, return safe image projections, and delete a preview only after its image becomes approved.
-- [ ] Run `go test ./internal/service/moderation ./internal/service/moment ./internal/service/comment ./internal/service/guestbook -count=1`.
-- [ ] Commit with `feat(moderation): 接入全站内容图片审核流程`.
+- [x] Write service tests for first publish and edit across approved/unapproved/static/GIF combinations, preserving old images for medium edits and restoring them on rejection.
+- [x] Run moment/comment/guestbook/moderation tests and confirm RED on `ErrImageReviewUnavailable` or missing image projections.
+- [x] Normalize comment temp images into durable owner-scoped keys, prepare moment files before submission with compensation, call the media service, and persist real ordered snapshots.
+- [x] Remove the unconditional image rejection, feed `HasUnapprovedImage` into policy selection, return safe image projections, and delete a preview only after its image becomes approved.
+- [x] Run `go test ./internal/service/moderation ./internal/service/moment ./internal/service/comment ./internal/service/guestbook -count=1`.
+- [x] Commit with `feat(moderation): 接入全站内容图片审核流程`.
 
 ### Task 4: Complete user trust governance and sanctions
 

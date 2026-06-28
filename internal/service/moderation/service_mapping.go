@@ -53,6 +53,7 @@ func (s *applicationService) transitionCommand(
 		Materialize:         mapRevisionPointer(plan.MaterializeRevision),
 		MomentOptions:       cloneMomentOptions(input.momentOptions),
 		CreateSubject:       !input.isEdit,
+		SyncImages:          true,
 		Log: &moderationrepo.ActionLog{
 			Revision: moderationrepo.NewRevision(), ActorUserID: &input.actorID,
 			SubjectUserID: &authorID, Action: moderationrepo.Event(plan.AppendLog.Event),

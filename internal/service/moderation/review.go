@@ -78,9 +78,15 @@ type ReviewService interface {
 	Reject(ctx context.Context, cmd ReviewCommand) (ReviewItem, error)
 }
 
+// PreviewCleaner 在审核事务提交后删除不再需要的独占低清预览。
+type PreviewCleaner interface {
+	DeletePreviewObjects(ctx context.Context, keys []string) error
+}
+
 type reviewService struct {
 	repo      moderationrepo.Repository
 	processor ContentProcessor
+	cleaner   PreviewCleaner
 	cfg       config.ModerationConfig
 	logger    *zap.Logger
 	now       func() time.Time
@@ -90,6 +96,7 @@ type reviewService struct {
 func NewReviewService(
 	repo moderationrepo.Repository,
 	processor ContentProcessor,
+	cleaner PreviewCleaner,
 	cfg config.ModerationConfig,
 	logger *zap.Logger,
 	now func() time.Time,
@@ -100,7 +107,7 @@ func NewReviewService(
 	if now == nil {
 		now = time.Now
 	}
-	return &reviewService{repo: repo, processor: processor, cfg: cfg, logger: logger, now: now}
+	return &reviewService{repo: repo, processor: processor, cleaner: cleaner, cfg: cfg, logger: logger, now: now}
 }
 
 // List 分页查询审核版本，默认只返回待审队列。
@@ -202,6 +209,14 @@ func (s *reviewService) applyReview(
 		return ReviewItem{}, ErrReviewConflict
 	}
 	now := s.now()
+	var previewKeys []string
+	if s.cleaner != nil && (event == EventApprove || event == EventCorrectAndApprove) {
+		var loadErr error
+		previewKeys, loadErr = s.repo.LoadRevisionPreviewKeys(ctx, record.RevisionID)
+		if loadErr != nil {
+			return ReviewItem{}, mapReviewRepositoryError(loadErr)
+		}
+	}
 	plan, err := Transition(TransitionInput{
 		Event: event, Previous: itemSnapshot(record.State), NewRevisionID: record.RevisionID,
 		Reason: strings.TrimSpace(cmd.Reason), Now: now,
@@ -213,6 +228,11 @@ func (s *reviewService) applyReview(
 	applied, err := s.repo.ApplyTransition(ctx, persisted)
 	if err != nil {
 		return ReviewItem{}, mapReviewRepositoryError(err)
+	}
+	if len(previewKeys) > 0 {
+		if cleanupErr := s.cleaner.DeletePreviewObjects(ctx, previewKeys); cleanupErr != nil {
+			s.logger.Warn("删除已通过图片预览失败，等待定期清理补偿", zap.Error(cleanupErr))
+		}
 	}
 	return appliedReviewItem(record, cmd, corrected, plan, applied.LockVersion, now), nil
 }

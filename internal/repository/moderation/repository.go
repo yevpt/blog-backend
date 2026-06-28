@@ -23,6 +23,7 @@ type Repository interface {
 	UseApprovedImage(ctx context.Context, fingerprint ImageFingerprint, usedAt time.Time) (bool, error)
 	UpsertPendingImage(ctx context.Context, image PendingImage) error
 	LoadRevisionImages(ctx context.Context, revisionID uint64) ([]RevisionImageRecord, error)
+	LoadRevisionPreviewKeys(ctx context.Context, revisionID uint64) ([]string, error)
 }
 
 type repository struct {

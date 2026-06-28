@@ -267,7 +267,7 @@ func newRouteHandlers(
 	if moderationErr != nil {
 		panic(moderationErr)
 	}
-	moderationReviewSvc := maybeNewModerationReviewService(db, cfg.Moderation, log)
+	moderationReviewSvc := maybeNewModerationReviewService(db, cfg.Moderation, log, objectStore)
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)

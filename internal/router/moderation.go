@@ -39,16 +39,22 @@ func newModerationService(ctx context.Context, db *gorm.DB, cfg config.Moderatio
 }
 
 // maybeNewModerationReviewService 在审核开启时组装管理端人工审核服务。
-func maybeNewModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger) moderationservice.ReviewService {
+func maybeNewModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) moderationservice.ReviewService {
 	if !cfg.Enabled {
 		return nil
 	}
-	return newModerationReviewService(db, cfg, logger)
+	return newModerationReviewService(db, cfg, logger, store)
 }
 
 // newModerationReviewService 组装管理端人工审核服务，复用同一数据库事实源。
-func newModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger) moderationservice.ReviewService {
+
+func newModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) moderationservice.ReviewService {
+	repo := moderationrepo.NewRepository(db)
+	var cleaner moderationservice.PreviewCleaner
+	if readable, ok := store.(storage.ReadableObjectStore); ok {
+		cleaner = moderationmedia.NewService(readable, repo, cfg.Image, nil)
+	}
 	return moderationservice.NewReviewService(
-		moderationrepo.NewRepository(db), moderationservice.NewContentProcessor(), cfg, logger, nil,
+		repo, moderationservice.NewContentProcessor(), cleaner, cfg, logger, nil,
 	)
 }

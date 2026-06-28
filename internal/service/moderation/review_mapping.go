@@ -37,6 +37,7 @@ func buildReviewTransition(
 		},
 		ProfileChange: reviewProfileChange(event, record.AuthorID, now, cfg),
 		Notification:  reviewNotification(event, record, reason),
+		SyncImages:    true,
 	}
 	return persisted
 }

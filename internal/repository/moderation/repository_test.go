@@ -71,6 +71,7 @@ func transitionCommand() moderation.ApplyTransitionCommand {
 func TestApplyTransitionLocksCreatesVersionMaterializesAndCommits(t *testing.T) {
 	repository, mock := newRepository(t)
 	command := transitionCommand()
+	command.SyncImages = true
 	command.Revision.Images = []moderation.RevisionImageDraft{{
 		ImageFingerprint: moderation.ImageFingerprint{SHA256: "sha", MD5: "md5", Size: 10},
 		Seq:              1, ObjectKey: "moments/42/a.jpg", MediaType: "image/jpeg",
@@ -91,6 +92,15 @@ func TestApplyTransitionLocksCreatesVersionMaterializesAndCommits(t *testing.T) 
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE `article_comment` SET `content`=\\? WHERE .*id = \\?.*user_id = \\?.*article_id = \\?").
 		WithArgs("安全正文", uint64(7), uint64(42), uint64(3)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT .* FROM `moderation_revision_image` WHERE revision_id = .*ORDER BY seq ASC,id ASC").
+		WithArgs(uint64(101)).WillReturnRows(sqlmock.NewRows([]string{
+		"revision_id", "seq", "object_key", "sha256", "md5", "size", "media_type", "is_gif",
+	}).AddRow(101, 1, "moments/42/a.jpg", "sha", "md5", 10, "image/jpeg", false))
+	mock.ExpectExec("DELETE FROM `moderation_visible_image` WHERE item_id = \\?").
+		WithArgs(uint64(10)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO `moderation_visible_image`").
+		WithArgs(uint64(10), uint64(101), uint(1), "moments/42/a.jpg", fixedTime, fixedTime).
+		WillReturnResult(sqlmock.NewResult(301, 1))
 	mock.ExpectExec("INSERT INTO `moderation_action_log`").WillReturnResult(sqlmock.NewResult(501, 1))
 	mock.ExpectCommit()
 
@@ -109,6 +119,11 @@ func TestApplyTransitionCreatesFirstSubjectItemAndRevisionAtomically(t *testing.
 	command.Subject.ID = 0
 	command.ExpectedLockVersion = 0
 	command.CreateSubject = true
+	command.SyncImages = true
+	command.Revision.Images = []moderation.RevisionImageDraft{{
+		ImageFingerprint: moderation.ImageFingerprint{SHA256: "sha", MD5: "md5", Size: 10},
+		Seq:              1, ObjectKey: "comments/moderation/42/a.jpg", MediaType: "image/jpeg",
+	}}
 
 	mock.ExpectBegin()
 	expectNoIdempotencyResult(mock, 42, "request-1")
@@ -120,7 +135,15 @@ func TestApplyTransitionCreatesFirstSubjectItemAndRevisionAtomically(t *testing.
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(MAX(version), 0) FROM `moderation_revision` WHERE item_id = ?")).
 		WithArgs(uint64(10)).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(0))
 	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
+	mock.ExpectExec("INSERT INTO `moderation_revision_image`").WillReturnResult(sqlmock.NewResult(201, 1))
 	mock.ExpectExec("UPDATE `moderation_item` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT .* FROM `moderation_revision_image` WHERE revision_id = .*ORDER BY seq ASC,id ASC").
+		WithArgs(uint64(101)).WillReturnRows(sqlmock.NewRows([]string{
+		"revision_id", "seq", "object_key", "sha256", "md5", "size", "media_type", "is_gif",
+	}).AddRow(101, 1, "comments/moderation/42/a.jpg", "sha", "md5", 10, "image/jpeg", false))
+	mock.ExpectExec("DELETE FROM `moderation_visible_image` WHERE item_id = \\?").
+		WithArgs(uint64(10)).WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec("INSERT INTO `moderation_visible_image`").WillReturnResult(sqlmock.NewResult(301, 1))
 	mock.ExpectExec("INSERT INTO `moderation_action_log`").WillReturnResult(sqlmock.NewResult(501, 1))
 	mock.ExpectCommit()
 

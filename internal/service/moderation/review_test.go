@@ -15,11 +15,23 @@ import (
 	"go.uber.org/zap"
 )
 
+type previewCleanerStub struct {
+	keys []string
+}
+
+func (s *previewCleanerStub) DeletePreviewObjects(_ context.Context, keys []string) error {
+	s.keys = append([]string(nil), keys...)
+	return nil
+}
+
 func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
 	record := pendingReviewRecord()
+	cleaner := &previewCleanerStub{}
 	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	repo.EXPECT().LoadRevisionPreviewKeys(gomock.Any(), record.RevisionID).
+		Return([]string{"moderation/previews/a.jpg"}, nil)
 	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, cmd moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
 			assert.Equal(t, record.AuthorID, cmd.AuthorID)
@@ -36,7 +48,7 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 			assert.Equal(t, record.AuthorID, cmd.Notification.RecipientUserID)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
 		})
-	service := newReviewService(repo, &processorStub{})
+	service := newReviewService(repo, &processorStub{}, cleaner)
 
 	got, err := service.Approve(context.Background(), moderation.ReviewCommand{
 		ItemID: record.ItemID, RevisionID: record.RevisionID,
@@ -46,6 +58,7 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, moderation.ReviewApproved, got.ReviewStatus)
 	assert.Equal(t, uint64(4), got.LockVersion)
+	assert.Equal(t, []string{"moderation/previews/a.jpg"}, cleaner.keys)
 }
 
 func TestReviewServiceCorrectSanitizesContentAndRecordsViolation(t *testing.T) {
@@ -130,7 +143,7 @@ func TestReviewServiceDeletedItemReturnsTerminalError(t *testing.T) {
 	require.ErrorIs(t, err, moderation.ErrAlreadyDeleted)
 }
 
-func newReviewService(repo moderationrepo.Repository, processor moderation.ContentProcessor) moderation.ReviewService {
+func newReviewService(repo moderationrepo.Repository, processor moderation.ContentProcessor, cleaners ...moderation.PreviewCleaner) moderation.ReviewService {
 	cfg := config.ModerationConfig{
 		Content: config.ModerationContentConfig{
 			MomentMaxChars: 800, CommentMaxChars: 2000, GuestbookMaxChars: 2000, ReplyMaxChars: 2000,
@@ -142,7 +155,11 @@ func newReviewService(repo moderationrepo.Repository, processor moderation.Conte
 			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3},
 		},
 	}
-	return moderation.NewReviewService(repo, processor, cfg, zap.NewNop(), func() time.Time { return serviceNow })
+	var cleaner moderation.PreviewCleaner
+	if len(cleaners) > 0 {
+		cleaner = cleaners[0]
+	}
+	return moderation.NewReviewService(repo, processor, cleaner, cfg, zap.NewNop(), func() time.Time { return serviceNow })
 }
 
 func pendingReviewRecord() moderationrepo.ReviewRecord {

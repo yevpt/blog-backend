@@ -51,3 +51,18 @@ func (r *repository) LoadRevisionImages(ctx context.Context, revisionID uint64) 
 	}
 	return result, nil
 }
+
+// LoadRevisionPreviewKeys 返回版本当前独占的待审预览；共享系统占位由上层清理器保护。
+func (r *repository) LoadRevisionPreviewKeys(ctx context.Context, revisionID uint64) ([]string, error) {
+	var keys []string
+	err := r.db.WithContext(ctx).Raw(`
+SELECT DISTINCT image_record.preview_object_key
+FROM moderation_revision_image AS revision_image
+JOIN moderation_image AS image_record
+  ON image_record.sha256 = revision_image.sha256 AND image_record.size = revision_image.size
+WHERE revision_image.revision_id = ? AND image_record.status = ?
+  AND image_record.preview_object_key IS NOT NULL AND image_record.preview_object_key <> ''`,
+		revisionID, ImagePending,
+	).Scan(&keys).Error
+	return keys, err
+}

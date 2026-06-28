@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
+	"strings"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
@@ -79,6 +81,10 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 
 		if !createdSubject || !cmd.Materialize.IsNew {
 			if err := r.materialize(ctx, tx, adapter, cmd, item.ID, newRevisionID); err != nil {
+				return err
+			}
+		} else if cmd.SyncImages {
+			if err := syncMaterializedImages(ctx, tx, cmd, item.ID, newRevisionID); err != nil {
 				return err
 			}
 		}
@@ -494,9 +500,55 @@ func (r *repository) materialize(ctx context.Context, tx *gorm.DB, adapter subje
 			options = &MomentOptions{Status: *revision.MomentStatus, CommentStatus: *revision.MomentCommentStatus}
 		}
 	}
-	return adapter.Materialize(ctx, tx, MaterializeCommand{
+	if err := adapter.Materialize(ctx, tx, MaterializeCommand{
 		Ref: cmd.Subject, AuthorID: cmd.AuthorID, Content: content, MomentOptions: options,
-	})
+	}); err != nil {
+		return err
+	}
+	if !cmd.SyncImages {
+		return nil
+	}
+	return syncMaterializedImages(ctx, tx, cmd, itemID, *revisionID)
+}
+
+func syncMaterializedImages(ctx context.Context, tx *gorm.DB, cmd ApplyTransitionCommand, itemID, revisionID uint64) error {
+	var images []model.ModerationRevisionImage
+	if err := tx.WithContext(ctx).Where("revision_id = ?", revisionID).Order("seq ASC,id ASC").Find(&images).Error; err != nil {
+		return err
+	}
+	if cmd.Subject.Type == SubjectMoment {
+		if err := tx.WithContext(ctx).Unscoped().Where("moment_id = ?", cmd.Subject.ID).Delete(&model.Media{}).Error; err != nil {
+			return err
+		}
+		rows := make([]model.Media, 0, len(images))
+		for _, image := range images {
+			name := path.Base(image.ObjectKey)
+			rows = append(rows, model.Media{
+				UploaderID: uint(cmd.AuthorID), MomentID: uint(cmd.Subject.ID), Type: uint8(0),
+				FileType: strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."), Name: name,
+				URL: image.ObjectKey, Size: uint(image.Size), Status: 1, Seq: image.Seq,
+			})
+		}
+		if len(rows) > 0 {
+			return tx.WithContext(ctx).Create(&rows).Error
+		}
+		return nil
+	}
+	if err := tx.WithContext(ctx).Where("item_id = ?", itemID).Delete(&model.ModerationVisibleImage{}).Error; err != nil {
+		return err
+	}
+	now := tx.NowFunc()
+	rows := make([]model.ModerationVisibleImage, 0, len(images))
+	for _, image := range images {
+		rows = append(rows, model.ModerationVisibleImage{
+			ItemID: itemID, RevisionID: revisionID, Seq: image.Seq, ObjectKey: image.ObjectKey,
+			CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	if len(rows) > 0 {
+		return tx.WithContext(ctx).Create(&rows).Error
+	}
+	return nil
 }
 
 type reviewNotificationMetadata struct {

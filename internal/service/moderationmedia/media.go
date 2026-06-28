@@ -55,6 +55,7 @@ type objectStore interface {
 // Service 准备审核版本所需的图片事实。
 type Service interface {
 	Prepare(ctx context.Context, userID uint64, objectKeys []string) (PreparedSet, error)
+	DeletePreviewObjects(ctx context.Context, keys []string) error
 }
 
 type service struct {
