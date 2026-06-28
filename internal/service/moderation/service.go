@@ -103,6 +103,7 @@ type SubmitResult struct {
 	Message            string
 	HasPendingRevision bool
 	CanInteract        bool
+	Images             []moderationrepo.ImageView
 }
 
 // Service 是评论、留言和碎语业务依赖的审核门面。

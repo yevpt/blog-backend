@@ -12,23 +12,26 @@ import (
 )
 
 func TestProjectViewBuildsSafeDTOWithoutRuleIDs(t *testing.T) {
-	content := "待审编辑正文"
+	content := "待审编辑正文 ![图](comments/new.jpg)"
+	pendingProjected := "待审编辑正文 ![图](moderation/previews/new.jpg)"
 	risk := moderationrepo.RiskMedium
 	status := moderationrepo.ReviewPending
 	view := moderationrepo.View{
 		PublicState: moderationrepo.PublicVisible, DisplayVersion: moderationrepo.DisplayLastApproved,
-		VisibleContent: "旧正文", HasPendingRevision: true,
+		VisibleContent: "旧正文 ![图](comments/old.jpg)", HasPendingRevision: true,
 		PendingContent: &content, PendingRiskLevel: &risk, PendingReviewStatus: &status,
 		PendingRuleMatchIDs: []uint64{3, 4}, CanInteract: false,
+		VisibleImages: []moderationrepo.ImageView{{SourceObjectKey: "comments/old.jpg", DisplayObjectKey: "moderation/previews/old.jpg"}},
+		PendingImages: []moderationrepo.ImageView{{SourceObjectKey: "comments/new.jpg", DisplayObjectKey: "moderation/previews/new.jpg"}},
 	}
 
 	gotContent, got := moderation.ProjectView(view)
 
-	assert.Equal(t, "旧正文", gotContent)
+	assert.Equal(t, "旧正文 ![图](moderation/previews/old.jpg)", gotContent)
 	assert.Equal(t, dto.ModerationView{
 		PublicState: "visible", DisplayVersion: "last_approved", HasPendingRevision: true,
 		PendingRiskLevel: stringPointer("medium"), ReviewStatus: stringPointer("pending"),
-		PendingContent: &content, CanInteract: false,
+		PendingContent: &pendingProjected, CanInteract: false,
 	}, got)
 	require.NotContains(t, anyJSONKeys(got), "rule_match_ids")
 }

@@ -286,10 +286,11 @@ func TestMomentServiceListProjectsModerationInOneBatch(t *testing.T) {
 			PublicState: moderationrepo.PublicVisible, DisplayVersion: moderationrepo.DisplayLastApproved,
 			VisibleContent: "最后通过正文", HasPendingRevision: true,
 			PendingContent: &pending, PendingRiskLevel: &risk, PendingReviewStatus: &status,
-			CanInteract: false,
+			CanInteract:   false,
+			VisibleImages: []moderationrepo.ImageView{{Seq: 1, DisplayObjectKey: "moderation/previews/a.jpg"}},
 		},
 	}, nil)
-	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil, moderationSvc)
+	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil, nil, moderationSvc)
 	viewerID := uint(7)
 
 	resp, err := svc.List(dto.MomentListReq{}, &viewerID)
@@ -299,6 +300,9 @@ func TestMomentServiceListProjectsModerationInOneBatch(t *testing.T) {
 	assert.Equal(t, "最后通过正文", resp.List[0].Content)
 	assert.Equal(t, "last_approved", resp.List[0].Moderation.DisplayVersion)
 	assert.Equal(t, &pending, resp.List[0].Moderation.PendingContent)
+	require.Len(t, resp.List[0].Images, 1)
+	assert.Equal(t, "moderation/previews/a.jpg", resp.List[0].Images[0].URL)
+	assert.Equal(t, "https://cdn.example.com/moderation/previews/a.jpg", resp.List[0].Images[0].AccessURL)
 }
 
 func TestMomentServiceSaveUsesModerationBeforeBusinessRepository(t *testing.T) {
@@ -340,10 +344,11 @@ func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T)
 		MomentOptions: &moderationservice.MomentOptions{Status: 1, CommentStatus: 1},
 	}).Return(moderationservice.SubmitResult{
 		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9}, AuthorID: 7,
+		Images: []moderationrepo.ImageView{{Seq: 1, DisplayObjectKey: "moderation/previews/a.jpg"}},
 	}, nil)
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
 
-	_, err := svc.Save(dto.MomentSaveReq{
+	resp, err := svc.Save(dto.MomentSaveReq{
 		Content: "碎语", Status: 1, CommentStatus: 1, IdempotencyKey: "moment-images",
 		ImageURLs:  []string{"moments/7/old.jpg"},
 		ImageFiles: []dto.MomentImageFileReq{{Name: "cat.gif", ContentType: "image/gif", Data: fileData}},
@@ -351,6 +356,8 @@ func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T)
 
 	require.NoError(t, err)
 	assert.Contains(t, store.putKeys, fileKey)
+	require.Len(t, resp.Images, 1)
+	assert.Equal(t, "moderation/previews/a.jpg", resp.Images[0].URL)
 }
 
 func TestMomentModeratedSavePreservesAdminManagedAuthor(t *testing.T) {

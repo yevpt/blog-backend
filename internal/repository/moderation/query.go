@@ -274,6 +274,10 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 	if err != nil {
 		return nil, err
 	}
+	imagesByRevision, err := r.loadModerationViewImages(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
 	for _, row := range rows {
 		key := SubjectKey{ContentType: SubjectType(row.ContentType), ContentID: row.ContentID}
 		_, ok := requested[key]
@@ -284,7 +288,69 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 		if err != nil {
 			return nil, fmt.Errorf("project moderation view %s/%d: %w", row.ContentType, row.ContentID, err)
 		}
+		if row.MaterializedRevisionID != nil {
+			view.VisibleImages = imagesByRevision[*row.MaterializedRevisionID]
+		}
+		canReadPending := viewer.Role == ViewerAdmin || (viewer.Role == ViewerAuthor && viewer.UserID == row.AuthorID)
+		if canReadPending && row.PendingRevisionID != nil {
+			view.PendingImages = imagesByRevision[*row.PendingRevisionID]
+		}
 		result[key] = view
+	}
+	return result, nil
+}
+
+type moderationViewImageRow struct {
+	RevisionID       uint64
+	Seq              uint
+	ObjectKey        string
+	PreviewObjectKey *string
+	Status           *string
+	IsGIF            bool
+}
+
+func (r *repository) loadModerationViewImages(ctx context.Context, rows []moderationViewRow) (map[uint64][]ImageView, error) {
+	revisionSet := make(map[uint64]struct{})
+	for _, row := range rows {
+		if row.MaterializedRevisionID != nil {
+			revisionSet[*row.MaterializedRevisionID] = struct{}{}
+		}
+		if row.PendingRevisionID != nil {
+			revisionSet[*row.PendingRevisionID] = struct{}{}
+		}
+	}
+	result := make(map[uint64][]ImageView, len(revisionSet))
+	if len(revisionSet) == 0 {
+		return result, nil
+	}
+	revisionIDs := make([]uint64, 0, len(revisionSet))
+	for id := range revisionSet {
+		revisionIDs = append(revisionIDs, id)
+	}
+	var imageRows []moderationViewImageRow
+	err := r.db.WithContext(ctx).Raw(`
+SELECT revision_image.revision_id, revision_image.seq, revision_image.object_key,
+       image_record.preview_object_key, image_record.status, revision_image.is_gif
+FROM moderation_revision_image AS revision_image
+LEFT JOIN moderation_image AS image_record
+  ON image_record.sha256 = revision_image.sha256 AND image_record.size = revision_image.size
+WHERE revision_image.revision_id IN ?
+ORDER BY revision_image.revision_id ASC, revision_image.seq ASC, revision_image.id ASC`, revisionIDs).Scan(&imageRows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range imageRows {
+		approved := row.Status != nil && *row.Status == ImageApproved
+		displayKey := ""
+		if approved {
+			displayKey = row.ObjectKey
+		} else if row.PreviewObjectKey != nil {
+			displayKey = *row.PreviewObjectKey
+		}
+		result[row.RevisionID] = append(result[row.RevisionID], ImageView{
+			Seq: row.Seq, SourceObjectKey: row.ObjectKey, DisplayObjectKey: displayKey,
+			Approved: approved, IsGIF: row.IsGIF,
+		})
 	}
 	return result, nil
 }

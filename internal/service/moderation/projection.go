@@ -1,16 +1,24 @@
 package moderation
 
 import (
+	"strings"
+
 	"github.com/vpt/blog-backend/internal/dto"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 )
 
 // ProjectView 把内部审核视图转换为安全 DTO，并返回当前可展示正文。
 func ProjectView(view View) (string, dto.ModerationView) {
+	pendingContent := cloneString(view.PendingContent)
+	if pendingContent != nil {
+		value := rewriteImageKeys(*pendingContent, view.PendingImages)
+		pendingContent = &value
+	}
 	result := dto.ModerationView{
 		PublicState:        string(view.PublicState),
 		DisplayVersion:     string(view.DisplayVersion),
 		HasPendingRevision: view.HasPendingRevision,
-		PendingContent:     cloneString(view.PendingContent),
+		PendingContent:     pendingContent,
 		CanInteract:        view.CanInteract,
 	}
 	if view.PendingRiskLevel != nil {
@@ -21,7 +29,16 @@ func ProjectView(view View) (string, dto.ModerationView) {
 		value := string(*view.PendingReviewStatus)
 		result.ReviewStatus = &value
 	}
-	return view.VisibleContent, result
+	return rewriteImageKeys(view.VisibleContent, view.VisibleImages), result
+}
+
+func rewriteImageKeys(content string, images []moderationrepo.ImageView) string {
+	for _, image := range images {
+		if image.SourceObjectKey != "" && image.DisplayObjectKey != "" && image.SourceObjectKey != image.DisplayObjectKey {
+			content = strings.ReplaceAll(content, image.SourceObjectKey, image.DisplayObjectKey)
+		}
+	}
+	return content
 }
 
 // ProjectSubmitResult 把一次写入结果转换为作者可见的安全审核状态。

@@ -2,9 +2,12 @@ package moment
 
 import (
 	"math"
+	"path"
+	"strings"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/internal/service/userrole"
@@ -76,8 +79,24 @@ func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate, rolesM
 		content, projected := moderationservice.ProjectView(view)
 		resp.Content = content
 		resp.Moderation = projected
+		resp.Images = s.moderationImagesToDTO(view.VisibleImages)
 	}
 	return resp, nil
+}
+
+func (s *momentService) moderationImagesToDTO(images []moderationrepo.ImageView) []dto.MomentMediaResp {
+	result := make([]dto.MomentMediaResp, 0, len(images))
+	for _, image := range images {
+		if image.DisplayObjectKey == "" {
+			continue
+		}
+		name := path.Base(image.DisplayObjectKey)
+		result = append(result, dto.MomentMediaResp{
+			Name: name, FileType: strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."),
+			URL: image.DisplayObjectKey, AccessURL: s.resolveImageURL(image.DisplayObjectKey), Seq: image.Seq,
+		})
+	}
+	return result
 }
 
 func (s *momentService) mediaToDTO(images []model.Media) []dto.MomentMediaResp {

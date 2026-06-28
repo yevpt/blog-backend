@@ -458,7 +458,18 @@ type View struct {
 	PendingRiskLevel    *RiskLevel
 	PendingReviewStatus *ReviewStatus
 	PendingRuleMatchIDs []uint64
+	VisibleImages       []ImageView
+	PendingImages       []ImageView
 	CanInteract         bool
+}
+
+// ImageView 是审核读取投影中的安全图片地址，未通过时 DisplayObjectKey 只含预览或占位图。
+type ImageView struct {
+	Seq              uint
+	SourceObjectKey  string
+	DisplayObjectKey string
+	Approved         bool
+	IsGIF            bool
 }
 
 // DisplayVersion 表示公开正文选择的审核版本。

@@ -290,7 +290,8 @@ func rewriteResolvableContent(
 
 func resolveCommentImageTarget(ctx context.Context, resolver storage.ObjectURLResolver, target string) string {
 	key := strings.Trim(strings.TrimSpace(target), "/")
-	if key == "" || storage.IsAbsoluteURL(key) || !strings.HasPrefix(key, "comments/") {
+	if key == "" || storage.IsAbsoluteURL(key) ||
+		(!strings.HasPrefix(key, "comments/") && !strings.HasPrefix(key, "moderation/")) {
 		return target
 	}
 	url, err := resolver.ObjectURL(ctx, key)

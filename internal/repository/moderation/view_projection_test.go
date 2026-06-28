@@ -20,6 +20,10 @@ func TestModerationViewPublicProjectionNeverLeaksPendingBody(t *testing.T) {
 		WillReturnRows(moderationViewRows().
 			AddRow("article_comment", 1, 7, "active", "visible", 11, nil, 11, "低风险正文", "低风险原文", "low", "pending", "[3]").
 			AddRow("article_comment", 2, 8, "active", "placeholder", nil, nil, 12, nil, "中风险原文", "medium", "pending", "[4]"))
+	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image LEFT JOIN moderation_image AS image_record").
+		WillReturnRows(moderationViewImageRows().
+			AddRow(11, 1, "comments/original-a.jpg", "moderation/previews/a.jpg", "pending", false).
+			AddRow(12, 1, "comments/original-b.gif", "system/moderation/gif-review.jpg", "pending", true))
 
 	got, err := repository.LoadModerationView(context.Background(), refs, moderation.Viewer{Role: moderation.ViewerPublic})
 
@@ -31,6 +35,9 @@ func TestModerationViewPublicProjectionNeverLeaksPendingBody(t *testing.T) {
 	assert.False(t, low.CanInteract)
 	assert.Nil(t, low.PendingContent)
 	assert.Empty(t, low.PendingRuleMatchIDs)
+	require.Len(t, low.VisibleImages, 1)
+	assert.Equal(t, "moderation/previews/a.jpg", low.VisibleImages[0].DisplayObjectKey)
+	assert.False(t, low.VisibleImages[0].Approved)
 	medium := got[refs[1].Key()]
 	assert.Empty(t, medium.VisibleContent)
 	assert.Equal(t, moderation.DisplayNone, medium.DisplayVersion)
@@ -44,6 +51,10 @@ func TestModerationViewAuthorGetsPendingEditorContentButKeepsApprovedDisplay(t *
 	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized.*LEFT JOIN moderation_revision AS pending").
 		WillReturnRows(moderationViewRows().
 			AddRow("guestbook", 2, 7, "active", "visible", 10, 10, 12, "旧正文", "新中风险正文", "medium", "pending", "[4]"))
+	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image LEFT JOIN moderation_image AS image_record").
+		WillReturnRows(moderationViewImageRows().
+			AddRow(10, 1, "comments/approved.jpg", nil, "approved", false).
+			AddRow(12, 1, "comments/new.jpg", "moderation/previews/new.jpg", "pending", false))
 
 	got, err := repository.LoadModerationView(context.Background(), []moderation.SubjectRef{ref}, moderation.Viewer{
 		Role: moderation.ViewerAuthor, UserID: 7,
@@ -61,7 +72,17 @@ func TestModerationViewAuthorGetsPendingEditorContentButKeepsApprovedDisplay(t *
 	assert.Equal(t, moderation.ReviewPending, *view.PendingReviewStatus)
 	assert.Equal(t, []uint64{4}, view.PendingRuleMatchIDs)
 	assert.False(t, view.CanInteract)
+	require.Len(t, view.VisibleImages, 1)
+	assert.Equal(t, "comments/approved.jpg", view.VisibleImages[0].DisplayObjectKey)
+	require.Len(t, view.PendingImages, 1)
+	assert.Equal(t, "moderation/previews/new.jpg", view.PendingImages[0].DisplayObjectKey)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func moderationViewImageRows() *sqlmock.Rows {
+	return sqlmock.NewRows([]string{
+		"revision_id", "seq", "object_key", "preview_object_key", "status", "is_gif",
+	})
 }
 
 func moderationViewRows() *sqlmock.Rows {

@@ -21,7 +21,8 @@ func (s *momentService) submit(req dto.MomentSaveReq, actorID, authorID uint, is
 	visibleContent, view := moderationservice.ProjectSubmitResult(result)
 	return &dto.MomentItemResp{
 		ID: uint(result.Subject.ID), UserID: uint(result.AuthorID), Content: visibleContent,
-		Status: req.Status, CommentStatus: req.CommentStatus, Images: []dto.MomentMediaResp{}, Moderation: view,
+		Status: req.Status, CommentStatus: req.CommentStatus,
+		Images: s.moderationImagesToDTO(result.Images), Moderation: view,
 	}, nil
 }
 
@@ -38,7 +39,8 @@ func (s *momentService) edit(req dto.MomentSaveReq, actorID uint, isAdmin bool, 
 	visibleContent, view := moderationservice.ProjectSubmitResult(result)
 	return &dto.MomentItemResp{
 		ID: *req.ID, UserID: uint(result.AuthorID), Content: visibleContent,
-		Status: req.Status, CommentStatus: req.CommentStatus, Images: []dto.MomentMediaResp{}, Moderation: view,
+		Status: req.Status, CommentStatus: req.CommentStatus,
+		Images: s.moderationImagesToDTO(result.Images), Moderation: view,
 	}, nil
 }
 

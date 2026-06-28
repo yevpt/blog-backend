@@ -269,6 +269,7 @@ func TestServicePersistsPreparedImagesAndSelectsUnapprovedImagePolicy(t *testing
 	media := &mediaServiceStub{set: moderationmedia.PreparedSet{Images: []moderationmedia.PreparedImage{{
 		Fingerprint: moderationmedia.Fingerprint{SHA256: "sha", MD5: "md5", Size: 10},
 		ObjectKey:   "moments/7/a.jpg", MediaType: "image/jpeg",
+		PreviewObjectKey: "moderation/previews/a.jpg",
 	}}, Replacements: map[string]string{"raw-image": "moments/7/a.jpg"}}}
 	cmd := submitCommand()
 	cmd.ImageKeys = []string{"moments/7/a.jpg"}
@@ -286,10 +287,13 @@ func TestServicePersistsPreparedImagesAndSelectsUnapprovedImagePolicy(t *testing
 			}, nil
 		})
 
-	_, err := newApplicationService(repo, processor, classifier, decider, zap.NewNop(), media).Submit(context.Background(), cmd)
+	result, err := newApplicationService(repo, processor, classifier, decider, zap.NewNop(), media).Submit(context.Background(), cmd)
 
 	require.NoError(t, err)
 	assert.True(t, decider.input.HasUnapprovedImage)
+	assert.Equal(t, "moderation/previews/a.jpg", result.Content)
+	require.Len(t, result.Images, 1)
+	assert.Equal(t, "moderation/previews/a.jpg", result.Images[0].DisplayObjectKey)
 }
 
 func TestServiceIdempotentRetryReturnsStoredResult(t *testing.T) {

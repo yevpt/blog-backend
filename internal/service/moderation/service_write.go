@@ -26,6 +26,7 @@ type writeInput struct {
 	idempotencyKey string
 	momentOptions  *moderationrepo.MomentOptions
 	images         []moderationrepo.RevisionImageDraft
+	imageViews     []moderationrepo.ImageView
 	isEdit         bool
 }
 
@@ -93,6 +94,7 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 			return SubmitResult{}, ErrImageReviewUnavailable
 		}
 		input.images = revisionImageDrafts(prepared.Images)
+		input.imageViews = preparedImageViews(prepared.Images)
 		processed.Published = applyImageReplacements(processed.Published, prepared.Replacements)
 		for _, image := range prepared.Images {
 			if !image.Approved {
@@ -157,9 +159,16 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 	if applied.Replay != nil {
 		return s.resultFromStored(*applied.Replay, input.subject)
 	}
-	return s.resultFromApplied(
+	result := s.resultFromApplied(
 		applied, resolvedAuthorID(input, item), processed, previousContent, classification.Risk, action, plan,
-	), nil
+	)
+	result.Images = input.imageViews
+	result.Content = rewriteImageKeys(result.Content, input.imageViews)
+	if result.PendingContent != nil {
+		value := rewriteImageKeys(*result.PendingContent, input.imageViews)
+		result.PendingContent = &value
+	}
+	return result, nil
 }
 
 func resolvedAuthorID(input writeInput, item moderationrepo.ItemStateRecord) uint64 {
@@ -275,6 +284,21 @@ func revisionImageDrafts(images []moderationmedia.PreparedImage) []moderationrep
 				SHA256: image.SHA256, MD5: image.MD5, Size: image.Size,
 			},
 			Seq: uint(index + 1), ObjectKey: image.ObjectKey, MediaType: image.MediaType, IsGIF: image.IsGIF,
+		})
+	}
+	return result
+}
+
+func preparedImageViews(images []moderationmedia.PreparedImage) []moderationrepo.ImageView {
+	result := make([]moderationrepo.ImageView, 0, len(images))
+	for index, image := range images {
+		displayKey := image.ObjectKey
+		if !image.Approved {
+			displayKey = image.PreviewObjectKey
+		}
+		result = append(result, moderationrepo.ImageView{
+			Seq: uint(index + 1), SourceObjectKey: image.ObjectKey, DisplayObjectKey: displayKey,
+			Approved: image.Approved, IsGIF: image.IsGIF,
 		})
 	}
 	return result
