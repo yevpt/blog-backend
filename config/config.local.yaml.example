@@ -42,6 +42,9 @@ cdn:
   signQueryName: "a"
   timestampQueryName: "b"
 
+image:
+  originAuthSecret: "your_cdn_origin_auth_secret"
+
 email:
   # 供应商标识与安全限额默认值见 config.yaml，本地仅覆盖连接凭证
   provider: aliyun_enterprise

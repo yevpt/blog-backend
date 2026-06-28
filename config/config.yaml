@@ -43,6 +43,14 @@ cdn:
   signQueryName: "a"
   timestampQueryName: "b"
 
+image:
+  # CDN 回源请求头 X-Origin-Auth 密钥，生产经 env BLOG_IMAGE_ORIGINAUTHSECRET 覆盖
+  originAuthSecret: ""
+  # Cache-Control max-age 秒数，默认 7 天
+  responseCacheMaxAge: 604800
+  defaultQuality: 75
+  maxWidth: 3840
+
 email:
   # 发件人昵称，出现在邮件 From 头，如 "YEVPT <noreply@example.com>"；为空时仅显示邮箱
   from_name: ""

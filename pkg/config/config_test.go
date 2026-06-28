@@ -524,6 +524,34 @@ garage:
 	assert.Equal(t, "/app/geoip/ip2region_v6.xdb", cfg.Analytics.GeoIPV6Path)
 }
 
+// TestLoad_ReadsImageConfig 验证 CDN 回源图片服务配置能解析到结构体。
+func TestLoad_ReadsImageConfig(t *testing.T) {
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(cwd))
+	})
+
+	configDir := filepath.Join(t.TempDir(), "config")
+	writeProjectConfigFixture(t, configDir, `
+image:
+  originAuthSecret: "origin-secret"
+  responseCacheMaxAge: 3600
+  defaultQuality: 80
+  maxWidth: 2048
+`)
+
+	t.Setenv("APP_ENV", "")
+	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
+
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	assert.Equal(t, "origin-secret", cfg.Image.OriginAuthSecret)
+	assert.Equal(t, 3600, cfg.Image.ResponseCacheMaxAge)
+	assert.Equal(t, 80, cfg.Image.DefaultQuality)
+	assert.Equal(t, 2048, cfg.Image.MaxWidth)
+}
+
 func writeProjectConfigFixture(t *testing.T, configDir, localOverride string) {
 	t.Helper()
 

@@ -24,6 +24,7 @@ type Config struct {
 	Moderation ModerationConfig `mapstructure:"moderation"`
 
 	Analytics AnalyticsConfig `mapstructure:"analytics"` // 站点统计采集与聚合配置
+	Image     ImageConfig     `mapstructure:"image"`     // CDN 回源图片变换服务配置
 }
 
 type ServerConfig struct {
@@ -73,6 +74,14 @@ type GarageConfig struct {
 	AccessKeyID     string `mapstructure:"accessKeyID"`     // 访问密钥 ID
 	SecretAccessKey string `mapstructure:"secretAccessKey"` // 访问密钥 Secret
 	CDN             bool   `mapstructure:"cdn"`             // 是否优先返回 CDN 签名 URL
+}
+
+// ImageConfig 是 CDN 回源图片变换服务配置。
+type ImageConfig struct {
+	OriginAuthSecret    string `mapstructure:"originAuthSecret"`    // CDN 回源请求头 X-Origin-Auth 密钥
+	ResponseCacheMaxAge int    `mapstructure:"responseCacheMaxAge"` // Cache-Control max-age 秒数
+	DefaultQuality      int    `mapstructure:"defaultQuality"`      // 默认 JPEG 质量（1–100）
+	MaxWidth            int    `mapstructure:"maxWidth"`            // 变换宽度上限
 }
 
 // CDNConfig 是私有 CDN TypeD 签名配置。
@@ -238,6 +247,10 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"analytics.geoip_v6_path",
 		"analytics.site_host",
 		"analytics.collect_token_secret",
+		"image.originAuthSecret",
+		"image.responseCacheMaxAge",
+		"image.defaultQuality",
+		"image.maxWidth",
 	}
 
 	for _, key := range keys {
