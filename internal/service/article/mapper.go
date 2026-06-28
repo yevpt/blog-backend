@@ -96,11 +96,17 @@ func resolveURL(value *string, objectURLResolver storage.ObjectURLResolver) (*st
 }
 
 func resolveListItemCoverURL(item *dto.ArticleListItemResp, objectURLResolver storage.ObjectURLResolver) error {
-	url, err := resolveURL(item.CoverImgUrl, objectURLResolver)
+	coverURL, err := resolveURL(item.CoverImgUrl, objectURLResolver)
 	if err != nil {
 		return err
 	}
-	item.CoverImgUrl = url
+	item.CoverImgUrl = coverURL
+
+	mobileCoverURL, err := resolveURL(item.MobileCoverImgUrl, objectURLResolver)
+	if err != nil {
+		return err
+	}
+	item.MobileCoverImgUrl = mobileCoverURL
 	return nil
 }
 
@@ -213,6 +219,7 @@ func deletedArticleToDTO(article *model.Article) *dto.ArticleDetailResp {
 		ID:                  article.ID,
 		Title:               article.Title,
 		CoverImgUrl:         article.CoverImgUrl,
+		MobileCoverImgUrl:   article.MobileCoverImgUrl,
 		ShortContent:        article.ShortContent,
 		UserID:              article.UserID,
 		Status:              article.Status,
@@ -249,6 +256,7 @@ func articleListItemToDTO(aggregate *articlerepo.ArticleAggregate) dto.ArticleLi
 		ID:                  article.ID,
 		Title:               article.Title,
 		CoverImgUrl:         article.CoverImgUrl,
+		MobileCoverImgUrl:   article.MobileCoverImgUrl,
 		ShortContent:        article.ShortContent,
 		UserID:              article.UserID,
 		User:                articleUserToDTO(aggregate.User),

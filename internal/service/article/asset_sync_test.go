@@ -42,6 +42,30 @@ func TestNormalizeArticleContent_RejectsExternalImage(t *testing.T) {
 	assert.Contains(t, err.Error(), "https://example.net/a.png")
 }
 
+func TestNormalizeArticleMobileCover_CopiesTempMobileCover(t *testing.T) {
+	store := &assetStore{
+		keys: map[string]bool{
+			"temp/articles/7/mobile-covers/m.png": true,
+		},
+		keyMap: map[string]string{
+			"https://cdn.example.com/blog/temp/articles/7/mobile-covers/m.png": "temp/articles/7/mobile-covers/m.png",
+		},
+	}
+	mobileCover := "https://cdn.example.com/blog/temp/articles/7/mobile-covers/m.png"
+
+	result, err := normalizeArticleAssets(context.Background(), store, articleAssetNormalizeInput{
+		ArticleID:   45,
+		UserID:      7,
+		MobileCover: &mobileCover,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, result.MobileCover)
+	assert.Equal(t, "articles/45/mobile-cover/m.png", *result.MobileCover)
+	assert.Equal(t, []articleAssetCopy{{source: "temp/articles/7/mobile-covers/m.png", target: "articles/45/mobile-cover/m.png"}}, store.copies)
+	assert.Equal(t, []string{"temp/articles/7/mobile-covers/m.png"}, result.TempKeys)
+}
+
 type assetStore struct {
 	keys   map[string]bool
 	keyMap map[string]string

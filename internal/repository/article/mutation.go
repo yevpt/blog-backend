@@ -258,7 +258,8 @@ func visibleArticleStatuses() []uint {
 func articleUpdateFields(article model.Article) map[string]any {
 	return map[string]any{
 		"title":          article.Title,
-		"cover_img_url":  article.CoverImgUrl,
+		"cover_img_url":        article.CoverImgUrl,
+		"mobile_cover_img_url": article.MobileCoverImgUrl,
 		"short_content":  article.ShortContent,
 		"content":        article.Content,
 		"user_id":        article.UserID,

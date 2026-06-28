@@ -28,15 +28,17 @@ type articleAssetStore interface {
 }
 
 type articleAssetNormalizeInput struct {
-	ArticleID uint
-	UserID    uint
-	Content   string
-	Cover     *string
+	ArticleID   uint
+	UserID      uint
+	Content     string
+	Cover       *string
+	MobileCover *string
 }
 
 type articleAssetNormalizeResult struct {
 	Content        string
 	Cover          *string
+	MobileCover    *string
 	TempKeys       []string
 	CopiedKeys     []string
 	ReferencedKeys []string
@@ -60,9 +62,14 @@ func normalizeArticleAssets(ctx context.Context, store articleAssetStore, input 
 	if err != nil {
 		return nil, err
 	}
+	mobileCover, err := normalizer.normalizeMobileCover(input.MobileCover)
+	if err != nil {
+		return nil, err
+	}
 	return &articleAssetNormalizeResult{
 		Content:        content,
 		Cover:          cover,
+		MobileCover:    mobileCover,
 		TempKeys:       normalizer.tempKeys(),
 		CopiedKeys:     normalizer.copiedKeys(),
 		ReferencedKeys: normalizer.referencedKeys(),
@@ -101,6 +108,14 @@ func (n *articleAssetNormalizer) normalizeContent(content string) (string, error
 }
 
 func (n *articleAssetNormalizer) normalizeCover(cover *string) (*string, error) {
+	return n.normalizeCoverValue(cover)
+}
+
+func (n *articleAssetNormalizer) normalizeMobileCover(cover *string) (*string, error) {
+	return n.normalizeCoverValue(cover)
+}
+
+func (n *articleAssetNormalizer) normalizeCoverValue(cover *string) (*string, error) {
 	if cover == nil {
 		return nil, nil
 	}
@@ -181,8 +196,10 @@ func (n *articleAssetNormalizer) normalizeKey(key string) (target string, tempKe
 	}
 	tempImagePrefix := fmt.Sprintf("temp/articles/%d/images/", n.userID)
 	tempCoverPrefix := fmt.Sprintf("temp/articles/%d/covers/", n.userID)
+	tempMobileCoverPrefix := fmt.Sprintf("temp/articles/%d/mobile-covers/", n.userID)
 	formalImagePrefix := fmt.Sprintf("articles/%d/images/", n.articleID)
 	formalCoverPrefix := fmt.Sprintf("articles/%d/cover/", n.articleID)
+	formalMobileCoverPrefix := fmt.Sprintf("articles/%d/mobile-cover/", n.articleID)
 
 	switch {
 	case strings.HasPrefix(key, tempImagePrefix):
@@ -199,7 +216,14 @@ func (n *articleAssetNormalizer) normalizeKey(key string) (target string, tempKe
 			return "", "", err
 		}
 		return target, key, nil
-	case strings.HasPrefix(key, formalImagePrefix), strings.HasPrefix(key, formalCoverPrefix):
+	case strings.HasPrefix(key, tempMobileCoverPrefix):
+		name := path.Base(key)
+		target = formalMobileCoverPrefix + name
+		if err := n.ensureTargetReady(key, target); err != nil {
+			return "", "", err
+		}
+		return target, key, nil
+	case strings.HasPrefix(key, formalImagePrefix), strings.HasPrefix(key, formalCoverPrefix), strings.HasPrefix(key, formalMobileCoverPrefix):
 		if err := n.ensureExists(key); err != nil {
 			return "", "", err
 		}
@@ -255,9 +279,14 @@ func sortedKeys(values map[string]struct{}) []string {
 	return keys
 }
 
-func hasArticleImageReferences(content string, cover *string) bool {
+func hasArticleImageReferences(content string, covers ...*string) bool {
 	if markdownImagePattern.MatchString(content) || htmlImagePattern.MatchString(content) {
 		return true
 	}
-	return cover != nil && strings.TrimSpace(*cover) != ""
+	for _, cover := range covers {
+		if cover != nil && strings.TrimSpace(*cover) != "" {
+			return true
+		}
+	}
+	return false
 }

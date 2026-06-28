@@ -19,7 +19,8 @@ const (
 type Article struct {
 	Base
 	Title         string  `gorm:"size:200;not null;comment:标题" json:"title"`
-	CoverImgUrl   *string `gorm:"size:500;comment:封面图URL" json:"cover_img_url"`
+	CoverImgUrl       *string `gorm:"size:500;comment:封面图URL" json:"cover_img_url"`
+	MobileCoverImgUrl *string `gorm:"size:500;comment:移动端封面图URL" json:"mobile_cover_img_url"`
 	ShortContent  *string `gorm:"size:1000;comment:摘要" json:"short_content"`
 	Content       string  `gorm:"type:longtext;comment:正文（Markdown）" json:"content"`
 	UserID        uint    `gorm:"not null;index;comment:作者ID" json:"user_id"`

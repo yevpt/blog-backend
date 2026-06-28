@@ -27,7 +27,7 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 
 func articleTableColumns() []string {
 	return []string{
-		"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url",
+		"id", "created_at", "updated_at", "deleted_at", "title", "cover_img_url", "mobile_cover_img_url",
 		"short_content", "content", "user_id", "status", "comment_status",
 		"password", "read_count", "cover_ai_generated", "content_ai_referenced",
 	}

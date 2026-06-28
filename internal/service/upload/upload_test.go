@@ -100,6 +100,24 @@ func TestService_UploadTempImage_StoresUserScopedKey(t *testing.T) {
 	assert.Equal(t, file, store.puts[0].data)
 }
 
+func TestService_UploadTempImage_MobileCoversDir(t *testing.T) {
+	store := &fakeObjectStore{objectURLByKey: map[string]string{}}
+	svc := uploadservice.NewService(store)
+	file := smallPNG(t)
+	sum := md5.Sum(file)
+	expectedMD5 := hex.EncodeToString(sum[:])
+
+	resp, err := svc.UploadTempImage(context.Background(), uploadservice.TempImageInput{
+		UserID: 7,
+		Dir:    "mobile-covers",
+		Name:   "mobile.png",
+		Data:   file,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "temp/articles/7/mobile-covers/"+expectedMD5+".png", resp.Key)
+}
+
 func TestService_UploadTempImage_RejectsInvalidDir(t *testing.T) {
 	svc := uploadservice.NewService(&fakeObjectStore{})
 

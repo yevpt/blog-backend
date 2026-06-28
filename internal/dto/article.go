@@ -35,6 +35,8 @@ type ArticleSaveReq struct {
 	Title string `json:"title" binding:"required" example:"文章标题"`
 	// CoverImgUrl 封面图地址。
 	CoverImgUrl *string `json:"cover_img_url" example:"https://example.com/cover.jpg"`
+	// MobileCoverImgUrl 移动端封面图地址；为空时前端可回退到 cover_img_url。
+	MobileCoverImgUrl *string `json:"mobile_cover_img_url,omitempty" example:"https://example.com/mobile-cover.jpg"`
 	// ShortContent 文章摘要。
 	ShortContent *string `json:"short_content" example:"摘要"`
 	// Content Markdown 正文内容。
@@ -133,6 +135,8 @@ type ArticleListItemResp struct {
 	Title string `json:"title" example:"文章标题"`
 	// CoverImgUrl 封面图地址。
 	CoverImgUrl *string `json:"cover_img_url,omitempty"`
+	// MobileCoverImgUrl 移动端封面图地址。
+	MobileCoverImgUrl *string `json:"mobile_cover_img_url,omitempty"`
 	// ShortContent 文章摘要。
 	ShortContent *string `json:"short_content,omitempty"`
 	// UserID 作者用户 ID。

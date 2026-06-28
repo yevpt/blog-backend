@@ -161,6 +161,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 	article := model.Article{
 		Title:               strings.TrimSpace(req.Title),
 		CoverImgUrl:         req.CoverImgUrl,
+		MobileCoverImgUrl:   req.MobileCoverImgUrl,
 		ShortContent:        req.ShortContent,
 		Content:             req.Content,
 		UserID:              authorID,
@@ -187,10 +188,13 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		if oldAggregate.Article.CoverImgUrl != nil && strings.TrimSpace(*oldAggregate.Article.CoverImgUrl) != "" {
 			oldContent += "\n![](" + strings.TrimSpace(*oldAggregate.Article.CoverImgUrl) + ")"
 		}
+		if oldAggregate.Article.MobileCoverImgUrl != nil && strings.TrimSpace(*oldAggregate.Article.MobileCoverImgUrl) != "" {
+			oldContent += "\n![](" + strings.TrimSpace(*oldAggregate.Article.MobileCoverImgUrl) + ")"
+		}
 	}
 
 	store, hasStore := s.objectURLResolver.(storage.ObjectStore)
-	if hasArticleImageReferences(article.Content, article.CoverImgUrl) && (!hasStore || store == nil) {
+	if hasArticleImageReferences(article.Content, article.CoverImgUrl, article.MobileCoverImgUrl) && (!hasStore || store == nil) {
 		return nil, ErrArticleImageInvalid
 	}
 
@@ -212,10 +216,11 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 	if hasStore && store != nil {
 		prepareArticle = func(article model.Article) (model.Article, error) {
 			normalized, err := normalizeArticleAssets(context.Background(), store, articleAssetNormalizeInput{
-				ArticleID: article.ID,
-				UserID:    authorID,
-				Content:   article.Content,
-				Cover:     article.CoverImgUrl,
+				ArticleID:   article.ID,
+				UserID:      authorID,
+				Content:     article.Content,
+				Cover:       article.CoverImgUrl,
+				MobileCover: article.MobileCoverImgUrl,
 			})
 			if err != nil {
 				return model.Article{}, err
@@ -225,6 +230,7 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 			newReferencedKeys = normalized.ReferencedKeys
 			article.Content = normalized.Content
 			article.CoverImgUrl = normalized.Cover
+			article.MobileCoverImgUrl = normalized.MobileCover
 			return article, nil
 		}
 	}

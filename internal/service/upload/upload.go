@@ -216,7 +216,7 @@ func normalizeTempDir(value string) (string, error) {
 func normalizeArticleTempDir(value string) (string, error) {
 	dir := strings.TrimSpace(value)
 	switch dir {
-	case "images", "covers":
+	case "images", "covers", "mobile-covers":
 		return dir, nil
 	default:
 		return "", ErrUploadDirInvalid

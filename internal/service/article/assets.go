@@ -62,6 +62,9 @@ func deletedArticleAssetMoves(article *model.Article, keyResolver storage.Object
 	if article.CoverImgUrl != nil {
 		appendMove(*article.CoverImgUrl)
 	}
+	if article.MobileCoverImgUrl != nil {
+		appendMove(*article.MobileCoverImgUrl)
+	}
 	for _, value := range articleAssetValues(article.ID, article.Content) {
 		appendMove(value)
 	}

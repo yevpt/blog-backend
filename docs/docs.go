@@ -3779,7 +3779,7 @@ const docTemplate = `{
         },
         "/admin/users/avatars/normalize": {
             "post": {
-                "description": "管理员检查本站托管头像是否超出 120px / 20KB JPEG 规范；超出则压缩替换、更新 avatar_url 并清理旧对象。可指定 user_id 处理单个用户，不传则处理全部；clear_invalid=true 时无法处理的头像会被清空。",
+                "description": "管理员检查本站托管头像是否超出 120px / 20KB JPEG 规范；超出则压缩替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true 时无法处理的头像会被清空。",
                 "consumes": [
                     "application/json"
                 ],
@@ -8471,7 +8471,7 @@ const docTemplate = `{
         },
         "/uploads/temp": {
             "post": {
-                "description": "登录用户上传临时图片。默认 scene=article，仅支持 images/covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。",
+                "description": "登录用户上传临时图片。默认 scene=article，仅支持 images/covers/mobile-covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -8491,7 +8491,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "临时目录：images 或 covers",
+                        "description": "临时目录：images、covers 或 mobile-covers",
                         "name": "dir",
                         "in": "formData",
                         "required": true
@@ -9861,6 +9861,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 3
                 },
+                "mobile_cover_img_url": {
+                    "description": "MobileCoverImgUrl 移动端封面图地址。",
+                    "type": "string"
+                },
                 "music": {
                     "description": "Music 音乐列表，字段与音乐模块 MusicItemResp 一致。",
                     "type": "array",
@@ -10006,6 +10010,10 @@ const docTemplate = `{
                     "description": "LikeCount 点赞数量。",
                     "type": "integer",
                     "example": 3
+                },
+                "mobile_cover_img_url": {
+                    "description": "MobileCoverImgUrl 移动端封面图地址。",
+                    "type": "string"
                 },
                 "read_count": {
                     "description": "ReadCount 阅读数量。",
@@ -10646,6 +10654,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 3
                 },
+                "mobile_cover_img_url": {
+                    "description": "MobileCoverImgUrl 移动端封面图地址。",
+                    "type": "string"
+                },
                 "music": {
                     "description": "Music 音乐列表，字段与音乐模块 MusicItemResp 一致。",
                     "type": "array",
@@ -10820,6 +10832,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 3
                 },
+                "mobile_cover_img_url": {
+                    "description": "MobileCoverImgUrl 移动端封面图地址。",
+                    "type": "string"
+                },
                 "read_count": {
                     "description": "ReadCount 阅读数量。",
                     "type": "integer",
@@ -10981,6 +10997,11 @@ const docTemplate = `{
                     "description": "ID 文章 ID，为空或 0 表示新增。",
                     "type": "integer",
                     "example": 1
+                },
+                "mobile_cover_img_url": {
+                    "description": "MobileCoverImgUrl 移动端封面图地址；为空时前端可回退到 cover_img_url。",
+                    "type": "string",
+                    "example": "https://example.com/mobile-cover.jpg"
                 },
                 "music_ids": {
                     "description": "MusicIDs 音乐 ID 列表。",
@@ -12711,6 +12732,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 14
                 },
+                "purged": {
+                    "type": "integer",
+                    "example": 5
+                },
                 "scanned": {
                     "type": "integer",
                     "example": 20
@@ -12718,6 +12743,10 @@ const docTemplate = `{
                 "skipped": {
                     "type": "integer",
                     "example": 2
+                },
+                "storage_scanned": {
+                    "type": "integer",
+                    "example": 8
                 },
                 "updated": {
                     "type": "integer",
