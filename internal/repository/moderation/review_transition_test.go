@@ -47,6 +47,9 @@ func TestApplyTransitionCorrectsMaterializedContentAndCreatesNotificationAtomica
 		WillReturnRows(sqlmock.NewRows([]string{"id", "item_id"}).AddRow(20, 10))
 	mock.ExpectExec("UPDATE `moderation_revision` SET .*published_content.*review_status").
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE moderation_image AS image_record JOIN moderation_revision_image AS revision_image").
+		WithArgs(moderation.ImageApproved, fixedTime, reviewerID, fixedTime, fixedTime, uint64(20)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE `moderation_item` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT .* FROM `moderation_revision` WHERE .*id = \\?.*item_id = \\?.*LIMIT \\?").
 		WithArgs(uint64(20), uint64(10), 1).

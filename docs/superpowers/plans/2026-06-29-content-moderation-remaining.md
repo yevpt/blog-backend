@@ -54,15 +54,15 @@
 - Regenerate: `internal/repository/moderation/mock/mock_repository.go`
 
 **Interfaces:**
-- Produces `FindApprovedImage`, `TouchApprovedImage`, `UpsertPendingImage`, `LoadRevisionImages`, and `ListObsoleteImages` repository methods.
+- Produces atomic `UseApprovedImage`, `UpsertPendingImage`, and `LoadRevisionImages` repository methods; obsolete-image selection remains in Task 6.
 - Extends `RevisionDraft` with ordered `Images []RevisionImageDraft`.
 - Review transitions approve every image fingerprint referenced by the approved revision in the same MySQL transaction.
 
-- [ ] Write sqlmock tests proving MD5 lookup also requires SHA-256 and size, approved hits update `last_used_at`, revision order is immutable, transition rollback removes no prior snapshot, and review approval records `approved_at/approved_by`.
-- [ ] Run repository tests and confirm RED on missing interfaces.
-- [ ] Implement the named repository methods and transition inserts/updates without exposing GORM models to services.
-- [ ] Regenerate repository mocks with the repository's existing `go generate` command and run `go test ./internal/repository/moderation ./internal/service/moderation -count=1`.
-- [ ] Commit with `feat(moderation): 持久化审核版本图片与全站复用状态`.
+- [x] Write sqlmock tests proving MD5 lookup also requires SHA-256 and size, approved hits update `last_used_at`, revision order is immutable, transition rollback removes no prior snapshot, and review approval records `approved_at/approved_by`.
+- [x] Run repository tests and confirm RED on missing interfaces.
+- [x] Implement the named repository methods and transition inserts/updates without exposing GORM models to services.
+- [x] Regenerate repository mocks with the repository's existing `go generate` command and run `go test ./internal/repository/moderation ./internal/service/moderation -count=1`.
+- [x] Commit with `feat(moderation): 持久化审核版本图片与全站复用状态`.
 
 ### Task 3: Route moment, comment, reply, and guestbook images through moderation
 

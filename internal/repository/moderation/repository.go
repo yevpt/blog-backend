@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -19,6 +20,9 @@ type Repository interface {
 	ListReviewRecords(ctx context.Context, filter ReviewFilter) (ReviewPage, error)
 	LoadReviewRecord(ctx context.Context, itemID, revisionID uint64) (ReviewRecord, error)
 	LoadCurrentReviewRecord(ctx context.Context, itemID uint64) (ReviewRecord, error)
+	UseApprovedImage(ctx context.Context, fingerprint ImageFingerprint, usedAt time.Time) (bool, error)
+	UpsertPendingImage(ctx context.Context, image PendingImage) error
+	LoadRevisionImages(ctx context.Context, revisionID uint64) ([]RevisionImageRecord, error)
 }
 
 type repository struct {

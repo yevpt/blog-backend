@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -18,18 +19,10 @@ var (
 )
 
 // Fingerprint 是全站图片复用的最终身份。
-type Fingerprint struct {
-	SHA256 string
-	MD5    string
-	Size   uint64
-}
+type Fingerprint = moderationrepo.ImageFingerprint
 
 // PendingImage 是需要登记或刷新为待审状态的图片事实。
-type PendingImage struct {
-	Fingerprint
-	PreviewObjectKey string
-	LastUsedAt       time.Time
-}
+type PendingImage = moderationrepo.PendingImage
 
 // PreparedImage 是一个提交版本可安全持久化的有序图片快照。
 type PreparedImage struct {
@@ -48,8 +41,8 @@ type PreparedSet struct {
 
 // Registry 隔离全站图片审核记录的数据访问。
 type Registry interface {
-	UseApproved(ctx context.Context, fingerprint Fingerprint, usedAt time.Time) (bool, error)
-	UpsertPending(ctx context.Context, image PendingImage) error
+	UseApprovedImage(ctx context.Context, fingerprint Fingerprint, usedAt time.Time) (bool, error)
+	UpsertPendingImage(ctx context.Context, image PendingImage) error
 }
 
 type objectStore interface {

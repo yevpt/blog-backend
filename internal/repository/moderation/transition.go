@@ -57,11 +57,17 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 		if newRevision != nil {
 			applied.RevisionID = newRevision.ID
 			applied.RevisionVersion = newRevision.Version
+			if err := createRevisionImages(ctx, tx, newRevision.ID, cmd.Revision.Images); err != nil {
+				return err
+			}
 		}
 		if err := supersedeRevision(ctx, tx, item.ID, cmd.SupersedeRevisionID); err != nil {
 			return err
 		}
 		if err := reviewRevision(ctx, tx, item.ID, cmd.Review); err != nil {
+			return err
+		}
+		if err := approveRevisionImages(ctx, tx, cmd.Review); err != nil {
 			return err
 		}
 
@@ -347,6 +353,41 @@ func createRevision(ctx context.Context, tx *gorm.DB, itemID uint64, draft *Revi
 }
 
 func uint8Pointer(value uint8) *uint8 { return &value }
+
+func createRevisionImages(ctx context.Context, tx *gorm.DB, revisionID uint64, drafts []RevisionImageDraft) error {
+	if len(drafts) == 0 {
+		return nil
+	}
+	now := tx.NowFunc()
+	rows := make([]model.ModerationRevisionImage, 0, len(drafts))
+	for _, draft := range drafts {
+		if draft.Seq == 0 || draft.ObjectKey == "" || draft.SHA256 == "" || draft.MD5 == "" || draft.Size == 0 || draft.MediaType == "" {
+			return ErrInvalidCommand
+		}
+		rows = append(rows, model.ModerationRevisionImage{
+			RevisionID: revisionID, Seq: draft.Seq, ObjectKey: draft.ObjectKey,
+			SHA256: draft.SHA256, MD5: draft.MD5, Size: draft.Size,
+			MediaType: draft.MediaType, IsGIF: draft.IsGIF, CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	return tx.WithContext(ctx).Create(&rows).Error
+}
+
+func approveRevisionImages(ctx context.Context, tx *gorm.DB, review *RevisionReview) error {
+	if review == nil || review.Status != ReviewApproved {
+		return nil
+	}
+	result := tx.WithContext(ctx).Exec(`
+UPDATE moderation_image AS image_record
+JOIN moderation_revision_image AS revision_image
+  ON revision_image.sha256 = image_record.sha256 AND revision_image.size = image_record.size
+SET image_record.status = ?, image_record.approved_at = ?, image_record.approved_by = ?,
+    image_record.preview_object_key = NULL, image_record.last_used_at = ?, image_record.updated_at = ?
+WHERE revision_image.revision_id = ?`,
+		ImageApproved, review.ReviewedAt, review.ReviewerID, review.ReviewedAt, review.ReviewedAt, review.RevisionID,
+	)
+	return result.Error
+}
 
 func supersedeRevision(ctx context.Context, tx *gorm.DB, itemID uint64, revisionID *uint64) error {
 	if revisionID == nil {

@@ -63,11 +63,11 @@ type mediaRegistry struct {
 	pending   []moderationmedia.PendingImage
 }
 
-func (r *mediaRegistry) UseApproved(_ context.Context, _ moderationmedia.Fingerprint, usedAt time.Time) (bool, error) {
+func (r *mediaRegistry) UseApprovedImage(_ context.Context, _ moderationmedia.Fingerprint, usedAt time.Time) (bool, error) {
 	r.usedAt = usedAt
 	return r.approved, r.useErr
 }
-func (r *mediaRegistry) UpsertPending(_ context.Context, image moderationmedia.PendingImage) error {
+func (r *mediaRegistry) UpsertPendingImage(_ context.Context, image moderationmedia.PendingImage) error {
 	r.pending = append(r.pending, image)
 	return r.upsertErr
 }

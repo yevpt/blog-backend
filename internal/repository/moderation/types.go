@@ -168,7 +168,39 @@ type RevisionDraft struct {
 	ReviewerID       *uint64
 	ReviewedAt       *time.Time
 	MomentOptions    *MomentOptions
+	Images           []RevisionImageDraft
 }
+
+const (
+	ImagePending  = "pending"
+	ImageApproved = "approved"
+)
+
+// ImageFingerprint 是全站图片复用的最终身份，MD5 仅用于缩小候选范围。
+type ImageFingerprint struct {
+	SHA256 string
+	MD5    string
+	Size   uint64
+}
+
+// PendingImage 是待审图片记录的幂等写入数据。
+type PendingImage struct {
+	Fingerprint      ImageFingerprint
+	PreviewObjectKey string
+	LastUsedAt       time.Time
+}
+
+// RevisionImageDraft 是新审核版本的有序图片快照。
+type RevisionImageDraft struct {
+	ImageFingerprint
+	Seq       uint
+	ObjectKey string
+	MediaType string
+	IsGIF     bool
+}
+
+// RevisionImageRecord 是已持久化的有序图片快照。
+type RevisionImageRecord = RevisionImageDraft
 
 // RevisionReview 是已有版本的审核结果更新。
 type RevisionReview struct {

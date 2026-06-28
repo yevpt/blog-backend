@@ -71,6 +71,10 @@ func transitionCommand() moderation.ApplyTransitionCommand {
 func TestApplyTransitionLocksCreatesVersionMaterializesAndCommits(t *testing.T) {
 	repository, mock := newRepository(t)
 	command := transitionCommand()
+	command.Revision.Images = []moderation.RevisionImageDraft{{
+		ImageFingerprint: moderation.ImageFingerprint{SHA256: "sha", MD5: "md5", Size: 10},
+		Seq:              1, ObjectKey: "moments/42/a.jpg", MediaType: "image/jpeg",
+	}}
 
 	mock.ExpectBegin()
 	expectNoIdempotencyResult(mock, 42, "request-1")
@@ -79,6 +83,9 @@ func TestApplyTransitionLocksCreatesVersionMaterializesAndCommits(t *testing.T) 
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(MAX(version), 0) FROM `moderation_revision` WHERE item_id = ?")).
 		WithArgs(uint64(10)).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
 	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
+	mock.ExpectExec("INSERT INTO `moderation_revision_image`").
+		WithArgs(uint64(101), uint(1), "moments/42/a.jpg", "sha", "md5", uint64(10), "image/jpeg", false, fixedTime, fixedTime).
+		WillReturnResult(sqlmock.NewResult(201, 1))
 	mock.ExpectExec("UPDATE `moderation_item` SET .*`lock_version`=lock_version \\+ 1.*WHERE .*lock_version = \\?").
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), uint64(10), uint64(4)).
 		WillReturnResult(sqlmock.NewResult(0, 1))

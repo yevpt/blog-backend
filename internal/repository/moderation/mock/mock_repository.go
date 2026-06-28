@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	moderation "github.com/vpt/blog-backend/internal/repository/moderation"
 	gomock "go.uber.org/mock/gomock"
@@ -176,6 +177,21 @@ func (mr *MockRepositoryMockRecorder) LoadReviewRecord(ctx, itemID, revisionID a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadReviewRecord", reflect.TypeOf((*MockRepository)(nil).LoadReviewRecord), ctx, itemID, revisionID)
 }
 
+// LoadRevisionImages mocks base method.
+func (m *MockRepository) LoadRevisionImages(ctx context.Context, revisionID uint64) ([]moderation.RevisionImageRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadRevisionImages", ctx, revisionID)
+	ret0, _ := ret[0].([]moderation.RevisionImageRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadRevisionImages indicates an expected call of LoadRevisionImages.
+func (mr *MockRepositoryMockRecorder) LoadRevisionImages(ctx, revisionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRevisionImages", reflect.TypeOf((*MockRepository)(nil).LoadRevisionImages), ctx, revisionID)
+}
+
 // LoadSubject mocks base method.
 func (m *MockRepository) LoadSubject(ctx context.Context, ref moderation.SubjectRef) (moderation.SubjectSnapshot, error) {
 	m.ctrl.T.Helper()
@@ -204,4 +220,33 @@ func (m *MockRepository) RecordBlockedAttempt(ctx context.Context, attempt moder
 func (mr *MockRepositoryMockRecorder) RecordBlockedAttempt(ctx, attempt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordBlockedAttempt", reflect.TypeOf((*MockRepository)(nil).RecordBlockedAttempt), ctx, attempt)
+}
+
+// UpsertPendingImage mocks base method.
+func (m *MockRepository) UpsertPendingImage(ctx context.Context, image moderation.PendingImage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertPendingImage", ctx, image)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpsertPendingImage indicates an expected call of UpsertPendingImage.
+func (mr *MockRepositoryMockRecorder) UpsertPendingImage(ctx, image any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPendingImage", reflect.TypeOf((*MockRepository)(nil).UpsertPendingImage), ctx, image)
+}
+
+// UseApprovedImage mocks base method.
+func (m *MockRepository) UseApprovedImage(ctx context.Context, fingerprint moderation.ImageFingerprint, usedAt time.Time) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UseApprovedImage", ctx, fingerprint, usedAt)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UseApprovedImage indicates an expected call of UseApprovedImage.
+func (mr *MockRepositoryMockRecorder) UseApprovedImage(ctx, fingerprint, usedAt any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UseApprovedImage", reflect.TypeOf((*MockRepository)(nil).UseApprovedImage), ctx, fingerprint, usedAt)
 }

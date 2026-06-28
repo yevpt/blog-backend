@@ -48,7 +48,7 @@ func (s *service) Prepare(ctx context.Context, userID uint64, objectKeys []strin
 			createdPreviews = append(createdPreviews, prepared.PreviewObjectKey)
 		}
 		if !prepared.Approved {
-			err = s.registry.UpsertPending(ctx, PendingImage{
+			err = s.registry.UpsertPendingImage(ctx, PendingImage{
 				Fingerprint: prepared.Fingerprint, PreviewObjectKey: prepared.PreviewObjectKey, LastUsedAt: s.now(),
 			})
 			if err != nil {
@@ -81,7 +81,7 @@ func (s *service) prepareOne(ctx context.Context, key string) (PreparedImage, bo
 	fingerprint := Fingerprint{
 		SHA256: hex.EncodeToString(shaSum[:]), MD5: hex.EncodeToString(md5Sum[:]), Size: uint64(len(data)),
 	}
-	approved, err := s.registry.UseApproved(ctx, fingerprint, s.now())
+	approved, err := s.registry.UseApprovedImage(ctx, fingerprint, s.now())
 	if err != nil {
 		return PreparedImage{}, false, fmt.Errorf("%w: %v", ErrImageUnavailable, err)
 	}
