@@ -130,10 +130,12 @@ type MomentRepository interface {
 }
 
 type momentRepo struct {
-	db *gorm.DB
+	db                *gorm.DB
+	moderationEnabled bool
 }
 
 // NewMomentRepository 创建碎语仓储实例。
-func NewMomentRepository(db *gorm.DB) MomentRepository {
-	return &momentRepo{db: db}
+// moderationEnabled 关闭时，公开查询完全沿用旧版状态条件，不访问审核表。
+func NewMomentRepository(db *gorm.DB, moderationEnabled bool) MomentRepository {
+	return &momentRepo{db: db, moderationEnabled: moderationEnabled}
 }

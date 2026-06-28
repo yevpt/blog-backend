@@ -33,7 +33,7 @@ func newMomentMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 func TestMomentRepository_CountPublicByUser_UsesPublicStatusFilter(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
 		WithArgs(append(publicMomentVisibilityArgs(), uint(7))...).
@@ -46,10 +46,26 @@ func TestMomentRepository_CountPublicByUser_UsesPublicStatusFilter(t *testing.T)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestMomentRepository_CountPublicByUser_BypassesModerationWhenDisabled(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db, false)
+
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment` WHERE moment.status = \\? AND moment.user_id = \\?").
+		WithArgs(uint8(1), uint(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
+
+	count, err := repo.CountPublicByUser(7)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), count)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMomentRepositoryListIncludesModerationPlaceholder(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 	now := time.Now()
 	visibilityArgs := publicMomentVisibilityArgs()
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment` LEFT JOIN moderation_item AS public_moderation").
@@ -74,7 +90,7 @@ func TestMomentRepositoryListIncludesModerationPlaceholder(t *testing.T) {
 func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	viewerID := uint(7)
@@ -125,7 +141,7 @@ func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 func TestMomentRepository_List_RandomExcludesIDsAndIgnoresOffset(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
@@ -155,7 +171,7 @@ func TestMomentRepository_List_RandomExcludesIDsAndIgnoresOffset(t *testing.T) {
 func TestMomentRepository_ListFeed_FriendsLatestOrdersByCreatedAt(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	ownerID := uint(1)
@@ -187,7 +203,7 @@ func TestMomentRepository_ListFeed_FriendsLatestOrdersByCreatedAt(t *testing.T) 
 func TestMomentRepository_Save_ReplacesImages(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user`").
@@ -226,7 +242,7 @@ func TestMomentRepository_Save_ReplacesImages(t *testing.T) {
 func TestMomentRepository_Save_CollectsRemovedImageURLs(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `user`").
@@ -281,7 +297,7 @@ func TestMomentRepository_Save_CollectsRemovedImageURLs(t *testing.T) {
 func TestMomentRepository_Delete_HardDeletesMomentAndCascade(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -330,7 +346,7 @@ func TestMomentRepository_Delete_HardDeletesMomentAndCascade(t *testing.T) {
 func TestMomentRepository_Delete_RejectsNonOwner(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -351,7 +367,7 @@ func TestMomentRepository_Delete_RejectsNonOwner(t *testing.T) {
 func TestMomentRepository_SetTop_RejectsFourthTop(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -375,7 +391,7 @@ func TestMomentRepository_SetTop_RejectsFourthTop(t *testing.T) {
 func TestMomentRepository_IncrementReadCount_UsesUpdateColumn(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -400,7 +416,7 @@ func TestMomentRepository_IncrementReadCount_UsesUpdateColumn(t *testing.T) {
 func TestMomentRepository_SetTop_UsesUpdateColumn(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -428,7 +444,7 @@ func TestMomentRepository_SetTop_UsesUpdateColumn(t *testing.T) {
 func TestMomentRepository_ToggleLike_CreatesLike(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()
@@ -467,7 +483,7 @@ func TestMomentRepository_ToggleLike_CreatesLike(t *testing.T) {
 func TestMomentRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 	db, mock, sqlDB := newMomentMockDB(t)
 	defer sqlDB.Close()
-	repo := momentrepo.NewMomentRepository(db)
+	repo := momentrepo.NewMomentRepository(db, true)
 
 	now := time.Now()
 	mock.ExpectBegin()

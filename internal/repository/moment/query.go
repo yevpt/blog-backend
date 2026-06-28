@@ -113,7 +113,11 @@ func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
 }
 
 func (r *momentRepo) publicMomentBase() *gorm.DB {
-	return r.db.Model(&model.Moment{}).
+	query := r.db.Model(&model.Moment{})
+	if !r.moderationEnabled {
+		return query.Where("moment.status = ?", uint8(1))
+	}
+	return query.
 		Joins("LEFT JOIN moderation_item AS public_moderation ON public_moderation.content_type = ? AND public_moderation.content_id = moment.id", model.ModerationContentMoment).
 		Where(`(
 			(public_moderation.id IS NULL AND moment.status = ?)

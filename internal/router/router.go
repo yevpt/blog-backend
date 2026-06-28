@@ -272,7 +272,7 @@ func newRouteHandlers(
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
 	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
-	momentRepo := momentrepo.NewMomentRepository(db)
+	momentRepo := momentrepo.NewMomentRepository(db, cfg.Moderation.Enabled)
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo, moderationSvc)
 	uploadSvc := uploadservice.NewService(objectStore)
 
