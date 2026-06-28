@@ -797,6 +797,117 @@
                 }
             }
         },
+        "/admin/articles/recommendations": {
+            "get": {
+                "description": "返回未软删除的推荐文章，按 recommend_seq 升序排列，供管理端拖拽排序弹窗使用。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "查询推荐文章排序列表",
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示查询成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminRecommendListResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/articles/recommendations/order": {
+            "put": {
+                "description": "按 article_ids 数组顺序重写 recommend_seq；须包含当前全部推荐文章且无重复。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "文章管理"
+                ],
+                "summary": "批量更新推荐文章排序",
+                "parameters": [
+                    {
+                        "description": "推荐排序请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminRecommendOrderReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示保存成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "参数错误或推荐集合不一致",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/articles/{id}": {
             "get": {
                 "description": "管理员查询文章详情，包含隐藏、加密和已软删除文章；加密文章返回完整正文；软删除文章返回 deleted_at。",
@@ -10396,6 +10507,64 @@
                 }
             }
         },
+        "dto.AdminRecommendItemResp": {
+            "type": "object",
+            "properties": {
+                "cover_img_url": {
+                    "description": "CoverImgUrl 封面图地址。",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID 文章 ID。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "recommend_seq": {
+                    "description": "RecommendSeq 推荐排序值，越小越靠前。",
+                    "type": "integer",
+                    "example": 0
+                },
+                "status": {
+                    "description": "Status 文章状态：0 隐藏，1 公开，2 加密，3 草稿。",
+                    "type": "integer",
+                    "example": 1
+                },
+                "title": {
+                    "description": "Title 文章标题。",
+                    "type": "string",
+                    "example": "文章标题"
+                }
+            }
+        },
+        "dto.AdminRecommendListResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "description": "List 推荐文章列表，按 recommend_seq 升序排列。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminRecommendItemResp"
+                    }
+                }
+            }
+        },
+        "dto.AdminRecommendOrderReq": {
+            "type": "object",
+            "required": [
+                "article_ids"
+            ],
+            "properties": {
+                "article_ids": {
+                    "description": "ArticleIDs 推荐文章 ID 列表，须包含当前全部推荐文章且无重复，顺序即新排序。",
+                    "type": "array",
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "dto.AdminRoleQuotaPolicyResp": {
             "type": "object",
             "properties": {
@@ -11012,12 +11181,12 @@
                     "example": "secret"
                 },
                 "recommend": {
-                    "description": "Recommend 是否推荐文章。",
+                    "description": "Recommend 是否推荐文章；保存时 seq 由服务端维护，新推荐追加到队尾，已推荐则保持原序。",
                     "type": "boolean",
                     "example": false
                 },
                 "recommend_seq": {
-                    "description": "RecommendSeq 推荐排序值。",
+                    "description": "RecommendSeq 已废弃：排序请使用 PUT /admin/articles/recommendations/order。",
                     "type": "integer",
                     "example": 10
                 },
@@ -11501,6 +11670,14 @@
                     "type": "integer",
                     "example": 3
                 },
+                "moderation": {
+                    "description": "Moderation 当前审核展示状态。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ModerationView"
+                        }
+                    ]
+                },
                 "reply_count": {
                     "description": "ReplyCount 回复数量。",
                     "type": "integer",
@@ -11677,6 +11854,14 @@
                     "description": "LikeCount 回复点赞数量。",
                     "type": "integer",
                     "example": 3
+                },
+                "moderation": {
+                    "description": "Moderation 当前审核展示状态。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ModerationView"
+                        }
+                    ]
                 },
                 "parent_reply_id": {
                     "description": "ParentReplyID 上级回复 ID；0 表示直接回复一级评论。",
@@ -11920,6 +12105,14 @@
                     "type": "integer",
                     "example": 3
                 },
+                "moderation": {
+                    "description": "Moderation 当前审核展示状态。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ModerationView"
+                        }
+                    ]
+                },
                 "owner_user_id": {
                     "description": "OwnerUserID 留言板主人用户 ID。",
                     "type": "integer",
@@ -12074,6 +12267,50 @@
                 }
             }
         },
+        "dto.ModerationView": {
+            "type": "object",
+            "properties": {
+                "can_interact": {
+                    "description": "CanInteract 表示后端当前是否允许点赞和回复。",
+                    "type": "boolean",
+                    "example": false
+                },
+                "display_version": {
+                    "description": "DisplayVersion 表示公开正文来自 pending、last_approved 或 none。",
+                    "type": "string",
+                    "example": "pending"
+                },
+                "has_pending_revision": {
+                    "description": "HasPendingRevision 表示当前仍有一个待审版本。",
+                    "type": "boolean",
+                    "example": true
+                },
+                "notice": {
+                    "description": "Notice 是提交后可直接展示给用户的稳定提示。",
+                    "type": "string",
+                    "example": "发布成功，内容会被审核。"
+                },
+                "pending_content": {
+                    "description": "PendingContent 仅向作者和管理员返回，供编辑器显示。",
+                    "type": "string"
+                },
+                "pending_risk_level": {
+                    "description": "PendingRiskLevel 仅向作者和管理员返回。",
+                    "type": "string",
+                    "example": "low"
+                },
+                "public_state": {
+                    "description": "PublicState 是 visible、placeholder、hidden 或 emergency_hidden。",
+                    "type": "string",
+                    "example": "visible"
+                },
+                "review_status": {
+                    "description": "ReviewStatus 仅向作者和管理员返回当前待审状态。",
+                    "type": "string",
+                    "example": "pending"
+                }
+            }
+        },
         "dto.MomentDeleteResp": {
             "type": "object",
             "properties": {
@@ -12132,6 +12369,14 @@
                     "description": "LikeCount 点赞数量。",
                     "type": "integer",
                     "example": 3
+                },
+                "moderation": {
+                    "description": "Moderation 当前审核展示状态。",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.ModerationView"
+                        }
+                    ]
                 },
                 "read_count": {
                     "description": "ReadCount 阅读数量。",

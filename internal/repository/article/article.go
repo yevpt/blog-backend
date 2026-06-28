@@ -59,7 +59,6 @@ type ArticleSaveData struct {
 	MusicIDs       []uint
 	AiModels       []ArticleAiModelSaveData
 	Recommend      bool
-	RecommendSeq   uint
 	PrepareArticle func(article model.Article) (model.Article, error)
 }
 
@@ -91,6 +90,8 @@ type ArticleRepository interface {
 	IsLiked(articleID uint, userID uint) (bool, int64, error)
 	ToggleLike(articleID uint, userID uint) (*ArticleAggregate, bool, error)
 	CountExistingMusicIDs(ids []uint) (int64, error)
+	ListRecommended() ([]RecommendArticleRow, error)
+	ReorderRecommended(articleIDs []uint) error
 }
 
 type articleRepo struct {

@@ -55,10 +55,10 @@ type ArticleSaveReq struct {
 	Tags []ArticleTagSaveReq `json:"tags"`
 	// MusicIDs 音乐 ID 列表。
 	MusicIDs []uint `json:"music_ids" example:"1"`
-	// Recommend 是否推荐文章。
+	// Recommend 是否推荐文章；保存时 seq 由服务端维护，新推荐追加到队尾，已推荐则保持原序。
 	Recommend bool `json:"recommend" example:"false"`
-	// RecommendSeq 推荐排序值。
-	RecommendSeq uint `json:"recommend_seq" example:"10"`
+	// RecommendSeq 已废弃：排序请使用 PUT /admin/articles/recommendations/order。
+	RecommendSeq uint `json:"recommend_seq,omitempty" example:"10"`
 	// CoverAiGenerated 封面是否 AI 生成（对外披露）。
 	CoverAiGenerated bool `json:"cover_ai_generated" example:"false"`
 	// ContentAiReferenced 正文是否 AI 参考（对外披露）。
@@ -265,4 +265,30 @@ type ArticleViewResp struct {
 type ArticleDeleteResp struct {
 	// ID 文章 ID。
 	ID uint `json:"id" example:"1"`
+}
+
+// AdminRecommendItemResp 管理端推荐文章排序项。
+type AdminRecommendItemResp struct {
+	// ID 文章 ID。
+	ID uint `json:"id" example:"1"`
+	// Title 文章标题。
+	Title string `json:"title" example:"文章标题"`
+	// CoverImgUrl 封面图地址。
+	CoverImgUrl *string `json:"cover_img_url,omitempty"`
+	// Status 文章状态：0 隐藏，1 公开，2 加密，3 草稿。
+	Status uint8 `json:"status" example:"1"`
+	// RecommendSeq 推荐排序值，越小越靠前。
+	RecommendSeq uint `json:"recommend_seq" example:"0"`
+}
+
+// AdminRecommendListResp 管理端推荐文章列表响应。
+type AdminRecommendListResp struct {
+	// List 推荐文章列表，按 recommend_seq 升序排列。
+	List []AdminRecommendItemResp `json:"list"`
+}
+
+// AdminRecommendOrderReq 管理端批量更新推荐排序请求。
+type AdminRecommendOrderReq struct {
+	// ArticleIDs 推荐文章 ID 列表，须包含当前全部推荐文章且无重复，顺序即新排序。
+	ArticleIDs []uint `json:"article_ids" binding:"required,min=1,max=100,dive,min=1"`
 }

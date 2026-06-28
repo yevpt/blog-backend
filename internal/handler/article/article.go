@@ -326,7 +326,8 @@ func writeArticleResponse(c *gin.Context, data any, err error) {
 		errors.Is(err, articleservice.ErrArticleMusicNotFound) ||
 		errors.Is(err, articleservice.ErrArticleImageExternal) ||
 		errors.Is(err, articleservice.ErrArticleImageInvalid) ||
-		errors.Is(err, articleservice.ErrArticleImageNotFound) {
+		errors.Is(err, articleservice.ErrArticleImageNotFound) ||
+		errors.Is(err, articleservice.ErrRecommendOrderInvalid) {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}

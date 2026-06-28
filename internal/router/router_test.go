@@ -67,6 +67,14 @@ func (s *stubArticleServiceForRouter) ToggleLike(id uint, userID uint) (*dto.Art
 	return &dto.ArticleLikeResp{IsLiked: true, LikeCount: 1}, nil
 }
 
+func (s *stubArticleServiceForRouter) ListRecommendedAdmin() (*dto.AdminRecommendListResp, error) {
+	return &dto.AdminRecommendListResp{}, nil
+}
+
+func (s *stubArticleServiceForRouter) ReorderRecommendedAdmin(req dto.AdminRecommendOrderReq) error {
+	return nil
+}
+
 var _ articleservice.ArticleService = (*stubArticleServiceForRouter)(nil)
 
 func TestRegisterPublicRoutes_ArticlesListAllowsOptionalAuth(t *testing.T) {

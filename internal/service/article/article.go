@@ -23,6 +23,7 @@ var (
 	ErrArticleNoDeletePermission = errors.New("无权删除文章")
 	ErrArticleNotSoftDeleted     = errors.New("文章尚未软删除")
 	ErrArticleMusicNotFound      = errors.New("音乐不存在")
+	ErrRecommendOrderInvalid     = errors.New("推荐排序无效：须包含全部推荐文章、不可重复、不可包含未推荐文章")
 )
 
 // MusicItemPresenter 将音乐模型映射为完整对外响应，供文章详情复用音乐模块字段。
@@ -43,6 +44,8 @@ type ArticleService interface {
 	View(id uint, visitorID string) (*dto.ArticleViewResp, error)
 	IsLiked(id uint, userID uint) (*dto.ArticleLikeResp, error)
 	ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error)
+	ListRecommendedAdmin() (*dto.AdminRecommendListResp, error)
+	ReorderRecommendedAdmin(req dto.AdminRecommendOrderReq) error
 }
 
 type articleService struct {
@@ -70,6 +73,24 @@ func NewArticleService(
 		publisher:         publisher,
 		musicPresenter:    musicPresenter,
 	}
+}
+
+func (s *articleService) ListRecommendedAdmin() (*dto.AdminRecommendListResp, error) {
+	rows, err := s.repo.ListRecommended()
+	if err != nil {
+		return nil, err
+	}
+	return recommendListToDTO(rows, s.objectURLResolver)
+}
+
+func (s *articleService) ReorderRecommendedAdmin(req dto.AdminRecommendOrderReq) error {
+	if err := s.repo.ReorderRecommended(req.ArticleIDs); err != nil {
+		if errors.Is(err, articlerepo.ErrRecommendOrderMismatch) {
+			return ErrRecommendOrderInvalid
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *articleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -242,7 +263,6 @@ func (s *articleService) Save(req dto.ArticleSaveReq, authorID uint) (*dto.Artic
 		MusicIDs:       musicIDs,
 		AiModels:       normalizeArticleAiModels(req),
 		Recommend:      req.Recommend,
-		RecommendSeq:   req.RecommendSeq,
 		PrepareArticle: prepareArticle,
 	})
 	if err != nil {

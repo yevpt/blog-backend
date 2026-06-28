@@ -40,6 +40,10 @@ type stubArticleService struct {
 	saveErr         error
 	likeResp        *dto.ArticleLikeResp
 	likeErr         error
+	recommendList   *dto.AdminRecommendListResp
+	recommendListErr error
+	recommendOrder  dto.AdminRecommendOrderReq
+	recommendOrderErr error
 }
 
 func (s *stubArticleService) ListIDs() (*dto.ArticleIDsResp, error) {
@@ -82,6 +86,13 @@ func (s *stubArticleService) IsLiked(id uint, userID uint) (*dto.ArticleLikeResp
 func (s *stubArticleService) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error) {
 	return s.likeResp, s.likeErr
 }
+func (s *stubArticleService) ListRecommendedAdmin() (*dto.AdminRecommendListResp, error) {
+	return s.recommendList, s.recommendListErr
+}
+func (s *stubArticleService) ReorderRecommendedAdmin(req dto.AdminRecommendOrderReq) error {
+	s.recommendOrder = req
+	return s.recommendOrderErr
+}
 
 func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
@@ -103,6 +114,8 @@ func newArticleRouter(svc articleservice.ArticleService) *gin.Engine {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		h.Save(c)
 	})
+	r.GET("/admin/articles/recommendations", h.ListRecommendedAdmin)
+	r.PUT("/admin/articles/recommendations/order", h.ReorderRecommendedAdmin)
 	r.DELETE("/admin/articles/:id/permanent", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 7})
 		h.PermanentDelete(c)
@@ -382,4 +395,36 @@ func TestArticleHandler_PermanentDelete_UsesClaimsUserID(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, uint(7), stub.deleteUserID)
+}
+
+func TestArticleHandler_ListRecommendedAdmin_Success(t *testing.T) {
+	stub := &stubArticleService{
+		recommendList: &dto.AdminRecommendListResp{
+			List: []dto.AdminRecommendItemResp{{ID: 3, Title: "A", RecommendSeq: 0}},
+		},
+	}
+	r := newArticleRouter(stub)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/admin/articles/recommendations", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeOK, resp.Code)
+}
+
+func TestArticleHandler_ReorderRecommendedAdmin_Success(t *testing.T) {
+	stub := &stubArticleService{}
+	r := newArticleRouter(stub)
+
+	body := []byte(`{"article_ids":[1,3]}`)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("PUT", "/admin/articles/recommendations/order", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, []uint{1, 3}, stub.recommendOrder.ArticleIDs)
 }

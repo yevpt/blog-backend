@@ -66,6 +66,12 @@ func (s *stubArticleServiceForTag) IsLiked(id uint, userID uint) (*dto.ArticleLi
 func (s *stubArticleServiceForTag) ToggleLike(id uint, userID uint) (*dto.ArticleLikeResp, error) {
 	return nil, nil
 }
+func (s *stubArticleServiceForTag) ListRecommendedAdmin() (*dto.AdminRecommendListResp, error) {
+	return nil, nil
+}
+func (s *stubArticleServiceForTag) ReorderRecommendedAdmin(req dto.AdminRecommendOrderReq) error {
+	return nil
+}
 
 var _ articleservice.ArticleService = (*stubArticleServiceForTag)(nil)
 

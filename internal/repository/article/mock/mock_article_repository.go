@@ -177,6 +177,21 @@ func (mr *MockArticleRepositoryMockRecorder) ListPublicIDs() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPublicIDs", reflect.TypeOf((*MockArticleRepository)(nil).ListPublicIDs))
 }
 
+// ListRecommended mocks base method.
+func (m *MockArticleRepository) ListRecommended() ([]article.RecommendArticleRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListRecommended")
+	ret0, _ := ret[0].([]article.RecommendArticleRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListRecommended indicates an expected call of ListRecommended.
+func (mr *MockArticleRepositoryMockRecorder) ListRecommended() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListRecommended", reflect.TypeOf((*MockArticleRepository)(nil).ListRecommended))
+}
+
 // PermanentDelete mocks base method.
 func (m *MockArticleRepository) PermanentDelete(id, operatorID uint) (*model.Article, error) {
 	m.ctrl.T.Helper()
@@ -190,6 +205,20 @@ func (m *MockArticleRepository) PermanentDelete(id, operatorID uint) (*model.Art
 func (mr *MockArticleRepositoryMockRecorder) PermanentDelete(id, operatorID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PermanentDelete", reflect.TypeOf((*MockArticleRepository)(nil).PermanentDelete), id, operatorID)
+}
+
+// ReorderRecommended mocks base method.
+func (m *MockArticleRepository) ReorderRecommended(articleIDs []uint) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReorderRecommended", articleIDs)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReorderRecommended indicates an expected call of ReorderRecommended.
+func (mr *MockArticleRepositoryMockRecorder) ReorderRecommended(articleIDs any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReorderRecommended", reflect.TypeOf((*MockArticleRepository)(nil).ReorderRecommended), articleIDs)
 }
 
 // Save mocks base method.

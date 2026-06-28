@@ -8,6 +8,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/vpt/blog-backend/internal/model"
 	article "github.com/vpt/blog-backend/internal/repository/article"
@@ -491,6 +492,14 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 	mock.ExpectExec("DELETE FROM `article_ai_model` WHERE article_id = \\?").
 		WithArgs(uint(7)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery("SELECT \\* FROM `article_recommend` WHERE article_id = \\? AND `article_recommend`.`deleted_at` IS NULL ORDER BY `article_recommend`.`id` LIMIT \\?").
+		WithArgs(uint(7), 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `article_recommend` JOIN article ON article.id = article_recommend.article_id AND article.deleted_at IS NULL WHERE article_recommend.deleted_at IS NULL AND `article_recommend`.`deleted_at` IS NULL").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery("SELECT \\* FROM `article_recommend` WHERE article_id = \\? ORDER BY `article_recommend`.`id` LIMIT \\?").
+		WithArgs(uint(7), 1).
+		WillReturnError(gorm.ErrRecordNotFound)
 	mock.ExpectExec("INSERT INTO `article_recommend`").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -520,7 +529,6 @@ func TestArticleRepository_Save_CreatesArticleAndReplacesRelations(t *testing.T)
 		},
 		MusicIDs:     []uint{9},
 		Recommend:    true,
-		RecommendSeq: 10,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)

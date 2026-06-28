@@ -259,10 +259,8 @@ func newRouteHandlers(
 
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo)
-
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
 	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher, userRepo)
-
 	momentRepo := momentrepo.NewMomentRepository(db)
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo)
 	uploadSvc := uploadservice.NewService(objectStore)
@@ -515,6 +513,8 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin := r.Group("/admin", middleware.Auth(jwtManager, handlers.userCache), middleware.RequireRole(roles.AdminRole))
 	admin.GET("/test", handlers.test.Admin)
 	admin.GET("/articles", handlers.article.ListAdmin)
+	admin.GET("/articles/recommendations", handlers.article.ListRecommendedAdmin)
+	admin.PUT("/articles/recommendations/order", handlers.article.ReorderRecommendedAdmin)
 	admin.GET("/articles/:id", handlers.article.GetAdminDetail)
 	admin.POST("/articles", handlers.article.Save)
 	admin.DELETE("/articles/:id", handlers.article.Delete)

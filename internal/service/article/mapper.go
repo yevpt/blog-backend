@@ -48,6 +48,24 @@ func articlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver s
 	}, nil
 }
 
+func recommendListToDTO(rows []articlerepo.RecommendArticleRow, objectURLResolver storage.ObjectURLResolver) (*dto.AdminRecommendListResp, error) {
+	items := make([]dto.AdminRecommendItemResp, 0, len(rows))
+	for _, row := range rows {
+		coverURL, err := resolveURL(row.Article.CoverImgUrl, objectURLResolver)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, dto.AdminRecommendItemResp{
+			ID:           row.Article.ID,
+			Title:        row.Article.Title,
+			CoverImgUrl:  coverURL,
+			Status:       row.Article.Status,
+			RecommendSeq: row.Seq,
+		})
+	}
+	return &dto.AdminRecommendListResp{List: items}, nil
+}
+
 func adminArticlePageToDTO(result *articlerepo.ArticlePageResult, objectURLResolver storage.ObjectURLResolver) (*dto.AdminArticlePageResp, error) {
 	items := make([]dto.AdminArticleListItemResp, 0, len(result.Articles))
 	for _, aggregate := range result.Articles {

@@ -48,7 +48,7 @@ func (r *articleRepo) Save(data ArticleSaveData) (*ArticleAggregate, error) {
 		if err := replaceArticleAiModels(tx, articleID, data.AiModels); err != nil {
 			return err
 		}
-		return replaceArticleRecommend(tx, articleID, data.Recommend, data.RecommendSeq)
+		return replaceArticleRecommend(tx, articleID, data.Recommend)
 	})
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
@@ -332,17 +332,38 @@ func replaceArticleAiModels(tx *gorm.DB, articleID uint, models []ArticleAiModel
 	return tx.Create(&rows).Error
 }
 
-func replaceArticleRecommend(tx *gorm.DB, articleID uint, recommend bool, seq uint) error {
+func replaceArticleRecommend(tx *gorm.DB, articleID uint, recommend bool) error {
 	if !recommend {
 		return tx.Where("article_id = ?", articleID).Delete(&model.ArticleRecommend{}).Error
 	}
-	row := model.ArticleRecommend{ArticleID: articleID, Seq: seq}
-	return tx.Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "article_id"}},
-		DoUpdates: clause.Assignments(map[string]any{
-			"seq":        seq,
+
+	var existing model.ArticleRecommend
+	err := tx.Where("article_id = ?", articleID).First(&existing).Error
+	if err == nil {
+		// 已处于推荐状态：编辑保存时不改动 seq。
+		return nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	nextSeq, err := nextRecommendSeq(tx)
+	if err != nil {
+		return err
+	}
+
+	var deleted model.ArticleRecommend
+	err = tx.Unscoped().Where("article_id = ?", articleID).First(&deleted).Error
+	if err == nil {
+		return tx.Unscoped().Model(&deleted).Updates(map[string]any{
+			"seq":        nextSeq,
 			"deleted_at": nil,
 			"updated_at": gorm.Expr("NOW()"),
-		}),
-	}).Create(&row).Error
+		}).Error
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	return tx.Create(&model.ArticleRecommend{ArticleID: articleID, Seq: nextSeq}).Error
 }

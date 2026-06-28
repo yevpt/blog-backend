@@ -671,6 +671,48 @@ definitions:
         example: 0
         type: integer
     type: object
+  dto.AdminRecommendItemResp:
+    properties:
+      cover_img_url:
+        description: CoverImgUrl 封面图地址。
+        type: string
+      id:
+        description: ID 文章 ID。
+        example: 1
+        type: integer
+      recommend_seq:
+        description: RecommendSeq 推荐排序值，越小越靠前。
+        example: 0
+        type: integer
+      status:
+        description: Status 文章状态：0 隐藏，1 公开，2 加密，3 草稿。
+        example: 1
+        type: integer
+      title:
+        description: Title 文章标题。
+        example: 文章标题
+        type: string
+    type: object
+  dto.AdminRecommendListResp:
+    properties:
+      list:
+        description: List 推荐文章列表，按 recommend_seq 升序排列。
+        items:
+          $ref: '#/definitions/dto.AdminRecommendItemResp'
+        type: array
+    type: object
+  dto.AdminRecommendOrderReq:
+    properties:
+      article_ids:
+        description: ArticleIDs 推荐文章 ID 列表，须包含当前全部推荐文章且无重复，顺序即新排序。
+        items:
+          type: integer
+        maxItems: 100
+        minItems: 1
+        type: array
+    required:
+    - article_ids
+    type: object
   dto.AdminRoleQuotaPolicyResp:
     properties:
       daily_limit:
@@ -1124,11 +1166,11 @@ definitions:
         example: secret
         type: string
       recommend:
-        description: Recommend 是否推荐文章。
+        description: Recommend 是否推荐文章；保存时 seq 由服务端维护，新推荐追加到队尾，已推荐则保持原序。
         example: false
         type: boolean
       recommend_seq:
-        description: RecommendSeq 推荐排序值。
+        description: RecommendSeq 已废弃：排序请使用 PUT /admin/articles/recommendations/order。
         example: 10
         type: integer
       short_content:
@@ -1492,6 +1534,10 @@ definitions:
         description: LikeCount 评论点赞数量。
         example: 3
         type: integer
+      moderation:
+        allOf:
+        - $ref: '#/definitions/dto.ModerationView'
+        description: Moderation 当前审核展示状态。
       reply_count:
         description: ReplyCount 回复数量。
         example: 3
@@ -1622,6 +1668,10 @@ definitions:
         description: LikeCount 回复点赞数量。
         example: 3
         type: integer
+      moderation:
+        allOf:
+        - $ref: '#/definitions/dto.ModerationView'
+        description: Moderation 当前审核展示状态。
       parent_reply_id:
         description: ParentReplyID 上级回复 ID；0 表示直接回复一级评论。
         example: 0
@@ -1803,6 +1853,10 @@ definitions:
         description: LikeCount 点赞数量。
         example: 3
         type: integer
+      moderation:
+        allOf:
+        - $ref: '#/definitions/dto.ModerationView'
+        description: Moderation 当前审核展示状态。
       owner_user_id:
         description: OwnerUserID 留言板主人用户 ID。
         example: 1
@@ -1914,6 +1968,40 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResp'
     type: object
+  dto.ModerationView:
+    properties:
+      can_interact:
+        description: CanInteract 表示后端当前是否允许点赞和回复。
+        example: false
+        type: boolean
+      display_version:
+        description: DisplayVersion 表示公开正文来自 pending、last_approved 或 none。
+        example: pending
+        type: string
+      has_pending_revision:
+        description: HasPendingRevision 表示当前仍有一个待审版本。
+        example: true
+        type: boolean
+      notice:
+        description: Notice 是提交后可直接展示给用户的稳定提示。
+        example: 发布成功，内容会被审核。
+        type: string
+      pending_content:
+        description: PendingContent 仅向作者和管理员返回，供编辑器显示。
+        type: string
+      pending_risk_level:
+        description: PendingRiskLevel 仅向作者和管理员返回。
+        example: low
+        type: string
+      public_state:
+        description: PublicState 是 visible、placeholder、hidden 或 emergency_hidden。
+        example: visible
+        type: string
+      review_status:
+        description: ReviewStatus 仅向作者和管理员返回当前待审状态。
+        example: pending
+        type: string
+    type: object
   dto.MomentDeleteResp:
     properties:
       id:
@@ -1959,6 +2047,10 @@ definitions:
         description: LikeCount 点赞数量。
         example: 3
         type: integer
+      moderation:
+        allOf:
+        - $ref: '#/definitions/dto.ModerationView'
+        description: Moderation 当前审核展示状态。
       read_count:
         description: ReadCount 阅读数量。
         example: 20
@@ -3802,6 +3894,76 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 真实删除已软删除文章
+      tags:
+      - 文章管理
+  /admin/articles/recommendations:
+    get:
+      consumes:
+      - application/json
+      description: 返回未软删除的推荐文章，按 recommend_seq 升序排列，供管理端拖拽排序弹窗使用。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示查询成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminRecommendListResp'
+              type: object
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询推荐文章排序列表
+      tags:
+      - 文章管理
+  /admin/articles/recommendations/order:
+    put:
+      consumes:
+      - application/json
+      description: 按 article_ids 数组顺序重写 recommend_seq；须包含当前全部推荐文章且无重复。
+      parameters:
+      - description: 推荐排序请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminRecommendOrderReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 统一响应；code=0 表示保存成功
+          schema:
+            $ref: '#/definitions/response.Response'
+        "400":
+          description: 参数错误或推荐集合不一致
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: 未登录或 token 已过期
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: 权限不足
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: 服务器内部错误
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 批量更新推荐文章排序
       tags:
       - 文章管理
   /admin/auth/login:
