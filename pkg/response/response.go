@@ -33,6 +33,7 @@ const (
 	CodeImageReviewUnavailable      = "CONTENT_IMAGE_REVIEW_UNAVAILABLE"
 	CodeContentAlreadyDeleted       = "CONTENT_ALREADY_DELETED"
 	CodeContentPendingNoInteraction = "CONTENT_PENDING_NO_INTERACTION"
+	CodeModerationReviewConflict    = "MODERATION_REVIEW_CONFLICT"
 )
 
 // 业务错误码，与 HTTP 状态码对齐，便于客户端统一处理

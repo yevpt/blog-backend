@@ -22,3 +22,10 @@ func newModerationService(ctx context.Context, db *gorm.DB, cfg config.Moderatio
 		moderationservice.NewPolicyDecider(), cfg, logger, nil,
 	), nil
 }
+
+// newModerationReviewService 组装管理端人工审核服务，复用同一数据库事实源。
+func newModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger) moderationservice.ReviewService {
+	return moderationservice.NewReviewService(
+		moderationrepo.NewRepository(db), moderationservice.NewContentProcessor(), cfg, logger, nil,
+	)
+}

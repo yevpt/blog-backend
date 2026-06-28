@@ -19,6 +19,7 @@ import (
 	dashboardhandler "github.com/vpt/blog-backend/internal/handler/dashboard"
 	friendlinkhandler "github.com/vpt/blog-backend/internal/handler/friendlink"
 	guestbookhandler "github.com/vpt/blog-backend/internal/handler/guestbook"
+	moderationhandler "github.com/vpt/blog-backend/internal/handler/moderation"
 	momenthandler "github.com/vpt/blog-backend/internal/handler/moment"
 	musichandler "github.com/vpt/blog-backend/internal/handler/music"
 	notificationhandler "github.com/vpt/blog-backend/internal/handler/notification"
@@ -82,6 +83,7 @@ type routeHandlers struct {
 	comment             *commenthandler.CommentHandler
 	guestbook           *guestbookhandler.GuestbookHandler
 	moment              *momenthandler.MomentHandler
+	moderationAdmin     *moderationhandler.AdminHandler
 	notification        *notificationhandler.NotificationHandler
 	notificationAdmin   *notificationhandler.NotificationAdminHandler
 	user                *userhandler.UserHandler
@@ -265,6 +267,7 @@ func newRouteHandlers(
 	if moderationErr != nil {
 		panic(moderationErr)
 	}
+	moderationReviewSvc := newModerationReviewService(db, cfg.Moderation, log)
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
@@ -295,6 +298,7 @@ func newRouteHandlers(
 		comment:             commenthandler.NewCommentHandler(commentSvc),
 		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc),
 		moment:              momenthandler.NewMomentHandler(momentSvc),
+		moderationAdmin:     moderationhandler.NewAdminHandler(moderationReviewSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
@@ -576,6 +580,11 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.PUT("/notifications/email-quotas/:id", handlers.notificationAdmin.UpdateQuota)
 	admin.PUT("/notifications/role-quotas/:id", handlers.notificationAdmin.UpdateRoleQuota)
 	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
+	admin.GET("/moderation/items", handlers.moderationAdmin.List)
+	admin.GET("/moderation/items/:id", handlers.moderationAdmin.Get)
+	admin.POST("/moderation/items/:id/approve", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Approve)
+	admin.POST("/moderation/items/:id/correct", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Correct)
+	admin.POST("/moderation/items/:id/reject", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Reject)
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
 	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)
 	admin.POST("/users/avatars/normalize", middleware.RateLimitNormal(redisClient), handlers.userAdmin.NormalizeAvatars)

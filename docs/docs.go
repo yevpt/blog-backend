@@ -2067,6 +2067,384 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/moderation/items": {
+            "get": {
+                "description": "管理员按审核状态、内容类型和风险等级分页查询审核版本，默认只返回待审版本。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内容审核管理"
+                ],
+                "summary": "查询内容审核队列",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 20，最大 100",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "内容类型",
+                        "name": "content_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "风险：low、medium、high",
+                        "name": "risk_level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "状态：pending、approved、rejected、superseded",
+                        "name": "review_status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/items/{id}": {
+            "get": {
+                "description": "优先返回当前待审版本；没有待审版本时返回最新历史版本。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内容审核管理"
+                ],
+                "summary": "查询内容审核详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核项 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/items/{id}/approve": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内容审核管理"
+                ],
+                "summary": "通过待审内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核项 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "通过请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationReviewReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或内容已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/items/{id}/correct": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内容审核管理"
+                ],
+                "summary": "修正并通过待审内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核项 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "修正请求",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationCorrectReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或内容已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/items/{id}/reject": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内容审核管理"
+                ],
+                "summary": "驳回待审内容",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核项 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "驳回请求，reason 必填",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationReviewReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "版本冲突或内容已删除",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/moments": {
             "get": {
                 "description": "管理员查询全站碎语列表，支持状态筛选与正文搜索。",
@@ -10978,6 +11356,189 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.AdminModerationCorrectReq": {
+            "type": "object",
+            "required": [
+                "content",
+                "lock_version",
+                "reason",
+                "revision_id"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "example": "管理员修正后的正文"
+                },
+                "lock_version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 3
+                },
+                "reason": {
+                    "type": "string",
+                    "example": "移除不当表述"
+                },
+                "revision_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 20
+                }
+            }
+        },
+        "dto.AdminModerationItemResp": {
+            "type": "object",
+            "properties": {
+                "author_id": {
+                    "type": "integer",
+                    "example": 42
+                },
+                "can_interact": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "decision_reason": {
+                    "type": "string"
+                },
+                "decision_type": {
+                    "type": "string"
+                },
+                "item_id": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "lifecycle_state": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "lock_version": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "moment_options": {
+                    "$ref": "#/definitions/dto.AdminModerationMomentOptionsResp"
+                },
+                "policy_action": {
+                    "type": "string",
+                    "example": "pre_review"
+                },
+                "public_state": {
+                    "type": "string",
+                    "example": "visible"
+                },
+                "published_content": {
+                    "type": "string"
+                },
+                "review_status": {
+                    "type": "string",
+                    "example": "pending"
+                },
+                "reviewed_at": {
+                    "type": "string"
+                },
+                "reviewer_id": {
+                    "type": "integer"
+                },
+                "revision_id": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "revision_version": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "risk_level": {
+                    "type": "string",
+                    "example": "medium"
+                },
+                "subject": {
+                    "$ref": "#/definitions/dto.AdminModerationSubjectResp"
+                },
+                "submitted_content": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AdminModerationMomentOptionsResp": {
+            "type": "object",
+            "properties": {
+                "comment_status": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "status": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.AdminModerationPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationItemResp"
+                    }
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 12
+                }
+            }
+        },
+        "dto.AdminModerationReviewReq": {
+            "type": "object",
+            "required": [
+                "lock_version",
+                "revision_id"
+            ],
+            "properties": {
+                "lock_version": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 3
+                },
+                "reason": {
+                    "type": "string",
+                    "example": "内容符合发布要求"
+                },
+                "revision_id": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "example": 20
+                }
+            }
+        },
+        "dto.AdminModerationSubjectResp": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "parent_id": {
+                    "type": "integer"
+                },
+                "root_id": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "type": {
+                    "type": "string",
+                    "example": "article_comment"
                 }
             }
         },

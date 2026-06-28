@@ -609,6 +609,137 @@ definitions:
     - password
     - username
     type: object
+  dto.AdminModerationCorrectReq:
+    properties:
+      content:
+        example: 管理员修正后的正文
+        type: string
+      lock_version:
+        example: 3
+        minimum: 1
+        type: integer
+      reason:
+        example: 移除不当表述
+        type: string
+      revision_id:
+        example: 20
+        minimum: 1
+        type: integer
+    required:
+    - content
+    - lock_version
+    - reason
+    - revision_id
+    type: object
+  dto.AdminModerationItemResp:
+    properties:
+      author_id:
+        example: 42
+        type: integer
+      can_interact:
+        type: boolean
+      created_at:
+        type: string
+      decision_reason:
+        type: string
+      decision_type:
+        type: string
+      item_id:
+        example: 10
+        type: integer
+      lifecycle_state:
+        example: active
+        type: string
+      lock_version:
+        example: 3
+        type: integer
+      moment_options:
+        $ref: '#/definitions/dto.AdminModerationMomentOptionsResp'
+      policy_action:
+        example: pre_review
+        type: string
+      public_state:
+        example: visible
+        type: string
+      published_content:
+        type: string
+      review_status:
+        example: pending
+        type: string
+      reviewed_at:
+        type: string
+      reviewer_id:
+        type: integer
+      revision_id:
+        example: 20
+        type: integer
+      revision_version:
+        example: 2
+        type: integer
+      risk_level:
+        example: medium
+        type: string
+      subject:
+        $ref: '#/definitions/dto.AdminModerationSubjectResp'
+      submitted_content:
+        type: string
+    type: object
+  dto.AdminModerationMomentOptionsResp:
+    properties:
+      comment_status:
+        example: 1
+        type: integer
+      status:
+        example: 1
+        type: integer
+    type: object
+  dto.AdminModerationPageResp:
+    properties:
+      list:
+        items:
+          $ref: '#/definitions/dto.AdminModerationItemResp'
+        type: array
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 20
+        type: integer
+      total:
+        example: 12
+        type: integer
+    type: object
+  dto.AdminModerationReviewReq:
+    properties:
+      lock_version:
+        example: 3
+        minimum: 1
+        type: integer
+      reason:
+        example: 内容符合发布要求
+        type: string
+      revision_id:
+        example: 20
+        minimum: 1
+        type: integer
+    required:
+    - lock_version
+    - revision_id
+    type: object
+  dto.AdminModerationSubjectResp:
+    properties:
+      id:
+        example: 7
+        type: integer
+      parent_id:
+        type: integer
+      root_id:
+        example: 3
+        type: integer
+      type:
+        example: article_comment
+        type: string
+    type: object
   dto.AdminMomentPageResp:
     properties:
       list:
@@ -4564,6 +4695,240 @@ paths:
       summary: 后台分页查询留言
       tags:
       - 后台留言
+  /admin/moderation/items:
+    get:
+      consumes:
+      - application/json
+      description: 管理员按审核状态、内容类型和风险等级分页查询审核版本，默认只返回待审版本。
+      parameters:
+      - description: 页码，从 1 开始
+        in: query
+        name: page
+        type: integer
+      - description: 每页数量，默认 20，最大 100
+        in: query
+        name: page_size
+        type: integer
+      - description: 内容类型
+        in: query
+        name: content_type
+        type: string
+      - description: 风险：low、medium、high
+        in: query
+        name: risk_level
+        type: string
+      - description: 状态：pending、approved、rejected、superseded
+        in: query
+        name: review_status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationPageResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询内容审核队列
+      tags:
+      - 内容审核管理
+  /admin/moderation/items/{id}:
+    get:
+      description: 优先返回当前待审版本；没有待审版本时返回最新历史版本。
+      parameters:
+      - description: 审核项 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询内容审核详情
+      tags:
+      - 内容审核管理
+  /admin/moderation/items/{id}/approve:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 审核项 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 通过请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationReviewReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 版本冲突或内容已删除
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 通过待审内容
+      tags:
+      - 内容审核管理
+  /admin/moderation/items/{id}/correct:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 审核项 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 修正请求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationCorrectReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 版本冲突或内容已删除
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 修正并通过待审内容
+      tags:
+      - 内容审核管理
+  /admin/moderation/items/{id}/reject:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 审核项 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 驳回请求，reason 必填
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationReviewReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: 版本冲突或内容已删除
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 驳回待审内容
+      tags:
+      - 内容审核管理
   /admin/moments:
     get:
       consumes:

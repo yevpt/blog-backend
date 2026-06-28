@@ -182,3 +182,28 @@ func TestRegisterAdminRoutes_RegistersFriendLinkMutationRoutes(t *testing.T) {
 	}
 	assert.True(t, slices.Contains(paths, "/admin/friend-links"))
 }
+
+func TestRegisterAdminRoutesRegistersModerationReviewRoutes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	jwtManager := jwt.NewManager("test-secret", 2, 24)
+
+	registerAdminRoutes(r, routeHandlers{}, jwtManager, nil)
+
+	want := map[string]string{
+		"GET /admin/moderation/items":              "",
+		"GET /admin/moderation/items/:id":          "",
+		"POST /admin/moderation/items/:id/approve": "",
+		"POST /admin/moderation/items/:id/correct": "",
+		"POST /admin/moderation/items/:id/reject":  "",
+	}
+	for _, route := range r.Routes() {
+		key := route.Method + " " + route.Path
+		if _, ok := want[key]; ok {
+			want[key] = route.Handler
+		}
+	}
+	for route, handler := range want {
+		assert.NotEmpty(t, handler, route)
+	}
+}
