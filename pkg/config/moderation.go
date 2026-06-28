@@ -136,6 +136,7 @@ type ModerationAuditConfig struct {
 
 // ModerationNoticesConfig 定义对外稳定审核提示。
 type ModerationNoticesConfig struct {
+	Approved       string `mapstructure:"approved"`
 	LowSubmitted   string `mapstructure:"low_submitted"`
 	ReviewRequired string `mapstructure:"review_required"`
 	HighRejected   string `mapstructure:"high_rejected"`

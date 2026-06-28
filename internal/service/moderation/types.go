@@ -59,6 +59,8 @@ type Classification struct {
 	Risk RiskLevel
 	// RuleMatchIDs 只包含本次实际命中的规则 ID。
 	RuleMatchIDs []uint64
+	// RulesetVersion 标识本次判定使用的不可变规则快照。
+	RulesetVersion uint64
 }
 
 // Classifier 对清洗后的纯文本分类，并维护最后一个有效规则快照。

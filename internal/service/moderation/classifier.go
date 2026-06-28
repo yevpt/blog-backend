@@ -47,7 +47,7 @@ func (c *classifier) Classify(processed ProcessedContent) Classification {
 	}
 
 	normalized := NormalizeText(processed.PlainText)
-	result := Classification{Risk: RiskLow, RuleMatchIDs: make([]uint64, 0)}
+	result := Classification{Risk: RiskLow, RuleMatchIDs: make([]uint64, 0), RulesetVersion: snapshot.version}
 	for _, rule := range snapshot.rules {
 		if !rule.matches(normalized) {
 			continue

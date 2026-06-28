@@ -125,6 +125,7 @@ func validateModerationStrings(c ModerationConfig) error {
 	}{
 		{path: "moderation.image.static_placeholder_key", value: c.Image.StaticPlaceholderKey},
 		{path: "moderation.image.gif_placeholder_key", value: c.Image.GIFPlaceholderKey},
+		{path: "moderation.notices.approved", value: c.Notices.Approved},
 		{path: "moderation.notices.low_submitted", value: c.Notices.LowSubmitted},
 		{path: "moderation.notices.review_required", value: c.Notices.ReviewRequired},
 		{path: "moderation.notices.high_rejected", value: c.Notices.HighRejected},

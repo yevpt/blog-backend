@@ -228,6 +228,8 @@ type AppliedTransition struct {
 	RevisionID      uint64
 	RevisionVersion uint64
 	LockVersion     uint64
+	// Replay 在事务内命中同域幂等结果时返回首次安全结果。
+	Replay *StoredResult
 }
 
 // ItemStateRecord 是 service 构建纯状态机输入所需的完整审核项快照。
@@ -281,6 +283,8 @@ type StoredResult struct {
 	Content         string
 	RevisionVersion uint64
 	LockVersion     uint64
+	RiskLevel       RiskLevel
+	PolicyAction    PolicyAction
 }
 
 // TrustLevel 是用户审核信任级别。

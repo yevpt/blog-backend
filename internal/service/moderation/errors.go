@@ -17,4 +17,14 @@ var (
 	ErrInvalidTransition = errors.New("invalid moderation state transition")
 	// ErrAlreadyDeleted 表示删除终态拒绝任何非删除事件。
 	ErrAlreadyDeleted = errors.New("moderation item already deleted")
+	// ErrInvalidRequest 表示审核写入参数缺失或不符合内容类型约束。
+	ErrInvalidRequest = errors.New("invalid moderation request")
+	// ErrImageReviewUnavailable 表示图片审核阶段尚未启用。
+	ErrImageReviewUnavailable = errors.New("content image review is unavailable")
+	// ErrContentRiskRejected 表示内容因较高风险被明确拒绝。
+	ErrContentRiskRejected = errors.New("content rejected because of risk")
+	// ErrPublishingForbidden 表示用户处罚或全站控制阻止本次发布。
+	ErrPublishingForbidden = errors.New("content publishing is forbidden")
+	// ErrInteractionNotAllowed 表示目标内容尚在审核或不可公开互动。
+	ErrInteractionNotAllowed = errors.New("moderation subject cannot be interacted with")
 )

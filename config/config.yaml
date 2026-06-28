@@ -167,6 +167,7 @@ moderation:
     cleanup_batch_size: 500
 
   notices:
+    approved: "发布成功。"
     low_submitted: "发布成功，内容会被审核。"
     review_required: "内容已提交，等待人工审核。"
     high_rejected: "内容存在较高风险，未能发布，请修改后重试。"

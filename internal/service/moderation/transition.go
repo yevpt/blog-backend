@@ -42,8 +42,10 @@ const (
 type ReviewStatus string
 
 const (
-	ReviewApproved ReviewStatus = "approved"
-	ReviewRejected ReviewStatus = "rejected"
+	ReviewPending    ReviewStatus = "pending"
+	ReviewApproved   ReviewStatus = "approved"
+	ReviewRejected   ReviewStatus = "rejected"
+	ReviewSuperseded ReviewStatus = "superseded"
 )
 
 // DecisionType 表示人工或自动通过版本的决策事实。

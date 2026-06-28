@@ -113,9 +113,12 @@ type storedResultRow struct {
 	CreatedAt       time.Time
 	RevisionVersion uint64
 	LockVersion     uint64
+	RiskLevel       string
+	PolicyAction    string
+	Content         string
 }
 
-const idempotencyResultQuery = "SELECT 'revision' AS domain, revision.id AS record_id, revision.item_id AS item_id, item.content_type, item.content_id, revision.review_status, item.public_state, revision.created_at, revision.version AS revision_version, item.lock_version AS lock_version FROM moderation_revision AS revision JOIN moderation_item AS item ON item.id = revision.item_id WHERE revision.submitter_id = ? AND revision.idempotency_key = ? UNION ALL SELECT 'attempt' AS domain, attempt.id AS record_id, attempt.item_id AS item_id, attempt.content_type, NULL AS content_id, 'blocked' AS review_status, '' AS public_state, attempt.created_at, 0 AS revision_version, 0 AS lock_version FROM moderation_attempt AS attempt WHERE attempt.user_id = ? AND attempt.idempotency_key = ?"
+const idempotencyResultQuery = "SELECT 'revision' AS domain, revision.id AS record_id, revision.item_id AS item_id, item.content_type, item.content_id, revision.review_status, item.public_state, revision.created_at, revision.version AS revision_version, item.lock_version AS lock_version, revision.risk_level, revision.policy_action, revision.published_content AS content FROM moderation_revision AS revision JOIN moderation_item AS item ON item.id = revision.item_id WHERE revision.submitter_id = ? AND revision.idempotency_key = ? UNION ALL SELECT 'attempt' AS domain, attempt.id AS record_id, attempt.item_id AS item_id, attempt.content_type, NULL AS content_id, 'blocked' AS review_status, '' AS public_state, attempt.created_at, 0 AS revision_version, 0 AS lock_version, 'high' AS risk_level, 'block' AS policy_action, '' AS content FROM moderation_attempt AS attempt WHERE attempt.user_id = ? AND attempt.idempotency_key = ?"
 
 func (r *repository) FindResultByIdempotencyKey(ctx context.Context, userID uint64, key string) (*StoredResult, error) {
 	if userID == 0 || key == "" {
@@ -147,6 +150,9 @@ func storedResult(row storedResultRow) *StoredResult {
 		CreatedAt:       row.CreatedAt,
 		RevisionVersion: row.RevisionVersion,
 		LockVersion:     row.LockVersion,
+		RiskLevel:       RiskLevel(row.RiskLevel),
+		PolicyAction:    PolicyAction(row.PolicyAction),
+		Content:         row.Content,
 	}
 	if row.Domain == string(ResultBlocked) || row.Domain == "attempt" {
 		result.Kind = ResultBlocked

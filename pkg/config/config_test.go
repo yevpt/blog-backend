@@ -80,6 +80,7 @@ moderation:
     cleanup_interval: 24h
     cleanup_batch_size: 500
   notices:
+    approved: 发布成功。
     low_submitted: 发布成功，内容会被审核。
     review_required: 内容已提交，等待人工审核。
     high_rejected: 内容存在较高风险，未能发布，请修改后重试。
@@ -191,6 +192,9 @@ func TestValidateModeration(t *testing.T) {
 		{name: "empty notices", env: "test", mutate: func(c *config.ModerationConfig) {
 			c.Notices.ReviewRequired = ""
 		}, wantErr: "moderation.notices.review_required"},
+		{name: "empty approved notice", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.Notices.Approved = ""
+		}, wantErr: "moderation.notices.approved"},
 		{name: "invalid action", env: "test", mutate: func(c *config.ModerationConfig) {
 			c.Policy.Normal.Medium = "publish"
 		}, wantErr: "moderation.policy.normal.medium"},
@@ -283,7 +287,7 @@ func validModerationConfig() config.ModerationConfig {
 			CleanupInterval: 24 * time.Hour, CleanupBatchSize: 500,
 		},
 		Notices: config.ModerationNoticesConfig{
-			LowSubmitted: "发布成功，内容会被审核。", ReviewRequired: "内容已提交，等待人工审核。",
+			Approved: "发布成功。", LowSubmitted: "发布成功，内容会被审核。", ReviewRequired: "内容已提交，等待人工审核。",
 			HighRejected: "内容存在较高风险，未能发布，请修改后重试。",
 		},
 	}

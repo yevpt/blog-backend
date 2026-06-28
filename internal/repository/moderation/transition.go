@@ -90,9 +90,11 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 }
 
 func appliedTransitionFromStored(result StoredResult) AppliedTransition {
+	replay := result
 	return AppliedTransition{
 		Subject: result.Subject, ItemID: result.ItemID, RevisionID: result.RevisionID,
 		RevisionVersion: result.RevisionVersion, LockVersion: result.LockVersion,
+		Replay: &replay,
 	}
 }
 
