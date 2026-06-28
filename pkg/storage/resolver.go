@@ -23,6 +23,11 @@ type ObjectKeyResolver interface {
 	ObjectKey(value string) (string, error)
 }
 
+// ObjectReader 从对象存储读取原始字节，供需要校验内容而非仅解析 URL 的服务使用。
+type ObjectReader interface {
+	GetObject(ctx context.Context, objectName string) ([]byte, error)
+}
+
 // ObjectStore 提供对象访问 URL、存在性检查和写入能力。
 type ObjectStore interface {
 	ObjectURLResolver

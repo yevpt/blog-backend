@@ -36,11 +36,11 @@
 - `PreparedImage` contains `ObjectKey`, `SHA256`, `MD5`, `Size`, `MediaType`, `IsGIF`, `PreviewObjectKey`, and `Approved`.
 - Consumes a constructor-injected object reader/store and an image repository lookup boundary.
 
-- [ ] Write failing tests for exact byte fingerprints, decoded-pixel and byte limits, approved-image reuse updating access time, 48-pixel static previews, GIF placeholders, duplicate order preservation, ownership-safe object keys, and cleanup of newly-created previews on repository failure.
-- [ ] Run `go test ./internal/service/moderationmedia -count=1` and confirm RED because the package does not exist.
-- [ ] Add `storage.ObjectReader` with `GetObject`, then implement bounded reads, `image.DecodeConfig` validation, SHA-256/MD5 calculation, preview generation through `pkg/imageutil`, and deterministic preview keys below `moderation/previews/`.
-- [ ] Run the focused tests and `go test ./pkg/storage ./internal/service/moderationmedia -count=1`.
-- [ ] Commit with `feat(moderation): 实现审核图片指纹与预览处理`.
+- [x] Write failing tests for exact byte fingerprints, decoded-pixel and byte limits, approved-image reuse updating access time, 48-pixel static previews, GIF placeholders, duplicate order preservation, ownership-safe object keys, and cleanup of newly-created previews on repository failure.
+- [x] Run `go test ./internal/service/moderationmedia -count=1` and confirm RED because the package does not exist.
+- [x] Add `storage.ObjectReader` with `GetObject`, then implement bounded reads, `image.DecodeConfig` validation, SHA-256/MD5 calculation, preview generation through `pkg/imageutil`, and deterministic preview keys below `moderation/previews/`.
+- [x] Run the focused tests and `go test ./pkg/storage ./internal/service/moderationmedia -count=1`.
+- [x] Commit with `feat(moderation): 实现审核图片指纹与预览处理`.
 
 ### Task 2: Persist revision images and global approval reuse
 
