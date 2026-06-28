@@ -77,6 +77,9 @@ func validateModerationBounds(c ModerationConfig) error {
 		{path: "moderation.content.reply_max_chars", value: int64(c.Content.ReplyMaxChars)},
 		{path: "moderation.content.max_images_per_content", value: int64(c.Content.MaxImagesPerContent)},
 		{path: "moderation.content.max_links_per_content", value: int64(c.Content.MaxLinksPerContent)},
+		{path: "moderation.review.queue_default_page_size", value: int64(c.Review.QueueDefaultPageSize)},
+		{path: "moderation.review.queue_max_page_size", value: int64(c.Review.QueueMaxPageSize)},
+		{path: "moderation.review.reason_max_chars", value: int64(c.Review.ReasonMaxChars)},
 		{path: "moderation.image.max_upload_bytes", value: c.Image.MaxUploadBytes},
 		{path: "moderation.image.max_gif_bytes", value: c.Image.MaxGIFBytes},
 		{path: "moderation.image.max_stored_bytes", value: c.Image.MaxStoredBytes},
@@ -114,6 +117,15 @@ func validateModerationBounds(c ModerationConfig) error {
 		if item.value <= 0 {
 			return fmt.Errorf("%s: must be positive", item.path)
 		}
+	}
+	if c.Review.QueueDefaultPageSize > c.Review.QueueMaxPageSize {
+		return fmt.Errorf("moderation.review.queue_default_page_size: must not exceed queue_max_page_size")
+	}
+	if c.Review.QueueMaxPageSize > 500 {
+		return fmt.Errorf("moderation.review.queue_max_page_size: must not exceed 500")
+	}
+	if c.Review.ReasonMaxChars > 1000 {
+		return fmt.Errorf("moderation.review.reason_max_chars: must not exceed database capacity 1000")
 	}
 	return nil
 }

@@ -36,6 +36,8 @@ var (
 	ErrPublishingForbidden = errors.New("content publishing is forbidden")
 	// ErrInteractionNotAllowed 表示目标内容尚在审核或不可公开互动。
 	ErrInteractionNotAllowed = errors.New("moderation subject cannot be interacted with")
+	// ErrReviewConflict 表示管理员依据的待审版本或锁版本已经过期。
+	ErrReviewConflict = errors.New("moderation review conflict")
 )
 
 // PublicErrorMessage 返回可安全暴露给前端的审核错误提示，不包含规则命中细节。
@@ -52,6 +54,8 @@ func PublicErrorMessage(err error) string {
 		return "内容已删除，不能继续操作。"
 	case errors.Is(err, ErrInteractionNotAllowed):
 		return "内容正在审核，暂时不能互动。"
+	case errors.Is(err, ErrReviewConflict):
+		return "审核状态已经变化，请刷新后重试。"
 	default:
 		return "内容审核失败，请稍后重试。"
 	}

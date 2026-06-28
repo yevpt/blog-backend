@@ -606,6 +606,12 @@ func applyProfileChange(ctx context.Context, tx *gorm.DB, change *ProfileChange)
 	if change.SanctionState != nil {
 		updates["sanction_state"] = *change.SanctionState
 	}
+	if change.ResetCleanApproval {
+		updates["clean_approval_streak"] = 0
+	}
+	if change.LastViolationAt != nil {
+		updates["last_violation_at"] = *change.LastViolationAt
+	}
 	result := tx.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", change.UserID).UpdateColumns(updates)
 	if result.Error != nil {
 		return result.Error

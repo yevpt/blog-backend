@@ -122,6 +122,12 @@ moderation:
     max_images_per_content: 9
     max_links_per_content: 10
 
+  # 人工审核队列与公开理由边界
+  review:
+    queue_default_page_size: 20
+    queue_max_page_size: 100
+    reason_max_chars: 1000
+
   # Media & Review 阶段使用的图片处理边界
   image:
     max_upload_bytes: 1048576

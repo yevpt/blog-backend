@@ -200,6 +200,8 @@ type ProfileChange struct {
 	RejectedDelta       int64
 	HighRiskDelta       int64
 	ViolationScoreDelta int64
+	ResetCleanApproval  bool
+	LastViolationAt     *time.Time
 	TrustLevel          *string
 	SanctionState       *string
 	UpdatedAt           time.Time
@@ -266,6 +268,10 @@ type ReviewRecord struct {
 	PolicyAction     PolicyAction
 	ReviewStatus     ReviewStatus
 	MomentOptions    *MomentOptions
+	DecisionType     *string
+	DecisionReason   *string
+	ReviewerID       *uint64
+	ReviewedAt       *time.Time
 	CreatedAt        time.Time
 }
 

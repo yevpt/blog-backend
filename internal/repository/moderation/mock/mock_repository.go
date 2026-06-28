@@ -86,6 +86,21 @@ func (mr *MockRepositoryMockRecorder) ListReviewRecords(ctx, filter any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReviewRecords", reflect.TypeOf((*MockRepository)(nil).ListReviewRecords), ctx, filter)
 }
 
+// LoadCurrentReviewRecord mocks base method.
+func (m *MockRepository) LoadCurrentReviewRecord(ctx context.Context, itemID uint64) (moderation.ReviewRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadCurrentReviewRecord", ctx, itemID)
+	ret0, _ := ret[0].(moderation.ReviewRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadCurrentReviewRecord indicates an expected call of LoadCurrentReviewRecord.
+func (mr *MockRepositoryMockRecorder) LoadCurrentReviewRecord(ctx, itemID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadCurrentReviewRecord", reflect.TypeOf((*MockRepository)(nil).LoadCurrentReviewRecord), ctx, itemID)
+}
+
 // LoadEnabledRules mocks base method.
 func (m *MockRepository) LoadEnabledRules(ctx context.Context) ([]moderation.RuleRecord, error) {
 	m.ctrl.T.Helper()

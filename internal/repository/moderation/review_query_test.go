@@ -19,8 +19,8 @@ func TestListReviewRecordsReturnsPendingRevisionAndMomentOptions(t *testing.T) {
 		WithArgs(moderation.ReviewPending, 20).
 		WillReturnRows(reviewRecordRows().AddRow(
 			uint64(10), "moment", uint64(7), uint64(42), uint64(3), "active", "placeholder",
-			nil, nil, uint64(20), uint64(20), uint64(1), "待审原文", "待审正文",
-			"medium", "pre_review", "pending", uint8(1), uint8(0), fixedTime,
+			nil, nil, uint64(20), nil, nil, nil, nil, uint64(20), uint64(1), "待审原文", "待审正文",
+			"medium", "pre_review", "pending", uint8(1), uint8(0), nil, nil, nil, nil, fixedTime,
 		))
 
 	page, err := repository.ListReviewRecords(context.Background(), moderation.ReviewFilter{
@@ -44,8 +44,8 @@ func TestLoadReviewRecordReturnsCanonicalCommentRelation(t *testing.T) {
 		WithArgs(uint64(10), uint64(20), 1).
 		WillReturnRows(reviewRecordRows().AddRow(
 			uint64(10), "article_comment", uint64(7), uint64(42), uint64(3), "active", "visible",
-			uint64(19), uint64(19), uint64(20), uint64(20), uint64(2), "待审原文", "待审正文",
-			"medium", "pre_review", "pending", nil, nil, fixedTime,
+			uint64(19), uint64(19), uint64(20), nil, nil, nil, nil, uint64(20), uint64(2), "待审原文", "待审正文",
+			"medium", "pre_review", "pending", nil, nil, nil, nil, nil, nil, fixedTime,
 		))
 	mock.ExpectQuery("SELECT .* FROM `article_comment` WHERE .*`id` = \\?.*LIMIT \\?").
 		WithArgs(uint64(7), 1).
@@ -62,11 +62,36 @@ func TestLoadReviewRecordReturnsCanonicalCommentRelation(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestLoadCurrentReviewRecordPrefersPendingRevision(t *testing.T) {
+	repository, mock := newRepository(t)
+	mock.ExpectQuery("SELECT `pending_revision_id` FROM `moderation_item` WHERE id = \\?.*LIMIT \\?").
+		WithArgs(uint64(10), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"pending_revision_id"}).AddRow(uint64(20)))
+	mock.ExpectQuery("SELECT .* FROM `moderation_revision` JOIN moderation_item.*WHERE .*moderation_item.id = \\?.*moderation_revision.id = \\?.*LIMIT \\?").
+		WithArgs(uint64(10), uint64(20), 1).
+		WillReturnRows(reviewRecordRows().AddRow(
+			uint64(10), "moment", uint64(7), uint64(42), uint64(3), "active", "placeholder",
+			nil, nil, uint64(20), nil, nil, nil, nil, uint64(20), uint64(1), "原文", "正文",
+			"medium", "pre_review", "pending", uint8(1), uint8(1), nil, nil, nil, nil, fixedTime,
+		))
+	mock.ExpectQuery("SELECT .* FROM `moment` WHERE `moment`.`id` = \\?.*LIMIT \\?").
+		WithArgs(uint64(7), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content"}).AddRow(7, 42, ""))
+
+	record, err := repository.LoadCurrentReviewRecord(context.Background(), 10)
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(20), record.RevisionID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func reviewRecordRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
 		"item_id", "content_type", "content_id", "author_id", "lock_version", "lifecycle_state", "public_state",
 		"materialized_revision_id", "approved_revision_id", "pending_revision_id",
+		"state_before_emergency", "emergency_hidden_reason", "emergency_hidden_at", "deleted_at",
 		"revision_id", "revision_version", "submitted_content", "published_content", "risk_level",
-		"policy_action", "review_status", "moment_status", "moment_comment_status", "created_at",
+		"policy_action", "review_status", "moment_status", "moment_comment_status",
+		"decision_type", "decision_reason", "reviewer_id", "reviewed_at", "created_at",
 	})
 }

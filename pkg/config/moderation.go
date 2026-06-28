@@ -28,12 +28,20 @@ type ModerationConfig struct {
 	Policy     ModerationPolicyConfig     `mapstructure:"policy"`
 	Rules      ModerationRulesConfig      `mapstructure:"rules"`
 	Content    ModerationContentConfig    `mapstructure:"content"`
+	Review     ModerationReviewConfig     `mapstructure:"review"`
 	Image      ModerationImageConfig      `mapstructure:"image"`
 	Governance ModerationGovernanceConfig `mapstructure:"governance"`
 	RateLimit  ModerationRateLimitConfig  `mapstructure:"rate_limit"`
 	Control    ModerationControlConfig    `mapstructure:"control"`
 	Audit      ModerationAuditConfig      `mapstructure:"audit"`
 	Notices    ModerationNoticesConfig    `mapstructure:"notices"`
+}
+
+// ModerationReviewConfig 定义人工审核查询与公开理由的维护边界。
+type ModerationReviewConfig struct {
+	QueueDefaultPageSize int `mapstructure:"queue_default_page_size"`
+	QueueMaxPageSize     int `mapstructure:"queue_max_page_size"`
+	ReasonMaxChars       int `mapstructure:"reason_max_chars"`
 }
 
 // ModerationPolicyConfig 按用户信任等级定义审核动作。

@@ -1,0 +1,160 @@
+package moderation_test
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	repositorymock "github.com/vpt/blog-backend/internal/repository/moderation/mock"
+	"github.com/vpt/blog-backend/internal/service/moderation"
+	"github.com/vpt/blog-backend/pkg/config"
+	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+)
+
+func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	record := pendingReviewRecord()
+	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, cmd moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+			assert.Equal(t, record.AuthorID, cmd.AuthorID)
+			assert.Equal(t, record.LockVersion, cmd.ExpectedLockVersion)
+			require.NotNil(t, cmd.ExpectedPendingID)
+			assert.Equal(t, record.RevisionID, *cmd.ExpectedPendingID)
+			require.NotNil(t, cmd.Review)
+			assert.Equal(t, moderationrepo.ReviewApproved, cmd.Review.Status)
+			assert.Equal(t, "approved", cmd.Review.Decision)
+			assert.Equal(t, moderationrepo.ExistingRevision(record.RevisionID), cmd.Materialize)
+			require.NotNil(t, cmd.ProfileChange)
+			assert.Equal(t, int64(1), cmd.ProfileChange.CleanApprovalDelta)
+			require.NotNil(t, cmd.Notification)
+			assert.Equal(t, record.AuthorID, cmd.Notification.RecipientUserID)
+			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
+		})
+	service := newReviewService(repo, &processorStub{})
+
+	got, err := service.Approve(context.Background(), moderation.ReviewCommand{
+		ItemID: record.ItemID, RevisionID: record.RevisionID,
+		ExpectedLockVersion: record.LockVersion, ReviewerID: 1,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, moderation.ReviewApproved, got.ReviewStatus)
+	assert.Equal(t, uint64(4), got.LockVersion)
+}
+
+func TestReviewServiceCorrectSanitizesContentAndRecordsViolation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	record := pendingReviewRecord()
+	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, cmd moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+			require.NotNil(t, cmd.Review.PublishedContent)
+			assert.Equal(t, "<p>修正正文</p>", *cmd.Review.PublishedContent)
+			assert.Equal(t, "移除不当表述", *cmd.Review.Reason)
+			assert.Equal(t, int64(1), cmd.ProfileChange.CorrectedDelta)
+			assert.Equal(t, int64(1), cmd.ProfileChange.ViolationScoreDelta)
+			assert.Equal(t, "corrected", cmd.Notification.Decision)
+			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
+		})
+	processor := &processorStub{useOut: true, out: moderation.ProcessedContent{
+		Published: "<p>修正正文</p>", PlainText: "修正正文",
+	}}
+	service := newReviewService(repo, processor)
+
+	got, err := service.Correct(context.Background(), moderation.CorrectCommand{
+		ReviewCommand: moderation.ReviewCommand{
+			ItemID: record.ItemID, RevisionID: record.RevisionID,
+			ExpectedLockVersion: record.LockVersion, ReviewerID: 1, Reason: "移除不当表述",
+		},
+		Content: "<p>修正正文</p><script>bad</script>",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "<p>修正正文</p>", got.PublishedContent)
+	assert.Equal(t, "<p>修正正文</p><script>bad</script>", processor.got)
+}
+
+func TestReviewServiceRejectRequiresReasonBeforeRepository(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	service := newReviewService(repo, &processorStub{})
+
+	_, err := service.Reject(context.Background(), moderation.ReviewCommand{
+		ItemID: 10, RevisionID: 20, ExpectedLockVersion: 3, ReviewerID: 1,
+	})
+
+	require.ErrorIs(t, err, moderation.ErrInvalidRequest)
+}
+
+func TestReviewServiceListDefaultsToPendingQueue(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	repo.EXPECT().ListReviewRecords(gomock.Any(), moderationrepo.ReviewFilter{
+		Page: 1, PageSize: 20, ReviewStatus: moderationrepo.ReviewPending,
+	}).Return(moderationrepo.ReviewPage{Total: 1, Items: []moderationrepo.ReviewRecord{pendingReviewRecord()}}, nil)
+	service := newReviewService(repo, &processorStub{})
+
+	page, err := service.List(context.Background(), moderation.ListReviewCommand{})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), page.Total)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, uint64(20), page.Items[0].RevisionID)
+}
+
+func TestReviewServiceDeletedItemReturnsTerminalError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	record := pendingReviewRecord()
+	deletedAt := serviceNow
+	record.State = moderationrepo.ItemState{
+		LifecycleState: moderationrepo.LifecycleDeleted, PublicState: moderationrepo.PublicHidden,
+		DeletedAt: &deletedAt,
+	}
+	record.ReviewStatus = moderationrepo.ReviewSuperseded
+	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	service := newReviewService(repo, &processorStub{})
+
+	_, err := service.Approve(context.Background(), moderation.ReviewCommand{
+		ItemID: record.ItemID, RevisionID: record.RevisionID,
+		ExpectedLockVersion: record.LockVersion, ReviewerID: 1,
+	})
+
+	require.ErrorIs(t, err, moderation.ErrAlreadyDeleted)
+}
+
+func newReviewService(repo moderationrepo.Repository, processor moderation.ContentProcessor) moderation.ReviewService {
+	cfg := config.ModerationConfig{
+		Content: config.ModerationContentConfig{
+			MomentMaxChars: 800, CommentMaxChars: 2000, GuestbookMaxChars: 2000, ReplyMaxChars: 2000,
+		},
+		Review: config.ModerationReviewConfig{
+			QueueDefaultPageSize: 20, QueueMaxPageSize: 100, ReasonMaxChars: 1000,
+		},
+		Governance: config.ModerationGovernanceConfig{
+			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3},
+		},
+	}
+	return moderation.NewReviewService(repo, processor, cfg, zap.NewNop(), func() time.Time { return serviceNow })
+}
+
+func pendingReviewRecord() moderationrepo.ReviewRecord {
+	return moderationrepo.ReviewRecord{
+		ItemID: 10, Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 7, RootID: 3},
+		AuthorID: 42, LockVersion: 3,
+		State: moderationrepo.ItemState{
+			LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicVisible,
+			Materialized: moderationrepo.ExistingRevision(20), Pending: moderationrepo.ExistingRevision(20),
+		},
+		RevisionID: 20, RevisionVersion: 1, SubmittedContent: "用户原文", PublishedContent: "待审正文",
+		RiskLevel: moderationrepo.RiskLow, PolicyAction: moderationrepo.ActionPostReview,
+		ReviewStatus: moderationrepo.ReviewPending, CreatedAt: serviceNow,
+	}
+}

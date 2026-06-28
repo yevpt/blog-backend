@@ -18,6 +18,7 @@ type Repository interface {
 	LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectKey]View, error)
 	ListReviewRecords(ctx context.Context, filter ReviewFilter) (ReviewPage, error)
 	LoadReviewRecord(ctx context.Context, itemID, revisionID uint64) (ReviewRecord, error)
+	LoadCurrentReviewRecord(ctx context.Context, itemID uint64) (ReviewRecord, error)
 }
 
 type repository struct {

@@ -57,6 +57,10 @@ moderation:
     orphan_min_age: 24h
     cleanup_interval: 24h
     cleanup_batch_size: 500
+  review:
+    queue_default_page_size: 20
+    queue_max_page_size: 100
+    reason_max_chars: 1000
   governance:
     new_to_normal: {min_age_days: 7, clean_approvals: 3}
     normal_to_trusted: {min_age_days: 30, clean_approvals: 20}
@@ -99,6 +103,7 @@ moderation:
 	assert.Equal(t, 500, cfg.Moderation.Rules.MaxPatternChars)
 	assert.Equal(t, 800, cfg.Moderation.Content.MomentMaxChars)
 	assert.Equal(t, int64(1_048_576), cfg.Moderation.Image.MaxUploadBytes)
+	assert.Equal(t, 20, cfg.Moderation.Review.QueueDefaultPageSize)
 	assert.Equal(t, 168*time.Hour, cfg.Moderation.Governance.RestrictedDuration)
 	assert.Equal(t, 10, cfg.Moderation.RateLimit.PublishPerMinute)
 	assert.Equal(t, 30*time.Second, cfg.Moderation.Control.CacheTTL)
@@ -271,6 +276,9 @@ func validModerationConfig() config.ModerationConfig {
 			GIFPlaceholderKey: "system/moderation/gif-review.jpg", ApprovalRetentionDays: 180, TempRetention: 24 * time.Hour,
 			OrphanMinAge: 24 * time.Hour, CleanupInterval: 24 * time.Hour, CleanupBatchSize: 500,
 		},
+		Review: config.ModerationReviewConfig{
+			QueueDefaultPageSize: 20, QueueMaxPageSize: 100, ReasonMaxChars: 1000,
+		},
 		Governance: config.ModerationGovernanceConfig{
 			NewToNormal:              config.ModerationPromotionConfig{MinAgeDays: 7, CleanApprovals: 3},
 			NormalToTrusted:          config.ModerationPromotionConfig{MinAgeDays: 30, CleanApprovals: 20},
@@ -291,6 +299,15 @@ func validModerationConfig() config.ModerationConfig {
 			HighRejected: "内容存在较高风险，未能发布，请修改后重试。",
 		},
 	}
+}
+
+func TestModerationReviewConfigRequiresPositiveBounds(t *testing.T) {
+	cfg := validModerationConfig()
+	cfg.Review.ReasonMaxChars = 0
+
+	err := cfg.Validate("test")
+
+	require.ErrorContains(t, err, "moderation.review.reason_max_chars")
 }
 
 // TestLoad_ReadsGarageAndCDNConfig 验证配置加载能解析 Garage 和 CDN 配置。
