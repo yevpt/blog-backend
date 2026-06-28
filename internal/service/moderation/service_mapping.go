@@ -19,6 +19,8 @@ func (s *applicationService) transitionCommand(
 	authorID := input.actorID
 	if input.isEdit {
 		authorID = item.AuthorID
+	} else if input.authorID != 0 {
+		authorID = input.authorID
 	}
 	reviewStatus := moderationrepo.ReviewPending
 	var decisionType *string
@@ -47,6 +49,7 @@ func (s *applicationService) transitionCommand(
 		},
 		SupersedeRevisionID: plan.SupersedeRevision,
 		Materialize:         mapRevisionPointer(plan.MaterializeRevision),
+		MomentOptions:       cloneMomentOptions(input.momentOptions),
 		CreateSubject:       !input.isEdit,
 		Log: &moderationrepo.ActionLog{
 			Revision: moderationrepo.NewRevision(), ActorUserID: &input.actorID,
@@ -121,6 +124,7 @@ func mapRepoEmergencyState(state *PublicState) *moderationrepo.PublicState {
 
 func (s *applicationService) resultFromApplied(
 	applied moderationrepo.AppliedTransition,
+	authorID uint64,
 	processed ProcessedContent,
 	previousContent string,
 	risk RiskLevel,
@@ -128,7 +132,7 @@ func (s *applicationService) resultFromApplied(
 	plan TransitionPlan,
 ) SubmitResult {
 	result := SubmitResult{
-		Subject: applied.Subject, ItemID: applied.ItemID, RevisionID: applied.RevisionID,
+		Subject: applied.Subject, AuthorID: authorID, ItemID: applied.ItemID, RevisionID: applied.RevisionID,
 		RevisionVersion: applied.RevisionVersion, LockVersion: applied.LockVersion,
 		RiskLevel: risk, Action: action, PublicState: plan.Item.PublicState,
 		HasPendingRevision: plan.Item.PendingRevisionID != nil,
@@ -172,13 +176,15 @@ func (s *applicationService) resultFromStored(stored moderationrepo.StoredResult
 	}
 	action := PolicyAction(stored.PolicyAction)
 	result := SubmitResult{
-		Subject: stored.Subject, ItemID: stored.ItemID, RevisionID: stored.RevisionID,
+		Subject: stored.Subject, AuthorID: stored.AuthorID, ItemID: stored.ItemID, RevisionID: stored.RevisionID,
 		RevisionVersion: stored.RevisionVersion, LockVersion: stored.LockVersion,
 		RiskLevel: RiskLevel(stored.RiskLevel), Action: action,
 		PublicState: PublicState(stored.PublicState), ReviewStatus: ReviewStatus(stored.ReviewStatus),
 		HasPendingRevision: stored.ReviewStatus == moderationrepo.ReviewPending,
 	}
-	if action != ActionPreReview {
+	if action == ActionPreReview {
+		result.Content = stored.VisibleContent
+	} else {
 		result.Content = stored.Content
 	}
 	if stored.ReviewStatus == moderationrepo.ReviewPending {
@@ -194,6 +200,7 @@ func (s *applicationService) resultFromStored(stored moderationrepo.StoredResult
 	default:
 		return SubmitResult{}, fmt.Errorf("%w: unsupported stored action", ErrInvalidTransition)
 	}
-	result.CanInteract = action == ActionAutoApprove && stored.PublicState == moderationrepo.PublicVisible
+	result.CanInteract = stored.ReviewStatus == moderationrepo.ReviewApproved &&
+		stored.PublicState == moderationrepo.PublicVisible
 	return result, nil
 }

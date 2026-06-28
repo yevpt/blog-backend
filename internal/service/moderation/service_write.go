@@ -13,21 +13,25 @@ import (
 )
 
 const newRevisionSentinel = ^uint64(0)
+const maxIdempotencyKeyChars = 128
 
 type writeInput struct {
 	actorID        uint64
+	authorID       uint64
 	isAdmin        bool
 	subject        SubjectRef
 	content        string
 	imageKeys      []string
 	idempotencyKey string
+	momentOptions  *moderationrepo.MomentOptions
 	isEdit         bool
 }
 
 func (s *applicationService) Submit(ctx context.Context, cmd SubmitCommand) (SubmitResult, error) {
 	return s.write(ctx, writeInput{
-		actorID: cmd.ActorID, isAdmin: cmd.IsAdmin, subject: cmd.Subject,
+		actorID: cmd.ActorID, authorID: cmd.AuthorID, isAdmin: cmd.IsAdmin, subject: cmd.Subject,
 		content: cmd.Content, imageKeys: cmd.ImageKeys, idempotencyKey: cmd.IdempotencyKey,
+		momentOptions: cloneMomentOptions(cmd.MomentOptions),
 	})
 }
 
@@ -35,7 +39,8 @@ func (s *applicationService) Edit(ctx context.Context, cmd EditCommand) (SubmitR
 	return s.write(ctx, writeInput{
 		actorID: cmd.ActorID, isAdmin: cmd.IsAdmin, subject: cmd.Subject,
 		content: cmd.Content, imageKeys: cmd.ImageKeys, idempotencyKey: cmd.IdempotencyKey,
-		isEdit: true,
+		momentOptions: cloneMomentOptions(cmd.MomentOptions),
+		isEdit:        true,
 	})
 }
 
@@ -128,14 +133,26 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 	if applied.Replay != nil {
 		return s.resultFromStored(*applied.Replay, input.subject)
 	}
-	return s.resultFromApplied(applied, processed, previousContent, classification.Risk, action, plan), nil
+	return s.resultFromApplied(
+		applied, resolvedAuthorID(input, item), processed, previousContent, classification.Risk, action, plan,
+	), nil
+}
+
+func resolvedAuthorID(input writeInput, item moderationrepo.ItemStateRecord) uint64 {
+	if input.isEdit {
+		return item.AuthorID
+	}
+	if input.authorID != 0 {
+		return input.authorID
+	}
+	return input.actorID
 }
 
 func (s *applicationService) validateWrite(input writeInput) error {
 	if input.actorID == 0 || s.repo == nil || s.classifier == nil || input.content == "" {
 		return ErrInvalidRequest
 	}
-	if input.idempotencyKey == "" || len(input.idempotencyKey) > 120 ||
+	if input.idempotencyKey == "" || len(input.idempotencyKey) > maxIdempotencyKeyChars ||
 		strings.TrimSpace(input.idempotencyKey) != input.idempotencyKey ||
 		strings.IndexFunc(input.idempotencyKey, unicode.IsControl) >= 0 {
 		return fmt.Errorf("%w: invalid idempotency key", ErrInvalidRequest)
@@ -143,10 +160,29 @@ func (s *applicationService) validateWrite(input writeInput) error {
 	if input.isEdit == (input.subject.ID == 0) {
 		return fmt.Errorf("%w: subject ID does not match operation", ErrInvalidRequest)
 	}
+	if input.isEdit && input.authorID != 0 {
+		return fmt.Errorf("%w: edit cannot override author", ErrInvalidRequest)
+	}
+	if !input.isEdit && input.authorID != 0 && input.authorID != input.actorID && !input.isAdmin {
+		return fmt.Errorf("%w: author override requires admin", ErrInvalidRequest)
+	}
+	if input.momentOptions != nil {
+		if input.subject.Type != SubjectMoment || input.momentOptions.Status > 1 || input.momentOptions.CommentStatus > 1 {
+			return fmt.Errorf("%w: invalid moment options", ErrInvalidRequest)
+		}
+	}
 	if input.isEdit && validSubjectType(input.subject.Type) {
 		return nil
 	}
 	return validateSubjectRef(input.subject)
+}
+
+func cloneMomentOptions(options *moderationrepo.MomentOptions) *moderationrepo.MomentOptions {
+	if options == nil {
+		return nil
+	}
+	result := *options
+	return &result
 }
 
 func validSubjectType(subjectType SubjectType) bool {

@@ -306,10 +306,12 @@ func TestMomentServiceSaveUsesModerationBeforeBusinessRepository(t *testing.T) {
 	moderationSvc := moderationmock.NewMockService(ctrl)
 	repo := &fakeMomentRepo{}
 	moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
-		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
+		ActorID: 7, AuthorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
 		Content: "碎语", IdempotencyKey: "moment-key",
+		MomentOptions: &moderationservice.MomentOptions{Status: 1, CommentStatus: 1},
 	}).Return(moderationservice.SubmitResult{
 		Subject:   moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9},
+		AuthorID:  7,
 		RiskLevel: moderationservice.RiskLow, Action: moderationservice.ActionPostReview,
 		PublicState: moderationservice.PublicVisible, ReviewStatus: moderationservice.ReviewPending,
 		Content: "碎语", HasPendingRevision: true,
@@ -326,6 +328,31 @@ func TestMomentServiceSaveUsesModerationBeforeBusinessRepository(t *testing.T) {
 	assert.True(t, resp.Moderation.HasPendingRevision)
 }
 
+func TestMomentModeratedSavePreservesAdminManagedAuthor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	authorID := uint(99)
+	moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
+		ActorID: 7, AuthorID: 99, IsAdmin: true,
+		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
+		Content: "代管碎语", IdempotencyKey: "managed-author",
+		MomentOptions: &moderationservice.MomentOptions{Status: 1, CommentStatus: 1},
+	}).Return(moderationservice.SubmitResult{
+		Subject:   moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9},
+		AuthorID:  99,
+		RiskLevel: moderationservice.RiskLow, PublicState: moderationservice.PublicVisible,
+		ReviewStatus: moderationservice.ReviewPending, Content: "代管碎语", HasPendingRevision: true,
+	}, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, nil, nil, nil, nil, moderationSvc)
+
+	resp, err := svc.Save(dto.MomentSaveReq{
+		UserID: &authorID, Content: "代管碎语", Status: 1, CommentStatus: 1, IdempotencyKey: "managed-author",
+	}, 7, []string{roles.AdminRole})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(99), resp.UserID)
+}
+
 func TestMomentServiceEditUsesModeration(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	moderationSvc := moderationmock.NewMockService(ctrl)
@@ -333,8 +360,10 @@ func TestMomentServiceEditUsesModeration(t *testing.T) {
 	moderationSvc.EXPECT().Edit(gomock.Any(), moderationservice.EditCommand{
 		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9},
 		Content: "编辑碎语", IdempotencyKey: "moment-edit",
+		MomentOptions: &moderationservice.MomentOptions{},
 	}).Return(moderationservice.SubmitResult{
 		Subject:   moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9},
+		AuthorID:  7,
 		RiskLevel: moderationservice.RiskMedium, PublicState: moderationservice.PublicVisible,
 		ReviewStatus: moderationservice.ReviewPending, Content: "旧碎语", HasPendingRevision: true,
 	}, nil)
@@ -343,6 +372,26 @@ func TestMomentServiceEditUsesModeration(t *testing.T) {
 	resp, err := svc.Save(dto.MomentSaveReq{ID: &id, Content: "编辑碎语", IdempotencyKey: "moment-edit"}, 7, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "旧碎语", resp.Content)
+}
+
+func TestMomentAdminEditKeepsOriginalAuthorInResponse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	id := uint(9)
+	moderationSvc.EXPECT().Edit(gomock.Any(), gomock.Any()).Return(moderationservice.SubmitResult{
+		Subject:  moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9},
+		AuthorID: 99, RiskLevel: moderationservice.RiskLow,
+		PublicState: moderationservice.PublicVisible, ReviewStatus: moderationservice.ReviewPending,
+		Content: "编辑后碎语", HasPendingRevision: true,
+	}, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, nil, nil, nil, nil, moderationSvc)
+
+	resp, err := svc.Save(dto.MomentSaveReq{
+		ID: &id, Content: "编辑后碎语", IdempotencyKey: "admin-edit",
+	}, 7, []string{roles.AdminRole})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(99), resp.UserID)
 }
 
 func TestMomentServiceToggleLikeGuardsPendingContent(t *testing.T) {

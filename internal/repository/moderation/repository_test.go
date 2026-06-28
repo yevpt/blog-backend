@@ -322,6 +322,26 @@ func TestFindResultByIdempotencyKeyReadsBothDomainsAndRejectsCollision(t *testin
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestFindResultByIdempotencyKeyReturnsPendingAndVisibleContentSeparately(t *testing.T) {
+	repository, mock := newRepository(t)
+	mock.ExpectQuery(`SELECT .*visible\.published_content.*FROM .*moderation_revision.*LEFT JOIN moderation_revision AS visible.*UNION ALL.*moderation_attempt`).
+		WithArgs(uint64(42), "medium-edit", uint64(42), "medium-edit").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"domain", "record_id", "item_id", "author_id", "content_type", "content_id", "review_status", "public_state", "created_at",
+			"revision_version", "lock_version", "risk_level", "policy_action", "content", "visible_content",
+		}).AddRow("revision", 9, 4, 42, "article_comment", 8, "pending", "visible", fixedTime,
+			2, 3, "medium", "pre_review", "中风险编辑", "最后通过正文"))
+
+	got, err := repository.FindResultByIdempotencyKey(context.Background(), 42, "medium-edit")
+
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, uint64(42), got.AuthorID)
+	assert.Equal(t, "中风险编辑", got.Content)
+	assert.Equal(t, "最后通过正文", got.VisibleContent)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestLoadPolicyContextDefaultsMissingProfileWithinOneReadTransaction(t *testing.T) {
 	repository, mock := newRepository(t)
 	mock.ExpectBegin()

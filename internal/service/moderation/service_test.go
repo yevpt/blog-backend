@@ -145,6 +145,42 @@ func TestServiceSubmitLowPostReview(t *testing.T) {
 	assert.Equal(t, uint64(41), got.Subject.ID)
 }
 
+func TestServiceSubmitMomentCarriesBusinessOptionsToTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := moderation.SubmitCommand{
+		ActorID: 7, AuthorID: 99, IsAdmin: true,
+		Subject: moderation.SubjectRef{Type: moderation.SubjectMoment}, Content: "隐藏碎语",
+		IdempotencyKey: "moment-options", MomentOptions: &moderation.MomentOptions{Status: 0, CommentStatus: 0},
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				assert.Equal(t, uint64(99), persisted.AuthorID)
+				require.NotNil(t, persisted.Log)
+				require.NotNil(t, persisted.Log.ActorUserID)
+				assert.Equal(t, uint64(7), *persisted.Log.ActorUserID)
+				require.NotNil(t, persisted.MomentOptions)
+				assert.Equal(t, uint8(0), persisted.MomentOptions.Status)
+				assert.Equal(t, uint8(0), persisted.MomentOptions.CommentStatus)
+				return moderationrepo.AppliedTransition{
+					Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectMoment, ID: 41},
+					ItemID:  51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,
+				}, nil
+			},
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionPostReview}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
+}
+
 func TestServiceSubmitMediumHidesBody(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
@@ -246,6 +282,47 @@ func TestServiceIdempotentRetryReturnsStoredResult(t *testing.T) {
 	assert.Equal(t, uint64(20), got.RevisionID)
 	assert.Equal(t, "发布成功，内容会被审核。", got.Message)
 	assert.Zero(t, processor.calls)
+}
+
+func TestServiceIdempotentMediumEditKeepsVisibleVersion(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := moderation.EditCommand{
+		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 88},
+		Content: "中风险编辑", IdempotencyKey: "medium-edit-replay",
+	}
+	repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(&moderationrepo.StoredResult{
+		Kind: moderationrepo.ResultRevision, Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 88, RootID: 11},
+		ItemID: 10, RevisionID: 20, RiskLevel: moderationrepo.RiskMedium,
+		PolicyAction: moderationrepo.ActionPreReview, ReviewStatus: moderationrepo.ReviewPending,
+		PublicState: moderationrepo.PublicVisible, Content: "中风险编辑", VisibleContent: "最后通过正文",
+	}, nil)
+
+	got, err := newApplicationService(repo, &processorStub{}, &classifierStub{}, &deciderStub{}, zap.NewNop()).Edit(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.Equal(t, "最后通过正文", got.Content)
+	require.NotNil(t, got.PendingContent)
+	assert.Equal(t, "中风险编辑", *got.PendingContent)
+	assert.False(t, got.CanInteract)
+}
+
+func TestServiceIdempotentApprovedPostReviewCanInteract(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := submitCommand()
+	repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(&moderationrepo.StoredResult{
+		Kind: moderationrepo.ResultRevision, Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 88, RootID: 11},
+		ItemID: 10, RevisionID: 20, RiskLevel: moderationrepo.RiskLow,
+		PolicyAction: moderationrepo.ActionPostReview, ReviewStatus: moderationrepo.ReviewApproved,
+		PublicState: moderationrepo.PublicVisible, Content: "已通过正文", VisibleContent: "已通过正文",
+	}, nil)
+
+	got, err := newApplicationService(repo, &processorStub{}, &classifierStub{}, &deciderStub{}, zap.NewNop()).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.True(t, got.CanInteract)
+	assert.False(t, got.HasPendingRevision)
 }
 
 func TestServiceAdminSubmitAutoApproves(t *testing.T) {

@@ -217,8 +217,16 @@ type ApplyTransitionCommand struct {
 	DeleteSubject       bool
 	Log                 *ActionLog
 	ProfileChange       *ProfileChange
+	// MomentOptions 仅用于碎语业务表物化；其他内容类型必须为空。
+	MomentOptions *MomentOptions
 	// CreateSubject 显式声明首次提交需要在事务内创建业务行。
 	CreateSubject bool
+}
+
+// MomentOptions 保存碎语本次物化需要保留的业务开关。
+type MomentOptions struct {
+	Status        uint8
+	CommentStatus uint8
 }
 
 // AppliedTransition 返回事务提交后的稳定标识。
@@ -247,6 +255,8 @@ type MaterializeCommand struct {
 	Content  string
 	Create   bool
 	Visible  bool
+	// MomentOptions 仅由碎语适配器读取。
+	MomentOptions *MomentOptions
 	// AssignedID 仅供私有适配器在首次创建后回填自增业务 ID。
 	AssignedID *uint64
 }
@@ -272,15 +282,19 @@ const (
 
 // StoredResult 是幂等重放所需的安全结果，不包含审核正文和规则命中。
 type StoredResult struct {
-	Kind            ResultKind
-	RevisionID      uint64
-	AttemptID       uint64
-	ItemID          uint64
-	Subject         SubjectRef
-	ReviewStatus    ReviewStatus
-	PublicState     PublicState
-	CreatedAt       time.Time
-	Content         string
+	Kind         ResultKind
+	RevisionID   uint64
+	AttemptID    uint64
+	ItemID       uint64
+	AuthorID     uint64
+	Subject      SubjectRef
+	ReviewStatus ReviewStatus
+	PublicState  PublicState
+	CreatedAt    time.Time
+	// Content 是本次幂等版本的安全正文，供作者待审回显。
+	Content string
+	// VisibleContent 是当前实际展示版本，用于中风险编辑稳定重放旧正文。
+	VisibleContent  string
 	RevisionVersion uint64
 	LockVersion     uint64
 	RiskLevel       RiskLevel

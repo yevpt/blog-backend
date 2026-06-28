@@ -7,19 +7,20 @@ import (
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 )
 
-func (s *momentService) submit(req dto.MomentSaveReq, actorID uint, isAdmin bool, content string) (*dto.MomentItemResp, error) {
+func (s *momentService) submit(req dto.MomentSaveReq, actorID, authorID uint, isAdmin bool, content string) (*dto.MomentItemResp, error) {
 	imageKeys := momentImageSignals(req)
 	result, err := s.moderation.Submit(context.Background(), moderationservice.SubmitCommand{
-		ActorID: uint64(actorID), IsAdmin: isAdmin,
+		ActorID: uint64(actorID), AuthorID: uint64(authorID), IsAdmin: isAdmin,
 		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
 		Content: content, ImageKeys: imageKeys, IdempotencyKey: req.IdempotencyKey,
+		MomentOptions: &moderationservice.MomentOptions{Status: req.Status, CommentStatus: req.CommentStatus},
 	})
 	if err != nil {
 		return nil, err
 	}
 	visibleContent, view := moderationservice.ProjectSubmitResult(result)
 	return &dto.MomentItemResp{
-		ID: uint(result.Subject.ID), UserID: actorID, Content: visibleContent,
+		ID: uint(result.Subject.ID), UserID: uint(result.AuthorID), Content: visibleContent,
 		Status: req.Status, CommentStatus: req.CommentStatus, Images: []dto.MomentMediaResp{}, Moderation: view,
 	}, nil
 }
@@ -29,13 +30,14 @@ func (s *momentService) edit(req dto.MomentSaveReq, actorID uint, isAdmin bool, 
 		ActorID: uint64(actorID), IsAdmin: isAdmin,
 		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: uint64(*req.ID)},
 		Content: content, ImageKeys: momentImageSignals(req), IdempotencyKey: req.IdempotencyKey,
+		MomentOptions: &moderationservice.MomentOptions{Status: req.Status, CommentStatus: req.CommentStatus},
 	})
 	if err != nil {
 		return nil, err
 	}
 	visibleContent, view := moderationservice.ProjectSubmitResult(result)
 	return &dto.MomentItemResp{
-		ID: *req.ID, UserID: actorID, Content: visibleContent,
+		ID: *req.ID, UserID: uint(result.AuthorID), Content: visibleContent,
 		Status: req.Status, CommentStatus: req.CommentStatus, Images: []dto.MomentMediaResp{}, Moderation: view,
 	}, nil
 }

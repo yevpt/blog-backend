@@ -112,6 +112,9 @@ func validateTransitionCommand(cmd ApplyTransitionCommand) error {
 	if err := validateTransitionSubjectRef(cmd.Subject); err != nil {
 		return err
 	}
+	if cmd.MomentOptions != nil && (cmd.Subject.Type != SubjectMoment || cmd.MomentOptions.Status > 1 || cmd.MomentOptions.CommentStatus > 1) {
+		return ErrInvalidCommand
+	}
 	if cmd.Next.LifecycleState != LifecycleActive && cmd.Next.LifecycleState != LifecycleDeleted {
 		return ErrInvalidCommand
 	}
@@ -198,7 +201,7 @@ func (r *repository) prepareItem(ctx context.Context, tx *gorm.DB, adapter subje
 	var assignedID uint64
 	if err := adapter.Materialize(ctx, tx, MaterializeCommand{
 		Ref: cmd.Subject, AuthorID: cmd.AuthorID, Content: content,
-		Create: true, Visible: cmd.Materialize.IsNew, AssignedID: &assignedID,
+		Create: true, Visible: cmd.Materialize.IsNew, MomentOptions: cmd.MomentOptions, AssignedID: &assignedID,
 	}); err != nil {
 		return model.ModerationItem{}, false, err
 	}
@@ -428,7 +431,9 @@ func (r *repository) materialize(ctx context.Context, tx *gorm.DB, adapter subje
 		}
 		content = revision.PublishedContent
 	}
-	return adapter.Materialize(ctx, tx, MaterializeCommand{Ref: cmd.Subject, AuthorID: cmd.AuthorID, Content: content})
+	return adapter.Materialize(ctx, tx, MaterializeCommand{
+		Ref: cmd.Subject, AuthorID: cmd.AuthorID, Content: content, MomentOptions: cmd.MomentOptions,
+	})
 }
 
 func (r *repository) deleteSubjectTree(ctx context.Context, tx *gorm.DB, adapter subjectAdapter, ref SubjectRef, authorID uint64) error {

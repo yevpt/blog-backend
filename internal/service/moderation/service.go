@@ -28,6 +28,9 @@ type SubjectRef = moderationrepo.SubjectRef
 // SubjectKey 是审核视图使用的稳定值键。
 type SubjectKey = moderationrepo.SubjectKey
 
+// MomentOptions 是碎语物化时保留的业务开关。
+type MomentOptions = moderationrepo.MomentOptions
+
 // Viewer 与 View 是业务 service 可读取的内部审核投影。
 type Viewer = moderationrepo.Viewer
 type View = moderationrepo.View
@@ -46,12 +49,15 @@ func (defaultPolicyDecider) Decide(input PolicyInput) (PolicyAction, error) { re
 
 // SubmitCommand 是首次发布内容的统一审核命令。
 type SubmitCommand struct {
-	ActorID        uint64
+	ActorID uint64
+	// AuthorID 仅供管理员代管创建；普通用户必须等于 ActorID。零值表示 ActorID。
+	AuthorID       uint64
 	IsAdmin        bool
 	Subject        SubjectRef
 	Content        string
 	ImageKeys      []string
 	IdempotencyKey string
+	MomentOptions  *moderationrepo.MomentOptions
 }
 
 // EditCommand 是编辑已有内容的统一审核命令。
@@ -62,6 +68,7 @@ type EditCommand struct {
 	Content        string
 	ImageKeys      []string
 	IdempotencyKey string
+	MomentOptions  *moderationrepo.MomentOptions
 }
 
 // DeleteCommand 是删除内容的统一审核命令。
@@ -75,6 +82,7 @@ type DeleteCommand struct {
 // SubmitResult 是业务 service 和 handler 使用的安全审核结果。
 type SubmitResult struct {
 	Subject         SubjectRef
+	AuthorID        uint64
 	ItemID          uint64
 	RevisionID      uint64
 	RevisionVersion uint64

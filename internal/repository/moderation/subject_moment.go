@@ -66,7 +66,14 @@ func (a *momentAdapter) Materialize(ctx context.Context, tx *gorm.DB, cmd Materi
 		if cmd.Visible {
 			status = 1
 		}
-		row := momentInsert{UserID: uint(cmd.AuthorID), Content: cmd.Content, Status: status, CommentStatus: 1}
+		commentStatus := uint8(1)
+		if cmd.MomentOptions != nil {
+			if cmd.MomentOptions.Status == 0 {
+				status = 0
+			}
+			commentStatus = cmd.MomentOptions.CommentStatus
+		}
+		row := momentInsert{UserID: uint(cmd.AuthorID), Content: cmd.Content, Status: status, CommentStatus: commentStatus}
 		if err := tx.WithContext(ctx).Create(&row).Error; err != nil {
 			return err
 		}
@@ -76,9 +83,14 @@ func (a *momentAdapter) Materialize(ctx context.Context, tx *gorm.DB, cmd Materi
 	if cmd.Ref.ID == 0 {
 		return ErrInvalidCommand
 	}
+	updates := map[string]any{"content": cmd.Content, "status": uint8(1)}
+	if cmd.MomentOptions != nil {
+		updates["status"] = cmd.MomentOptions.Status
+		updates["comment_status"] = cmd.MomentOptions.CommentStatus
+	}
 	result := tx.WithContext(ctx).Model(&model.Moment{}).
 		Where("id = ? AND user_id = ?", cmd.Ref.ID, cmd.AuthorID).
-		Updates(map[string]any{"content": cmd.Content, "status": uint8(1)})
+		Updates(updates)
 	return subjectUpdateError(result)
 }
 
