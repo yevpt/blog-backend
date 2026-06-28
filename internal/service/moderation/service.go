@@ -5,6 +5,7 @@ import (
 	"time"
 
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"go.uber.org/zap"
 )
@@ -38,6 +39,11 @@ type View = moderationrepo.View
 // PolicyDecider 将风险和用户上下文映射为审核动作。
 type PolicyDecider interface {
 	Decide(input PolicyInput) (PolicyAction, error)
+}
+
+// MediaService 准备审核版本的图片指纹、预览和全站复用状态。
+type MediaService interface {
+	Prepare(ctx context.Context, userID uint64, objectKeys []string) (moderationmedia.PreparedSet, error)
 }
 
 type defaultPolicyDecider struct{}
@@ -113,6 +119,7 @@ type applicationService struct {
 	processor  ContentProcessor
 	classifier Classifier
 	decider    PolicyDecider
+	media      MediaService
 	cfg        config.ModerationConfig
 	logger     *zap.Logger
 	now        func() time.Time
@@ -124,6 +131,7 @@ func NewService(
 	processor ContentProcessor,
 	classifier Classifier,
 	decider PolicyDecider,
+	media MediaService,
 	cfg config.ModerationConfig,
 	logger *zap.Logger,
 	now func() time.Time,
@@ -141,7 +149,7 @@ func NewService(
 		now = time.Now
 	}
 	return &applicationService{
-		repo: repo, processor: processor, classifier: classifier, decider: decider,
+		repo: repo, processor: processor, classifier: classifier, decider: decider, media: media,
 		cfg: cfg, logger: logger, now: now,
 	}
 }

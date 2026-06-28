@@ -11,6 +11,7 @@ import (
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	repositorymock "github.com/vpt/blog-backend/internal/repository/moderation/mock"
 	"github.com/vpt/blog-backend/internal/service/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -52,11 +53,22 @@ type deciderStub struct {
 	calls  int
 	action moderation.PolicyAction
 	err    error
+	input  moderation.PolicyInput
 }
 
-func (d *deciderStub) Decide(moderation.PolicyInput) (moderation.PolicyAction, error) {
+func (d *deciderStub) Decide(input moderation.PolicyInput) (moderation.PolicyAction, error) {
 	d.calls++
+	d.input = input
 	return d.action, d.err
+}
+
+type mediaServiceStub struct {
+	set moderationmedia.PreparedSet
+	err error
+}
+
+func (s *mediaServiceStub) Prepare(context.Context, uint64, []string) (moderationmedia.PreparedSet, error) {
+	return s.set, s.err
 }
 
 func newApplicationService(
@@ -65,6 +77,7 @@ func newApplicationService(
 	classifier moderation.Classifier,
 	decider moderation.PolicyDecider,
 	logger *zap.Logger,
+	media ...moderation.MediaService,
 ) moderation.Service {
 	cfg := config.ModerationConfig{
 		Enabled: true,
@@ -80,7 +93,11 @@ func newApplicationService(
 			HighRejected:   "内容存在较高风险，未能发布，请修改后重试。",
 		},
 	}
-	return moderation.NewService(repo, processor, classifier, decider, cfg, logger, func() time.Time {
+	var mediaService moderation.MediaService
+	if len(media) > 0 {
+		mediaService = media[0]
+	}
+	return moderation.NewService(repo, processor, classifier, decider, mediaService, cfg, logger, func() time.Time {
 		return serviceNow
 	})
 }
@@ -243,20 +260,35 @@ func TestServiceSubmitHighRiskStillRejectsWhenAuditFails(t *testing.T) {
 	assert.Equal(t, "记录高风险审核尝试失败", observed.All()[0].Message)
 }
 
-func TestServiceRejectsImagesBeforeDependencies(t *testing.T) {
+func TestServicePersistsPreparedImagesAndSelectsUnapprovedImagePolicy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
 	processor := &processorStub{}
-	classifier := &classifierStub{}
-	decider := &deciderStub{}
+	classifier := &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}}
+	decider := &deciderStub{action: moderation.ActionPostReview}
+	media := &mediaServiceStub{set: moderationmedia.PreparedSet{Images: []moderationmedia.PreparedImage{{
+		Fingerprint: moderationmedia.Fingerprint{SHA256: "sha", MD5: "md5", Size: 10},
+		ObjectKey:   "moments/7/a.jpg", MediaType: "image/jpeg",
+	}}}}
 	cmd := submitCommand()
-	cmd.ImageKeys = []string{"image.jpg"}
+	cmd.ImageKeys = []string{"moments/7/a.jpg"}
+	repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil)
+	repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil)
+	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+			require.Len(t, persisted.Revision.Images, 1)
+			assert.Equal(t, "sha", persisted.Revision.Images[0].SHA256)
+			assert.Equal(t, uint(1), persisted.Revision.Images[0].Seq)
+			return moderationrepo.AppliedTransition{
+				Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 88, RootID: 11},
+				ItemID:  10, RevisionID: 20, RevisionVersion: 1, LockVersion: 2,
+			}, nil
+		})
 
-	_, err := newApplicationService(repo, processor, classifier, decider, zap.NewNop()).Submit(context.Background(), cmd)
-	require.ErrorIs(t, err, moderation.ErrImageReviewUnavailable)
-	assert.Zero(t, processor.calls)
-	assert.Zero(t, classifier.calls)
-	assert.Zero(t, decider.calls)
+	_, err := newApplicationService(repo, processor, classifier, decider, zap.NewNop(), media).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
+	assert.True(t, decider.input.HasUnapprovedImage)
 }
 
 func TestServiceIdempotentRetryReturnsStoredResult(t *testing.T) {

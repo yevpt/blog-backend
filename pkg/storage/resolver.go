@@ -39,6 +39,12 @@ type ObjectStore interface {
 	DeleteObject(ctx context.Context, objectName string) error
 }
 
+// ReadableObjectStore 是需要校验对象原始内容的完整存储能力。
+type ReadableObjectStore interface {
+	ObjectStore
+	ObjectReader
+}
+
 // IsAbsoluteURL 判断给定的 URL 是否是一个绝对路径（以 http:// 或 https:// 开头）。
 // 超过两处使用，封装为公共方法以复用。
 func IsAbsoluteURL(value string) bool {

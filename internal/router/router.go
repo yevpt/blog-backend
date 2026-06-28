@@ -263,7 +263,7 @@ func newRouteHandlers(
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
-	moderationSvc, moderationErr := maybeNewModerationService(context.Background(), db, cfg.Moderation, log)
+	moderationSvc, moderationErr := maybeNewModerationService(context.Background(), db, cfg.Moderation, log, objectStore)
 	if moderationErr != nil {
 		panic(moderationErr)
 	}

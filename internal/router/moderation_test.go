@@ -23,7 +23,7 @@ func TestNewModerationServiceLoadsRulesBeforeReturningRuntime(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "rule_type", "pattern", "risk_level", "priority", "ruleset_version", "enabled"}).
 			AddRow(1, "基础规则", "keyword", "测试风险词", "medium", 1, 1, true))
 
-	service, err := newModerationService(context.Background(), gdb, config.ModerationConfig{}, zap.NewNop())
+	service, err := newModerationService(context.Background(), gdb, config.ModerationConfig{}, zap.NewNop(), nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, service)
@@ -37,7 +37,7 @@ func TestNewModerationServiceFailsClosedWhenInitialRuleLoadFails(t *testing.T) {
 	require.NoError(t, err)
 	mock.ExpectQuery("SELECT .* FROM `moderation_rule`").WillReturnError(errors.New("database unavailable"))
 
-	service, err := newModerationService(context.Background(), gdb, config.ModerationConfig{}, zap.NewNop())
+	service, err := newModerationService(context.Background(), gdb, config.ModerationConfig{}, zap.NewNop(), nil)
 
 	require.Error(t, err)
 	require.Nil(t, service)
@@ -45,7 +45,7 @@ func TestNewModerationServiceFailsClosedWhenInitialRuleLoadFails(t *testing.T) {
 }
 
 func TestMaybeNewModerationServiceSkipsRuntimeWhenDisabled(t *testing.T) {
-	service, err := maybeNewModerationService(context.Background(), nil, config.ModerationConfig{Enabled: false}, zap.NewNop())
+	service, err := maybeNewModerationService(context.Background(), nil, config.ModerationConfig{Enabled: false}, zap.NewNop(), nil)
 
 	require.NoError(t, err)
 	require.Nil(t, service)

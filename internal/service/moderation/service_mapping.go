@@ -47,6 +47,7 @@ func (s *applicationService) transitionCommand(
 			RulesetVersion: classification.RulesetVersion, RuleMatchIDs: classification.RuleMatchIDs,
 			DecisionType: decisionType, ReviewerID: reviewerID, ReviewedAt: reviewedAt,
 			MomentOptions: cloneMomentOptions(input.momentOptions),
+			Images:        input.images,
 		},
 		SupersedeRevisionID: plan.SupersedeRevision,
 		Materialize:         mapRevisionPointer(plan.MaterializeRevision),

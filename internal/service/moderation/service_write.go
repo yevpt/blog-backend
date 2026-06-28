@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"go.uber.org/zap"
 )
@@ -24,6 +25,7 @@ type writeInput struct {
 	imageKeys      []string
 	idempotencyKey string
 	momentOptions  *moderationrepo.MomentOptions
+	images         []moderationrepo.RevisionImageDraft
 	isEdit         bool
 }
 
@@ -47,9 +49,6 @@ func (s *applicationService) Edit(ctx context.Context, cmd EditCommand) (SubmitR
 func (s *applicationService) write(ctx context.Context, input writeInput) (SubmitResult, error) {
 	if err := s.validateWrite(input); err != nil {
 		return SubmitResult{}, err
-	}
-	if len(input.imageKeys) > 0 {
-		return SubmitResult{}, ErrImageReviewUnavailable
 	}
 	stored, err := s.repo.FindResultByIdempotencyKey(ctx, input.actorID, input.idempotencyKey)
 	if err != nil {
@@ -77,7 +76,31 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 		return SubmitResult{}, fmt.Errorf("%w: too many links", ErrInvalidRequest)
 	}
 	classification := s.classifier.Classify(processed)
-	action, err := s.decider.Decide(policyInput(input, policyContext, classification, len(processed.Links) > 0, s.cfg))
+	hasUnapprovedImage := false
+	if classification.Risk != RiskHigh && len(input.imageKeys) > 0 {
+		if len(input.imageKeys) > s.cfg.Content.MaxImagesPerContent || s.media == nil {
+			return SubmitResult{}, ErrImageReviewUnavailable
+		}
+		authorID := input.actorID
+		if input.authorID != 0 {
+			authorID = input.authorID
+		}
+		prepared, prepareErr := s.media.Prepare(ctx, authorID, input.imageKeys)
+		if prepareErr != nil {
+			if errors.Is(prepareErr, moderationmedia.ErrInvalidImage) {
+				return SubmitResult{}, fmt.Errorf("%w: invalid image", ErrInvalidRequest)
+			}
+			return SubmitResult{}, ErrImageReviewUnavailable
+		}
+		input.images = revisionImageDrafts(prepared.Images)
+		for _, image := range prepared.Images {
+			if !image.Approved {
+				hasUnapprovedImage = true
+				break
+			}
+		}
+	}
+	action, err := s.decider.Decide(policyInput(input, policyContext, classification, len(processed.Links) > 0, hasUnapprovedImage, s.cfg))
 	if err != nil {
 		return SubmitResult{}, err
 	}
@@ -231,14 +254,29 @@ func policyInput(
 	policyContext moderationrepo.PolicyContext,
 	classification Classification,
 	hasLink bool,
+	hasUnapprovedImage bool,
 	cfg config.ModerationConfig,
 ) PolicyInput {
 	return PolicyInput{
 		IsAdmin: input.isAdmin, Trust: TrustLevel(policyContext.TrustLevel),
 		Sanction:   SanctionState(policyContext.SanctionState),
 		Publishing: PublishingMode(policyContext.PublishingMode),
-		Risk:       classification.Risk, HasExternalLinkOrAd: hasLink, Policy: cfg.Policy,
+		Risk:       classification.Risk, HasUnapprovedImage: hasUnapprovedImage,
+		HasExternalLinkOrAd: hasLink, Policy: cfg.Policy,
 	}
+}
+
+func revisionImageDrafts(images []moderationmedia.PreparedImage) []moderationrepo.RevisionImageDraft {
+	result := make([]moderationrepo.RevisionImageDraft, 0, len(images))
+	for index, image := range images {
+		result = append(result, moderationrepo.RevisionImageDraft{
+			ImageFingerprint: moderationrepo.ImageFingerprint{
+				SHA256: image.SHA256, MD5: image.MD5, Size: image.Size,
+			},
+			Seq: uint(index + 1), ObjectKey: image.ObjectKey, MediaType: image.MediaType, IsGIF: image.IsGIF,
+		})
+	}
+	return result
 }
 
 func publishingBlocked(isAdmin bool, policy moderationrepo.PolicyContext) bool {
