@@ -188,6 +188,9 @@ func transitionSubmission(current ItemSnapshot, input TransitionInput) (Transiti
 	if input.NewRevisionID == 0 {
 		return TransitionPlan{Item: current}, invalidTransition(input.Event, "revision id is required")
 	}
+	if isExactSubmissionReplay(current, input.Action, input.NewRevisionID) {
+		return idempotentPlan(current), nil
+	}
 	if hasRevisionID(current, input.NewRevisionID) {
 		return TransitionPlan{Item: current}, ErrRevisionCollision
 	}
@@ -402,6 +405,31 @@ func hasRevisionID(item ItemSnapshot, revisionID uint64) bool {
 		revisionMatches(item.PendingRevisionID, revisionID)
 }
 
+func isExactSubmissionReplay(item ItemSnapshot, action PolicyAction, revisionID uint64) bool {
+	if item.LifecycleState != LifecycleActive {
+		return false
+	}
+
+	switch action {
+	case ActionPostReview:
+		return item.PublicState == PublicVisible &&
+			revisionMatches(item.PendingRevisionID, revisionID) &&
+			revisionMatches(item.MaterializedRevisionID, revisionID)
+	case ActionPreReview:
+		if !revisionMatches(item.PendingRevisionID, revisionID) || revisionMatches(item.MaterializedRevisionID, revisionID) {
+			return false
+		}
+		return (item.PublicState == PublicPlaceholder && item.MaterializedRevisionID == nil && item.ApprovedRevisionID == nil) ||
+			(item.PublicState == PublicVisible && sameRevision(item.MaterializedRevisionID, item.ApprovedRevisionID))
+	case ActionAutoApprove:
+		return item.PublicState == PublicVisible && item.PendingRevisionID == nil &&
+			revisionMatches(item.ApprovedRevisionID, revisionID) &&
+			revisionMatches(item.MaterializedRevisionID, revisionID)
+	default:
+		return false
+	}
+}
+
 func revisionMatches(pointer *uint64, revisionID uint64) bool {
 	return pointer != nil && *pointer == revisionID
 }
@@ -441,6 +469,9 @@ func validateItemSnapshot(item ItemSnapshot) error {
 		}
 	default:
 		return invalidTransition("", "unsupported lifecycle state")
+	}
+	if sameRevision(item.ApprovedRevisionID, item.PendingRevisionID) {
+		return invalidTransition("", "approved and pending revisions must differ")
 	}
 
 	if item.PublicState == PublicEmergencyHidden {

@@ -114,6 +114,38 @@ func TestTransitionResubmitSupersedesPendingRevision(t *testing.T) {
 	assert.Equal(t, ptr(1), plan.Item.ApprovedRevisionID)
 }
 
+func TestTransitionRecognizesExactSubmissionReplay(t *testing.T) {
+	tests := []struct {
+		name    string
+		current moderation.ItemSnapshot
+		event   moderation.Event
+		action  moderation.PolicyAction
+		id      uint64
+	}{
+		{name: "initial post review", current: activeSnapshot(moderation.PublicVisible, ptr(1), nil, ptr(1)), event: moderation.EventSubmit, action: moderation.ActionPostReview, id: 1},
+		{name: "edit post review", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), event: moderation.EventResubmit, action: moderation.ActionPostReview, id: 2},
+		{name: "initial pre review", current: activeSnapshot(moderation.PublicPlaceholder, nil, nil, ptr(1)), event: moderation.EventSubmit, action: moderation.ActionPreReview, id: 1},
+		{name: "edit pre review", current: activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(2)), event: moderation.EventResubmit, action: moderation.ActionPreReview, id: 2},
+		{name: "auto approve", current: approvedSnapshot(3), event: moderation.EventSubmit, action: moderation.ActionAutoApprove, id: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plan, err := moderation.Transition(moderation.TransitionInput{
+				Previous: tt.current, Event: tt.event,
+				Action: tt.action, NewRevisionID: tt.id, Now: fixedTime,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tt.current, plan.Item)
+			assert.True(t, plan.Idempotent)
+			assert.Nil(t, plan.MaterializeRevision)
+			assert.Nil(t, plan.SupersedeRevision)
+			assert.Nil(t, plan.ReviewRevision)
+			assert.Empty(t, plan.AppendLog.Event)
+		})
+	}
+}
+
 func TestTransitionRejectsRevisionIDCollision(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -122,9 +154,9 @@ func TestTransitionRejectsRevisionIDCollision(t *testing.T) {
 		id      uint64
 	}{
 		{name: "pending auto approve", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), action: moderation.ActionAutoApprove, id: 2},
-		{name: "pending post review", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), action: moderation.ActionPostReview, id: 2},
-		{name: "pending pre review", current: activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(2)), action: moderation.ActionPreReview, id: 2},
-		{name: "approved auto approve", current: approvedSnapshot(3), action: moderation.ActionAutoApprove, id: 3},
+		{name: "pre snapshot with post action", current: activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(2)), action: moderation.ActionPostReview, id: 2},
+		{name: "post snapshot with pre action", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), action: moderation.ActionPreReview, id: 2},
+		{name: "approved id with auto action while pending", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), action: moderation.ActionAutoApprove, id: 1},
 		{name: "approved post review", current: approvedSnapshot(3), action: moderation.ActionPostReview, id: 3},
 		{name: "approved pre review", current: approvedSnapshot(3), action: moderation.ActionPreReview, id: 3},
 	}
@@ -326,6 +358,7 @@ func TestTransitionRejectsInvalidSnapshotCombinations(t *testing.T) {
 		{LifecycleState: moderation.LifecycleActive, PublicState: moderation.PublicVisible},
 		activeSnapshot(moderation.PublicPlaceholder, ptr(1), nil, ptr(1)),
 		activeSnapshot(moderation.PublicVisible, ptr(9), ptr(1), ptr(2)),
+		activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(1)),
 		{
 			LifecycleState: moderation.LifecycleActive, PublicState: moderation.PublicVisible,
 			MaterializedRevisionID: ptr(1), ApprovedRevisionID: ptr(1), StateBeforeEmergency: &visible,
@@ -338,6 +371,21 @@ func TestTransitionRejectsInvalidSnapshotCombinations(t *testing.T) {
 			Action: moderation.ActionPreReview, NewRevisionID: 3, Now: fixedTime,
 		})
 		assert.ErrorIs(t, err, moderation.ErrInvalidTransition)
+	}
+}
+
+func TestTransitionDeleteRejectsInvalidPreviousSnapshot(t *testing.T) {
+	current := activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(1))
+
+	for _, event := range []moderation.Event{moderation.EventDelete, moderation.EventAdminDelete} {
+		t.Run(string(event), func(t *testing.T) {
+			plan, err := moderation.Transition(moderation.TransitionInput{
+				Previous: current, Event: event, Now: fixedTime,
+			})
+			assert.ErrorIs(t, err, moderation.ErrInvalidTransition)
+			assert.Equal(t, current, plan.Item)
+			assert.Empty(t, plan.AppendLog.Event)
+		})
 	}
 }
 
