@@ -137,6 +137,9 @@ func guestbookReplyRecipient(ctx context.Context, tx *gorm.DB, ref SubjectRef) (
 }
 
 func (a *guestbookAdapter) Delete(ctx context.Context, tx *gorm.DB, ref SubjectRef) error {
+	if err := deleteSubjectLikes(ctx, tx, ref); err != nil {
+		return err
+	}
 	var result *gorm.DB
 	switch ref.Type {
 	case SubjectGuestbook:

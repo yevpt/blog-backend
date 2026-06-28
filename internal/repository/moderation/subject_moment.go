@@ -86,6 +86,12 @@ func (a *momentAdapter) Delete(ctx context.Context, tx *gorm.DB, ref SubjectRef)
 	if ref.Type != SubjectMoment {
 		return ErrInvalidCommand
 	}
+	if err := deleteSubjectLikes(ctx, tx, ref); err != nil {
+		return err
+	}
+	if err := tx.WithContext(ctx).Unscoped().Where("moment_id = ?", ref.ID).Delete(&model.Media{}).Error; err != nil {
+		return err
+	}
 	return requireSubjectRow(tx.WithContext(ctx).Delete(&model.Moment{}, ref.ID))
 }
 

@@ -569,7 +569,8 @@ func TestServiceAssertCanInteractUsesDerivedState(t *testing.T) {
 func TestServiceDeleteBuildsTerminalTransition(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
-	ref := moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 4, RootID: 2}
+	ref := moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 4}
+	canonicalRef := moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 4, RootID: 2}
 	item := moderationrepo.ItemStateRecord{
 		ItemID: 8, AuthorID: 7, LockVersion: 3,
 		State: moderationrepo.ItemState{
@@ -579,8 +580,12 @@ func TestServiceDeleteBuildsTerminalTransition(t *testing.T) {
 	}
 	gomock.InOrder(
 		repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef(ref)).Return(item, nil),
+		repo.EXPECT().LoadSubject(gomock.Any(), moderationrepo.SubjectRef(ref)).Return(
+			moderationrepo.SubjectSnapshot{Ref: canonicalRef, AuthorID: 7, Content: "正文"}, nil,
+		),
 		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, command moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				assert.Equal(t, canonicalRef, command.Subject)
 				assert.Equal(t, moderationrepo.LifecycleDeleted, command.Next.LifecycleState)
 				assert.Equal(t, moderationrepo.PublicHidden, command.Next.PublicState)
 				assert.True(t, command.DeleteSubject)
@@ -596,6 +601,44 @@ func TestServiceDeleteBuildsTerminalTransition(t *testing.T) {
 		Delete(context.Background(), moderation.DeleteCommand{ActorID: 7, Subject: ref})
 
 	require.NoError(t, err)
+}
+
+func TestServiceDeleteIsIdempotentAfterTerminalState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	ref := moderation.SubjectRef{Type: moderation.SubjectMoment, ID: 4}
+	repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef(ref)).Return(moderationrepo.ItemStateRecord{
+		ItemID: 8, AuthorID: 7, LockVersion: 4,
+		State: moderationrepo.ItemState{
+			LifecycleState: moderationrepo.LifecycleDeleted, PublicState: moderationrepo.PublicHidden,
+			DeletedAt: &serviceNow,
+		},
+	}, nil)
+
+	err := newApplicationService(repo, &processorStub{}, &classifierStub{}, &deciderStub{}, zap.NewNop()).
+		Delete(context.Background(), moderation.DeleteCommand{ActorID: 7, Subject: ref})
+
+	require.NoError(t, err)
+}
+
+func TestServiceEditCannotReviveDeletedContent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	ref := moderation.SubjectRef{Type: moderation.SubjectMoment, ID: 4}
+	cmd := moderation.EditCommand{ActorID: 7, Subject: ref, Content: "编辑", IdempotencyKey: "deleted-edit"}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef(ref)).Return(moderationrepo.ItemStateRecord{
+			ItemID: 8, AuthorID: 7, LockVersion: 4,
+			State: moderationrepo.ItemState{LifecycleState: moderationrepo.LifecycleDeleted, PublicState: moderationrepo.PublicHidden},
+		}, nil),
+	)
+
+	_, err := newApplicationService(repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}}, &deciderStub{action: moderation.ActionPostReview}, zap.NewNop()).
+		Edit(context.Background(), cmd)
+
+	assert.ErrorIs(t, err, moderation.ErrAlreadyDeleted)
 }
 
 func TestServiceLoadViewsDelegatesStableKeys(t *testing.T) {

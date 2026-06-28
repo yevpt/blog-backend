@@ -267,6 +267,7 @@ func TestCommentHandlerMapsModerationRiskAndImageErrors(t *testing.T) {
 		{name: "risk", err: fmt.Errorf("%w: 内容存在风险，已拒绝发布。", moderationservice.ErrContentRiskRejected), statusCode: http.StatusUnprocessableEntity, errorCode: response.CodeContentRiskRejected},
 		{name: "image", err: moderationservice.ErrImageReviewUnavailable, statusCode: http.StatusConflict, errorCode: response.CodeImageReviewUnavailable},
 		{name: "pending interaction", err: moderationservice.ErrInteractionNotAllowed, statusCode: http.StatusConflict, errorCode: response.CodeContentPendingNoInteraction},
+		{name: "deleted", err: moderationservice.ErrAlreadyDeleted, statusCode: http.StatusConflict, errorCode: response.CodeContentAlreadyDeleted},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

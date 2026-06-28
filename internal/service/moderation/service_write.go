@@ -84,6 +84,9 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 		if err != nil {
 			return SubmitResult{}, err
 		}
+		if item.State.LifecycleState == moderationrepo.LifecycleDeleted {
+			return SubmitResult{}, ErrAlreadyDeleted
+		}
 		if item.AuthorID != input.actorID && !input.isAdmin {
 			return SubmitResult{}, moderationrepo.ErrSubjectNotFound
 		}

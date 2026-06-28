@@ -242,6 +242,9 @@ func momentReplyRecipient(ctx context.Context, tx *gorm.DB, ref SubjectRef) (uin
 }
 
 func (a *commentAdapter) Delete(ctx context.Context, tx *gorm.DB, ref SubjectRef) error {
+	if err := deleteSubjectLikes(ctx, tx, ref); err != nil {
+		return err
+	}
 	var result *gorm.DB
 	switch ref.Type {
 	case SubjectArticleComment:

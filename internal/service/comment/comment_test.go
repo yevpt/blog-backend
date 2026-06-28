@@ -62,6 +62,7 @@ type fakeCommentRepo struct {
 	toggleReplyLikeResp   *commentrepo.LikeResult
 	toggleReplyLikeErr    error
 	deleteCommentForce    bool
+	deleteCommentID       uint
 	deleteReplyTarget     commentrepo.Target
 	deleteReplyID         uint
 	deleteReplyForce      bool
@@ -144,8 +145,47 @@ func (f *fakeCommentRepo) ToggleReplyLike(target commentrepo.Target, replyID uin
 }
 
 func (f *fakeCommentRepo) DeleteComment(target commentrepo.Target, commentID uint, userID uint, force bool) (*commentrepo.CommentRecord, error) {
+	f.deleteCommentID = commentID
 	f.deleteCommentForce = force
 	return &commentrepo.CommentRecord{ID: commentID, UserID: userID}, f.deleteErr
+}
+
+func TestCommentServiceDeletesThroughModeration(t *testing.T) {
+	tests := []struct {
+		name        string
+		targetType  string
+		deleteReply bool
+		subjectType moderationservice.SubjectType
+	}{
+		{name: "article comment", targetType: "article", subjectType: moderationservice.SubjectArticleComment},
+		{name: "moment comment", targetType: "moment", subjectType: moderationservice.SubjectMomentComment},
+		{name: "guestbook", targetType: "guestbook", subjectType: moderationservice.SubjectGuestbook},
+		{name: "article reply", targetType: "article", deleteReply: true, subjectType: moderationservice.SubjectArticleCommentReply},
+		{name: "moment reply", targetType: "moment", deleteReply: true, subjectType: moderationservice.SubjectMomentCommentReply},
+		{name: "guestbook reply", targetType: "guestbook", deleteReply: true, subjectType: moderationservice.SubjectGuestbookReply},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			moderationSvc := moderationmock.NewMockService(ctrl)
+			moderationSvc.EXPECT().Delete(gomock.Any(), moderationservice.DeleteCommand{
+				ActorID: 7, Subject: moderationservice.SubjectRef{Type: test.subjectType, ID: 9},
+			}).Return(nil)
+			repo := &fakeCommentRepo{}
+			svc := commentservice.NewCommentService(repo, nil, nil, nil, moderationSvc)
+
+			var err error
+			if test.deleteReply {
+				_, err = svc.DeleteReply(test.targetType, 9, 7, nil)
+			} else {
+				_, err = svc.DeleteComment(test.targetType, 9, 7, nil)
+			}
+
+			require.NoError(t, err)
+			assert.Zero(t, repo.deleteCommentID)
+			assert.Zero(t, repo.deleteReplyID)
+		})
+	}
 }
 
 func (f *fakeCommentRepo) DeleteReply(target commentrepo.Target, replyID uint, userID uint, force bool) (*commentrepo.ReplyRecord, error) {

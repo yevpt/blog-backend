@@ -220,6 +220,22 @@ func TestGuestbookServiceToggleLikeGuardsPendingContent(t *testing.T) {
 	assert.Zero(t, repo.toggleID)
 }
 
+func TestGuestbookServiceDeletesThroughModeration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().Delete(gomock.Any(), moderationservice.DeleteCommand{
+		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbook, ID: 9},
+	}).Return(nil)
+	repo := &fakeGuestbookRepo{}
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil, moderationSvc)
+
+	resp, err := svc.Delete(9, 7, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(9), resp.ID)
+	assert.Zero(t, repo.deleteID)
+}
+
 func TestGuestbookService_ListAdmin_NormalizesSearchAndPagination(t *testing.T) {
 	now := time.Now()
 	repo := &fakeGuestbookRepo{

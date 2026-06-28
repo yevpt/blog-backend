@@ -46,6 +46,14 @@ func (s *applicationService) Delete(ctx context.Context, cmd DeleteCommand) erro
 	if plan.Idempotent {
 		return nil
 	}
+	subject, err := s.repo.LoadSubject(ctx, cmd.Subject)
+	if err != nil {
+		return err
+	}
+	if subject.AuthorID != item.AuthorID {
+		return moderationrepo.ErrSubjectNotFound
+	}
+	cmd.Subject = subject.Ref
 	_, err = s.repo.ApplyTransition(ctx, moderationrepo.ApplyTransitionCommand{
 		Subject: cmd.Subject, AuthorID: item.AuthorID,
 		ExpectedLockVersion: item.LockVersion, ExpectedPendingID: existingID(item.State.Pending),

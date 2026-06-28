@@ -360,6 +360,22 @@ func TestMomentServiceToggleLikeGuardsPendingContent(t *testing.T) {
 	assert.Zero(t, repo.likeID)
 }
 
+func TestMomentServiceDeletesThroughModeration(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().Delete(gomock.Any(), moderationservice.DeleteCommand{
+		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9},
+	}).Return(nil)
+	repo := &fakeMomentRepo{}
+	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil, moderationSvc)
+
+	resp, err := svc.Delete(9, 7, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, uint(9), resp.ID)
+	assert.Zero(t, repo.deleteID)
+}
+
 func TestMomentService_List_ForwardsRandomAndExcludeIDs(t *testing.T) {
 	repo := &fakeMomentRepo{
 		listResp: &momentrepo.PageResult{

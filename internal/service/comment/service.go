@@ -239,6 +239,16 @@ func (s *commentService) DeleteComment(targetType string, commentID uint, userID
 	if err != nil || commentID == 0 {
 		return nil, ErrCommentTargetInvalid
 	}
+	if s.moderation != nil {
+		err := s.moderation.Delete(context.Background(), moderationservice.DeleteCommand{
+			ActorID: uint64(userID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
+			Subject: moderationservice.SubjectRef{Type: commentSubjectType(commentType), ID: uint64(commentID)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &dto.CommentDeleteResp{ID: commentID}, nil
+	}
 	comment, err := s.repo.DeleteComment(commentrepo.Target{Type: commentType}, commentID, userID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
@@ -250,6 +260,16 @@ func (s *commentService) DeleteReply(targetType string, replyID uint, userID uin
 	commentType, err := parseTargetType(targetType)
 	if err != nil || replyID == 0 {
 		return nil, ErrCommentTargetInvalid
+	}
+	if s.moderation != nil {
+		err := s.moderation.Delete(context.Background(), moderationservice.DeleteCommand{
+			ActorID: uint64(userID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
+			Subject: moderationservice.SubjectRef{Type: replySubjectType(commentType), ID: uint64(replyID)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &dto.CommentDeleteResp{ID: replyID}, nil
 	}
 	reply, err := s.repo.DeleteReply(commentrepo.Target{Type: commentType}, replyID, userID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {

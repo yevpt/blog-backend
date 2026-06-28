@@ -164,6 +164,16 @@ func (s *momentService) Delete(id uint, operatorID uint, roleNames []string) (*d
 	if id == 0 {
 		return nil, ErrMomentInvalid
 	}
+	if s.moderation != nil {
+		err := s.moderation.Delete(context.Background(), moderationservice.DeleteCommand{
+			ActorID: uint64(operatorID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
+			Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: uint64(id)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &dto.MomentDeleteResp{ID: id}, nil
+	}
 	moment, images, err := s.repo.Delete(id, operatorID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)

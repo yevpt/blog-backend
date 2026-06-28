@@ -122,6 +122,16 @@ func (s *guestbookService) Delete(id uint, userID uint, roleNames []string) (*dt
 	if id == 0 {
 		return nil, ErrGuestbookInvalid
 	}
+	if s.moderation != nil {
+		err := s.moderation.Delete(context.Background(), moderationservice.DeleteCommand{
+			ActorID: uint64(userID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
+			Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbook, ID: uint64(id)},
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &dto.GuestbookDeleteResp{ID: id}, nil
+	}
 	message, err := s.repo.Delete(id, userID, roles.HasPermission(roleNames, roles.AdminRole))
 	if err != nil {
 		return nil, mapRepoError(err)
