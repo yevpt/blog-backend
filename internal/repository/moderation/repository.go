@@ -15,7 +15,7 @@ type Repository interface {
 	ApplyTransition(ctx context.Context, cmd ApplyTransitionCommand) (AppliedTransition, error)
 	RecordBlockedAttempt(ctx context.Context, attempt BlockedAttempt) (StoredResult, error)
 	LoadEnabledRules(ctx context.Context) ([]RuleRecord, error)
-	LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectRef]View, error)
+	LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectKey]View, error)
 }
 
 type repository struct {

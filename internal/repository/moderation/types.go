@@ -45,6 +45,17 @@ type SubjectRef struct {
 	ParentID *uint64
 }
 
+// SubjectKey 是不含关系指针、可稳定比较的业务内容标识。
+type SubjectKey struct {
+	ContentType SubjectType
+	ContentID   uint64
+}
+
+// Key 返回可安全用于 map key 的业务内容标识。
+func (ref SubjectRef) Key() SubjectKey {
+	return SubjectKey{ContentType: ref.Type, ContentID: ref.ID}
+}
+
 // SubjectSnapshot 是业务正文和归属关系的仓储记录。
 type SubjectSnapshot struct {
 	Ref      SubjectRef

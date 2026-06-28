@@ -419,11 +419,11 @@ func TestLoadModerationViewBatchesAndHidesPendingDetailsFromPublic(t *testing.T)
 	got, err := repository.LoadModerationView(context.Background(), refs, moderation.Viewer{Role: moderation.ViewerPublic})
 
 	require.NoError(t, err)
-	assert.Equal(t, "低风险正文", got[refs[0]].VisibleContent)
-	assert.Equal(t, "旧通过正文", got[refs[1]].VisibleContent)
-	assert.Nil(t, got[refs[0]].PendingContent)
-	assert.Empty(t, got[refs[0]].PendingRuleMatchIDs)
-	assert.False(t, got[refs[0]].CanInteract)
+	assert.Equal(t, "低风险正文", got[refs[0].Key()].VisibleContent)
+	assert.Equal(t, "旧通过正文", got[refs[1].Key()].VisibleContent)
+	assert.Nil(t, got[refs[0].Key()].PendingContent)
+	assert.Empty(t, got[refs[0].Key()].PendingRuleMatchIDs)
+	assert.False(t, got[refs[0].Key()].CanInteract)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -440,9 +440,9 @@ func TestLoadModerationViewReturnsPendingDetailsOnlyToAuthor(t *testing.T) {
 	got, err := repository.LoadModerationView(context.Background(), []moderation.SubjectRef{ref}, moderation.Viewer{Role: moderation.ViewerAuthor, UserID: 43})
 
 	require.NoError(t, err)
-	require.NotNil(t, got[ref].PendingContent)
-	assert.Equal(t, "待审正文", *got[ref].PendingContent)
-	assert.Equal(t, []uint64{2, 3}, got[ref].PendingRuleMatchIDs)
+	require.NotNil(t, got[ref.Key()].PendingContent)
+	assert.Equal(t, "待审正文", *got[ref.Key()].PendingContent)
+	assert.Equal(t, []uint64{2, 3}, got[ref.Key()].PendingRuleMatchIDs)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

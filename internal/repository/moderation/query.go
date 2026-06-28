@@ -242,8 +242,8 @@ type moderationViewRow struct {
 	PendingRuleMatchIDs    *string
 }
 
-func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectRef]View, error) {
-	result := make(map[SubjectRef]View, len(refs))
+func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectKey]View, error) {
+	result := make(map[SubjectKey]View, len(refs))
 	if len(refs) == 0 {
 		return result, nil
 	}
@@ -265,8 +265,8 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 		return nil, err
 	}
 	for _, row := range rows {
-		key := SubjectRef{Type: SubjectType(row.ContentType), ID: row.ContentID}
-		original, ok := requested[key]
+		key := SubjectKey{ContentType: SubjectType(row.ContentType), ContentID: row.ContentID}
+		_, ok := requested[key]
 		if !ok {
 			continue
 		}
@@ -274,21 +274,20 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 		if err != nil {
 			return nil, fmt.Errorf("project moderation view %s/%d: %w", row.ContentType, row.ContentID, err)
 		}
-		result[original] = view
+		result[key] = view
 	}
 	return result, nil
 }
 
-func viewKeys(refs []SubjectRef) ([]SubjectType, []uint64, map[SubjectRef]SubjectRef, error) {
+func viewKeys(refs []SubjectRef) ([]SubjectType, []uint64, map[SubjectKey]struct{}, error) {
 	types := make([]SubjectType, 0, len(refs))
 	ids := make([]uint64, 0, len(refs))
-	requested := make(map[SubjectRef]SubjectRef, len(refs))
+	requested := make(map[SubjectKey]struct{}, len(refs))
 	for _, ref := range refs {
 		if ref.ID == 0 || !validSubjectType(ref.Type) {
 			return nil, nil, nil, ErrInvalidCommand
 		}
-		key := SubjectRef{Type: ref.Type, ID: ref.ID}
-		requested[key] = ref
+		requested[ref.Key()] = struct{}{}
 		types = append(types, ref.Type)
 		ids = append(ids, ref.ID)
 	}

@@ -29,6 +29,28 @@ func TestLoadItemStateReturnsTransitionSnapshotAndLockVersion(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestModerationViewUsesStableSubjectKeyAcrossEquivalentReplyRefs(t *testing.T) {
+	repository, mock := newRepository(t)
+	firstParent := uint64(0)
+	secondParent := uint64(0)
+	first := moderation.SubjectRef{Type: moderation.SubjectArticleCommentReply, ID: 7, RootID: 3, ParentID: &firstParent}
+	equivalent := moderation.SubjectRef{Type: moderation.SubjectArticleCommentReply, ID: 7, RootID: 3, ParentID: &secondParent}
+	require.False(t, first == equivalent, "Go map equality uses ParentID pointer identity")
+	assert.Equal(t, first.Key(), equivalent.Key())
+	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized.*LEFT JOIN moderation_revision AS pending").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"content_type", "content_id", "author_id", "lifecycle_state", "public_state",
+			"materialized_revision_id", "approved_revision_id", "pending_revision_id",
+			"materialized_content", "pending_content", "pending_risk_level", "pending_review_status", "pending_rule_match_ids",
+		}).AddRow("article_comment_reply", 7, 42, "active", "visible", 20, 20, nil, "正文", nil, nil, nil, nil))
+
+	got, err := repository.LoadModerationView(context.Background(), []moderation.SubjectRef{first}, moderation.Viewer{Role: moderation.ViewerPublic})
+
+	require.NoError(t, err)
+	assert.Equal(t, "正文", got[equivalent.Key()].VisibleContent)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestFirstCreateRequiresExplicitCreateSubject(t *testing.T) {
 	repository, mock := newRepository(t)
 	command := transitionCommand()
@@ -260,9 +282,9 @@ func TestApplyTransitionRejectsReviewThatIsNotCurrentPending(t *testing.T) {
 	repository, mock := newRepository(t)
 	pending := uint64(90)
 	command := moderation.ApplyTransitionCommand{
-		Subject: moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 7, RootID: 3},
+		Subject:  moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 7, RootID: 3},
 		AuthorID: 42, ExpectedLockVersion: 4, ExpectedPendingID: &pending,
-		Next: moderation.ItemState{LifecycleState: moderation.LifecycleActive, PublicState: moderation.PublicVisible},
+		Next:   moderation.ItemState{LifecycleState: moderation.LifecycleActive, PublicState: moderation.PublicVisible},
 		Review: &moderation.RevisionReview{RevisionID: 89, Status: moderation.ReviewApproved, ReviewedAt: fixedTime},
 	}
 	mock.ExpectBegin()
