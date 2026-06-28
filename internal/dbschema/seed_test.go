@@ -44,6 +44,8 @@ func TestModerationModelsRegisterInDependencyOrder(t *testing.T) {
 	want := []reflect.Type{
 		reflect.TypeOf(&model.ModerationItem{}),
 		reflect.TypeOf(&model.ModerationRevision{}),
+		reflect.TypeOf(&model.ModerationRevisionImage{}),
+		reflect.TypeOf(&model.ModerationImage{}),
 		reflect.TypeOf(&model.ModerationAttempt{}),
 		reflect.TypeOf(&model.ModerationRule{}),
 		reflect.TypeOf(&model.ModerationActionLog{}),

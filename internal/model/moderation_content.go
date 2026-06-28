@@ -31,6 +31,8 @@ const (
 	ModerationDecisionCorrected       = "corrected"
 	ModerationDecisionRejected        = "rejected"
 	ModerationDecisionLegacyMigration = "legacy_migration"
+	ModerationImagePending            = "pending"
+	ModerationImageApproved           = "approved"
 	ModerationEventSubmit             = "submit"
 	ModerationEventResubmit           = "resubmit"
 	ModerationEventApprove            = "approve"
@@ -92,6 +94,42 @@ type ModerationRevision struct {
 }
 
 func (ModerationRevision) TableName() string { return "moderation_revision" }
+
+// ModerationRevisionImage 保存一个审核版本不可变的完整图片顺序与指纹快照。
+type ModerationRevisionImage struct {
+	ID         uint64             `gorm:"primaryKey"`
+	RevisionID uint64             `gorm:"not null;uniqueIndex:uk_moderation_revision_image_seq,priority:1;index:idx_moderation_revision_image_sha,priority:1"`
+	Seq        uint               `gorm:"not null;uniqueIndex:uk_moderation_revision_image_seq,priority:2"`
+	ObjectKey  string             `gorm:"size:500;not null"`
+	SHA256     string             `gorm:"size:64;not null;index:idx_moderation_revision_image_sha,priority:2"`
+	MD5        string             `gorm:"size:32;not null;index:idx_moderation_revision_image_md5"`
+	Size       uint64             `gorm:"not null"`
+	MediaType  string             `gorm:"size:100;not null"`
+	IsGIF      bool               `gorm:"type:tinyint(1);not null;default:0"`
+	CreatedAt  time.Time          `gorm:"type:datetime(3);not null"`
+	UpdatedAt  time.Time          `gorm:"type:datetime(3);not null"`
+	Revision   ModerationRevision `gorm:"foreignKey:RevisionID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+}
+
+func (ModerationRevisionImage) TableName() string { return "moderation_revision_image" }
+
+// ModerationImage 保存全站可复用图片的审核状态，最终身份由 SHA-256 和大小共同确定。
+type ModerationImage struct {
+	ID               uint64     `gorm:"primaryKey"`
+	SHA256           string     `gorm:"size:64;not null;uniqueIndex:uk_moderation_image_fingerprint,priority:1"`
+	Size             uint64     `gorm:"not null;uniqueIndex:uk_moderation_image_fingerprint,priority:2"`
+	MD5              string     `gorm:"size:32;not null;index:idx_moderation_image_md5"`
+	Status           string     `gorm:"size:16;not null;index:idx_moderation_image_status;check:chk_moderation_image_status,status IN ('pending','approved')"`
+	PreviewObjectKey *string    `gorm:"size:500"`
+	ApprovedAt       *time.Time `gorm:"type:datetime(3)"`
+	ApprovedBy       *uint64    `gorm:"index:idx_moderation_image_approved_by"`
+	LastUsedAt       time.Time  `gorm:"type:datetime(3);not null;index:idx_moderation_image_last_used_at"`
+	CreatedAt        time.Time  `gorm:"type:datetime(3);not null"`
+	UpdatedAt        time.Time  `gorm:"type:datetime(3);not null"`
+	Approver         *User      `gorm:"foreignKey:ApprovedBy;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+}
+
+func (ModerationImage) TableName() string { return "moderation_image" }
 
 // ModerationAttempt 仅保存高风险阻断所需的最小审计信息。
 type ModerationAttempt struct {
@@ -168,4 +206,9 @@ func ModerationReviewStatuses() []string {
 // ModerationDecisionTypes 返回人工决策类型。
 func ModerationDecisionTypes() []string {
 	return []string{ModerationDecisionApproved, ModerationDecisionCorrected, ModerationDecisionRejected, ModerationDecisionLegacyMigration}
+}
+
+// ModerationImageStatuses 返回全站图片可持久化的审核状态。
+func ModerationImageStatuses() []string {
+	return []string{ModerationImagePending, ModerationImageApproved}
 }

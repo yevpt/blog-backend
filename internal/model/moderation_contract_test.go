@@ -20,6 +20,8 @@ func TestModerationTableNames(t *testing.T) {
 	}{
 		{name: "item", got: model.ModerationItem{}.TableName(), want: "moderation_item"},
 		{name: "revision", got: model.ModerationRevision{}.TableName(), want: "moderation_revision"},
+		{name: "revision image", got: model.ModerationRevisionImage{}.TableName(), want: "moderation_revision_image"},
+		{name: "image", got: model.ModerationImage{}.TableName(), want: "moderation_image"},
 		{name: "attempt", got: model.ModerationAttempt{}.TableName(), want: "moderation_attempt"},
 		{name: "rule", got: model.ModerationRule{}.TableName(), want: "moderation_rule"},
 		{name: "action log", got: model.ModerationActionLog{}.TableName(), want: "moderation_action_log"},
@@ -62,7 +64,36 @@ func TestModerationModelsDeclareRequiredUniqueIndexes(t *testing.T) {
 	assertCompositeUniqueIndex(t, reflect.TypeOf(model.ModerationItem{}), "uk_moderation_subject", "ContentType", "ContentID")
 	assertCompositeUniqueIndex(t, reflect.TypeOf(model.ModerationRevision{}), "uk_moderation_revision_version", "ItemID", "Version")
 	assertCompositeUniqueIndex(t, reflect.TypeOf(model.ModerationRevision{}), "uk_moderation_revision_idempotency", "SubmitterID", "IdempotencyKey")
+	assertCompositeUniqueIndex(t, reflect.TypeOf(model.ModerationRevisionImage{}), "uk_moderation_revision_image_seq", "RevisionID", "Seq")
+	assertCompositeUniqueIndex(t, reflect.TypeOf(model.ModerationImage{}), "uk_moderation_image_fingerprint", "SHA256", "Size")
 	assertCompositeUniqueIndex(t, reflect.TypeOf(model.ModerationAttempt{}), "uk_moderation_attempt_idempotency", "UserID", "IdempotencyKey")
+}
+
+func TestModerationMediaDigestFieldsUseExactLengths(t *testing.T) {
+	tests := []reflect.Type{
+		reflect.TypeOf(model.ModerationRevisionImage{}),
+		reflect.TypeOf(model.ModerationImage{}),
+	}
+	for _, typ := range tests {
+		sha256Field, ok := typ.FieldByName("SHA256")
+		require.Truef(t, ok, "%s.SHA256 is missing", typ.Name())
+		assert.Contains(t, sha256Field.Tag.Get("gorm"), "size:64")
+
+		md5Field, ok := typ.FieldByName("MD5")
+		require.Truef(t, ok, "%s.MD5 is missing", typ.Name())
+		assert.Contains(t, md5Field.Tag.Get("gorm"), "size:32")
+	}
+}
+
+func TestModerationMediaMigrationDeclaresFingerprintConstraints(t *testing.T) {
+	migration, err := os.ReadFile("../../migrations/20260629_content_moderation_media.sql")
+	require.NoError(t, err)
+	sql := string(migration)
+	assert.Contains(t, sql, "CREATE TABLE IF NOT EXISTS `moderation_revision_image`")
+	assert.Contains(t, sql, "UNIQUE KEY `uk_moderation_revision_image_seq` (`revision_id`, `seq`)")
+	assert.Contains(t, sql, "CREATE TABLE IF NOT EXISTS `moderation_image`")
+	assert.Contains(t, sql, "UNIQUE KEY `uk_moderation_image_fingerprint` (`sha256`, `size`)")
+	assert.Contains(t, sql, "CHECK (`status` IN ('pending','approved'))")
 }
 
 func TestModerationAttemptDoesNotPersistBlockedContentOrDigest(t *testing.T) {
@@ -94,6 +125,7 @@ func TestModerationClosedEnumValues(t *testing.T) {
 	assert.ElementsMatch(t, []string{"auto_approve", "post_review", "pre_review", "block"}, model.ModerationPolicyActions())
 	assert.ElementsMatch(t, []string{"pending", "approved", "rejected", "superseded"}, model.ModerationReviewStatuses())
 	assert.ElementsMatch(t, []string{"approved", "corrected", "rejected", "legacy_migration"}, model.ModerationDecisionTypes())
+	assert.ElementsMatch(t, []string{"pending", "approved"}, model.ModerationImageStatuses())
 	assert.ElementsMatch(t, []string{"new", "normal", "trusted", "restricted"}, model.ModerationTrustLevels())
 	assert.ElementsMatch(t, []string{"auto", "manual"}, model.ModerationTrustSources())
 	assert.ElementsMatch(t, []string{"active", "muted", "banned"}, model.ModerationSanctionStates())

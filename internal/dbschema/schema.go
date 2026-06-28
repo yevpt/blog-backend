@@ -64,6 +64,8 @@ func moderationModels() []any {
 	return []any{
 		&model.ModerationItem{},
 		&model.ModerationRevision{},
+		&model.ModerationRevisionImage{},
+		&model.ModerationImage{},
 		&model.ModerationAttempt{},
 		&model.ModerationRule{},
 		&model.ModerationActionLog{},
