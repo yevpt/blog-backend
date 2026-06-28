@@ -93,6 +93,7 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 			return SubmitResult{}, ErrImageReviewUnavailable
 		}
 		input.images = revisionImageDrafts(prepared.Images)
+		processed.Published = applyImageReplacements(processed.Published, prepared.Replacements)
 		for _, image := range prepared.Images {
 			if !image.Approved {
 				hasUnapprovedImage = true
@@ -277,6 +278,15 @@ func revisionImageDrafts(images []moderationmedia.PreparedImage) []moderationrep
 		})
 	}
 	return result
+}
+
+func applyImageReplacements(content string, replacements map[string]string) string {
+	for source, target := range replacements {
+		if source != "" && target != "" && source != target {
+			content = strings.ReplaceAll(content, source, target)
+		}
+	}
+	return content
 }
 
 func publishingBlocked(isAdmin bool, policy moderationrepo.PolicyContext) bool {

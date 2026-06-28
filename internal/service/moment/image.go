@@ -22,11 +22,122 @@ import (
 
 const (
 	momentImageObjectPrefix   = "moments/"
+	momentModerationDir       = "moderation"
 	maxMomentImageCount       = 9
 	maxMomentImageOriginal    = 1024 * 1024
 	maxMomentGifOriginal      = 300 * 1024
 	maxMomentImageStoredBytes = 500 * 1024
 )
+
+func (s *momentService) prepareModerationMomentImages(
+	ctx context.Context,
+	authorID uint,
+	req dto.MomentSaveReq,
+	uploaded *[]string,
+) ([]string, error) {
+	expected := validMomentImageURLCount(req.ImageURLs) + len(req.ImageFiles)
+	if expected == 0 {
+		return nil, nil
+	}
+	if expected > maxMomentImageCount || authorID == 0 {
+		return nil, ErrMomentImageInvalid
+	}
+	store, err := s.momentObjectStore()
+	if err != nil {
+		return nil, err
+	}
+	appendURL := func(result []string, index int) ([]string, error) {
+		if index < 0 || index >= len(req.ImageURLs) {
+			return nil, ErrMomentImageInvalid
+		}
+		key := momentImageObjectKey(req.ImageURLs[index])
+		if key == "" {
+			return nil, ErrMomentImageInvalid
+		}
+		exists, existsErr := store.ObjectExists(ctx, key)
+		if existsErr != nil {
+			return nil, existsErr
+		}
+		if !exists {
+			return nil, ErrMomentImageNotFound
+		}
+		return append(result, key), nil
+	}
+	appendFile := func(result []string, index int) ([]string, error) {
+		if index < 0 || index >= len(req.ImageFiles) {
+			return nil, ErrMomentImageInvalid
+		}
+		processed, processErr := processMomentImageFile(req.ImageFiles[index])
+		if processErr != nil {
+			return nil, processErr
+		}
+		key := fmt.Sprintf("%s%d/%s/%s%s", momentImageObjectPrefix, authorID, momentModerationDir, fileMD5(processed.Data), processed.Ext)
+		exists, existsErr := store.ObjectExists(ctx, key)
+		if existsErr != nil {
+			return nil, existsErr
+		}
+		if !exists {
+			if putErr := store.PutObject(ctx, key, processed.Data, processed.ContentType); putErr != nil {
+				return nil, putErr
+			}
+			*uploaded = append(*uploaded, key)
+		}
+		return append(result, key), nil
+	}
+
+	result := make([]string, 0, expected)
+	if len(req.ImageOrder) == 0 {
+		for index := range req.ImageURLs {
+			if strings.TrimSpace(req.ImageURLs[index]) == "" {
+				continue
+			}
+			result, err = appendURL(result, index)
+			if err != nil {
+				return nil, err
+			}
+		}
+		for index := range req.ImageFiles {
+			result, err = appendFile(result, index)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return result, nil
+	}
+	if len(req.ImageOrder) != expected {
+		return nil, ErrMomentImageInvalid
+	}
+	seenURLs, seenFiles := map[int]struct{}{}, map[int]struct{}{}
+	for _, token := range req.ImageOrder {
+		kind, index, parseErr := parseMomentImageOrderToken(token)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		switch kind {
+		case "url":
+			if _, exists := seenURLs[index]; exists {
+				return nil, ErrMomentImageInvalid
+			}
+			seenURLs[index] = struct{}{}
+			result, err = appendURL(result, index)
+		case "file":
+			if _, exists := seenFiles[index]; exists {
+				return nil, ErrMomentImageInvalid
+			}
+			seenFiles[index] = struct{}{}
+			result, err = appendFile(result, index)
+		default:
+			return nil, ErrMomentImageInvalid
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(seenURLs) != validMomentImageURLCount(req.ImageURLs) || len(seenFiles) != len(req.ImageFiles) {
+		return nil, ErrMomentImageInvalid
+	}
+	return result, nil
+}
 
 const (
 	momentImageReadableFormatsText = "JPG、PNG、WebP 或 300KB 以内的 GIF"

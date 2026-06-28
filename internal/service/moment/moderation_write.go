@@ -43,8 +43,5 @@ func (s *momentService) edit(req dto.MomentSaveReq, actorID uint, isAdmin bool, 
 }
 
 func momentImageSignals(req dto.MomentSaveReq) []string {
-	if len(req.ImageURLs) > 0 || len(req.ImageFiles) > 0 || len(req.ImageOrder) > 0 {
-		return []string{"moment-image"}
-	}
-	return nil
+	return req.ImageURLs
 }

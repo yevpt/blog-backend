@@ -328,6 +328,31 @@ func TestMomentServiceSaveUsesModerationBeforeBusinessRepository(t *testing.T) {
 	assert.True(t, resp.Moderation.HasPendingRevision)
 }
 
+func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	fileData := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 32)...)
+	fileKey := "moments/7/moderation/" + md5Hex(fileData) + ".gif"
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/old.jpg": true}}
+	moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
+		ActorID: 7, AuthorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
+		Content: "碎语", ImageKeys: []string{"moments/7/old.jpg", fileKey}, IdempotencyKey: "moment-images",
+		MomentOptions: &moderationservice.MomentOptions{Status: 1, CommentStatus: 1},
+	}).Return(moderationservice.SubmitResult{
+		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9}, AuthorID: 7,
+	}, nil)
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content: "碎语", Status: 1, CommentStatus: 1, IdempotencyKey: "moment-images",
+		ImageURLs:  []string{"moments/7/old.jpg"},
+		ImageFiles: []dto.MomentImageFileReq{{Name: "cat.gif", ContentType: "image/gif", Data: fileData}},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	assert.Contains(t, store.putKeys, fileKey)
+}
+
 func TestMomentModeratedSavePreservesAdminManagedAuthor(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	moderationSvc := moderationmock.NewMockService(ctrl)

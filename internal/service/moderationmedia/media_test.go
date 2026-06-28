@@ -22,6 +22,7 @@ type mediaStore struct {
 	objects map[string][]byte
 	puts    []string
 	deletes []string
+	copies  [][2]string
 }
 
 func (s *mediaStore) ObjectURL(context.Context, string) (string, error) { return "", nil }
@@ -47,7 +48,11 @@ func (s *mediaStore) DeleteObject(_ context.Context, key string) error {
 	return nil
 }
 func (s *mediaStore) MoveObject(context.Context, string, string) error { return nil }
-func (s *mediaStore) CopyObject(context.Context, string, string) error { return nil }
+func (s *mediaStore) CopyObject(_ context.Context, source, target string) error {
+	s.objects[target] = append([]byte(nil), s.objects[source]...)
+	s.copies = append(s.copies, [2]string{source, target})
+	return nil
+}
 func (s *mediaStore) ObjectKey(value string) (string, error) {
 	if value == "https://external.example/a.png" {
 		return "", storage.ErrExternalObjectURL
@@ -121,7 +126,9 @@ func TestPrepareDeletesCreatedPreviewWhenRegistryFails(t *testing.T) {
 
 	require.Error(t, err)
 	require.Len(t, store.puts, 1)
-	assert.Equal(t, store.puts, store.deletes)
+	require.Len(t, store.deletes, 2)
+	assert.Contains(t, store.deletes, store.puts[0])
+	assert.Contains(t, store.deletes, store.copies[0][1])
 }
 
 func TestPrepareUsesGIFPlaceholderWithoutCreatingPreview(t *testing.T) {
@@ -164,6 +171,37 @@ func TestPrepareRejectsExternalAndOversizedPixelImages(t *testing.T) {
 
 	assert.ErrorIs(t, externalErr, moderationmedia.ErrInvalidImage)
 	assert.ErrorIs(t, pixelsErr, moderationmedia.ErrInvalidImage)
+}
+
+func TestPrepareAllowsLegacyMD5FilenameOnlyAfterFingerprintApproval(t *testing.T) {
+	key := "3735c09be448562f841ee8363c093359.png"
+	data := testPNG(t, 20, 20)
+	store := &mediaStore{objects: map[string][]byte{key: data}}
+
+	approved, err := moderationmedia.NewService(store, &mediaRegistry{approved: true}, mediaConfig(), time.Now).
+		Prepare(context.Background(), 7, []string{key})
+	require.NoError(t, err)
+	require.Len(t, approved.Images, 1)
+	assert.True(t, approved.Images[0].Approved)
+
+	_, err = moderationmedia.NewService(store, &mediaRegistry{}, mediaConfig(), time.Now).
+		Prepare(context.Background(), 7, []string{key})
+	assert.ErrorIs(t, err, moderationmedia.ErrInvalidImage)
+}
+
+func TestPrepareCopiesCommentTempImageToDurableKeyAndReturnsReplacement(t *testing.T) {
+	source := "temp/comments/7/images/a.png"
+	store := &mediaStore{objects: map[string][]byte{source: testPNG(t, 20, 20)}}
+	svc := moderationmedia.NewService(store, &mediaRegistry{}, mediaConfig(), time.Now)
+
+	got, err := svc.Prepare(context.Background(), 7, []string{source})
+
+	require.NoError(t, err)
+	require.Len(t, got.Images, 1)
+	assert.Regexp(t, `^comments/moderation/7/[a-f0-9]{64}\.png$`, got.Images[0].ObjectKey)
+	assert.Equal(t, got.Images[0].ObjectKey, got.Replacements[source])
+	assert.Equal(t, [][2]string{{source, got.Images[0].ObjectKey}}, store.copies)
+	assert.Equal(t, []string{got.Images[0].ObjectKey}, got.CreatedObjectKeys)
 }
 
 func mediaConfig() config.ModerationImageConfig {

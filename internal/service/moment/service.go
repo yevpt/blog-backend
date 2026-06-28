@@ -123,11 +123,22 @@ func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames [
 	if force && req.UserID != nil && *req.UserID > 0 {
 		authorID = *req.UserID
 	}
-	if s.moderation != nil && req.ID == nil {
-		return s.submit(req, operatorID, authorID, force, content)
-	}
 	if s.moderation != nil {
-		return s.edit(req, operatorID, force, content)
+		req.ImageURLs, err = s.prepareModerationMomentImages(context.Background(), authorID, req, &uploaded)
+		if err != nil {
+			return nil, err
+		}
+		req.ImageFiles = nil
+		req.ImageOrder = nil
+		if req.ID == nil {
+			resp, err = s.submit(req, operatorID, authorID, force, content)
+		} else {
+			resp, err = s.edit(req, operatorID, force, content)
+		}
+		if err == nil {
+			rollbackUploaded = false
+		}
+		return resp, err
 	}
 
 	moment := model.Moment{

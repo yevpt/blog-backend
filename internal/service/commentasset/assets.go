@@ -7,6 +7,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -26,6 +27,36 @@ var (
 // ContainsImage 判断正文是否包含 Markdown 或 HTML 图片语法。
 func ContainsImage(content string) bool {
 	return markdownImagePattern.MatchString(content) || htmlImagePattern.MatchString(content)
+}
+
+// ImageTargets 按正文出现顺序提取 Markdown 与 HTML 图片目标。
+func ImageTargets(content string) []string {
+	type match struct {
+		start  int
+		target string
+	}
+	matches := make([]match, 0)
+	appendPattern := func(pattern *regexp.Regexp, group int) {
+		for _, indexes := range pattern.FindAllStringSubmatchIndex(content, -1) {
+			start, end := indexes[group*2], indexes[group*2+1]
+			if start >= 0 && end >= start {
+				matches = append(matches, match{start: start, target: strings.TrimSpace(content[start:end])})
+			}
+		}
+	}
+	appendPattern(markdownImagePattern, 1)
+	appendPattern(htmlImagePattern, 1)
+	if len(matches) == 0 {
+		return nil
+	}
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].start < matches[j].start })
+	result := make([]string, 0, len(matches))
+	for _, item := range matches {
+		if item.target != "" {
+			result = append(result, item.target)
+		}
+	}
+	return result
 }
 
 type NormalizeInput struct {

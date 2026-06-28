@@ -108,8 +108,5 @@ func optionalUint(value *uint64) uint {
 }
 
 func moderationImageSignal(content string) []string {
-	if commentasset.ContainsImage(content) {
-		return []string{"embedded-image"}
-	}
-	return nil
+	return commentasset.ImageTargets(content)
 }

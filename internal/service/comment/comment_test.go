@@ -383,12 +383,14 @@ func TestCommentServiceSignalsImagesToModeration(t *testing.T) {
 	moderationSvc := moderationmock.NewMockService(ctrl)
 	moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
 		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectArticleComment, RootID: 3},
-		Content: "![图](temp/a.jpg)", ImageKeys: []string{"embedded-image"}, IdempotencyKey: "image-key",
-	}).Return(moderationservice.SubmitResult{}, moderationservice.ErrImageReviewUnavailable)
+		Content: "![图](temp/comments/7/images/a.jpg)", ImageKeys: []string{"temp/comments/7/images/a.jpg"}, IdempotencyKey: "image-key",
+	}).Return(moderationservice.SubmitResult{
+		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectArticleComment, ID: 9, RootID: 3},
+	}, nil)
 	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil, moderationSvc)
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "![图](temp/a.jpg)", IdempotencyKey: "image-key"}, 7)
-	assert.ErrorIs(t, err, moderationservice.ErrImageReviewUnavailable)
+	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "![图](temp/comments/7/images/a.jpg)", IdempotencyKey: "image-key"}, 7)
+	require.NoError(t, err)
 }
 
 func TestCommentServiceGuardsPendingTargetsBeforeWrites(t *testing.T) {

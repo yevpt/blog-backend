@@ -263,13 +263,13 @@ func TestServiceSubmitHighRiskStillRejectsWhenAuditFails(t *testing.T) {
 func TestServicePersistsPreparedImagesAndSelectsUnapprovedImagePolicy(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
-	processor := &processorStub{}
+	processor := &processorStub{useOut: true, out: moderation.ProcessedContent{Published: "raw-image", PlainText: "safe"}}
 	classifier := &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}}
 	decider := &deciderStub{action: moderation.ActionPostReview}
 	media := &mediaServiceStub{set: moderationmedia.PreparedSet{Images: []moderationmedia.PreparedImage{{
 		Fingerprint: moderationmedia.Fingerprint{SHA256: "sha", MD5: "md5", Size: 10},
 		ObjectKey:   "moments/7/a.jpg", MediaType: "image/jpeg",
-	}}}}
+	}}, Replacements: map[string]string{"raw-image": "moments/7/a.jpg"}}}
 	cmd := submitCommand()
 	cmd.ImageKeys = []string{"moments/7/a.jpg"}
 	repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil)
@@ -279,6 +279,7 @@ func TestServicePersistsPreparedImagesAndSelectsUnapprovedImagePolicy(t *testing
 			require.Len(t, persisted.Revision.Images, 1)
 			assert.Equal(t, "sha", persisted.Revision.Images[0].SHA256)
 			assert.Equal(t, uint(1), persisted.Revision.Images[0].Seq)
+			assert.Equal(t, "moments/7/a.jpg", persisted.Revision.PublishedContent)
 			return moderationrepo.AppliedTransition{
 				Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 88, RootID: 11},
 				ItemID:  10, RevisionID: 20, RevisionVersion: 1, LockVersion: 2,

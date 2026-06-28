@@ -10,10 +10,7 @@ import (
 )
 
 func (s *guestbookService) submit(ownerUserID, fromUserID uint, content, idempotencyKey string) (*dto.GuestbookItemResp, error) {
-	var imageKeys []string
-	if commentasset.ContainsImage(content) {
-		imageKeys = []string{"embedded-image"}
-	}
+	imageKeys := commentasset.ImageTargets(content)
 	result, err := s.moderation.Submit(context.Background(), moderationservice.SubmitCommand{
 		ActorID: uint64(fromUserID),
 		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbook, RootID: uint64(ownerUserID)},
@@ -40,10 +37,7 @@ func (s *guestbookService) Edit(id uint, req dto.GuestbookCreateReq, userID uint
 	if err != nil {
 		return nil, err
 	}
-	var imageKeys []string
-	if commentasset.ContainsImage(content) {
-		imageKeys = []string{"embedded-image"}
-	}
+	imageKeys := commentasset.ImageTargets(content)
 	result, err := s.moderation.Edit(context.Background(), moderationservice.EditCommand{
 		ActorID: uint64(userID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
 		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbook, ID: uint64(id)},

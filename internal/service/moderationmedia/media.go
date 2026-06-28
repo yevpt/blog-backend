@@ -36,7 +36,9 @@ type PreparedImage struct {
 
 // PreparedSet 保留用户提交的图片顺序。
 type PreparedSet struct {
-	Images []PreparedImage
+	Images            []PreparedImage
+	Replacements      map[string]string
+	CreatedObjectKeys []string
 }
 
 // Registry 隔离全站图片审核记录的数据访问。
