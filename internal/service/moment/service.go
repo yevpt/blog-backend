@@ -25,7 +25,7 @@ func (s *momentService) List(req dto.MomentListReq, viewerID *uint) (*dto.Moment
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return s.momentPageToDTO(result)
+	return s.momentPageToDTO(result, moderationViewer(viewerID, false))
 }
 
 // CountByUser 返回某用户发布的公开碎语总数。
@@ -54,7 +54,7 @@ func (s *momentService) ListAdmin(req dto.AdminMomentListReq) (*dto.AdminMomentP
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	page, err := s.momentPageToDTO(result)
+	page, err := s.momentPageToDTO(result, moderationViewer(nil, true))
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,11 @@ func (s *momentService) GetDetail(id uint, viewerID *uint) (*dto.MomentItemResp,
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return s.momentToDTO(*aggregate, nil)
+	views, err := s.loadMomentViews([]momentrepo.MomentAggregate{*aggregate}, moderationViewer(viewerID, false))
+	if err != nil {
+		return nil, err
+	}
+	return s.momentToDTO(*aggregate, nil, views)
 }
 
 func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames []string) (resp *dto.MomentItemResp, err error) {
@@ -146,7 +150,7 @@ func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames [
 	if err := s.deleteRemovedMomentImages(context.Background(), removedURLs); err != nil {
 		return nil, err
 	}
-	return s.momentToDTO(*aggregate, nil)
+	return s.momentToDTO(*aggregate, nil, nil)
 }
 
 func (s *momentService) Delete(id uint, operatorID uint, roleNames []string) (*dto.MomentDeleteResp, error) {
@@ -253,7 +257,7 @@ func (s *momentService) ToggleLike(id uint, userID uint) (*dto.MomentItemResp, e
 	if liked && aggregate.Moment.UserID != userID {
 		s.notifyMomentLiked(id, userID, aggregate.Moment.Content)
 	}
-	return s.momentToDTO(*aggregate, nil)
+	return s.momentToDTO(*aggregate, nil, nil)
 }
 
 func cleanMomentContent(content string) (string, error) {

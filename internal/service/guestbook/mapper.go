@@ -8,14 +8,15 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	"github.com/vpt/blog-backend/internal/service/commentasset"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/internal/service/userrole"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
-func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookPageResp {
+func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.GuestbookPageResp {
 	items := make([]dto.GuestbookItemResp, 0, len(result.Messages))
 	for _, message := range result.Messages {
-		items = append(items, *guestbookItemToDTO(message, resolver, rolesMap))
+		items = append(items, *guestbookItemToDTO(message, resolver, rolesMap, views))
 	}
 
 	pages := 0
@@ -32,10 +33,10 @@ func guestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.Objec
 	}
 }
 
-func adminGuestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.AdminGuestbookPageResp {
+func adminGuestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.AdminGuestbookPageResp {
 	items := make([]dto.GuestbookItemResp, 0, len(result.Messages))
 	for _, message := range result.Messages {
-		items = append(items, *guestbookItemToDTO(message, resolver, rolesMap))
+		items = append(items, *guestbookItemToDTO(message, resolver, rolesMap, views))
 	}
 
 	pages := 0
@@ -52,9 +53,9 @@ func adminGuestbookPageToDTO(result *guestbookrepo.PageResult, resolver storage.
 	}
 }
 
-func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookItemResp {
+func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.GuestbookItemResp {
 	message := aggregate.Message
-	return &dto.GuestbookItemResp{
+	result := &dto.GuestbookItemResp{
 		ID:          message.ID,
 		OwnerUserID: message.OwnerUserID,
 		FromUserID:  message.FromUserID,
@@ -66,6 +67,13 @@ func guestbookItemToDTO(aggregate guestbookrepo.GuestbookAggregate, resolver sto
 		CreatedAt:   message.CreatedAt,
 		UpdatedAt:   message.UpdatedAt,
 	}
+	view, ok := views[moderationservice.SubjectKey{ContentType: moderationservice.SubjectGuestbook, ContentID: uint64(message.ID)}]
+	if ok {
+		content, projected := moderationservice.ProjectView(view)
+		result.Content = commentasset.ResolveContent(context.Background(), resolver, content)
+		result.Moderation = projected
+	}
+	return result
 }
 
 func guestbookUserToDTO(user *model.User, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.GuestbookUserResp {

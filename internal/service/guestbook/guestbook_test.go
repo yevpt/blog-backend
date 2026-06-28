@@ -9,11 +9,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
+	moderationmock "github.com/vpt/blog-backend/internal/service/moderation/mock"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -128,6 +132,34 @@ func TestGuestbookService_List_DefaultsOwnerAndPagination(t *testing.T) {
 	assert.Equal(t, 10, resp.PageSize)
 	require.Len(t, resp.List, 1)
 	assert.Equal(t, int64(2), resp.List[0].ReplyCount)
+}
+
+func TestGuestbookServiceListProjectsModerationInOneBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	repo := &fakeGuestbookRepo{listResp: &guestbookrepo.PageResult{
+		Page: 1, PageSize: 10, Messages: []guestbookrepo.GuestbookAggregate{{
+			Message: model.Guestbook{Base: model.Base{ID: 9}, OwnerUserID: 1, FromUserID: 7, Content: "业务正文"},
+		}},
+	}}
+	ref := moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbook, ID: 9, RootID: 1}
+	moderationSvc.EXPECT().LoadViews(gomock.Any(), []moderationservice.SubjectRef{ref}, moderationservice.Viewer{
+		Role: moderationrepo.ViewerPublic,
+	}).Return(map[moderationservice.SubjectKey]moderationservice.View{
+		ref.Key(): {
+			PublicState: moderationrepo.PublicPlaceholder, DisplayVersion: moderationrepo.DisplayNone,
+			HasPendingRevision: true, CanInteract: false,
+		},
+	}, nil)
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil, moderationSvc)
+
+	resp, err := svc.List(dto.GuestbookListReq{}, nil)
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.Empty(t, resp.List[0].Content)
+	assert.Equal(t, "placeholder", resp.List[0].Moderation.PublicState)
+	assert.True(t, resp.List[0].Moderation.HasPendingRevision)
 }
 
 func TestGuestbookService_ListAdmin_NormalizesSearchAndPagination(t *testing.T) {

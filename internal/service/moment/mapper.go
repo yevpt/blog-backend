@@ -6,19 +6,25 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/internal/service/userrole"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
-func (s *momentService) momentPageToDTO(result *momentrepo.PageResult) (*dto.MomentPageResp, error) {
+func (s *momentService) momentPageToDTO(result *momentrepo.PageResult, viewer moderationservice.Viewer) (*dto.MomentPageResp, error) {
 	rolesMap, err := s.lookupRoles(collectMomentPageUserIDs(result))
+	if err != nil {
+		return nil, err
+	}
+
+	views, err := s.loadMomentViews(result.Moments, viewer)
 	if err != nil {
 		return nil, err
 	}
 
 	items := make([]dto.MomentItemResp, 0, len(result.Moments))
 	for _, aggregate := range result.Moments {
-		item, err := s.momentToDTO(aggregate, rolesMap)
+		item, err := s.momentToDTO(aggregate, rolesMap, views)
 		if err != nil {
 			return nil, err
 		}
@@ -38,7 +44,7 @@ func (s *momentService) momentPageToDTO(result *momentrepo.PageResult) (*dto.Mom
 	}, nil
 }
 
-func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate, rolesMap map[uint][]string) (*dto.MomentItemResp, error) {
+func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) (*dto.MomentItemResp, error) {
 	if rolesMap == nil {
 		var err error
 		rolesMap, err = s.lookupRoles(collectMomentAggregateUserIDs(aggregate))
@@ -64,6 +70,12 @@ func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate, rolesM
 		Images:        s.mediaToDTO(aggregate.Images),
 		CreatedAt:     moment.CreatedAt,
 		UpdatedAt:     moment.UpdatedAt,
+	}
+	view, ok := views[moderationservice.SubjectKey{ContentType: moderationservice.SubjectMoment, ContentID: uint64(moment.ID)}]
+	if ok {
+		content, projected := moderationservice.ProjectView(view)
+		resp.Content = content
+		resp.Moderation = projected
 	}
 	return resp, nil
 }

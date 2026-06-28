@@ -28,7 +28,11 @@ func (s *commentService) List(targetType string, targetID uint, req dto.CommentL
 	if err != nil {
 		return nil, err
 	}
-	return commentPageToDTO(result, target.Type, s.objectURLResolver, rolesMap), nil
+	views, err := s.loadCommentViews(result, target.Type, target.ID, moderationViewer(viewerID, false))
+	if err != nil {
+		return nil, err
+	}
+	return commentPageToDTO(result, target.Type, s.objectURLResolver, rolesMap, views), nil
 }
 
 func (s *commentService) ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error) {
@@ -45,7 +49,11 @@ func (s *commentService) ListAdmin(req dto.AdminCommentListReq) (*dto.AdminComme
 	if err != nil {
 		return nil, err
 	}
-	return adminCommentPageToDTO(result, s.objectURLResolver, rolesMap), nil
+	views, err := s.loadAdminCommentViews(result)
+	if err != nil {
+		return nil, err
+	}
+	return adminCommentPageToDTO(result, s.objectURLResolver, rolesMap, views), nil
 }
 
 func (s *commentService) Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
@@ -77,7 +85,7 @@ func (s *commentService) Create(targetType string, targetID uint, req dto.Commen
 	if err != nil {
 		return nil, err
 	}
-	return commentToDTO(*aggregate, target.Type, s.objectURLResolver, rolesMap), nil
+	return commentToDTO(*aggregate, target.Type, s.objectURLResolver, rolesMap, nil), nil
 }
 
 func (s *commentService) ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error) {
@@ -94,7 +102,11 @@ func (s *commentService) ListReplies(targetType string, commentID uint, req dto.
 	if err != nil {
 		return nil, err
 	}
-	return replyPageToDTO(result, target.Type, s.objectURLResolver, rolesMap), nil
+	views, err := s.loadReplyViews(result, target.Type, commentID, moderationViewer(viewerID, false))
+	if err != nil {
+		return nil, err
+	}
+	return replyPageToDTO(result, target.Type, s.objectURLResolver, rolesMap, views), nil
 }
 
 func (s *commentService) Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
@@ -132,7 +144,7 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 	if err != nil {
 		return nil, err
 	}
-	return replyToDTO(*aggregate, s.objectURLResolver, rolesMap), nil
+	return replyToDTO(*aggregate, s.objectURLResolver, rolesMap, nil), nil
 }
 
 func (s *commentService) normalizeCommentImages(content string, userID uint, targetPrefix string) (*commentasset.NormalizeResult, storage.ObjectStore, error) {

@@ -96,6 +96,8 @@ type CommentReplyResp struct {
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt 更新时间。
 	UpdatedAt time.Time `json:"updated_at"`
+	// Moderation 当前审核展示状态。
+	Moderation ModerationView `json:"moderation"`
 }
 
 // CommentItemResp 一级评论响应。
@@ -122,6 +124,8 @@ type CommentItemResp struct {
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt 更新时间。
 	UpdatedAt time.Time `json:"updated_at"`
+	// Moderation 当前审核展示状态。
+	Moderation ModerationView `json:"moderation"`
 }
 
 // CommentPageResp 评论分页响应。

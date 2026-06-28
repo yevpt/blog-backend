@@ -138,6 +138,8 @@ type MomentItemResp struct {
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt 更新时间。
 	UpdatedAt time.Time `json:"updated_at"`
+	// Moderation 当前审核展示状态。
+	Moderation ModerationView `json:"moderation"`
 }
 
 // MomentPageResp 碎语分页响应。

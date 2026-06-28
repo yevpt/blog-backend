@@ -9,11 +9,15 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	commentservice "github.com/vpt/blog-backend/internal/service/comment"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
+	moderationmock "github.com/vpt/blog-backend/internal/service/moderation/mock"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -168,6 +172,41 @@ func TestCommentService_List_UsesViewerAndPaging(t *testing.T) {
 	require.NotNil(t, repo.listViewerID)
 	assert.Equal(t, uint(9), *repo.listViewerID)
 	assert.Equal(t, 2, resp.Page)
+}
+
+func TestCommentServiceListProjectsModerationInOneBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	viewerID := uint(7)
+	repo := &fakeCommentRepo{listResp: &commentrepo.PageResult{
+		Page: 1, PageSize: 10, Comments: []commentrepo.CommentAggregate{{
+			Comment: commentrepo.CommentRecord{ID: 9, TargetID: 3, UserID: 7, Content: "业务表正文"},
+		}},
+	}}
+	ref := moderationservice.SubjectRef{Type: moderationservice.SubjectArticleComment, ID: 9, RootID: 3}
+	risk := moderationrepo.RiskLow
+	status := moderationrepo.ReviewPending
+	pending := "待审正文"
+	moderationSvc.EXPECT().LoadViews(gomock.Any(), []moderationservice.SubjectRef{ref}, moderationservice.Viewer{
+		Role: moderationrepo.ViewerAuthor, UserID: 7,
+	}).Return(map[moderationservice.SubjectKey]moderationservice.View{
+		ref.Key(): {
+			PublicState: moderationrepo.PublicVisible, DisplayVersion: moderationrepo.DisplayPending,
+			VisibleContent: "安全待审正文", HasPendingRevision: true,
+			PendingContent: &pending, PendingRiskLevel: &risk, PendingReviewStatus: &status,
+			CanInteract: false,
+		},
+	}, nil)
+	svc := commentservice.NewCommentService(repo, nil, nil, nil, moderationSvc)
+
+	resp, err := svc.List("article", 3, dto.CommentListReq{}, &viewerID)
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, "安全待审正文", resp.List[0].Content)
+	assert.Equal(t, "pending", resp.List[0].Moderation.DisplayVersion)
+	assert.Equal(t, &pending, resp.List[0].Moderation.PendingContent)
+	assert.False(t, resp.List[0].Moderation.CanInteract)
 }
 
 func TestCommentService_ListAdmin_NormalizesFiltersAndMapsItems(t *testing.T) {

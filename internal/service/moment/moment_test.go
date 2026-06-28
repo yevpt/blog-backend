@@ -17,10 +17,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
+	moderationmock "github.com/vpt/blog-backend/internal/service/moderation/mock"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/roles"
+	"go.uber.org/mock/gomock"
 )
 
 type fakeMomentRepo struct {
@@ -263,6 +267,40 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 	assert.Equal(t, []string{"moments/cat.jpg"}, resolver.objects)
 }
 
+func TestMomentServiceListProjectsModerationInOneBatch(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	repo := &fakeMomentRepo{listResp: &momentrepo.PageResult{
+		Page: 1, PageSize: 10, Moments: []momentrepo.MomentAggregate{{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "旧正文", Status: 1},
+		}},
+	}}
+	ref := moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9}
+	risk := moderationrepo.RiskMedium
+	status := moderationrepo.ReviewPending
+	pending := "新中风险正文"
+	moderationSvc.EXPECT().LoadViews(gomock.Any(), []moderationservice.SubjectRef{ref}, moderationservice.Viewer{
+		Role: moderationrepo.ViewerAuthor, UserID: 7,
+	}).Return(map[moderationservice.SubjectKey]moderationservice.View{
+		ref.Key(): {
+			PublicState: moderationrepo.PublicVisible, DisplayVersion: moderationrepo.DisplayLastApproved,
+			VisibleContent: "最后通过正文", HasPendingRevision: true,
+			PendingContent: &pending, PendingRiskLevel: &risk, PendingReviewStatus: &status,
+			CanInteract: false,
+		},
+	}, nil)
+	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil, moderationSvc)
+	viewerID := uint(7)
+
+	resp, err := svc.List(dto.MomentListReq{}, &viewerID)
+
+	require.NoError(t, err)
+	require.Len(t, resp.List, 1)
+	assert.Equal(t, "最后通过正文", resp.List[0].Content)
+	assert.Equal(t, "last_approved", resp.List[0].Moderation.DisplayVersion)
+	assert.Equal(t, &pending, resp.List[0].Moderation.PendingContent)
+}
+
 func TestMomentService_List_ForwardsRandomAndExcludeIDs(t *testing.T) {
 	repo := &fakeMomentRepo{
 		listResp: &momentrepo.PageResult{
@@ -423,6 +461,7 @@ func TestMomentService_Save_RejectsMissingExistingImage(t *testing.T) {
 func TestMomentService_Save_RejectsMoreThanNineImages(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil)
+
 	files := make([]dto.MomentImageFileReq, 10)
 	for i := range files {
 		files[i] = dto.MomentImageFileReq{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}
@@ -534,6 +573,7 @@ func TestMomentService_Save_KeepsSmallGifOriginal(t *testing.T) {
 		},
 	}
 	svc := momentservice.NewMomentService(repo, store, nil, nil, nil)
+
 	gif := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 128)...)
 
 	_, err := svc.Save(dto.MomentSaveReq{

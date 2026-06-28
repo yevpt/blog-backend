@@ -6,6 +6,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/internal/service/uv"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -54,10 +55,21 @@ type momentService struct {
 	objectURLResolver storage.ObjectURLResolver
 	uvSvc             uv.UVService
 	publisher         notificationservice.Publisher
+	moderation        moderationservice.Service
 }
 
 // NewMomentService 创建碎语业务服务实例。
 // publisher 用于点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher, userRepo userrepo.UserRepository) MomentService {
-	return &momentService{repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver, uvSvc: uvSvc, publisher: publisher}
+func NewMomentService(repo momentrepo.MomentRepository, objectURLResolver storage.ObjectURLResolver, uvSvc uv.UVService, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderationServices ...moderationservice.Service) MomentService {
+	return &momentService{
+		repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver,
+		uvSvc: uvSvc, publisher: publisher, moderation: firstModerationService(moderationServices),
+	}
+}
+
+func firstModerationService(services []moderationservice.Service) moderationservice.Service {
+	if len(services) == 0 {
+		return nil
+	}
+	return services[0]
 }

@@ -18,5 +18,5 @@ func (s *momentService) FeedList(req dto.MomentFeedReq, viewerID *uint) (*dto.Mo
 	if err != nil {
 		return nil, mapRepoError(err)
 	}
-	return s.momentPageToDTO(result)
+	return s.momentPageToDTO(result, moderationViewer(viewerID, false))
 }

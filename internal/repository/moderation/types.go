@@ -353,6 +353,7 @@ type Viewer struct {
 // View 是业务 service 后续转换 DTO 使用的内部投影。
 type View struct {
 	PublicState         PublicState
+	DisplayVersion      DisplayVersion
 	VisibleContent      string
 	HasPendingRevision  bool
 	PendingContent      *string
@@ -361,3 +362,12 @@ type View struct {
 	PendingRuleMatchIDs []uint64
 	CanInteract         bool
 }
+
+// DisplayVersion 表示公开正文选择的审核版本。
+type DisplayVersion string
+
+const (
+	DisplayPending      DisplayVersion = "pending"
+	DisplayLastApproved DisplayVersion = "last_approved"
+	DisplayNone         DisplayVersion = "none"
+)

@@ -6,6 +6,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -41,10 +42,21 @@ type guestbookService struct {
 	userRepo          userrepo.UserRepository
 	objectURLResolver storage.ObjectURLResolver
 	publisher         notificationservice.Publisher
+	moderation        moderationservice.Service
 }
 
 // NewGuestbookService 创建留言板业务服务实例。
 // publisher 用于留言、点赞成功后发布通知事件，可为 nil（测试或关闭通知时跳过发布）。
-func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher, userRepo userrepo.UserRepository) GuestbookService {
-	return &guestbookService{repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver, publisher: publisher}
+func NewGuestbookService(repo guestbookrepo.GuestbookRepository, objectURLResolver storage.ObjectURLResolver, publisher notificationservice.Publisher, userRepo userrepo.UserRepository, moderationServices ...moderationservice.Service) GuestbookService {
+	return &guestbookService{
+		repo: repo, userRepo: userRepo, objectURLResolver: objectURLResolver, publisher: publisher,
+		moderation: firstModerationService(moderationServices),
+	}
+}
+
+func firstModerationService(services []moderationservice.Service) moderationservice.Service {
+	if len(services) == 0 {
+		return nil
+	}
+	return services[0]
 }

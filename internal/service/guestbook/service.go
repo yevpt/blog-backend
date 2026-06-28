@@ -22,7 +22,11 @@ func (s *guestbookService) List(req dto.GuestbookListReq, viewerID *uint) (*dto.
 	if err != nil {
 		return nil, err
 	}
-	return guestbookPageToDTO(result, s.objectURLResolver, rolesMap), nil
+	views, err := s.loadGuestbookViews(result, moderationViewer(viewerID, false))
+	if err != nil {
+		return nil, err
+	}
+	return guestbookPageToDTO(result, s.objectURLResolver, rolesMap, views), nil
 }
 
 func (s *guestbookService) ListAdmin(req dto.AdminGuestbookListReq) (*dto.AdminGuestbookPageResp, error) {
@@ -34,7 +38,11 @@ func (s *guestbookService) ListAdmin(req dto.AdminGuestbookListReq) (*dto.AdminG
 	if err != nil {
 		return nil, err
 	}
-	return adminGuestbookPageToDTO(result, s.objectURLResolver, rolesMap), nil
+	views, err := s.loadGuestbookViews(result, moderationViewer(nil, true))
+	if err != nil {
+		return nil, err
+	}
+	return adminGuestbookPageToDTO(result, s.objectURLResolver, rolesMap, views), nil
 }
 
 func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (*dto.GuestbookItemResp, error) {
@@ -63,7 +71,7 @@ func (s *guestbookService) Create(req dto.GuestbookCreateReq, fromUserID uint) (
 	if err != nil {
 		return nil, err
 	}
-	return guestbookItemToDTO(*aggregate, s.objectURLResolver, rolesMap), nil
+	return guestbookItemToDTO(*aggregate, s.objectURLResolver, rolesMap, nil), nil
 }
 
 func (s *guestbookService) normalizeGuestbookImages(content string, userID uint, targetPrefix string) (*commentasset.NormalizeResult, storage.ObjectStore, error) {

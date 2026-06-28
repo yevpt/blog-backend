@@ -303,6 +303,7 @@ func viewKeys(refs []SubjectRef) ([]SubjectType, []uint64, map[SubjectKey]struct
 func projectView(row moderationViewRow, viewer Viewer) (View, error) {
 	view := View{
 		PublicState:        PublicState(row.PublicState),
+		DisplayVersion:     displayVersion(row),
 		HasPendingRevision: row.PendingRevisionID != nil,
 		CanInteract:        row.LifecycleState == string(LifecycleActive) && row.PublicState == string(PublicVisible) && row.PendingRevisionID == nil && row.ApprovedRevisionID != nil,
 	}
@@ -328,6 +329,23 @@ func projectView(row moderationViewRow, viewer Viewer) (View, error) {
 		}
 	}
 	return view, nil
+}
+
+func displayVersion(row moderationViewRow) DisplayVersion {
+	if row.LifecycleState != string(LifecycleActive) || row.PublicState != string(PublicVisible) || row.MaterializedRevisionID == nil {
+		return DisplayNone
+	}
+	if sameID(row.MaterializedRevisionID, row.PendingRevisionID) {
+		return DisplayPending
+	}
+	if sameID(row.MaterializedRevisionID, row.ApprovedRevisionID) {
+		return DisplayLastApproved
+	}
+	return DisplayNone
+}
+
+func sameID(left, right *uint64) bool {
+	return left != nil && right != nil && *left == *right
 }
 
 func validSubjectType(subjectType SubjectType) bool {
