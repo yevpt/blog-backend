@@ -20,6 +20,7 @@ func (r *momentRepo) ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, e
 	var moments []model.Moment
 	offset := (page - 1) * pageSize
 	if err := r.applyFeedOrder(r.feedMomentQuery(filter), filter.Sort).
+		Select("moment.*").
 		Limit(pageSize).
 		Offset(offset).
 		Find(&moments).Error; err != nil {
@@ -34,7 +35,7 @@ func (r *momentRepo) ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, e
 }
 
 func (r *momentRepo) feedMomentQuery(filter FeedFilter) *gorm.DB {
-	query := r.db.Model(&model.Moment{}).Where("moment.status = ?", uint8(1))
+	query := r.publicMomentBase()
 	switch filter.Scope {
 	case FeedScopeOwner:
 		query = query.Where("moment.user_id = ?", filter.OwnerUserID)

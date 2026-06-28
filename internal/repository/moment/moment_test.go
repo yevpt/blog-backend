@@ -2,6 +2,7 @@ package moment_test
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func TestMomentRepository_CountPublicByUser_UsesPublicStatusFilter(t *testing.T)
 	repo := momentrepo.NewMomentRepository(db)
 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
-		WithArgs(uint8(1), uint(7)).
+		WithArgs(append(publicMomentVisibilityArgs(), uint(7))...).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
 	count, err := repo.CountPublicByUser(7)
@@ -43,6 +44,31 @@ func TestMomentRepository_CountPublicByUser_UsesPublicStatusFilter(t *testing.T)
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), count)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMomentRepositoryListIncludesModerationPlaceholder(t *testing.T) {
+	db, mock, sqlDB := newMomentMockDB(t)
+	defer sqlDB.Close()
+	repo := momentrepo.NewMomentRepository(db)
+	now := time.Now()
+	visibilityArgs := publicMomentVisibilityArgs()
+	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment` LEFT JOIN moderation_item AS public_moderation").
+		WithArgs(visibilityArgs...).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT moment\\.\\* FROM `moment` LEFT JOIN moderation_item AS public_moderation").
+		WithArgs(append(visibilityArgs, 10)...).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
+			"comment_status", "read_count", "is_top",
+		}).AddRow(9, now, now, nil, 1, "", 0, 1, 0, false))
+	expectEmptyRelations(mock, now, uint(9), uint(1))
+
+	page, err := repo.List(momentrepo.ListFilter{Page: 1, PageSize: 10}, nil)
+
+	require.NoError(t, err)
+	require.Len(t, page.Moments, 1)
+	assert.Equal(t, uint8(0), page.Moments[0].Moment.Status)
+	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
@@ -53,10 +79,10 @@ func TestMomentRepository_List_LoadsUsersImagesLikesAndComments(t *testing.T) {
 	now := time.Now()
 	viewerID := uint(7)
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
-		WithArgs(uint8(1), uint(1)).
+		WithArgs(append(publicMomentVisibilityArgs(), uint(1))...).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT \\* FROM `moment`").
-		WithArgs(uint8(1), uint(1), 10).
+	mock.ExpectQuery("SELECT moment\\.\\* FROM `moment`").
+		WithArgs(append(publicMomentVisibilityArgs(), uint(1), 10)...).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
 			"comment_status", "read_count", "is_top",
@@ -103,10 +129,10 @@ func TestMomentRepository_List_RandomExcludesIDsAndIgnoresOffset(t *testing.T) {
 
 	now := time.Now()
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
-		WithArgs(uint8(1), uint(50), uint(49), uint(48)).
+		WithArgs(append(publicMomentVisibilityArgs(), uint(50), uint(49), uint(48))...).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT \\* FROM `moment`").
-		WithArgs(uint8(1), uint(50), uint(49), uint(48), 3).
+	mock.ExpectQuery("SELECT moment\\.\\* FROM `moment`").
+		WithArgs(append(publicMomentVisibilityArgs(), uint(50), uint(49), uint(48), 3)...).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
 			"comment_status", "read_count", "is_top",
@@ -134,10 +160,10 @@ func TestMomentRepository_ListFeed_FriendsLatestOrdersByCreatedAt(t *testing.T) 
 	now := time.Now()
 	ownerID := uint(1)
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
-		WithArgs(uint8(1), ownerID).
+		WithArgs(append(publicMomentVisibilityArgs(), ownerID)...).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT \\* FROM `moment`").
-		WithArgs(uint8(1), ownerID, 10).
+	mock.ExpectQuery("SELECT moment\\.\\* FROM `moment`").
+		WithArgs(append(publicMomentVisibilityArgs(), ownerID, 10)...).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
 			"comment_status", "read_count", "is_top",
@@ -419,8 +445,8 @@ func TestMomentRepository_ToggleLike_CreatesLike(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), nil, uint(7), uint(9), momentrepo.MomentLikeType).
 		WillReturnResult(sqlmock.NewResult(12, 1))
 	mock.ExpectCommit()
-	mock.ExpectQuery("SELECT \\* FROM `moment`").
-		WithArgs(uint(9), uint8(1), 1).
+	mock.ExpectQuery("SELECT moment\\.\\* FROM `moment` LEFT JOIN moderation_item AS public_moderation").
+		WithArgs(append(publicMomentVisibilityArgs(), uint(9), 1)...).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
 			"comment_status", "read_count", "is_top",
@@ -460,8 +486,8 @@ func TestMomentRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 		WithArgs(uint(12)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	mock.ExpectQuery("SELECT \\* FROM `moment`").
-		WithArgs(uint(9), uint8(1), 1).
+	mock.ExpectQuery("SELECT moment\\.\\* FROM `moment` LEFT JOIN moderation_item AS public_moderation").
+		WithArgs(append(publicMomentVisibilityArgs(), uint(9), 1)...).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "created_at", "updated_at", "deleted_at", "user_id", "content", "status",
 			"comment_status", "read_count", "is_top",
@@ -482,6 +508,10 @@ func TestMomentRepository_ToggleLike_HardDeletesExistingLike(t *testing.T) {
 
 func ptrUint(v uint) *uint {
 	return &v
+}
+
+func publicMomentVisibilityArgs() []driver.Value {
+	return []driver.Value{"moment", uint8(1), "active", "visible", uint8(1), "placeholder"}
 }
 
 func expectEmptyRelations(mock sqlmock.Sqlmock, now time.Time, momentID uint, userID uint) {

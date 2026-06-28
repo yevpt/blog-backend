@@ -23,13 +23,13 @@ func (r *momentRepo) List(filter ListFilter, viewerID *uint) (*PageResult, error
 	} else {
 		offset := (page - 1) * pageSize
 		query = query.
-			Order("is_top DESC").
-			Order("created_at DESC").
-			Order("id DESC").
+			Order("moment.is_top DESC").
+			Order("moment.created_at DESC").
+			Order("moment.id DESC").
 			Limit(pageSize).
 			Offset(offset)
 	}
-	if err := query.Find(&moments).Error; err != nil {
+	if err := query.Select("moment.*").Find(&moments).Error; err != nil {
 		return nil, err
 	}
 
@@ -69,7 +69,7 @@ func (r *momentRepo) ListAdmin(filter AdminListFilter) (*PageResult, error) {
 
 func (r *momentRepo) FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate, error) {
 	var moment model.Moment
-	err := r.db.Where("id = ? AND status = ?", id, uint8(1)).First(&moment).Error
+	err := r.publicMomentBase().Select("moment.*").Where("moment.id = ?", id).First(&moment).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrMomentNotFound
 	}
@@ -98,18 +98,33 @@ func (r *momentRepo) CountPublicByUser(userID uint) (int64, error) {
 }
 
 func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
-	query := r.db.Model(&model.Moment{}).Where("status = ?", uint8(1))
+	query := r.publicMomentBase()
 	if filter.UserID != nil {
-		query = query.Where("user_id = ?", *filter.UserID)
+		query = query.Where("moment.user_id = ?", *filter.UserID)
 	}
 	if filter.RoleID != nil {
 		query = query.Joins("JOIN user_role ON user_role.user_id = moment.user_id").
 			Where("user_role.role_id = ?", *filter.RoleID)
 	}
 	if len(filter.ExcludeIDs) > 0 {
-		query = query.Where("id NOT IN ?", filter.ExcludeIDs)
+		query = query.Where("moment.id NOT IN ?", filter.ExcludeIDs)
 	}
 	return query
+}
+
+func (r *momentRepo) publicMomentBase() *gorm.DB {
+	return r.db.Model(&model.Moment{}).
+		Joins("LEFT JOIN moderation_item AS public_moderation ON public_moderation.content_type = ? AND public_moderation.content_id = moment.id", model.ModerationContentMoment).
+		Where(`(
+			(public_moderation.id IS NULL AND moment.status = ?)
+			OR (
+				public_moderation.lifecycle_state = ?
+				AND (
+					(public_moderation.public_state = ? AND moment.status = ?)
+					OR public_moderation.public_state = ?
+				)
+			)
+		)`, uint8(1), model.ModerationLifecycleActive, model.ModerationPublicVisible, uint8(1), model.ModerationPublicPlaceholder)
 }
 
 func (r *momentRepo) adminMomentQuery(filter AdminListFilter) *gorm.DB {
