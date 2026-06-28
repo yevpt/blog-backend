@@ -5,7 +5,7 @@ import "time"
 // AdminModerationListReq 是管理端审核版本列表筛选。
 type AdminModerationListReq struct {
 	Page         int    `form:"page" binding:"omitempty,min=1" example:"1"`
-	PageSize     int    `form:"page_size" binding:"omitempty,min=1,max=100" example:"20"`
+	PageSize     int    `form:"page_size" binding:"omitempty,min=1" example:"20"`
 	ContentType  string `form:"content_type" binding:"omitempty,oneof=moment article_comment moment_comment guestbook article_comment_reply moment_comment_reply guestbook_reply"`
 	RiskLevel    string `form:"risk_level" binding:"omitempty,oneof=low medium high"`
 	ReviewStatus string `form:"review_status" binding:"omitempty,oneof=pending approved rejected superseded" example:"pending"`

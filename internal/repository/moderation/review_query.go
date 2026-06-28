@@ -148,7 +148,7 @@ func applyReviewFilter(query *gorm.DB, filter ReviewFilter) *gorm.DB {
 }
 
 func validateReviewFilter(filter ReviewFilter) error {
-	if filter.Page < 1 || filter.PageSize < 1 || filter.PageSize > 100 {
+	if filter.Page < 1 || filter.PageSize < 1 || filter.PageSize > 500 {
 		return ErrInvalidCommand
 	}
 	if filter.ReviewStatus != ReviewPending && filter.ReviewStatus != ReviewApproved &&
