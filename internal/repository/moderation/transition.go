@@ -84,7 +84,10 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 		if err := appendActionLog(ctx, tx, item.ID, newRevisionID, cmd.Log); err != nil {
 			return err
 		}
-		return applyProfileChange(ctx, tx, cmd.ProfileChange)
+		if err := applyProfileChange(ctx, tx, cmd.ProfileChange); err != nil {
+			return err
+		}
+		return appendReviewNotification(ctx, tx, item.ID, cmd.Notification)
 	})
 	return applied, err
 }
@@ -130,6 +133,12 @@ func validateTransitionCommand(cmd ApplyTransitionCommand) error {
 	}
 	if cmd.Revision != nil && cmd.ProfileChange != nil && cmd.Revision.SubmitterID != cmd.ProfileChange.UserID {
 		return ErrInvalidCommand
+	}
+	if cmd.Notification != nil {
+		if cmd.Review == nil || cmd.Notification.RecipientUserID == 0 || cmd.Notification.Title == "" ||
+			cmd.Notification.RevisionID != cmd.Review.RevisionID {
+			return ErrInvalidCommand
+		}
 	}
 	if referencesNewRevision(cmd) && cmd.Revision == nil {
 		return ErrInvalidCommand
@@ -364,6 +373,9 @@ func reviewRevision(ctx context.Context, tx *gorm.DB, itemID uint64, review *Rev
 		"decision_reason": review.Reason, "reviewer_id": review.ReviewerID,
 		"reviewed_at": review.ReviewedAt, "updated_at": review.ReviewedAt,
 	}
+	if review.PublishedContent != nil {
+		updates["published_content"] = *review.PublishedContent
+	}
 	result := tx.WithContext(ctx).Model(&model.ModerationRevision{}).
 		Where("id = ? AND item_id = ? AND review_status = ?", review.RevisionID, itemID, ReviewPending).
 		Updates(updates)
@@ -428,6 +440,7 @@ func (r *repository) materialize(ctx context.Context, tx *gorm.DB, adapter subje
 		return err
 	}
 	content := ""
+	options := cmd.MomentOptions
 	if cmd.Materialize.IsNew && cmd.Revision != nil {
 		content = cmd.Revision.PublishedContent
 	} else {
@@ -436,10 +449,53 @@ func (r *repository) materialize(ctx context.Context, tx *gorm.DB, adapter subje
 			return err
 		}
 		content = revision.PublishedContent
+		if revision.MomentStatus != nil && revision.MomentCommentStatus != nil {
+			options = &MomentOptions{Status: *revision.MomentStatus, CommentStatus: *revision.MomentCommentStatus}
+		}
 	}
 	return adapter.Materialize(ctx, tx, MaterializeCommand{
-		Ref: cmd.Subject, AuthorID: cmd.AuthorID, Content: content, MomentOptions: cmd.MomentOptions,
+		Ref: cmd.Subject, AuthorID: cmd.AuthorID, Content: content, MomentOptions: options,
 	})
+}
+
+type reviewNotificationMetadata struct {
+	RecipientUserIDs []uint64 `json:"recipient_user_ids"`
+	Moderation       struct {
+		ItemID     uint64 `json:"item_id"`
+		RevisionID uint64 `json:"revision_id"`
+		Decision   string `json:"decision"`
+	} `json:"moderation"`
+}
+
+func appendReviewNotification(ctx context.Context, tx *gorm.DB, itemID uint64, intent *NotificationIntent) error {
+	if intent == nil {
+		return nil
+	}
+	metadata := reviewNotificationMetadata{RecipientUserIDs: []uint64{intent.RecipientUserID}}
+	metadata.Moderation.ItemID = itemID
+	metadata.Moderation.RevisionID = intent.RevisionID
+	metadata.Moderation.Decision = intent.Decision
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	value := string(encoded)
+	now := tx.NowFunc()
+	event := model.NotificationEvent{
+		Type: "system_notice", SourceType: "system", RootType: "system",
+		Title:          truncateNotificationRunes(intent.Title, 120),
+		ContentExcerpt: truncateNotificationRunes(intent.ContentExcerpt, 500),
+		MetadataJSON:   &value, DispatchStatus: "pending", NextProcessAt: now,
+	}
+	return tx.WithContext(ctx).Create(&event).Error
+}
+
+func truncateNotificationRunes(value string, limit int) string {
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
 }
 
 func (r *repository) deleteSubjectTree(ctx context.Context, tx *gorm.DB, adapter subjectAdapter, ref SubjectRef, authorID uint64) error {

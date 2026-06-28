@@ -172,12 +172,13 @@ type RevisionDraft struct {
 
 // RevisionReview 是已有版本的审核结果更新。
 type RevisionReview struct {
-	RevisionID uint64
-	Status     ReviewStatus
-	Decision   string
-	Reason     *string
-	ReviewerID *uint64
-	ReviewedAt time.Time
+	RevisionID       uint64
+	Status           ReviewStatus
+	Decision         string
+	Reason           *string
+	ReviewerID       *uint64
+	ReviewedAt       time.Time
+	PublishedContent *string
 }
 
 // ActionLog 是事务内追加的审核事实。
@@ -204,6 +205,16 @@ type ProfileChange struct {
 	UpdatedAt           time.Time
 }
 
+// NotificationIntent 是审核事务内创建站内系统通知所需的最小数据。
+type NotificationIntent struct {
+	RecipientUserID uint64
+	Title           string
+	ContentExcerpt  string
+	ItemID          uint64
+	RevisionID      uint64
+	Decision        string
+}
+
 // ApplyTransitionCommand 是一次完整审核事务的数据命令。
 type ApplyTransitionCommand struct {
 	Subject             SubjectRef
@@ -218,6 +229,7 @@ type ApplyTransitionCommand struct {
 	DeleteSubject       bool
 	Log                 *ActionLog
 	ProfileChange       *ProfileChange
+	Notification        *NotificationIntent
 	// MomentOptions 仅用于碎语业务表物化；其他内容类型必须为空。
 	MomentOptions *MomentOptions
 	// CreateSubject 显式声明首次提交需要在事务内创建业务行。
