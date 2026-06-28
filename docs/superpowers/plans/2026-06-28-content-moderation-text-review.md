@@ -278,7 +278,7 @@ Expected: PASS.
 - [ ] **Step 5: Regenerate repository mock and commit**
 
 ```bash
-go run go.uber.org/mock/mockgen@v0.5.2 -destination=internal/repository/moderation/mock/mock_repository.go -package=mock github.com/vpt/blog-backend/internal/repository/moderation Repository
+go run go.uber.org/mock/mockgen -destination=internal/repository/moderation/mock/mock_repository.go -package=mock github.com/vpt/blog-backend/internal/repository/moderation Repository
 git add internal/repository/moderation
 git commit -m "feat(moderation): 原子执行人工审核决策"
 ```

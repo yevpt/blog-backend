@@ -16,6 +16,8 @@ type Repository interface {
 	RecordBlockedAttempt(ctx context.Context, attempt BlockedAttempt) (StoredResult, error)
 	LoadEnabledRules(ctx context.Context) ([]RuleRecord, error)
 	LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectKey]View, error)
+	ListReviewRecords(ctx context.Context, filter ReviewFilter) (ReviewPage, error)
+	LoadReviewRecord(ctx context.Context, itemID, revisionID uint64) (ReviewRecord, error)
 }
 
 type repository struct {

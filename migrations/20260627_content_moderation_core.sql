@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS `moderation_revision` (
   `risk_level` varchar(16) NOT NULL,
   `policy_action` varchar(24) NOT NULL,
   `review_status` varchar(16) NOT NULL,
+  `moment_status` tinyint unsigned NULL,
+  `moment_comment_status` tinyint unsigned NULL,
   `ruleset_version` bigint unsigned NOT NULL,
   `rule_match_ids` json NOT NULL,
   `decision_type` varchar(24) NULL,

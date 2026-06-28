@@ -46,6 +46,7 @@ func (s *applicationService) transitionCommand(
 			PolicyAction: moderationrepo.PolicyAction(action), ReviewStatus: reviewStatus,
 			RulesetVersion: classification.RulesetVersion, RuleMatchIDs: classification.RuleMatchIDs,
 			DecisionType: decisionType, ReviewerID: reviewerID, ReviewedAt: reviewedAt,
+			MomentOptions: cloneMomentOptions(input.momentOptions),
 		},
 		SupersedeRevisionID: plan.SupersedeRevision,
 		Materialize:         mapRevisionPointer(plan.MaterializeRevision),

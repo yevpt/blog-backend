@@ -73,6 +73,20 @@ func TestModerationAttemptDoesNotPersistBlockedContentOrDigest(t *testing.T) {
 	}
 }
 
+func TestModerationRevisionPersistsMomentOptions(t *testing.T) {
+	typ := reflect.TypeOf(model.ModerationRevision{})
+	status, hasStatus := typ.FieldByName("MomentStatus")
+	commentStatus, hasCommentStatus := typ.FieldByName("MomentCommentStatus")
+	require.True(t, hasStatus)
+	require.True(t, hasCommentStatus)
+	assert.Equal(t, reflect.TypeOf((*uint8)(nil)), status.Type)
+	assert.Equal(t, reflect.TypeOf((*uint8)(nil)), commentStatus.Type)
+	migration, err := os.ReadFile("../../migrations/20260627_content_moderation_core.sql")
+	require.NoError(t, err)
+	assert.Contains(t, string(migration), "`moment_status` tinyint unsigned NULL")
+	assert.Contains(t, string(migration), "`moment_comment_status` tinyint unsigned NULL")
+}
+
 func TestModerationClosedEnumValues(t *testing.T) {
 	assert.ElementsMatch(t, []string{"active", "deleted"}, model.ModerationLifecycleStates())
 	assert.ElementsMatch(t, []string{"visible", "placeholder", "hidden", "emergency_hidden"}, model.ModerationPublicStates())

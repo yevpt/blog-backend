@@ -71,6 +71,21 @@ func (mr *MockRepositoryMockRecorder) FindResultByIdempotencyKey(ctx, userID, ke
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindResultByIdempotencyKey", reflect.TypeOf((*MockRepository)(nil).FindResultByIdempotencyKey), ctx, userID, key)
 }
 
+// ListReviewRecords mocks base method.
+func (m *MockRepository) ListReviewRecords(ctx context.Context, filter moderation.ReviewFilter) (moderation.ReviewPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReviewRecords", ctx, filter)
+	ret0, _ := ret[0].(moderation.ReviewPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReviewRecords indicates an expected call of ListReviewRecords.
+func (mr *MockRepositoryMockRecorder) ListReviewRecords(ctx, filter any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReviewRecords", reflect.TypeOf((*MockRepository)(nil).ListReviewRecords), ctx, filter)
+}
+
 // LoadEnabledRules mocks base method.
 func (m *MockRepository) LoadEnabledRules(ctx context.Context) ([]moderation.RuleRecord, error) {
 	m.ctrl.T.Helper()
@@ -129,6 +144,21 @@ func (m *MockRepository) LoadPolicyContext(ctx context.Context, userID uint64) (
 func (mr *MockRepositoryMockRecorder) LoadPolicyContext(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPolicyContext", reflect.TypeOf((*MockRepository)(nil).LoadPolicyContext), ctx, userID)
+}
+
+// LoadReviewRecord mocks base method.
+func (m *MockRepository) LoadReviewRecord(ctx context.Context, itemID, revisionID uint64) (moderation.ReviewRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadReviewRecord", ctx, itemID, revisionID)
+	ret0, _ := ret[0].(moderation.ReviewRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadReviewRecord indicates an expected call of LoadReviewRecord.
+func (mr *MockRepositoryMockRecorder) LoadReviewRecord(ctx, itemID, revisionID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadReviewRecord", reflect.TypeOf((*MockRepository)(nil).LoadReviewRecord), ctx, itemID, revisionID)
 }
 
 // LoadSubject mocks base method.

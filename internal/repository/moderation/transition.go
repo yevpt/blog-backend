@@ -327,11 +327,17 @@ func createRevision(ctx context.Context, tx *gorm.DB, itemID uint64, draft *Revi
 		DecisionType: draft.DecisionType, DecisionReason: draft.DecisionReason,
 		ReviewerID: draft.ReviewerID, ReviewedAt: draft.ReviewedAt,
 	}
+	if draft.MomentOptions != nil {
+		row.MomentStatus = uint8Pointer(draft.MomentOptions.Status)
+		row.MomentCommentStatus = uint8Pointer(draft.MomentOptions.CommentStatus)
+	}
 	if err := tx.WithContext(ctx).Create(&row).Error; err != nil {
 		return nil, err
 	}
 	return &row, nil
 }
+
+func uint8Pointer(value uint8) *uint8 { return &value }
 
 func supersedeRevision(ctx context.Context, tx *gorm.DB, itemID uint64, revisionID *uint64) error {
 	if revisionID == nil {

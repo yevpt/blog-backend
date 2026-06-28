@@ -68,25 +68,27 @@ func (ModerationItem) TableName() string { return "moderation_item" }
 
 // ModerationRevision 保存不可变提交原文和可修正的发布正文。
 type ModerationRevision struct {
-	ID               uint64          `gorm:"primaryKey"`
-	ItemID           uint64          `gorm:"not null;uniqueIndex:uk_moderation_revision_version,priority:1;index:idx_moderation_revision_item_status,priority:1"`
-	Version          uint64          `gorm:"not null;uniqueIndex:uk_moderation_revision_version,priority:2"`
-	SubmitterID      uint64          `gorm:"not null;uniqueIndex:uk_moderation_revision_idempotency,priority:1;index:idx_moderation_revision_submitter"`
-	IdempotencyKey   string          `gorm:"size:128;not null;uniqueIndex:uk_moderation_revision_idempotency,priority:2"`
-	SubmittedContent string          `gorm:"type:longtext;not null"`
-	PublishedContent string          `gorm:"type:longtext;not null"`
-	RiskLevel        string          `gorm:"size:16;not null;check:chk_moderation_revision_risk,risk_level IN ('low','medium','high')"`
-	PolicyAction     string          `gorm:"size:24;not null;check:chk_moderation_revision_policy,policy_action IN ('auto_approve','post_review','pre_review','block')"`
-	ReviewStatus     string          `gorm:"size:16;not null;index:idx_moderation_revision_item_status,priority:2;index:idx_moderation_revision_queue,priority:1;check:chk_moderation_revision_status,review_status IN ('pending','approved','rejected','superseded')"`
-	RulesetVersion   uint64          `gorm:"not null"`
-	RuleMatchIDs     string          `gorm:"type:json;not null"`
-	DecisionType     *string         `gorm:"size:24;check:chk_moderation_revision_decision,decision_type IS NULL OR decision_type IN ('approved','corrected','rejected','legacy_migration')"`
-	DecisionReason   *string         `gorm:"size:1000"`
-	ReviewerID       *uint64         `gorm:"index:idx_moderation_revision_reviewer"`
-	ReviewedAt       *time.Time      `gorm:"type:datetime(3)"`
-	CreatedAt        time.Time       `gorm:"type:datetime(3);not null;index:idx_moderation_revision_queue,priority:2"`
-	UpdatedAt        time.Time       `gorm:"type:datetime(3);not null"`
-	Item             *ModerationItem `gorm:"foreignKey:ItemID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
+	ID                  uint64          `gorm:"primaryKey"`
+	ItemID              uint64          `gorm:"not null;uniqueIndex:uk_moderation_revision_version,priority:1;index:idx_moderation_revision_item_status,priority:1"`
+	Version             uint64          `gorm:"not null;uniqueIndex:uk_moderation_revision_version,priority:2"`
+	SubmitterID         uint64          `gorm:"not null;uniqueIndex:uk_moderation_revision_idempotency,priority:1;index:idx_moderation_revision_submitter"`
+	IdempotencyKey      string          `gorm:"size:128;not null;uniqueIndex:uk_moderation_revision_idempotency,priority:2"`
+	SubmittedContent    string          `gorm:"type:longtext;not null"`
+	PublishedContent    string          `gorm:"type:longtext;not null"`
+	RiskLevel           string          `gorm:"size:16;not null;check:chk_moderation_revision_risk,risk_level IN ('low','medium','high')"`
+	PolicyAction        string          `gorm:"size:24;not null;check:chk_moderation_revision_policy,policy_action IN ('auto_approve','post_review','pre_review','block')"`
+	ReviewStatus        string          `gorm:"size:16;not null;index:idx_moderation_revision_item_status,priority:2;index:idx_moderation_revision_queue,priority:1;check:chk_moderation_revision_status,review_status IN ('pending','approved','rejected','superseded')"`
+	MomentStatus        *uint8          `gorm:"type:tinyint;comment:碎语提交时公开开关"`
+	MomentCommentStatus *uint8          `gorm:"type:tinyint;comment:碎语提交时评论开关"`
+	RulesetVersion      uint64          `gorm:"not null"`
+	RuleMatchIDs        string          `gorm:"type:json;not null"`
+	DecisionType        *string         `gorm:"size:24;check:chk_moderation_revision_decision,decision_type IS NULL OR decision_type IN ('approved','corrected','rejected','legacy_migration')"`
+	DecisionReason      *string         `gorm:"size:1000"`
+	ReviewerID          *uint64         `gorm:"index:idx_moderation_revision_reviewer"`
+	ReviewedAt          *time.Time      `gorm:"type:datetime(3)"`
+	CreatedAt           time.Time       `gorm:"type:datetime(3);not null;index:idx_moderation_revision_queue,priority:2"`
+	UpdatedAt           time.Time       `gorm:"type:datetime(3);not null"`
+	Item                *ModerationItem `gorm:"foreignKey:ItemID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT"`
 }
 
 func (ModerationRevision) TableName() string { return "moderation_revision" }

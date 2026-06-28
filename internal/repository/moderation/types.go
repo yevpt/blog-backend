@@ -167,6 +167,7 @@ type RevisionDraft struct {
 	DecisionReason   *string
 	ReviewerID       *uint64
 	ReviewedAt       *time.Time
+	MomentOptions    *MomentOptions
 }
 
 // RevisionReview 是已有版本的审核结果更新。
@@ -227,6 +228,39 @@ type ApplyTransitionCommand struct {
 type MomentOptions struct {
 	Status        uint8
 	CommentStatus uint8
+}
+
+// ReviewFilter 是管理员审核版本列表的有界筛选条件。
+type ReviewFilter struct {
+	Page         int
+	PageSize     int
+	ContentType  *SubjectType
+	RiskLevel    *RiskLevel
+	ReviewStatus ReviewStatus
+}
+
+// ReviewRecord 汇总审核项状态与一个明确版本，供人工审核 service 使用。
+type ReviewRecord struct {
+	ItemID           uint64
+	Subject          SubjectRef
+	AuthorID         uint64
+	LockVersion      uint64
+	State            ItemState
+	RevisionID       uint64
+	RevisionVersion  uint64
+	SubmittedContent string
+	PublishedContent string
+	RiskLevel        RiskLevel
+	PolicyAction     PolicyAction
+	ReviewStatus     ReviewStatus
+	MomentOptions    *MomentOptions
+	CreatedAt        time.Time
+}
+
+// ReviewPage 是审核版本分页查询结果。
+type ReviewPage struct {
+	Total int64
+	Items []ReviewRecord
 }
 
 // AppliedTransition 返回事务提交后的稳定标识。
