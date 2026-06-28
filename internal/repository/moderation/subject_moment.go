@@ -6,6 +6,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type momentAdapter struct{}
@@ -22,6 +23,19 @@ type momentInsert struct {
 	CommentStatus uint8
 	ReadCount     uint
 	IsTop         bool
+}
+
+func (a *momentAdapter) Lock(ctx context.Context, tx *gorm.DB, ref SubjectRef, authorID uint64) (SubjectSnapshot, error) {
+	if ref.Type != SubjectMoment {
+		return SubjectSnapshot{}, ErrInvalidCommand
+	}
+	var row model.Moment
+	err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("id = ? AND user_id = ?", ref.ID, authorID).Take(&row).Error
+	if err != nil {
+		return SubjectSnapshot{}, subjectError(err)
+	}
+	return SubjectSnapshot{Ref: SubjectRef{Type: SubjectMoment, ID: uint64(row.ID)}, AuthorID: uint64(row.UserID), Content: row.Content}, nil
 }
 
 func (momentInsert) TableName() string { return "moment" }
@@ -65,7 +79,7 @@ func (a *momentAdapter) Materialize(ctx context.Context, tx *gorm.DB, cmd Materi
 	result := tx.WithContext(ctx).Model(&model.Moment{}).
 		Where("id = ? AND user_id = ?", cmd.Ref.ID, cmd.AuthorID).
 		Updates(map[string]any{"content": cmd.Content, "status": uint8(1)})
-	return requireSubjectRow(result)
+	return subjectUpdateError(result)
 }
 
 func (a *momentAdapter) Delete(ctx context.Context, tx *gorm.DB, ref SubjectRef) error {
@@ -95,7 +109,7 @@ func (a *momentAdapter) Descendants(ctx context.Context, tx *gorm.DB, ref Subjec
 			return nil, err
 		}
 		for _, row := range replies {
-			refs = append(refs, SubjectRef{Type: SubjectMomentCommentReply, ID: uint64(row.ID), RootID: uint64(row.CommentID), ParentID: uint64(row.ParentReplyID)})
+			refs = append(refs, SubjectRef{Type: SubjectMomentCommentReply, ID: uint64(row.ID), RootID: uint64(row.CommentID), ParentID: uint64Pointer(uint64(row.ParentReplyID))})
 		}
 	}
 	sortSubjectRefs(refs)

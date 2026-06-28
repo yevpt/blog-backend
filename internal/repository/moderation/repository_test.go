@@ -73,7 +73,9 @@ func TestApplyTransitionLocksCreatesVersionMaterializesAndCommits(t *testing.T) 
 	command := transitionCommand()
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	expectLockedItem(mock, 4, nil)
+	expectLockedArticleSubject(mock, "旧正文")
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(MAX(version), 0) FROM `moderation_revision` WHERE item_id = ?")).
 		WithArgs(uint64(10)).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
 	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
@@ -99,8 +101,10 @@ func TestApplyTransitionCreatesFirstSubjectItemAndRevisionAtomically(t *testing.
 	command := transitionCommand()
 	command.Subject.ID = 0
 	command.ExpectedLockVersion = 0
+	command.CreateSubject = true
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	mock.ExpectQuery("SELECT `id` FROM `article` WHERE .*id = \\?.*status IN \\(\\?,\\?\\).*comment_status = \\?.*LIMIT \\?").
 		WithArgs(uint64(3), uint(1), uint(2), uint8(1), 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(3))
@@ -128,6 +132,7 @@ func TestApplyTransitionCreatesPreReviewMomentHiddenInBusinessTable(t *testing.T
 	command := transitionCommand()
 	command.Subject = moderation.SubjectRef{Type: moderation.SubjectMoment}
 	command.ExpectedLockVersion = 0
+	command.CreateSubject = true
 	command.Next = moderation.ItemState{
 		LifecycleState: moderation.LifecycleActive,
 		PublicState:    moderation.PublicPlaceholder,
@@ -138,6 +143,7 @@ func TestApplyTransitionCreatesPreReviewMomentHiddenInBusinessTable(t *testing.T
 	command.Materialize = moderation.RevisionRef{}
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	mock.ExpectQuery("SELECT `id` FROM `user` WHERE .*id = \\?.*status = \\?.*LIMIT \\?").
 		WithArgs(uint64(42), uint8(1), 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(42))
@@ -166,7 +172,11 @@ func TestApplyTransitionSupersedesExpectedPendingRevision(t *testing.T) {
 	command.SupersedeRevisionID = &oldPending
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	expectLockedItem(mock, 4, &oldPending)
+	expectLockedArticleSubject(mock, "旧正文")
+	mock.ExpectQuery("SELECT .* FROM `moderation_revision`.*FOR UPDATE").
+		WillReturnRows(sqlmock.NewRows([]string{"id", "item_id"}).AddRow(oldPending, 10))
 	mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\)").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
 	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
 	mock.ExpectExec("UPDATE `moderation_revision` SET .*`review_status`=\\?.*WHERE .*id = \\?.*item_id = \\?.*review_status = \\?").
@@ -188,6 +198,7 @@ func TestApplyTransitionRejectsOptimisticLockMismatch(t *testing.T) {
 	command := transitionCommand()
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	expectLockedItem(mock, 5, nil)
 	mock.ExpectRollback()
 
@@ -205,6 +216,7 @@ func TestApplyTransitionRejectsStalePendingRevision(t *testing.T) {
 	command.ExpectedPendingID = &expected
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	expectLockedItem(mock, 4, &actual)
 	mock.ExpectRollback()
 
@@ -219,7 +231,9 @@ func TestApplyTransitionRollsBackWhenMaterializationFails(t *testing.T) {
 	command := transitionCommand()
 
 	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
 	expectLockedItem(mock, 4, nil)
+	expectLockedArticleSubject(mock, "旧正文")
 	mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\)").WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
 	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
 	mock.ExpectExec("UPDATE `moderation_item` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
@@ -236,7 +250,7 @@ func TestApplyTransitionRollsBackWhenMaterializationFails(t *testing.T) {
 func TestApplyTransitionDeleteRejectsMismatchedReplyParent(t *testing.T) {
 	repository, mock := newRepository(t)
 	command := moderation.ApplyTransitionCommand{
-		Subject:             moderation.SubjectRef{Type: moderation.SubjectArticleCommentReply, ID: 9, RootID: 999, ParentID: 5},
+		Subject:             moderation.SubjectRef{Type: moderation.SubjectArticleCommentReply, ID: 9, RootID: 999, ParentID: uint64Pointer(5)},
 		AuthorID:            42,
 		ExpectedLockVersion: 4,
 		Next: moderation.ItemState{
@@ -255,12 +269,9 @@ func TestApplyTransitionDeleteRejectsMismatchedReplyParent(t *testing.T) {
 			"state_before_emergency", "emergency_hidden_reason", "emergency_hidden_at", "deleted_at",
 			"lock_version", "created_at", "updated_at",
 		}).AddRow(12, "article_comment_reply", 9, 42, "active", "visible", 80, 80, nil, nil, nil, nil, nil, 4, fixedTime, fixedTime))
-	mock.ExpectExec("UPDATE `moderation_item` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery("SELECT .* FROM `article_comment_reply` WHERE .*`id` = \\?.*LIMIT \\?").
-		WithArgs(uint64(9), 1).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "created_at", "updated_at", "deleted_at", "comment_id", "to_user_id", "from_user_id", "parent_reply_id", "content",
-		}).AddRow(9, fixedTime, fixedTime, nil, 7, 1, 42, 5, "正文"))
+	mock.ExpectQuery("SELECT .* FROM `article_comment_reply`.*FOR UPDATE").
+		WithArgs(uint64(9), uint64(42), uint64(999), uint64(5), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "comment_id", "from_user_id", "parent_reply_id", "content"}))
 	mock.ExpectRollback()
 
 	_, err := repository.ApplyTransition(context.Background(), command)
@@ -276,6 +287,8 @@ func TestRecordBlockedAttemptIsIdempotentAndStoresNoBody(t *testing.T) {
 		RulesetVersion: 3, RuleMatchIDs: []uint64{7, 9}, CreatedAt: fixedTime,
 	}
 
+	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "blocked-1")
 	mock.ExpectExec("INSERT INTO `moderation_attempt` .*ON DUPLICATE KEY UPDATE `id`=`id`").
 		WithArgs(uint64(42), moderation.SubjectMoment, nil, "blocked-1", uint64(3), "[7,9]", fixedTime).
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -283,6 +296,7 @@ func TestRecordBlockedAttemptIsIdempotentAndStoresNoBody(t *testing.T) {
 		WithArgs(uint64(42), "blocked-1", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content_type", "item_id", "idempotency_key", "ruleset_version", "rule_match_ids", "created_at"}).
 			AddRow(33, 42, "moment", nil, "blocked-1", 3, "[7,9]", fixedTime))
+	mock.ExpectCommit()
 
 	got, err := repository.RecordBlockedAttempt(context.Background(), attempt)
 
@@ -359,7 +373,12 @@ func TestLoadSubjectUsesTypedTableMappings(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, uint64(42), got.AuthorID)
 			assert.Equal(t, tt.wantRoot, got.Ref.RootID)
-			assert.Equal(t, tt.wantParent, got.Ref.ParentID)
+			if tt.ref.Type == moderation.SubjectArticleCommentReply || tt.ref.Type == moderation.SubjectMomentCommentReply || tt.ref.Type == moderation.SubjectGuestbookReply {
+				require.NotNil(t, got.Ref.ParentID)
+				assert.Equal(t, tt.wantParent, *got.Ref.ParentID)
+			} else {
+				assert.Nil(t, got.Ref.ParentID)
+			}
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
@@ -388,7 +407,7 @@ func TestLoadModerationViewBatchesAndHidesPendingDetailsFromPublic(t *testing.T)
 		{Type: moderation.SubjectArticleComment, ID: 7},
 		{Type: moderation.SubjectMoment, ID: 8},
 	}
-	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized.*LEFT JOIN moderation_revision AS pending.*content_type IN.*content_id IN").
+	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized ON materialized.id = moderation_item.materialized_revision_id AND materialized.item_id = moderation_item.id.*LEFT JOIN moderation_revision AS pending ON pending.id = moderation_item.pending_revision_id AND pending.item_id = moderation_item.id.*content_type IN.*content_id IN").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"content_type", "content_id", "author_id", "lifecycle_state", "public_state",
 			"materialized_revision_id", "approved_revision_id", "pending_revision_id",
@@ -411,7 +430,7 @@ func TestLoadModerationViewBatchesAndHidesPendingDetailsFromPublic(t *testing.T)
 func TestLoadModerationViewReturnsPendingDetailsOnlyToAuthor(t *testing.T) {
 	repository, mock := newRepository(t)
 	ref := moderation.SubjectRef{Type: moderation.SubjectMoment, ID: 8}
-	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized.*LEFT JOIN moderation_revision AS pending").
+	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized ON materialized.id = moderation_item.materialized_revision_id AND materialized.item_id = moderation_item.id.*LEFT JOIN moderation_revision AS pending ON pending.id = moderation_item.pending_revision_id AND pending.item_id = moderation_item.id").
 		WillReturnRows(sqlmock.NewRows([]string{
 			"content_type", "content_id", "author_id", "lifecycle_state", "public_state",
 			"materialized_revision_id", "approved_revision_id", "pending_revision_id",

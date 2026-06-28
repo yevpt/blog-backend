@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
@@ -22,12 +23,32 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 
 	var applied AppliedTransition
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if cmd.Revision != nil {
+			existing, err := lockIdempotencyScope(ctx, tx, cmd.Revision.SubmitterID, cmd.Revision.IdempotencyKey)
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				if existing.Kind != ResultRevision {
+					return ErrIdempotencyDomainConflict
+				}
+				applied = appliedTransitionFromStored(*existing)
+				return nil
+			}
+		} else if cmd.ProfileChange != nil {
+			if err := ensureAndLockProfile(ctx, tx, cmd.ProfileChange.UserID); err != nil {
+				return err
+			}
+		}
 		item, createdSubject, err := r.prepareItem(ctx, tx, adapter, &cmd)
 		if err != nil {
 			return err
 		}
 		applied.Subject = cmd.Subject
 		applied.ItemID = item.ID
+		if err := validateRevisionOwnership(ctx, tx, item, cmd); err != nil {
+			return err
+		}
 
 		newRevision, err := createRevision(ctx, tx, item.ID, cmd.Revision)
 		if err != nil {
@@ -68,16 +89,26 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 	return applied, err
 }
 
+func appliedTransitionFromStored(result StoredResult) AppliedTransition {
+	return AppliedTransition{
+		Subject: result.Subject, ItemID: result.ItemID, RevisionID: result.RevisionID,
+		RevisionVersion: result.RevisionVersion, LockVersion: result.LockVersion,
+	}
+}
+
 func validateTransitionCommand(cmd ApplyTransitionCommand) error {
 	if !validSubjectType(cmd.Subject.Type) || cmd.AuthorID == 0 {
 		return ErrInvalidCommand
 	}
 	if cmd.Subject.ID == 0 {
-		if cmd.ExpectedLockVersion != 0 || cmd.ExpectedPendingID != nil || cmd.Revision == nil {
+		if !cmd.CreateSubject || cmd.ExpectedLockVersion != 0 || cmd.ExpectedPendingID != nil || cmd.Revision == nil {
 			return ErrInvalidCommand
 		}
-	} else if cmd.ExpectedLockVersion == 0 {
+	} else if cmd.CreateSubject || cmd.ExpectedLockVersion == 0 {
 		return ErrInvalidCommand
+	}
+	if err := validateTransitionSubjectRef(cmd.Subject); err != nil {
+		return err
 	}
 	if cmd.Next.LifecycleState != LifecycleActive && cmd.Next.LifecycleState != LifecycleDeleted {
 		return ErrInvalidCommand
@@ -89,7 +120,49 @@ func validateTransitionCommand(cmd ApplyTransitionCommand) error {
 	if cmd.Revision != nil && (cmd.Revision.SubmitterID == 0 || cmd.Revision.IdempotencyKey == "" || cmd.Revision.ReviewStatus == "") {
 		return ErrInvalidCommand
 	}
+	if cmd.ProfileChange != nil && cmd.ProfileChange.UserID == 0 {
+		return ErrInvalidCommand
+	}
+	if cmd.Revision != nil && cmd.ProfileChange != nil && cmd.Revision.SubmitterID != cmd.ProfileChange.UserID {
+		return ErrInvalidCommand
+	}
 	if referencesNewRevision(cmd) && cmd.Revision == nil {
+		return ErrInvalidCommand
+	}
+	if err := validateRevisionRefs(cmd); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateRevisionRefs(cmd ApplyTransitionCommand) error {
+	refs := []RevisionRef{cmd.Next.Materialized, cmd.Next.Approved, cmd.Next.Pending, cmd.Materialize}
+	if cmd.Log != nil {
+		refs = append(refs, cmd.Log.Revision)
+	}
+	for _, ref := range refs {
+		if ref.IsNew && ref.ID != 0 {
+			return ErrInvalidCommand
+		}
+	}
+	return nil
+}
+
+func validateTransitionSubjectRef(ref SubjectRef) error {
+	switch ref.Type {
+	case SubjectArticleCommentReply, SubjectMomentCommentReply, SubjectGuestbookReply:
+		if ref.RootID == 0 || ref.ParentID == nil {
+			return ErrInvalidCommand
+		}
+	case SubjectArticleComment, SubjectMomentComment, SubjectGuestbook:
+		if ref.RootID == 0 || ref.ParentID != nil {
+			return ErrInvalidCommand
+		}
+	case SubjectMoment:
+		if ref.RootID != 0 || ref.ParentID != nil {
+			return ErrInvalidCommand
+		}
+	default:
 		return ErrInvalidCommand
 	}
 	return nil
@@ -101,7 +174,17 @@ func (r *repository) prepareItem(ctx context.Context, tx *gorm.DB, adapter subje
 		if err != nil {
 			return item, false, err
 		}
-		return item, false, validateLockedItem(item, *cmd)
+		if err := validateLockedItem(item, *cmd); err != nil {
+			return item, false, err
+		}
+		snapshot, err := adapter.Lock(ctx, tx, cmd.Subject, cmd.AuthorID)
+		if err != nil {
+			return item, false, err
+		}
+		if !sameSubjectRelation(snapshot.Ref, cmd.Subject) || snapshot.AuthorID != cmd.AuthorID {
+			return item, false, ErrSubjectNotFound
+		}
+		return item, false, nil
 	}
 	if cmd.Materialize.ID != 0 && !cmd.Materialize.IsNew {
 		return model.ModerationItem{}, false, ErrInvalidCommand
@@ -127,6 +210,67 @@ func (r *repository) prepareItem(ctx context.Context, tx *gorm.DB, adapter subje
 	}
 	cmd.ExpectedLockVersion = item.LockVersion
 	return item, true, nil
+}
+
+type revisionOwnerRow struct {
+	ID     uint64
+	ItemID uint64
+}
+
+func validateRevisionOwnership(ctx context.Context, tx *gorm.DB, item model.ModerationItem, cmd ApplyTransitionCommand) error {
+	if cmd.SupersedeRevisionID != nil && !sameOptionalID(cmd.SupersedeRevisionID, item.PendingRevisionID) {
+		return ErrPendingRevisionConflict
+	}
+	if cmd.Review != nil && (item.PendingRevisionID == nil || cmd.Review.RevisionID != *item.PendingRevisionID) {
+		return ErrPendingRevisionConflict
+	}
+	ids := existingRevisionIDs(cmd)
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []revisionOwnerRow
+	if err := tx.WithContext(ctx).Model(&model.ModerationRevision{}).
+		Select("id", "item_id").Where("id IN ?", ids).Order("id ASC").
+		Clauses(clause.Locking{Strength: "UPDATE"}).Find(&rows).Error; err != nil {
+		return err
+	}
+	if len(rows) != len(ids) {
+		return ErrRevisionStateConflict
+	}
+	for _, row := range rows {
+		if row.ItemID != item.ID {
+			return ErrRevisionStateConflict
+		}
+	}
+	return nil
+}
+
+func existingRevisionIDs(cmd ApplyTransitionCommand) []uint64 {
+	unique := make(map[uint64]struct{})
+	add := func(ref RevisionRef) {
+		if !ref.IsNew && ref.ID != 0 {
+			unique[ref.ID] = struct{}{}
+		}
+	}
+	add(cmd.Next.Materialized)
+	add(cmd.Next.Approved)
+	add(cmd.Next.Pending)
+	add(cmd.Materialize)
+	if cmd.Log != nil {
+		add(cmd.Log.Revision)
+	}
+	if cmd.SupersedeRevisionID != nil {
+		unique[*cmd.SupersedeRevisionID] = struct{}{}
+	}
+	if cmd.Review != nil {
+		unique[cmd.Review.RevisionID] = struct{}{}
+	}
+	ids := make([]uint64, 0, len(unique))
+	for id := range unique {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
 }
 
 func referencesNewRevision(cmd ApplyTransitionCommand) bool {
@@ -320,7 +464,7 @@ func sameSubjectRelation(actual, expected SubjectRef) bool {
 	if expected.Type == SubjectMoment {
 		return true
 	}
-	return expected.RootID != 0 && actual.RootID == expected.RootID && actual.ParentID == expected.ParentID
+	return expected.RootID != 0 && actual.RootID == expected.RootID && sameOptionalID(actual.ParentID, expected.ParentID)
 }
 
 func tombstoneDescendant(ctx context.Context, tx *gorm.DB, ref SubjectRef) error {

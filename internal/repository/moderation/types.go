@@ -41,8 +41,8 @@ type SubjectRef struct {
 	ID   uint64
 	// RootID 对一级内容是文章、碎语或留言板 owner；对回复是一级评论 ID。
 	RootID uint64
-	// ParentID 对回复是 parent_reply_id，零表示直接回复一级评论。
-	ParentID uint64
+	// ParentID 对回复是 parent_reply_id；nil 表示未提供，指向零表示直接回复一级评论。
+	ParentID *uint64
 }
 
 // SubjectSnapshot 是业务正文和归属关系的仓储记录。
@@ -206,6 +206,8 @@ type ApplyTransitionCommand struct {
 	DeleteSubject       bool
 	Log                 *ActionLog
 	ProfileChange       *ProfileChange
+	// CreateSubject 显式声明首次提交需要在事务内创建业务行。
+	CreateSubject bool
 }
 
 // AppliedTransition 返回事务提交后的稳定标识。
@@ -215,6 +217,14 @@ type AppliedTransition struct {
 	RevisionID      uint64
 	RevisionVersion uint64
 	LockVersion     uint64
+}
+
+// ItemStateRecord 是 service 构建纯状态机输入所需的完整审核项快照。
+type ItemStateRecord struct {
+	ItemID      uint64
+	AuthorID    uint64
+	State       ItemState
+	LockVersion uint64
 }
 
 // MaterializeCommand 是私有适配器的业务表写入命令。
@@ -249,15 +259,17 @@ const (
 
 // StoredResult 是幂等重放所需的安全结果，不包含审核正文和规则命中。
 type StoredResult struct {
-	Kind         ResultKind
-	RevisionID   uint64
-	AttemptID    uint64
-	ItemID       uint64
-	Subject      SubjectRef
-	ReviewStatus ReviewStatus
-	PublicState  PublicState
-	CreatedAt    time.Time
-	Content      string
+	Kind            ResultKind
+	RevisionID      uint64
+	AttemptID       uint64
+	ItemID          uint64
+	Subject         SubjectRef
+	ReviewStatus    ReviewStatus
+	PublicState     PublicState
+	CreatedAt       time.Time
+	Content         string
+	RevisionVersion uint64
+	LockVersion     uint64
 }
 
 // TrustLevel 是用户审核信任级别。

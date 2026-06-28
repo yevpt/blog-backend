@@ -9,6 +9,7 @@ import (
 // Repository 是 service 可 mock 的审核数据边界。
 type Repository interface {
 	LoadSubject(ctx context.Context, ref SubjectRef) (SubjectSnapshot, error)
+	LoadItemState(ctx context.Context, ref SubjectRef) (ItemStateRecord, error)
 	LoadPolicyContext(ctx context.Context, userID uint64) (PolicyContext, error)
 	FindResultByIdempotencyKey(ctx context.Context, userID uint64, key string) (*StoredResult, error)
 	ApplyTransition(ctx context.Context, cmd ApplyTransitionCommand) (AppliedTransition, error)
@@ -43,6 +44,7 @@ func NewRepository(db *gorm.DB) Repository {
 
 type subjectAdapter interface {
 	Load(ctx context.Context, db *gorm.DB, ref SubjectRef) (SubjectSnapshot, error)
+	Lock(ctx context.Context, tx *gorm.DB, ref SubjectRef, authorID uint64) (SubjectSnapshot, error)
 	Materialize(ctx context.Context, tx *gorm.DB, cmd MaterializeCommand) error
 	Delete(ctx context.Context, tx *gorm.DB, ref SubjectRef) error
 	Descendants(ctx context.Context, tx *gorm.DB, ref SubjectRef) ([]SubjectRef, error)

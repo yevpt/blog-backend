@@ -9,6 +9,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/model"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (r *repository) LoadSubject(ctx context.Context, ref SubjectRef) (SubjectSnapshot, error) {
@@ -21,10 +22,46 @@ func (r *repository) LoadSubject(ctx context.Context, ref SubjectRef) (SubjectSn
 		return SubjectSnapshot{}, err
 	}
 	if (ref.RootID != 0 && ref.RootID != snapshot.Ref.RootID) ||
-		(ref.ParentID != 0 && ref.ParentID != snapshot.Ref.ParentID) {
+		(ref.ParentID != nil && !sameOptionalID(ref.ParentID, snapshot.Ref.ParentID)) {
 		return SubjectSnapshot{}, ErrSubjectNotFound
 	}
 	return snapshot, nil
+}
+
+func (r *repository) LoadItemState(ctx context.Context, ref SubjectRef) (ItemStateRecord, error) {
+	if !validSubjectType(ref.Type) || ref.ID == 0 {
+		return ItemStateRecord{}, ErrInvalidCommand
+	}
+	var item model.ModerationItem
+	err := r.db.WithContext(ctx).Where("content_type = ? AND content_id = ?", ref.Type, ref.ID).Take(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ItemStateRecord{}, ErrItemNotFound
+	}
+	if err != nil {
+		return ItemStateRecord{}, err
+	}
+	return itemStateRecord(item), nil
+}
+
+func itemStateRecord(item model.ModerationItem) ItemStateRecord {
+	state := ItemState{
+		LifecycleState: LifecycleState(item.LifecycleState), PublicState: PublicState(item.PublicState),
+		Materialized: revisionRef(item.MaterializedRevisionID), Approved: revisionRef(item.ApprovedRevisionID),
+		Pending: revisionRef(item.PendingRevisionID), EmergencyReason: cloneString(item.EmergencyHiddenReason),
+		EmergencyHiddenAt: item.EmergencyHiddenAt, DeletedAt: item.DeletedAt,
+	}
+	if item.StateBeforeEmergency != nil {
+		value := PublicState(*item.StateBeforeEmergency)
+		state.StateBeforeEmergency = &value
+	}
+	return ItemStateRecord{ItemID: item.ID, AuthorID: item.AuthorID, State: state, LockVersion: item.LockVersion}
+}
+
+func revisionRef(id *uint64) RevisionRef {
+	if id == nil {
+		return RevisionRef{}
+	}
+	return ExistingRevision(*id)
 }
 
 func (r *repository) LoadPolicyContext(ctx context.Context, userID uint64) (PolicyContext, error) {
@@ -66,23 +103,30 @@ func (r *repository) LoadPolicyContext(ctx context.Context, userID uint64) (Poli
 }
 
 type storedResultRow struct {
-	Domain       string
-	RecordID     uint64
-	ItemID       *uint64
-	ContentType  string
-	ContentID    *uint64
-	ReviewStatus string
-	PublicState  string
-	CreatedAt    time.Time
+	Domain          string
+	RecordID        uint64
+	ItemID          *uint64
+	ContentType     string
+	ContentID       *uint64
+	ReviewStatus    string
+	PublicState     string
+	CreatedAt       time.Time
+	RevisionVersion uint64
+	LockVersion     uint64
 }
+
+const idempotencyResultQuery = "SELECT 'revision' AS domain, revision.id AS record_id, revision.item_id AS item_id, item.content_type, item.content_id, revision.review_status, item.public_state, revision.created_at, revision.version AS revision_version, item.lock_version AS lock_version FROM moderation_revision AS revision JOIN moderation_item AS item ON item.id = revision.item_id WHERE revision.submitter_id = ? AND revision.idempotency_key = ? UNION ALL SELECT 'attempt' AS domain, attempt.id AS record_id, attempt.item_id AS item_id, attempt.content_type, NULL AS content_id, 'blocked' AS review_status, '' AS public_state, attempt.created_at, 0 AS revision_version, 0 AS lock_version FROM moderation_attempt AS attempt WHERE attempt.user_id = ? AND attempt.idempotency_key = ?"
 
 func (r *repository) FindResultByIdempotencyKey(ctx context.Context, userID uint64, key string) (*StoredResult, error) {
 	if userID == 0 || key == "" {
 		return nil, ErrInvalidCommand
 	}
-	const query = "SELECT 'revision' AS domain, revision.id AS record_id, revision.item_id AS item_id, item.content_type, item.content_id, revision.review_status, item.public_state, revision.created_at FROM moderation_revision AS revision JOIN moderation_item AS item ON item.id = revision.item_id WHERE revision.submitter_id = ? AND revision.idempotency_key = ? UNION ALL SELECT 'attempt' AS domain, attempt.id AS record_id, attempt.item_id AS item_id, attempt.content_type, NULL AS content_id, 'blocked' AS review_status, '' AS public_state, attempt.created_at FROM moderation_attempt AS attempt WHERE attempt.user_id = ? AND attempt.idempotency_key = ?"
+	return findResultByIdempotencyKey(ctx, r.db, userID, key)
+}
+
+func findResultByIdempotencyKey(ctx context.Context, db *gorm.DB, userID uint64, key string) (*StoredResult, error) {
 	var rows []storedResultRow
-	if err := r.db.WithContext(ctx).Raw(query, userID, key, userID, key).Scan(&rows).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(idempotencyResultQuery, userID, key, userID, key).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 	if len(rows) == 0 {
@@ -96,11 +140,13 @@ func (r *repository) FindResultByIdempotencyKey(ctx context.Context, userID uint
 
 func storedResult(row storedResultRow) *StoredResult {
 	result := &StoredResult{
-		ItemID:       valueOrZero(row.ItemID),
-		Subject:      SubjectRef{Type: SubjectType(row.ContentType), ID: valueOrZero(row.ContentID)},
-		ReviewStatus: ReviewStatus(row.ReviewStatus),
-		PublicState:  PublicState(row.PublicState),
-		CreatedAt:    row.CreatedAt,
+		ItemID:          valueOrZero(row.ItemID),
+		Subject:         SubjectRef{Type: SubjectType(row.ContentType), ID: valueOrZero(row.ContentID)},
+		ReviewStatus:    ReviewStatus(row.ReviewStatus),
+		PublicState:     PublicState(row.PublicState),
+		CreatedAt:       row.CreatedAt,
+		RevisionVersion: row.RevisionVersion,
+		LockVersion:     row.LockVersion,
 	}
 	if row.Domain == string(ResultBlocked) || row.Domain == "attempt" {
 		result.Kind = ResultBlocked
@@ -110,6 +156,29 @@ func storedResult(row storedResultRow) *StoredResult {
 	result.Kind = ResultRevision
 	result.RevisionID = row.RecordID
 	return result
+}
+
+func lockIdempotencyScope(ctx context.Context, tx *gorm.DB, userID uint64, key string) (*StoredResult, error) {
+	if err := ensureAndLockProfile(ctx, tx, userID); err != nil {
+		return nil, err
+	}
+	return findResultByIdempotencyKey(ctx, tx, userID, key)
+}
+
+func ensureAndLockProfile(ctx context.Context, tx *gorm.DB, userID uint64) error {
+	now := tx.NowFunc()
+	if err := tx.WithContext(ctx).Exec(
+		"INSERT INTO `user_moderation_profile` (`user_id`,`created_at`,`updated_at`) VALUES (?,?,?) ON DUPLICATE KEY UPDATE `user_id`=`user_id`",
+		userID, now, now,
+	).Error; err != nil {
+		return err
+	}
+	var profile struct{ UserID uint64 }
+	if err := tx.WithContext(ctx).Table("user_moderation_profile").Select("user_id").
+		Clauses(clause.Locking{Strength: "UPDATE"}).Where("user_id = ?", userID).Take(&profile).Error; err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *repository) RecordBlockedAttempt(ctx context.Context, attempt BlockedAttempt) (StoredResult, error) {
@@ -125,20 +194,36 @@ func (r *repository) RecordBlockedAttempt(ctx context.Context, attempt BlockedAt
 		IdempotencyKey: attempt.IdempotencyKey, RulesetVersion: attempt.RulesetVersion,
 		RuleMatchIDs: string(ruleIDs), CreatedAt: attempt.CreatedAt,
 	}
-	insert := r.db.WithContext(ctx).Exec(
-		"INSERT INTO `moderation_attempt` (`user_id`,`content_type`,`item_id`,`idempotency_key`,`ruleset_version`,`rule_match_ids`,`created_at`) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `id`=`id`",
-		row.UserID, SubjectType(row.ContentType), row.ItemID, row.IdempotencyKey, row.RulesetVersion, row.RuleMatchIDs, row.CreatedAt,
-	)
-	if insert.Error != nil {
-		return StoredResult{}, insert.Error
-	}
-	if err := r.db.WithContext(ctx).Where("user_id = ? AND idempotency_key = ?", attempt.UserID, attempt.IdempotencyKey).Take(&row).Error; err != nil {
-		return StoredResult{}, err
-	}
-	return StoredResult{
-		Kind: ResultBlocked, AttemptID: row.ID, ItemID: valueOrZero(row.ItemID),
-		Subject: SubjectRef{Type: SubjectType(row.ContentType)}, CreatedAt: row.CreatedAt,
-	}, nil
+	var result StoredResult
+	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		existing, err := lockIdempotencyScope(ctx, tx, attempt.UserID, attempt.IdempotencyKey)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			if existing.Kind != ResultBlocked {
+				return ErrIdempotencyDomainConflict
+			}
+			result = *existing
+			return nil
+		}
+		insert := tx.WithContext(ctx).Exec(
+			"INSERT INTO `moderation_attempt` (`user_id`,`content_type`,`item_id`,`idempotency_key`,`ruleset_version`,`rule_match_ids`,`created_at`) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `id`=`id`",
+			row.UserID, SubjectType(row.ContentType), row.ItemID, row.IdempotencyKey, row.RulesetVersion, row.RuleMatchIDs, row.CreatedAt,
+		)
+		if insert.Error != nil {
+			return insert.Error
+		}
+		if err := tx.WithContext(ctx).Where("user_id = ? AND idempotency_key = ?", attempt.UserID, attempt.IdempotencyKey).Take(&row).Error; err != nil {
+			return err
+		}
+		result = StoredResult{
+			Kind: ResultBlocked, AttemptID: row.ID, ItemID: valueOrZero(row.ItemID),
+			Subject: SubjectRef{Type: SubjectType(row.ContentType)}, CreatedAt: row.CreatedAt,
+		}
+		return nil
+	})
+	return result, err
 }
 
 type moderationViewRow struct {
@@ -172,8 +257,8 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 	var rows []moderationViewRow
 	err = r.db.WithContext(ctx).Table("moderation_item").
 		Select("moderation_item.content_type, moderation_item.content_id, moderation_item.author_id, moderation_item.lifecycle_state, moderation_item.public_state, moderation_item.materialized_revision_id, moderation_item.approved_revision_id, moderation_item.pending_revision_id, materialized.published_content AS materialized_content, pending.submitted_content AS pending_content, pending.risk_level AS pending_risk_level, pending.review_status AS pending_review_status, pending.rule_match_ids AS pending_rule_match_ids").
-		Joins("LEFT JOIN moderation_revision AS materialized ON materialized.id = moderation_item.materialized_revision_id").
-		Joins("LEFT JOIN moderation_revision AS pending ON pending.id = moderation_item.pending_revision_id").
+		Joins("LEFT JOIN moderation_revision AS materialized ON materialized.id = moderation_item.materialized_revision_id AND materialized.item_id = moderation_item.id").
+		Joins("LEFT JOIN moderation_revision AS pending ON pending.id = moderation_item.pending_revision_id AND pending.item_id = moderation_item.id").
 		Where("moderation_item.content_type IN ? AND moderation_item.content_id IN ?", types, ids).
 		Scan(&rows).Error
 	if err != nil {
