@@ -163,10 +163,10 @@ type UserMomentsCountResp struct {
 
 // UserListItemResp 用户列表项响应
 type UserListItemResp struct {
-	ID          uint       `json:"id" example:"1"`
-	Nickname    *string    `json:"nickname,omitempty" example:"Yevpt"`
-	AvatarUrl   *string    `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
-	Mark        *string    `json:"mark,omitempty" example:"博主"`
+	ID           uint       `json:"id" example:"1"`
+	Nickname     *string    `json:"nickname,omitempty" example:"Yevpt"`
+	AvatarUrl    *string    `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
+	Mark         *string    `json:"mark,omitempty" example:"博主"`
 	Roles        []string   `json:"roles"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 	LastActiveAt *time.Time `json:"last_active_at,omitempty"`

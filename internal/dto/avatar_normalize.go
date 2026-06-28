@@ -23,13 +23,13 @@ type NormalizeAvatarItem struct {
 
 // NormalizeAvatarsResp 批量归一化老用户头像响应。
 type NormalizeAvatarsResp struct {
-	Scanned        int                 `json:"scanned" example:"20"`
-	StorageScanned int                 `json:"storage_scanned,omitempty" example:"8"`
-	Updated        int                 `json:"updated" example:"3"`
-	Cleared        int                 `json:"cleared" example:"1"`
-	Purged         int                 `json:"purged,omitempty" example:"5"`
-	Skipped        int                 `json:"skipped" example:"2"`
-	OK             int                 `json:"ok" example:"14"`
-	Failed         int                 `json:"failed" example:"1"`
+	Scanned        int                   `json:"scanned" example:"20"`
+	StorageScanned int                   `json:"storage_scanned,omitempty" example:"8"`
+	Updated        int                   `json:"updated" example:"3"`
+	Cleared        int                   `json:"cleared" example:"1"`
+	Purged         int                   `json:"purged,omitempty" example:"5"`
+	Skipped        int                   `json:"skipped" example:"2"`
+	OK             int                   `json:"ok" example:"14"`
+	Failed         int                   `json:"failed" example:"1"`
 	Items          []NormalizeAvatarItem `json:"items"`
 }
