@@ -509,6 +509,38 @@ func TestServiceAssertCanInteractUsesDerivedState(t *testing.T) {
 			},
 			wantErr: moderation.ErrInteractionNotAllowed,
 		},
+		{
+			name: "placeholder",
+			state: moderationrepo.ItemState{
+				LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicPlaceholder,
+				Pending: moderationrepo.ExistingRevision(11),
+			},
+			wantErr: moderation.ErrInteractionNotAllowed,
+		},
+		{
+			name: "hidden",
+			state: moderationrepo.ItemState{
+				LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicHidden,
+				Materialized: moderationrepo.ExistingRevision(10), Approved: moderationrepo.ExistingRevision(10),
+			},
+			wantErr: moderation.ErrInteractionNotAllowed,
+		},
+		{
+			name: "emergency hidden",
+			state: moderationrepo.ItemState{
+				LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicEmergencyHidden,
+				Materialized: moderationrepo.ExistingRevision(10), Approved: moderationrepo.ExistingRevision(10),
+			},
+			wantErr: moderation.ErrInteractionNotAllowed,
+		},
+		{
+			name: "deleted",
+			state: moderationrepo.ItemState{
+				LifecycleState: moderationrepo.LifecycleDeleted, PublicState: moderationrepo.PublicHidden,
+				Approved: moderationrepo.ExistingRevision(10),
+			},
+			wantErr: moderation.ErrInteractionNotAllowed,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

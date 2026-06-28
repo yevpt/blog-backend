@@ -205,6 +205,21 @@ func TestGuestbookServiceEditUsesModeration(t *testing.T) {
 	assert.Equal(t, "新留言", resp.Content)
 }
 
+func TestGuestbookServiceToggleLikeGuardsPendingContent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().AssertCanInteract(gomock.Any(), moderationservice.SubjectRef{
+		Type: moderationservice.SubjectGuestbook, ID: 9,
+	}).Return(moderationservice.ErrInteractionNotAllowed)
+	repo := &fakeGuestbookRepo{}
+	svc := guestbookservice.NewGuestbookService(repo, nil, nil, nil, moderationSvc)
+
+	_, err := svc.ToggleLike(9, 7)
+
+	assert.ErrorIs(t, err, moderationservice.ErrInteractionNotAllowed)
+	assert.Zero(t, repo.toggleID)
+}
+
 func TestGuestbookService_ListAdmin_NormalizesSearchAndPagination(t *testing.T) {
 	now := time.Now()
 	repo := &fakeGuestbookRepo{

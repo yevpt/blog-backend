@@ -9,6 +9,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	guestbookrepo "github.com/vpt/blog-backend/internal/repository/guestbook"
 	"github.com/vpt/blog-backend/internal/service/commentasset"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -97,6 +98,13 @@ func guestbookImageTargetPrefix(ownerUserID uint) string {
 func (s *guestbookService) ToggleLike(id uint, userID uint) (*dto.GuestbookLikeResp, error) {
 	if id == 0 {
 		return nil, ErrGuestbookInvalid
+	}
+	if s.moderation != nil {
+		if err := s.moderation.AssertCanInteract(context.Background(), moderationservice.SubjectRef{
+			Type: moderationservice.SubjectGuestbook, ID: uint64(id),
+		}); err != nil {
+			return nil, err
+		}
 	}
 	result, err := s.repo.ToggleLike(id, userID)
 	if err != nil {

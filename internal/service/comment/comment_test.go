@@ -223,6 +223,11 @@ func TestCommentServiceRoutesAllCommentSubjectsThroughModeration(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			moderationSvc := moderationmock.NewMockService(ctrl)
 			repo := &fakeCommentRepo{}
+			if tt.targetType == "moment" {
+				moderationSvc.EXPECT().AssertCanInteract(gomock.Any(), moderationservice.SubjectRef{
+					Type: moderationservice.SubjectMoment, ID: 3,
+				}).Return(nil)
+			}
 			moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
 				ActorID: 7, Subject: moderationservice.SubjectRef{Type: tt.wantSubject, RootID: 3},
 				Content: "正文", IdempotencyKey: "create-key",
@@ -264,6 +269,9 @@ func TestCommentServiceRoutesAllReplySubjectsThroughModeration(t *testing.T) {
 			moderationSvc := moderationmock.NewMockService(ctrl)
 			repo := &fakeCommentRepo{}
 			parentID := uint64(0)
+			moderationSvc.EXPECT().AssertCanInteract(gomock.Any(), moderationservice.SubjectRef{
+				Type: commentParentSubjectType(tt.targetType), ID: 9,
+			}).Return(nil)
 			moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
 				ActorID: 7, Subject: moderationservice.SubjectRef{
 					Type: tt.wantSubject, RootID: 9, ParentID: &parentID,
@@ -287,6 +295,17 @@ func TestCommentServiceRoutesAllReplySubjectsThroughModeration(t *testing.T) {
 			assert.Equal(t, "placeholder", resp.Moderation.PublicState)
 			assert.Zero(t, repo.replyData.FromUserID, "业务仓储不得重复创建可见行")
 		})
+	}
+}
+
+func commentParentSubjectType(targetType string) moderationservice.SubjectType {
+	switch targetType {
+	case "moment":
+		return moderationservice.SubjectMomentComment
+	case "guestbook":
+		return moderationservice.SubjectGuestbook
+	default:
+		return moderationservice.SubjectArticleComment
 	}
 }
 
@@ -330,6 +349,51 @@ func TestCommentServiceSignalsImagesToModeration(t *testing.T) {
 
 	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "![图](temp/a.jpg)", IdempotencyKey: "image-key"}, 7)
 	assert.ErrorIs(t, err, moderationservice.ErrImageReviewUnavailable)
+}
+
+func TestCommentServiceGuardsPendingTargetsBeforeWrites(t *testing.T) {
+	tests := []struct {
+		name string
+		ref  moderationservice.SubjectRef
+		call func(commentservice.CommentService) error
+	}{
+		{name: "moment child comment", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 3}, call: func(svc commentservice.CommentService) error {
+			_, err := svc.Create("moment", 3, dto.CommentCreateReq{Content: "评论", IdempotencyKey: "child"}, 7)
+			return err
+		}},
+		{name: "direct reply", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectArticleComment, ID: 9}, call: func(svc commentservice.CommentService) error {
+			_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "回复", IdempotencyKey: "direct"}, 7)
+			return err
+		}},
+		{name: "nested reply", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbookReply, ID: 12}, call: func(svc commentservice.CommentService) error {
+			_, err := svc.Reply("guestbook", 9, dto.CommentReplyCreateReq{ParentReplyID: 12, Content: "回复", IdempotencyKey: "nested"}, 7)
+			return err
+		}},
+		{name: "comment like", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectMomentComment, ID: 9}, call: func(svc commentservice.CommentService) error {
+			_, err := svc.ToggleLike("moment", 9, 7)
+			return err
+		}},
+		{name: "reply like", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectArticleCommentReply, ID: 12}, call: func(svc commentservice.CommentService) error {
+			_, err := svc.ToggleReplyLike("article", 12, 7)
+			return err
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			moderationSvc := moderationmock.NewMockService(ctrl)
+			moderationSvc.EXPECT().AssertCanInteract(gomock.Any(), test.ref).Return(moderationservice.ErrInteractionNotAllowed)
+			repo := &fakeCommentRepo{}
+			svc := commentservice.NewCommentService(repo, nil, nil, nil, moderationSvc)
+
+			err := test.call(svc)
+
+			assert.ErrorIs(t, err, moderationservice.ErrInteractionNotAllowed)
+			assert.Zero(t, repo.createUserID)
+			assert.Zero(t, repo.replyData.FromUserID)
+			assert.Zero(t, repo.toggleLikeCommentID)
+		})
+	}
 }
 
 func TestCommentService_ListAdmin_NormalizesFiltersAndMapsItems(t *testing.T) {

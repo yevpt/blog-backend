@@ -345,6 +345,21 @@ func TestMomentServiceEditUsesModeration(t *testing.T) {
 	assert.Equal(t, "旧碎语", resp.Content)
 }
 
+func TestMomentServiceToggleLikeGuardsPendingContent(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().AssertCanInteract(gomock.Any(), moderationservice.SubjectRef{
+		Type: moderationservice.SubjectMoment, ID: 9,
+	}).Return(moderationservice.ErrInteractionNotAllowed)
+	repo := &fakeMomentRepo{}
+	svc := momentservice.NewMomentService(repo, nil, nil, nil, nil, moderationSvc)
+
+	_, err := svc.ToggleLike(9, 7)
+
+	assert.ErrorIs(t, err, moderationservice.ErrInteractionNotAllowed)
+	assert.Zero(t, repo.likeID)
+}
+
 func TestMomentService_List_ForwardsRandomAndExcludeIDs(t *testing.T) {
 	repo := &fakeMomentRepo{
 		listResp: &momentrepo.PageResult{

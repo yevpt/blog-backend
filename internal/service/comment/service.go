@@ -9,6 +9,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	commentrepo "github.com/vpt/blog-backend/internal/repository/comment"
 	"github.com/vpt/blog-backend/internal/service/commentasset"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/internal/service/userrole"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -66,6 +67,13 @@ func (s *commentService) Create(targetType string, targetID uint, req dto.Commen
 		return nil, err
 	}
 	if s.moderation != nil {
+		if target.Type == commentrepo.TargetMoment {
+			if err := s.moderation.AssertCanInteract(context.Background(), moderationservice.SubjectRef{
+				Type: moderationservice.SubjectMoment, ID: uint64(targetID),
+			}); err != nil {
+				return nil, err
+			}
+		}
 		return s.submitComment(target, targetID, userID, content, req.IdempotencyKey)
 	}
 	normalized, store, err := s.normalizeCommentImages(content, userID, commentImageTargetPrefix(targetType, targetID))
@@ -122,6 +130,13 @@ func (s *commentService) Reply(targetType string, commentID uint, req dto.Commen
 		return nil, err
 	}
 	if s.moderation != nil {
+		parentRef := moderationservice.SubjectRef{Type: commentSubjectType(commentType), ID: uint64(commentID)}
+		if req.ParentReplyID > 0 {
+			parentRef = moderationservice.SubjectRef{Type: replySubjectType(commentType), ID: uint64(req.ParentReplyID)}
+		}
+		if err := s.moderation.AssertCanInteract(context.Background(), parentRef); err != nil {
+			return nil, err
+		}
 		return s.submitReply(commentType, commentID, userID, req, content)
 	}
 	normalized, store, err := s.normalizeCommentImages(content, userID, replyImageTargetPrefix(targetType, commentID))
@@ -179,6 +194,13 @@ func (s *commentService) ToggleLike(targetType string, commentID uint, userID ui
 	if err != nil || commentID == 0 {
 		return nil, ErrCommentTargetInvalid
 	}
+	if s.moderation != nil {
+		if err := s.moderation.AssertCanInteract(context.Background(), moderationservice.SubjectRef{
+			Type: commentSubjectType(target.Type), ID: uint64(commentID),
+		}); err != nil {
+			return nil, err
+		}
+	}
 	result, err := s.repo.ToggleLike(commentrepo.Target{Type: target.Type}, commentID, userID)
 	if err != nil {
 		return nil, mapRepoError(err)
@@ -194,6 +216,13 @@ func (s *commentService) ToggleReplyLike(targetType string, replyID uint, userID
 	target, err := parseTarget(targetType, 1)
 	if err != nil || replyID == 0 {
 		return nil, ErrCommentTargetInvalid
+	}
+	if s.moderation != nil {
+		if err := s.moderation.AssertCanInteract(context.Background(), moderationservice.SubjectRef{
+			Type: replySubjectType(target.Type), ID: uint64(replyID),
+		}); err != nil {
+			return nil, err
+		}
 	}
 	result, err := s.repo.ToggleReplyLike(commentrepo.Target{Type: target.Type}, replyID, userID)
 	if err != nil {

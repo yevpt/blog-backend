@@ -10,6 +10,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
 	momentrepo "github.com/vpt/blog-backend/internal/repository/moment"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
@@ -253,6 +254,13 @@ func (s *momentService) IsLiked(id uint, userID uint) (*dto.MomentLikeResp, erro
 func (s *momentService) ToggleLike(id uint, userID uint) (*dto.MomentItemResp, error) {
 	if id == 0 {
 		return nil, ErrMomentInvalid
+	}
+	if s.moderation != nil {
+		if err := s.moderation.AssertCanInteract(context.Background(), moderationservice.SubjectRef{
+			Type: moderationservice.SubjectMoment, ID: uint64(id),
+		}); err != nil {
+			return nil, err
+		}
 	}
 	aggregate, liked, err := s.repo.ToggleLike(id, userID)
 	if err != nil {
