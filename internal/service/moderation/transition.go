@@ -135,9 +135,9 @@ type TransitionPlan struct {
 	Idempotent          bool
 }
 
-// Transition 根据当前快照和事件生成原子持久化计划，不执行外部副作用。
-func Transition(current ItemSnapshot, input TransitionInput) (TransitionPlan, error) {
-	current = cloneItem(current)
+// Transition 根据输入中的前置快照和事件生成原子持久化计划，不执行外部副作用。
+func Transition(input TransitionInput) (TransitionPlan, error) {
+	current := cloneItem(input.Previous)
 	if err := validateItemSnapshot(current); err != nil {
 		return TransitionPlan{Item: current}, err
 	}
@@ -151,23 +151,36 @@ func Transition(current ItemSnapshot, input TransitionInput) (TransitionPlan, er
 	}
 
 	// 事件按职责分发到短小的状态转换函数。
+	var plan TransitionPlan
+	var err error
 	switch input.Event {
 	case EventSubmit, EventResubmit:
-		return transitionSubmission(current, input)
+		plan, err = transitionSubmission(current, input)
 	case EventApprove, EventCorrectAndApprove, EventReject:
-		return transitionReview(current, input)
+		plan, err = transitionReview(current, input)
 	case EventDelete, EventAdminDelete:
-		return transitionDelete(current, input)
+		plan, err = transitionDelete(current, input)
 	case EventEmergencyHide:
-		return transitionEmergencyHide(current, input)
+		plan, err = transitionEmergencyHide(current, input)
 	case EventRestore:
-		return transitionRestore(current, input)
+		plan, err = transitionRestore(current, input)
 	default:
 		return TransitionPlan{Item: current}, invalidTransition(input.Event, "unsupported event")
 	}
+	if err != nil || plan.Idempotent {
+		return plan, err
+	}
+	if err := validateItemSnapshot(plan.Item); err != nil {
+		return TransitionPlan{Item: current}, fmt.Errorf("%w: output snapshot: %v", ErrInvalidTransition, err)
+	}
+	return plan, nil
 }
 
 func transitionSubmission(current ItemSnapshot, input TransitionInput) (TransitionPlan, error) {
+	// 紧急隐藏内容只能先恢复，禁止提交事件间接公开。
+	if current.PublicState == PublicEmergencyHidden {
+		return TransitionPlan{Item: current}, invalidTransition(input.Event, "emergency hidden item must be restored first")
+	}
 	// 高风险不创建或替换任何审核状态。
 	if input.Action == ActionBlock {
 		return TransitionPlan{Item: current}, ErrPolicyBlocked
@@ -175,8 +188,8 @@ func transitionSubmission(current ItemSnapshot, input TransitionInput) (Transiti
 	if input.NewRevisionID == 0 {
 		return TransitionPlan{Item: current}, invalidTransition(input.Event, "revision id is required")
 	}
-	if isSubmissionRetry(current, input) {
-		return idempotentPlan(current), nil
+	if hasRevisionID(current, input.NewRevisionID) {
+		return TransitionPlan{Item: current}, ErrRevisionCollision
 	}
 	if input.Now.IsZero() {
 		return TransitionPlan{Item: current}, invalidTransition(input.Event, "time is required")
@@ -383,17 +396,14 @@ func transitionRestore(current ItemSnapshot, input TransitionInput) (TransitionP
 	}, nil
 }
 
-func isSubmissionRetry(current ItemSnapshot, input TransitionInput) bool {
-	id := input.NewRevisionID
-	if id == 0 {
-		return false
-	}
-	if input.Action == ActionAutoApprove {
-		return sameRevision(current.ApprovedRevisionID, &id) &&
-			sameRevision(current.MaterializedRevisionID, &id) &&
-			current.PendingRevisionID == nil
-	}
-	return sameRevision(current.PendingRevisionID, &id)
+func hasRevisionID(item ItemSnapshot, revisionID uint64) bool {
+	return revisionMatches(item.MaterializedRevisionID, revisionID) ||
+		revisionMatches(item.ApprovedRevisionID, revisionID) ||
+		revisionMatches(item.PendingRevisionID, revisionID)
+}
+
+func revisionMatches(pointer *uint64, revisionID uint64) bool {
+	return pointer != nil && *pointer == revisionID
 }
 
 func idempotentPlan(item ItemSnapshot) TransitionPlan {

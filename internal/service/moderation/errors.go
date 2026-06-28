@@ -11,6 +11,8 @@ var (
 	ErrInvalidPolicyContext = errors.New("invalid moderation policy context")
 	// ErrPolicyBlocked 表示策略拒绝本次发布或编辑。
 	ErrPolicyBlocked = errors.New("moderation policy blocked content")
+	// ErrRevisionCollision 表示新版本 ID 已被当前审核项的版本指针占用。
+	ErrRevisionCollision = errors.New("moderation revision id collision")
 	// ErrInvalidTransition 表示事件不适用于当前审核状态。
 	ErrInvalidTransition = errors.New("invalid moderation state transition")
 	// ErrAlreadyDeleted 表示删除终态拒绝任何非删除事件。

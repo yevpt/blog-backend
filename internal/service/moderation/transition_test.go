@@ -44,8 +44,9 @@ func TestTransitionInitialSubmit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, err := moderation.Transition(moderation.ItemSnapshot{}, moderation.TransitionInput{
-				Event: moderation.EventSubmit, Action: tt.action, NewRevisionID: 1, Now: fixedTime,
+			plan, err := moderation.Transition(moderation.TransitionInput{
+				Previous: moderation.ItemSnapshot{}, Event: moderation.EventSubmit,
+				Action: tt.action, NewRevisionID: 1, Now: fixedTime,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, plan.Item)
@@ -60,22 +61,25 @@ func TestTransitionInitialSubmit(t *testing.T) {
 func TestTransitionEditKeepsOrReplacesApprovedMaterialization(t *testing.T) {
 	current := approvedSnapshot(10)
 
-	postPlan, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventResubmit, Action: moderation.ActionPostReview, NewRevisionID: 11, Now: fixedTime,
+	postPlan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventResubmit,
+		Action: moderation.ActionPostReview, NewRevisionID: 11, Now: fixedTime,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, activeSnapshot(moderation.PublicVisible, ptr(11), ptr(10), ptr(11)), postPlan.Item)
 	assert.Equal(t, ptr(11), postPlan.MaterializeRevision)
 
-	prePlan, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventResubmit, Action: moderation.ActionPreReview, NewRevisionID: 12, Now: fixedTime,
+	prePlan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventResubmit,
+		Action: moderation.ActionPreReview, NewRevisionID: 12, Now: fixedTime,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, activeSnapshot(moderation.PublicVisible, ptr(10), ptr(10), ptr(12)), prePlan.Item)
 	assert.Nil(t, prePlan.MaterializeRevision)
 
-	autoPlan, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventResubmit, Action: moderation.ActionAutoApprove, NewRevisionID: 13, Now: fixedTime,
+	autoPlan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventResubmit,
+		Action: moderation.ActionAutoApprove, NewRevisionID: 13, Now: fixedTime,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, activeSnapshot(moderation.PublicVisible, ptr(13), ptr(13), nil), autoPlan.Item)
@@ -84,8 +88,9 @@ func TestTransitionEditKeepsOrReplacesApprovedMaterialization(t *testing.T) {
 
 func TestTransitionBlockDoesNotMutateState(t *testing.T) {
 	current := approvedSnapshot(10)
-	plan, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventResubmit, Action: moderation.ActionBlock, NewRevisionID: 11, Now: fixedTime,
+	plan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventResubmit,
+		Action: moderation.ActionBlock, NewRevisionID: 11, Now: fixedTime,
 	})
 
 	assert.ErrorIs(t, err, moderation.ErrPolicyBlocked)
@@ -97,8 +102,9 @@ func TestTransitionBlockDoesNotMutateState(t *testing.T) {
 
 func TestTransitionResubmitSupersedesPendingRevision(t *testing.T) {
 	current := activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2))
-	plan, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventResubmit, Action: moderation.ActionPreReview, NewRevisionID: 3, Now: fixedTime,
+	plan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventResubmit,
+		Action: moderation.ActionPreReview, NewRevisionID: 3, Now: fixedTime,
 	})
 
 	require.NoError(t, err)
@@ -108,26 +114,29 @@ func TestTransitionResubmitSupersedesPendingRevision(t *testing.T) {
 	assert.Equal(t, ptr(1), plan.Item.ApprovedRevisionID)
 }
 
-func TestTransitionIdempotentRetry(t *testing.T) {
+func TestTransitionRejectsRevisionIDCollision(t *testing.T) {
 	tests := []struct {
 		name    string
 		current moderation.ItemSnapshot
-		event   moderation.Event
 		action  moderation.PolicyAction
 		id      uint64
 	}{
-		{name: "pending", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), event: moderation.EventResubmit, action: moderation.ActionPostReview, id: 2},
-		{name: "approved", current: approvedSnapshot(3), event: moderation.EventResubmit, action: moderation.ActionAutoApprove, id: 3},
+		{name: "pending auto approve", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), action: moderation.ActionAutoApprove, id: 2},
+		{name: "pending post review", current: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)), action: moderation.ActionPostReview, id: 2},
+		{name: "pending pre review", current: activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(2)), action: moderation.ActionPreReview, id: 2},
+		{name: "approved auto approve", current: approvedSnapshot(3), action: moderation.ActionAutoApprove, id: 3},
+		{name: "approved post review", current: approvedSnapshot(3), action: moderation.ActionPostReview, id: 3},
+		{name: "approved pre review", current: approvedSnapshot(3), action: moderation.ActionPreReview, id: 3},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			plan, err := moderation.Transition(tt.current, moderation.TransitionInput{
-				Event: tt.event, Action: tt.action, NewRevisionID: tt.id, Now: fixedTime,
+			plan, err := moderation.Transition(moderation.TransitionInput{
+				Previous: tt.current, Event: moderation.EventResubmit,
+				Action: tt.action, NewRevisionID: tt.id, Now: fixedTime,
 			})
-			require.NoError(t, err)
+			assert.ErrorIs(t, err, moderation.ErrRevisionCollision)
 			assert.Equal(t, tt.current, plan.Item)
-			assert.True(t, plan.Idempotent)
 			assert.Nil(t, plan.MaterializeRevision)
 			assert.Nil(t, plan.SupersedeRevision)
 			assert.Empty(t, plan.AppendLog.Event)
@@ -150,7 +159,9 @@ func TestTransitionReviewEvents(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.event), func(t *testing.T) {
-			plan, err := moderation.Transition(current, moderation.TransitionInput{Event: tt.event, NewRevisionID: 2, Now: fixedTime})
+			plan, err := moderation.Transition(moderation.TransitionInput{
+				Previous: current, Event: tt.event, NewRevisionID: 2, Now: fixedTime,
+			})
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantItem, plan.Item)
 			assert.Equal(t, tt.materialized, plan.MaterializeRevision)
@@ -164,7 +175,9 @@ func TestTransitionReviewEvents(t *testing.T) {
 
 func TestTransitionRejectsFirstPendingSubmission(t *testing.T) {
 	current := activeSnapshot(moderation.PublicVisible, ptr(1), nil, ptr(1))
-	plan, err := moderation.Transition(current, moderation.TransitionInput{Event: moderation.EventReject, NewRevisionID: 1, Now: fixedTime})
+	plan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventReject, NewRevisionID: 1, Now: fixedTime,
+	})
 
 	require.NoError(t, err)
 	assert.Equal(t, activeSnapshot(moderation.PublicHidden, nil, nil, nil), plan.Item)
@@ -173,33 +186,40 @@ func TestTransitionRejectsFirstPendingSubmission(t *testing.T) {
 
 func TestTransitionDeleteFromEveryActiveState(t *testing.T) {
 	visible := moderation.PublicVisible
-	states := []moderation.ItemSnapshot{
-		activeSnapshot(moderation.PublicVisible, ptr(1), nil, ptr(1)),
-		activeSnapshot(moderation.PublicPlaceholder, nil, nil, ptr(1)),
-		approvedSnapshot(1),
-		activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2)),
-		{
+	states := []struct {
+		name string
+		item moderation.ItemSnapshot
+	}{
+		{name: "initial post-review", item: activeSnapshot(moderation.PublicVisible, ptr(1), nil, ptr(1))},
+		{name: "initial pre-review", item: activeSnapshot(moderation.PublicPlaceholder, nil, nil, ptr(1))},
+		{name: "approved visible", item: approvedSnapshot(1)},
+		{name: "low edit pending", item: activeSnapshot(moderation.PublicVisible, ptr(2), ptr(1), ptr(2))},
+		{name: "medium edit pending", item: activeSnapshot(moderation.PublicVisible, ptr(1), ptr(1), ptr(2))},
+		{name: "hidden", item: activeSnapshot(moderation.PublicHidden, nil, nil, nil)},
+		{name: "emergency hidden", item: moderation.ItemSnapshot{
 			LifecycleState: moderation.LifecycleActive, PublicState: moderation.PublicEmergencyHidden,
 			MaterializedRevisionID: ptr(1), ApprovedRevisionID: ptr(1), StateBeforeEmergency: &visible,
 			EmergencyHiddenReason: strPtr("incident"), EmergencyHiddenAt: timePtr(fixedTime.Add(-time.Hour)),
-		},
+		}},
 	}
 
 	for _, event := range []moderation.Event{moderation.EventDelete, moderation.EventAdminDelete} {
-		for index, current := range states {
-			t.Run(string(event)+"/state", func(t *testing.T) {
-				plan, err := moderation.Transition(current, moderation.TransitionInput{Event: event, Now: fixedTime})
-				require.NoError(t, err, index)
+		for _, state := range states {
+			t.Run(string(event)+"/"+state.name, func(t *testing.T) {
+				plan, err := moderation.Transition(moderation.TransitionInput{
+					Previous: state.item, Event: event, Now: fixedTime,
+				})
+				require.NoError(t, err)
 				assert.Equal(t, moderation.LifecycleDeleted, plan.Item.LifecycleState)
 				assert.Equal(t, moderation.PublicHidden, plan.Item.PublicState)
 				assert.Nil(t, plan.Item.MaterializedRevisionID)
-				assert.Equal(t, current.ApprovedRevisionID, plan.Item.ApprovedRevisionID)
+				assert.Equal(t, state.item.ApprovedRevisionID, plan.Item.ApprovedRevisionID)
 				assert.Nil(t, plan.Item.PendingRevisionID)
 				assert.Nil(t, plan.Item.StateBeforeEmergency)
 				assert.Nil(t, plan.Item.EmergencyHiddenReason)
 				assert.Nil(t, plan.Item.EmergencyHiddenAt)
 				assert.Equal(t, timePtr(fixedTime), plan.Item.DeletedAt)
-				assert.Equal(t, current.PendingRevisionID, plan.SupersedeRevision)
+				assert.Equal(t, state.item.PendingRevisionID, plan.SupersedeRevision)
 				assert.Equal(t, event, plan.AppendLog.Event)
 			})
 		}
@@ -209,7 +229,9 @@ func TestTransitionDeleteFromEveryActiveState(t *testing.T) {
 func TestTransitionRepeatedDeleteIsIdempotent(t *testing.T) {
 	current := deletedSnapshot()
 	for _, event := range []moderation.Event{moderation.EventDelete, moderation.EventAdminDelete} {
-		plan, err := moderation.Transition(current, moderation.TransitionInput{Event: event, Now: fixedTime.Add(time.Hour)})
+		plan, err := moderation.Transition(moderation.TransitionInput{
+			Previous: current, Event: event, Now: fixedTime.Add(time.Hour),
+		})
 		require.NoError(t, err)
 		assert.Equal(t, current, plan.Item)
 		assert.True(t, plan.Idempotent)
@@ -225,15 +247,17 @@ func TestDeletedIsTerminal(t *testing.T) {
 		moderation.EventEmergencyHide, moderation.EventRestore,
 	}
 	for _, event := range events {
-		_, err := moderation.Transition(deletedSnapshot(), moderation.TransitionInput{Event: event, Now: fixedTime})
+		_, err := moderation.Transition(moderation.TransitionInput{
+			Previous: deletedSnapshot(), Event: event, Now: fixedTime,
+		})
 		assert.ErrorIs(t, err, moderation.ErrAlreadyDeleted)
 	}
 }
 
 func TestTransitionEmergencyHideAndRestore(t *testing.T) {
 	current := approvedSnapshot(1)
-	hidden, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventEmergencyHide, Reason: "incident", Now: fixedTime,
+	hidden, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventEmergencyHide, Reason: "incident", Now: fixedTime,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, moderation.PublicEmergencyHidden, hidden.Item.PublicState)
@@ -241,14 +265,17 @@ func TestTransitionEmergencyHideAndRestore(t *testing.T) {
 	assert.Equal(t, strPtr("incident"), hidden.Item.EmergencyHiddenReason)
 	assert.Equal(t, timePtr(fixedTime), hidden.Item.EmergencyHiddenAt)
 
-	repeated, err := moderation.Transition(hidden.Item, moderation.TransitionInput{
-		Event: moderation.EventEmergencyHide, Reason: "overwrite", Now: fixedTime.Add(time.Hour),
+	repeated, err := moderation.Transition(moderation.TransitionInput{
+		Previous: hidden.Item, Event: moderation.EventEmergencyHide,
+		Reason: "overwrite", Now: fixedTime.Add(time.Hour),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, hidden.Item, repeated.Item)
 	assert.True(t, repeated.Idempotent)
 
-	restored, err := moderation.Transition(hidden.Item, moderation.TransitionInput{Event: moderation.EventRestore, Now: fixedTime.Add(time.Hour)})
+	restored, err := moderation.Transition(moderation.TransitionInput{
+		Previous: hidden.Item, Event: moderation.EventRestore, Now: fixedTime.Add(time.Hour),
+	})
 	require.NoError(t, err)
 	assert.Equal(t, current, restored.Item)
 	assert.Nil(t, restored.Item.StateBeforeEmergency)
@@ -265,14 +292,32 @@ func TestTransitionEmergencyHideRequiresVisibleApprovedWithoutPending(t *testing
 	}
 
 	for _, current := range states {
-		_, err := moderation.Transition(current, moderation.TransitionInput{Event: moderation.EventEmergencyHide, Now: fixedTime})
+		_, err := moderation.Transition(moderation.TransitionInput{
+			Previous: current, Event: moderation.EventEmergencyHide, Now: fixedTime,
+		})
 		assert.ErrorIs(t, err, moderation.ErrInvalidTransition)
 	}
 }
 
 func TestTransitionRestoreRequiresEmergencySnapshot(t *testing.T) {
-	_, err := moderation.Transition(approvedSnapshot(1), moderation.TransitionInput{Event: moderation.EventRestore, Now: fixedTime})
+	_, err := moderation.Transition(moderation.TransitionInput{
+		Previous: approvedSnapshot(1), Event: moderation.EventRestore, Now: fixedTime,
+	})
 	assert.ErrorIs(t, err, moderation.ErrInvalidTransition)
+}
+
+func TestTransitionEmergencyHiddenRejectsSubmitAndResubmit(t *testing.T) {
+	for _, event := range []moderation.Event{moderation.EventSubmit, moderation.EventResubmit} {
+		t.Run(string(event), func(t *testing.T) {
+			current := emergencySnapshot(1)
+			plan, err := moderation.Transition(moderation.TransitionInput{
+				Previous: current, Event: event,
+				Action: moderation.ActionPostReview, NewRevisionID: 2, Now: fixedTime,
+			})
+			assert.ErrorIs(t, err, moderation.ErrInvalidTransition)
+			assert.Equal(t, current, plan.Item)
+		})
+	}
 }
 
 func TestTransitionRejectsInvalidSnapshotCombinations(t *testing.T) {
@@ -288,8 +333,9 @@ func TestTransitionRejectsInvalidSnapshotCombinations(t *testing.T) {
 	}
 
 	for _, current := range states {
-		_, err := moderation.Transition(current, moderation.TransitionInput{
-			Event: moderation.EventResubmit, Action: moderation.ActionPreReview, NewRevisionID: 3, Now: fixedTime,
+		_, err := moderation.Transition(moderation.TransitionInput{
+			Previous: current, Event: moderation.EventResubmit,
+			Action: moderation.ActionPreReview, NewRevisionID: 3, Now: fixedTime,
 		})
 		assert.ErrorIs(t, err, moderation.ErrInvalidTransition)
 	}
@@ -300,8 +346,9 @@ func TestTransitionRepeatedEmergencyHidePreservesEmptyReasonPointer(t *testing.T
 	empty := ""
 	current.EmergencyHiddenReason = &empty
 
-	plan, err := moderation.Transition(current, moderation.TransitionInput{
-		Event: moderation.EventEmergencyHide, Reason: "overwrite", Now: fixedTime.Add(time.Hour),
+	plan, err := moderation.Transition(moderation.TransitionInput{
+		Previous: current, Event: moderation.EventEmergencyHide,
+		Reason: "overwrite", Now: fixedTime.Add(time.Hour),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, plan.Item.EmergencyHiddenReason)
