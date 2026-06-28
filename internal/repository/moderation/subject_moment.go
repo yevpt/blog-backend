@@ -1,0 +1,103 @@
+package moderation
+
+import (
+	"context"
+	"time"
+
+	"github.com/vpt/blog-backend/internal/model"
+	"gorm.io/gorm"
+)
+
+type momentAdapter struct{}
+
+// momentInsert 不带 default 标签，确保首次先审后发显式写入 status=0。
+type momentInsert struct {
+	ID            uint `gorm:"primaryKey"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     gorm.DeletedAt
+	UserID        uint
+	Content       string
+	Status        uint8
+	CommentStatus uint8
+	ReadCount     uint
+	IsTop         bool
+}
+
+func (momentInsert) TableName() string { return "moment" }
+
+func (a *momentAdapter) Load(ctx context.Context, db *gorm.DB, ref SubjectRef) (SubjectSnapshot, error) {
+	if ref.Type != SubjectMoment {
+		return SubjectSnapshot{}, ErrInvalidCommand
+	}
+	var row model.Moment
+	if err := db.WithContext(ctx).First(&row, ref.ID).Error; err != nil {
+		return SubjectSnapshot{}, subjectError(err)
+	}
+	return SubjectSnapshot{Ref: SubjectRef{Type: SubjectMoment, ID: uint64(row.ID)}, AuthorID: uint64(row.UserID), Content: row.Content}, nil
+}
+
+func (a *momentAdapter) Materialize(ctx context.Context, tx *gorm.DB, cmd MaterializeCommand) error {
+	if cmd.Ref.Type != SubjectMoment || cmd.AuthorID == 0 {
+		return ErrInvalidCommand
+	}
+	if cmd.Create {
+		if cmd.AssignedID == nil || cmd.Ref.ID != 0 {
+			return ErrInvalidCommand
+		}
+		if err := ensureActiveUser(ctx, tx, cmd.AuthorID); err != nil {
+			return err
+		}
+		status := uint8(0)
+		if cmd.Visible {
+			status = 1
+		}
+		row := momentInsert{UserID: uint(cmd.AuthorID), Content: cmd.Content, Status: status, CommentStatus: 1}
+		if err := tx.WithContext(ctx).Create(&row).Error; err != nil {
+			return err
+		}
+		*cmd.AssignedID = uint64(row.ID)
+		return nil
+	}
+	if cmd.Ref.ID == 0 {
+		return ErrInvalidCommand
+	}
+	result := tx.WithContext(ctx).Model(&model.Moment{}).
+		Where("id = ? AND user_id = ?", cmd.Ref.ID, cmd.AuthorID).
+		Updates(map[string]any{"content": cmd.Content, "status": uint8(1)})
+	return requireSubjectRow(result)
+}
+
+func (a *momentAdapter) Delete(ctx context.Context, tx *gorm.DB, ref SubjectRef) error {
+	if ref.Type != SubjectMoment {
+		return ErrInvalidCommand
+	}
+	return requireSubjectRow(tx.WithContext(ctx).Delete(&model.Moment{}, ref.ID))
+}
+
+func (a *momentAdapter) Descendants(ctx context.Context, tx *gorm.DB, ref SubjectRef) ([]SubjectRef, error) {
+	if ref.Type != SubjectMoment {
+		return nil, ErrInvalidCommand
+	}
+	var comments []model.MomentComment
+	if err := tx.WithContext(ctx).Where("moment_id = ?", ref.ID).Find(&comments).Error; err != nil {
+		return nil, err
+	}
+	refs := make([]SubjectRef, 0, len(comments))
+	commentIDs := make([]uint, 0, len(comments))
+	for _, row := range comments {
+		commentIDs = append(commentIDs, row.ID)
+		refs = append(refs, SubjectRef{Type: SubjectMomentComment, ID: uint64(row.ID), RootID: ref.ID})
+	}
+	if len(commentIDs) > 0 {
+		var replies []model.MomentCommentReply
+		if err := tx.WithContext(ctx).Where("comment_id IN ?", commentIDs).Find(&replies).Error; err != nil {
+			return nil, err
+		}
+		for _, row := range replies {
+			refs = append(refs, SubjectRef{Type: SubjectMomentCommentReply, ID: uint64(row.ID), RootID: uint64(row.CommentID), ParentID: uint64(row.ParentReplyID)})
+		}
+	}
+	sortSubjectRefs(refs)
+	return refs, nil
+}
