@@ -384,7 +384,7 @@ func (h *CommentHandler) createTargetComment(c *gin.Context, targetType string, 
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}
@@ -407,7 +407,7 @@ func (h *CommentHandler) editTargetComment(c *gin.Context, targetType string, pa
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}
@@ -430,7 +430,7 @@ func (h *CommentHandler) replyTargetComment(c *gin.Context, targetType string, p
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}
@@ -453,7 +453,7 @@ func (h *CommentHandler) editTargetReply(c *gin.Context, targetType string, para
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}

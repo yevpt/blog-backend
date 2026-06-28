@@ -43,3 +43,10 @@ func TestNewModerationServiceFailsClosedWhenInitialRuleLoadFails(t *testing.T) {
 	require.Nil(t, service)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestMaybeNewModerationServiceSkipsRuntimeWhenDisabled(t *testing.T) {
+	service, err := maybeNewModerationService(context.Background(), nil, config.ModerationConfig{Enabled: false}, zap.NewNop())
+
+	require.NoError(t, err)
+	require.Nil(t, service)
+}

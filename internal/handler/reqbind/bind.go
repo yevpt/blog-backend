@@ -62,8 +62,20 @@ func PathUint(c *gin.Context, name string, label string) (uint, bool) {
 
 // IdempotencyKey 读取并校验审核写接口要求的幂等键。
 func IdempotencyKey(c *gin.Context) (string, bool) {
+	return IdempotencyKeyIf(c, true)
+}
+
+// IdempotencyKeyIf 在审核写入开启时校验幂等键；关闭时允许省略。
+func IdempotencyKeyIf(c *gin.Context, required bool) (string, bool) {
 	key := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
-	if key == "" || len([]rune(key)) > maxIdempotencyKeyChars || strings.IndexFunc(key, unicode.IsControl) >= 0 {
+	if key == "" {
+		if !required {
+			return "", true
+		}
+		response.Fail(c, response.CodeBadRequest, "Idempotency-Key 请求头缺失或格式不正确")
+		return "", false
+	}
+	if len([]rune(key)) > maxIdempotencyKeyChars || strings.IndexFunc(key, unicode.IsControl) >= 0 {
 		response.Fail(c, response.CodeBadRequest, "Idempotency-Key 请求头缺失或格式不正确")
 		return "", false
 	}

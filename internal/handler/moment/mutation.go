@@ -46,7 +46,7 @@ func (h *MomentHandler) Save(c *gin.Context) {
 	if !ok {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}

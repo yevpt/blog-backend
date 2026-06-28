@@ -152,11 +152,13 @@ type ModerationNoticesConfig struct {
 
 // Validate 校验审核模式、固定策略不变量及所有安全边界。
 func (c ModerationConfig) Validate(environment string) error {
-	// 生产环境不得关闭审核或切换到观察模式。
+	// 关闭审核时跳过策略与边界校验，写入路径回退到业务 service 旧逻辑。
+	if !c.Enabled {
+		return nil
+	}
+
+	// 生产环境开启审核后必须强制执行，禁止观察模式。
 	if environment == "production" || environment == "prod" {
-		if !c.Enabled {
-			return fmt.Errorf("moderation.enabled: production requires true")
-		}
 		if c.Mode != ModerationModeEnforce {
 			return fmt.Errorf("moderation.mode: production requires %s", ModerationModeEnforce)
 		}

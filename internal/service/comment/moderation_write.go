@@ -28,6 +28,9 @@ func (s *commentService) submitComment(target commentrepo.Target, targetID, user
 }
 
 func (s *commentService) EditComment(targetType string, commentID uint, req dto.CommentCreateReq, userID uint, roleNames []string) (*dto.CommentItemResp, error) {
+	if s.moderation == nil {
+		return nil, moderationservice.ErrWriteDisabled
+	}
 	commentType, err := parseTargetType(targetType)
 	if err != nil || commentID == 0 {
 		return nil, ErrCommentTargetInvalid
@@ -70,6 +73,9 @@ func (s *commentService) submitReply(targetType uint8, commentID, userID uint, r
 }
 
 func (s *commentService) EditReply(targetType string, replyID uint, req dto.CommentReplyCreateReq, userID uint, roleNames []string) (*dto.CommentReplyResp, error) {
+	if s.moderation == nil {
+		return nil, moderationservice.ErrWriteDisabled
+	}
 	commentType, err := parseTargetType(targetType)
 	if err != nil || replyID == 0 {
 		return nil, ErrCommentTargetInvalid

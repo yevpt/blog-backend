@@ -89,7 +89,7 @@ func (s *stubGuestbookService) Delete(id uint, userID uint, roleNames []string) 
 func newGuestbookRouter(svc guestbookservice.GuestbookService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := guestbookhandler.NewGuestbookHandler(svc)
+	h := guestbookhandler.NewGuestbookHandler(svc, true)
 	r.GET("/guestbook", h.List)
 	r.GET("/admin/guestbook", h.ListAdmin)
 	r.POST("/guestbook", func(c *gin.Context) {

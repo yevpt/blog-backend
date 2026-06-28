@@ -30,6 +30,9 @@ func (s *guestbookService) submit(ownerUserID, fromUserID uint, content, idempot
 }
 
 func (s *guestbookService) Edit(id uint, req dto.GuestbookCreateReq, userID uint, roleNames []string) (*dto.GuestbookItemResp, error) {
+	if s.moderation == nil {
+		return nil, moderationservice.ErrWriteDisabled
+	}
 	if id == 0 {
 		return nil, ErrGuestbookInvalid
 	}

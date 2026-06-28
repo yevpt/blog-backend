@@ -11,12 +11,13 @@ import (
 
 // MomentHandler 碎语 HTTP 入口，只负责参数绑定、调用 service 和选择响应。
 type MomentHandler struct {
-	svc momentservice.MomentService
+	svc                    momentservice.MomentService
+	requireModerationWrite bool
 }
 
 // NewMomentHandler 创建碎语 HTTP 处理器。
-func NewMomentHandler(svc momentservice.MomentService) *MomentHandler {
-	return &MomentHandler{svc: svc}
+func NewMomentHandler(svc momentservice.MomentService, requireModerationWrite bool) *MomentHandler {
+	return &MomentHandler{svc: svc, requireModerationWrite: requireModerationWrite}
 }
 
 func bindMomentID(c *gin.Context, name string) (uint, bool) {

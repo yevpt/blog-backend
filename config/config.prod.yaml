@@ -9,8 +9,8 @@ log:
   format: json
 
 moderation:
-  # 生产环境固定开启并强制执行审核策略
-  enabled: true
+  # 审核全量上线前临时关闭；上线时改回 true 并重新部署
+  enabled: false
   mode: enforce
 
 analytics:

@@ -51,6 +51,8 @@ func writeModerationError(c *gin.Context, err error) bool {
 		response.Conflict(c, response.CodeContentAlreadyDeleted, moderationservice.PublicErrorMessage(err))
 	case errors.Is(err, moderationservice.ErrInteractionNotAllowed):
 		response.Conflict(c, response.CodeContentPendingNoInteraction, moderationservice.PublicErrorMessage(err))
+	case errors.Is(err, moderationservice.ErrWriteDisabled):
+		response.Fail(c, response.CodeBadRequest, moderationservice.PublicErrorMessage(err))
 	default:
 		return false
 	}

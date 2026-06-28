@@ -117,7 +117,7 @@ func (s *stubMomentService) CountByUser(uint) (*dto.UserMomentsCountResp, error)
 func newMomentRouter(svc momentservice.MomentService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := momenthandler.NewMomentHandler(svc)
+	h := momenthandler.NewMomentHandler(svc, true)
 	r.GET("/moments", h.List)
 	r.GET("/admin/moments", h.ListAdmin)
 	r.GET("/moments/feed", h.Feed)

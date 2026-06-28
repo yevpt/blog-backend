@@ -32,7 +32,7 @@ func (h *GuestbookHandler) Create(c *gin.Context) {
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}
@@ -67,7 +67,7 @@ func (h *GuestbookHandler) Edit(c *gin.Context) {
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	key, ok := reqbind.IdempotencyKey(c)
+	key, ok := reqbind.IdempotencyKeyIf(c, h.requireModerationWrite)
 	if !ok {
 		return
 	}

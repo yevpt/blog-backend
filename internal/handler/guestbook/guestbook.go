@@ -12,12 +12,13 @@ import (
 
 // GuestbookHandler 留言板 HTTP 入口，只负责参数绑定、调用 service 和选择响应。
 type GuestbookHandler struct {
-	svc guestbookservice.GuestbookService
+	svc                    guestbookservice.GuestbookService
+	requireModerationWrite bool
 }
 
 // NewGuestbookHandler 创建留言板 HTTP 处理器。
-func NewGuestbookHandler(svc guestbookservice.GuestbookService) *GuestbookHandler {
-	return &GuestbookHandler{svc: svc}
+func NewGuestbookHandler(svc guestbookservice.GuestbookService, requireModerationWrite bool) *GuestbookHandler {
+	return &GuestbookHandler{svc: svc, requireModerationWrite: requireModerationWrite}
 }
 
 func bindGuestbookID(c *gin.Context, name string) (uint, bool) {

@@ -38,6 +38,8 @@ var (
 	ErrInteractionNotAllowed = errors.New("moderation subject cannot be interacted with")
 	// ErrReviewConflict 表示管理员依据的待审版本或锁版本已经过期。
 	ErrReviewConflict = errors.New("moderation review conflict")
+	// ErrWriteDisabled 表示审核总开关关闭，仅编辑类写入会返回。
+	ErrWriteDisabled = errors.New("moderation write is disabled")
 )
 
 // PublicErrorMessage 返回可安全暴露给前端的审核错误提示，不包含规则命中细节。
@@ -56,6 +58,8 @@ func PublicErrorMessage(err error) string {
 		return "内容正在审核，暂时不能互动。"
 	case errors.Is(err, ErrReviewConflict):
 		return "审核状态已经变化，请刷新后重试。"
+	case errors.Is(err, ErrWriteDisabled):
+		return "内容审核未启用，暂不支持编辑。"
 	default:
 		return "内容审核失败，请稍后重试。"
 	}

@@ -40,3 +40,16 @@ func TestIdempotencyKeyValidatesRequiredHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestIdempotencyKeyIfAllowsMissingWhenOptional(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest("POST", "/", nil)
+
+	got, ok := reqbind.IdempotencyKeyIf(ctx, false)
+
+	assert.True(t, ok)
+	assert.Empty(t, got)
+	assert.Equal(t, 0, recorder.Body.Len())
+}

@@ -77,7 +77,7 @@ var _ commentservice.CommentService = (*lifecycleCommentService)(nil)
 func TestCommentHTTPLifecycleHonorsModerationStates(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	service := &lifecycleCommentService{}
-	handler := commenthandler.NewCommentHandler(service)
+	handler := commenthandler.NewCommentHandler(service, true)
 	router := gin.New()
 	authenticated := func(next gin.HandlerFunc) gin.HandlerFunc {
 		return func(c *gin.Context) {

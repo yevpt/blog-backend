@@ -190,7 +190,7 @@ func TestValidateModeration(t *testing.T) {
 		{name: "valid defaults", env: "production"},
 		{name: "production disabled", env: "production", mutate: func(c *config.ModerationConfig) {
 			c.Enabled = false
-		}, wantErr: "moderation.enabled"},
+		}},
 		{name: "production requires enforce", env: "production", mutate: func(c *config.ModerationConfig) {
 			c.Mode = config.ModerationModeObserve
 		}, wantErr: "moderation.mode"},

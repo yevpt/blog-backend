@@ -1,6 +1,7 @@
 package router
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	articlehandler "github.com/vpt/blog-backend/internal/handler/article"
+	moderationhandler "github.com/vpt/blog-backend/internal/handler/moderation"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
+	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -76,6 +79,40 @@ func (s *stubArticleServiceForRouter) ReorderRecommendedAdmin(req dto.AdminRecom
 }
 
 var _ articleservice.ArticleService = (*stubArticleServiceForRouter)(nil)
+
+type moderationReviewStub struct{}
+
+func (moderationReviewStub) List(context.Context, moderationservice.ListReviewCommand) (moderationservice.ReviewPage, error) {
+	return moderationservice.ReviewPage{}, nil
+}
+
+func (moderationReviewStub) Get(context.Context, uint64) (moderationservice.ReviewItem, error) {
+	return moderationservice.ReviewItem{}, nil
+}
+
+func (moderationReviewStub) Approve(context.Context, moderationservice.ReviewCommand) (moderationservice.ReviewItem, error) {
+	return moderationservice.ReviewItem{}, nil
+}
+
+func (moderationReviewStub) Correct(context.Context, moderationservice.CorrectCommand) (moderationservice.ReviewItem, error) {
+	return moderationservice.ReviewItem{}, nil
+}
+
+func (moderationReviewStub) Reject(context.Context, moderationservice.ReviewCommand) (moderationservice.ReviewItem, error) {
+	return moderationservice.ReviewItem{}, nil
+}
+
+func TestRegisterAdminRoutesSkipsModerationWhenDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	jwtManager := jwt.NewManager("test-secret", 2, 24)
+
+	registerAdminRoutes(r, routeHandlers{}, jwtManager, nil)
+
+	for _, route := range r.Routes() {
+		assert.NotContains(t, route.Path, "/moderation/")
+	}
+}
 
 func TestRegisterPublicRoutes_ArticlesListAllowsOptionalAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -188,7 +225,9 @@ func TestRegisterAdminRoutesRegistersModerationReviewRoutes(t *testing.T) {
 	r := gin.New()
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
-	registerAdminRoutes(r, routeHandlers{}, jwtManager, nil)
+	registerAdminRoutes(r, routeHandlers{
+		moderationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}),
+	}, jwtManager, nil)
 
 	want := map[string]string{
 		"GET /admin/moderation/items":              "",

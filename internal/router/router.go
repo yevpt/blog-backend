@@ -263,11 +263,11 @@ func newRouteHandlers(
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
-	moderationSvc, moderationErr := newModerationService(context.Background(), db, cfg.Moderation, log)
+	moderationSvc, moderationErr := maybeNewModerationService(context.Background(), db, cfg.Moderation, log)
 	if moderationErr != nil {
 		panic(moderationErr)
 	}
-	moderationReviewSvc := newModerationReviewService(db, cfg.Moderation, log)
+	moderationReviewSvc := maybeNewModerationReviewService(db, cfg.Moderation, log)
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
@@ -295,10 +295,10 @@ func newRouteHandlers(
 		oauth:               oauthhandler.NewOAuthHandler(oauthSvc),
 		captcha:             captchahandler.NewCaptchaHandler(captchaSvc),
 		article:             articlehandler.NewArticleHandler(articleSvc),
-		comment:             commenthandler.NewCommentHandler(commentSvc),
-		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc),
-		moment:              momenthandler.NewMomentHandler(momentSvc),
-		moderationAdmin:     moderationhandler.NewAdminHandler(moderationReviewSvc),
+		comment:             commenthandler.NewCommentHandler(commentSvc, cfg.Moderation.Enabled),
+		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc, cfg.Moderation.Enabled),
+		moment:              momenthandler.NewMomentHandler(momentSvc, cfg.Moderation.Enabled),
+		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
@@ -580,11 +580,13 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.PUT("/notifications/email-quotas/:id", handlers.notificationAdmin.UpdateQuota)
 	admin.PUT("/notifications/role-quotas/:id", handlers.notificationAdmin.UpdateRoleQuota)
 	admin.POST("/notifications/email-batches/:id/retry", handlers.notificationAdmin.RetryBatch)
-	admin.GET("/moderation/items", handlers.moderationAdmin.List)
-	admin.GET("/moderation/items/:id", handlers.moderationAdmin.Get)
-	admin.POST("/moderation/items/:id/approve", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Approve)
-	admin.POST("/moderation/items/:id/correct", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Correct)
-	admin.POST("/moderation/items/:id/reject", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Reject)
+	if handlers.moderationAdmin != nil {
+		admin.GET("/moderation/items", handlers.moderationAdmin.List)
+		admin.GET("/moderation/items/:id", handlers.moderationAdmin.Get)
+		admin.POST("/moderation/items/:id/approve", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Approve)
+		admin.POST("/moderation/items/:id/correct", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Correct)
+		admin.POST("/moderation/items/:id/reject", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Reject)
+	}
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
 	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)
 	admin.POST("/users/avatars/normalize", middleware.RateLimitNormal(redisClient), handlers.userAdmin.NormalizeAvatars)

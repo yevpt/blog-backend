@@ -129,7 +129,7 @@ func (s *stubCommentService) DeleteReply(targetType string, replyID uint, userID
 func newCommentRouter(svc commentservice.CommentService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	h := commenthandler.NewCommentHandler(svc)
+	h := commenthandler.NewCommentHandler(svc, true)
 	r.GET("/articles/:id/comments", func(c *gin.Context) {
 		jwtpkg.SetClaims(c, &jwtpkg.Claims{UserId: 9})
 		h.ListArticle(c)
