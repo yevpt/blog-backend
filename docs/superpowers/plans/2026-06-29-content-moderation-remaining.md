@@ -200,7 +200,7 @@
 **Interfaces:**
 - Documents the exact order: deploy with `enabled: false`, apply schema, run migration, deploy frontend idempotency keys, run verify-only, enable `enforce`, then smoke test.
 
-- [ ] Add lifecycle tests covering create/edit low-medium-high, image preview/GIF placeholder, approve/correct/reject, delete terminal state, emergency hide/restore, governance, disabled fallback, and migrated content.
-- [ ] Run `make swag`, `go test ./... -count=1`, `go vet ./...`, `git diff --check`, and repository invariant searches.
-- [ ] Confirm production config remains `enabled: false`; do not enable it in code.
-- [ ] Commit with `docs(moderation): 补充审核生产启用与回滚手册`.
+- [x] Add lifecycle tests covering create/edit low-medium-high, image preview/GIF placeholder, approve/correct/reject, delete terminal state, emergency hide/restore, governance, disabled fallback, and migrated content.
+- [x] Run `make swag`, `go test ./... -count=1`, `go vet ./...`, `git diff --check`, and repository invariant searches.
+- [x] Confirm production config remains `enabled: false`; do not enable it in code.
+- [x] Commit with `docs(moderation): 补充审核生产启用与回滚手册`.

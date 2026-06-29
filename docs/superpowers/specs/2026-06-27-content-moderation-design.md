@@ -253,6 +253,7 @@
 - `normal -> trusted`：达到更高账号年龄和干净通过次数，当前违规分为零。
 - 达到限制分数：进入 `restricted` 并设置 `restricted_until`。
 - 修正、驳回和高风险阻断会把连续干净次数清零；受限期内再次违规会把期限顺延为“本次违规时间 + 配置时长”。
+- 干净通过按 `clean_approval_score_decay` 逐步抵消违规分，避免一次轻微修正永久阻断晋升。
 - 限制到期后，在下一次发布或读取本人档案时懒恢复为 `normal`，同时重置违规分。
 - 管理员锁定的信任等级不被自动覆盖。
 - `muted`、`banned` 仅由管理员设置和释放。
@@ -408,7 +409,7 @@
 - `publishing_mode`：`open`、`pre_review_all`、`closed`
 - `reason`、`operator_id`、`changed_at`、`lock_version`
 
-数据库是事实源，Redis 只缓存短 TTL。缓存失败回源数据库，更新后主动失效。
+数据库是事实源。个人博客写入量较低，控制读取直接访问数据库，不引入 Redis 双写和缓存失效分支。
 
 `registration_mode=closed` 同时阻止邮箱注册和 OAuth 自动建号，不影响已有用户登录。
 
@@ -541,6 +542,7 @@ moderation:
       clean_approvals: 20
     restricted_score_threshold: 6
     restricted_duration: 168h
+    clean_approval_score_decay: 1
     violation_weights:
       corrected: 1
       rejected: 3
@@ -598,6 +600,7 @@ config 启动时加载，修改后重启生效。审核规则、手工用户处�
 6. 部署完整新版并完成迁移校验后再开放发布。
 
 迁移可重复、可断点续跑，不修改业务 ID 和对象 key，不兼容旧版应用写入。
+使用 `cmd/moderation-migrate` 执行；每批提交后输出下一游标，`--verify-only` 只读校验内容指针、图片指纹、用户画像和控制单例。
 
 实施拆为三份计划：
 
