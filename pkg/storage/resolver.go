@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"strings"
+	"time"
 )
 
 // ObjectURLResolver 解析对象存储 key，返回可直接访问的 Garage 或 CDN 签名 URL。
@@ -26,6 +27,25 @@ type ObjectKeyResolver interface {
 // ObjectReader 从对象存储读取原始字节，供需要校验内容而非仅解析 URL 的服务使用。
 type ObjectReader interface {
 	GetObject(ctx context.Context, objectName string) ([]byte, error)
+}
+
+// ObjectMetadata 是对象清理所需的最小元数据。
+type ObjectMetadata struct {
+	Key          string
+	LastModified time.Time
+	Size         int64
+}
+
+// ObjectPage 是按 key 游标读取的一页对象。
+type ObjectPage struct {
+	Objects   []ObjectMetadata
+	NextAfter string
+	HasMore   bool
+}
+
+// ObjectPageLister 按固定前缀有界列出对象，避免清理任务全量加载 bucket。
+type ObjectPageLister interface {
+	ListObjectPage(ctx context.Context, prefix, after string, limit int) (ObjectPage, error)
 }
 
 // ObjectStore 提供对象访问 URL、存在性检查和写入能力。

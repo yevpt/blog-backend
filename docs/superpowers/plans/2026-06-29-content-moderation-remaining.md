@@ -161,11 +161,11 @@
 - Uses `moderation.image` and `moderation.audit` retention/batch config.
 - Never removes current materialized, approved, pending, or retained revision references.
 
-- [ ] Write tests for expired attempts/action logs/obsolete revisions, stale image records, orphan previews, temp objects, active-reference protection, minimum object age, bounded batches, and Garage failure logging without process exit.
-- [ ] Run worker/repository tests and confirm RED.
-- [ ] Implement repository selection/deletion and a cancellable ticker worker with injected logger, clock, repository, and object store.
-- [ ] Run focused tests plus `go test ./internal/worker/... -count=1`.
-- [ ] Commit with `feat(moderation): 新增审核记录与图片定期清理`.
+- [x] Write tests for expired attempts/action logs/obsolete revisions, stale image records, orphan previews, temp objects, active-reference protection, minimum object age, bounded batches, and Garage failure logging without process exit.
+- [x] Run worker/repository tests and confirm RED.
+- [x] Implement repository selection/deletion and a cancellable ticker worker with injected logger, clock, repository, and object store.
+- [x] Run focused tests plus `go test ./internal/worker/... -count=1`.
+- [x] Commit with `feat(moderation): 新增审核记录与图片定期清理`.
 
 ### Task 7: Implement resumable legacy migration and verification
 

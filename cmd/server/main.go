@@ -47,6 +47,9 @@ func main() {
 	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
 	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, zapLogger)
 
+	// 审核开启后启动有界清理：过期审计、无引用版本、图片记录和孤儿对象。
+	bootstrap.StartModerationCleanupWorker(context.Background(), cfg, db, objectURLResolver, zapLogger)
+
 	// 启动统计后台 worker：唯一事件落库消费 + 日聚合/清理调度，与 collect handler 共享同一 ingestor。
 	bootstrap.StartAnalyticsWorker(context.Background(), redisClient, zapLogger,
 		analyticsRuntime.Ingestor, analyticsRuntime.Repo, analyticsRuntime.TZ,

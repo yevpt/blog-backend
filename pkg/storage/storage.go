@@ -81,6 +81,11 @@ func (c *Client) ListObjectKeys(ctx context.Context, prefix string) ([]string, e
 	return c.listObjectKeys(ctx, prefix)
 }
 
+// ListObjectPage 按 key 游标有界列出对象及最后修改时间。
+func (c *Client) ListObjectPage(ctx context.Context, prefix, after string, limit int) (ObjectPage, error) {
+	return c.listObjectPage(ctx, prefix, after, limit)
+}
+
 // DeleteObject 从 Garage 删除对象。
 func (c *Client) DeleteObject(ctx context.Context, objectName string) error {
 	return c.deleteObject(ctx, objectName)
@@ -158,6 +163,11 @@ func (r *CachedObjectURLResolver) GetImageObject(ctx context.Context, objectName
 // ListObjectKeys 列出指定前缀下的对象 key。
 func (r *CachedObjectURLResolver) ListObjectKeys(ctx context.Context, prefix string) ([]string, error) {
 	return r.impl.client.ListObjectKeys(ctx, prefix)
+}
+
+// ListObjectPage 按 key 游标有界列出对象及最后修改时间。
+func (r *CachedObjectURLResolver) ListObjectPage(ctx context.Context, prefix, after string, limit int) (ObjectPage, error) {
+	return r.impl.client.ListObjectPage(ctx, prefix, after, limit)
 }
 
 // DeleteObject 从 Garage 删除对象。

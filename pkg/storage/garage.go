@@ -275,6 +275,41 @@ func (c *Client) listObjectKeys(ctx context.Context, prefix string) ([]string, e
 	return keys, nil
 }
 
+func (c *Client) listObjectPage(ctx context.Context, prefix, after string, limit int) (ObjectPage, error) {
+	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
+		return ObjectPage{}, errors.New("对象存储客户端未初始化")
+	}
+	prefix = normalizeObjectName(prefix)
+	after = normalizeObjectName(after)
+	if prefix == "" || limit <= 0 {
+		return ObjectPage{}, errors.New("对象分页参数无效")
+	}
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(c.impl.bucket), Prefix: aws.String(prefix), MaxKeys: aws.Int32(int32(limit)),
+	}
+	if after != "" {
+		input.StartAfter = aws.String(after)
+	}
+	out, err := c.impl.objectAPI.ListObjectsV2(ctx, input)
+	if err != nil {
+		return ObjectPage{}, err
+	}
+	page := ObjectPage{Objects: make([]ObjectMetadata, 0, len(out.Contents)), HasMore: aws.ToBool(out.IsTruncated)}
+	for _, item := range out.Contents {
+		key := strings.TrimSpace(aws.ToString(item.Key))
+		if key == "" || strings.HasSuffix(key, "/") {
+			continue
+		}
+		metadata := ObjectMetadata{Key: key, Size: aws.ToInt64(item.Size)}
+		if item.LastModified != nil {
+			metadata.LastModified = *item.LastModified
+		}
+		page.Objects = append(page.Objects, metadata)
+		page.NextAfter = key
+	}
+	return page, nil
+}
+
 func (c *Client) deleteObject(ctx context.Context, objectName string) error {
 	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
 		return errors.New("对象存储客户端未初始化")

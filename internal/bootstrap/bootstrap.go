@@ -11,9 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
+	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	analyticsworker "github.com/vpt/blog-backend/internal/worker/analytics"
+	moderationworker "github.com/vpt/blog-backend/internal/worker/moderation"
 	notificationworker "github.com/vpt/blog-backend/internal/worker/notification"
 	"github.com/vpt/blog-backend/pkg/cache"
 	"github.com/vpt/blog-backend/pkg/config"
@@ -126,6 +128,29 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 	} else {
 		zapLogger.Info("站内通知 worker 启动，邮件 worker 未启用")
 	}
+	go worker.Run(ctx)
+}
+
+// StartModerationCleanupWorker 在审核开启时启动有界审计和对象清理。
+func StartModerationCleanupWorker(
+	ctx context.Context,
+	cfg *config.Config,
+	db *gorm.DB,
+	store storage.ObjectStore,
+	zapLogger *zap.Logger,
+) {
+	if cfg == nil || !cfg.Moderation.Enabled {
+		return
+	}
+	cleanupStore, ok := store.(moderationworker.ObjectStore)
+	if !ok {
+		zapLogger.Warn("对象存储不支持分页列举，审核清理 worker 未启动")
+		return
+	}
+	worker := moderationworker.NewWorker(
+		moderationrepo.NewCleanupRepository(db), cleanupStore, cfg.Moderation, zapLogger, nil,
+	)
+	zapLogger.Info("审核记录与图片清理 worker 启动")
 	go worker.Run(ctx)
 }
 
