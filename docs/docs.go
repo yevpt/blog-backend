@@ -2226,6 +2226,12 @@ const docTemplate = `{
                         "description": "状态：pending、approved、rejected、superseded",
                         "name": "review_status",
                         "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "公开状态：visible、placeholder、hidden、emergency_hidden",
+                        "name": "public_state",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12203,6 +12209,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "decision_type": {
+                    "type": "string"
+                },
+                "emergency_hidden_at": {
+                    "description": "EmergencyHiddenAt 是紧急隐藏发生的时间，仅 public_state=emergency_hidden 时返回。",
+                    "type": "string"
+                },
+                "emergency_hide_reason": {
+                    "description": "EmergencyHideReason 是紧急隐藏时管理员填写的原因，仅 public_state=emergency_hidden 时返回。",
                     "type": "string"
                 },
                 "item_id": {
