@@ -92,6 +92,7 @@ func (s *momentService) moderationImagesToDTO(images []moderationrepo.ImageView)
 		}
 		name := path.Base(image.DisplayObjectKey)
 		result = append(result, dto.MomentMediaResp{
+			ID: uint(image.RevisionImageID),
 			Name: name, FileType: strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."),
 			URL: image.DisplayObjectKey, AccessURL: s.resolveImageURL(image.DisplayObjectKey),
 			DisplayMode: moderationImageDisplayMode(image), Seq: image.Seq,

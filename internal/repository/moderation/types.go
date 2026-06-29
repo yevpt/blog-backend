@@ -577,6 +577,7 @@ type View struct {
 
 // ImageView 是审核读取投影中的安全图片地址，未通过时 DisplayObjectKey 只含预览或占位图。
 type ImageView struct {
+	RevisionImageID  uint64
 	Seq              uint
 	SourceObjectKey  string
 	DisplayObjectKey string

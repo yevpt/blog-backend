@@ -93,6 +93,23 @@ func TestRunBatchMissingImageStopsBeforePersist(t *testing.T) {
 	assert.Empty(t, repo.persisted)
 }
 
+func TestRunBatchSkipsUnresolvableEmbeddedImageForComments(t *testing.T) {
+	repo := &migrationRepositoryStub{records: []moderationrepo.LegacyRecord{{
+		Subject:  moderationrepo.SubjectRef{Type: moderationrepo.SubjectGuestbook, ID: 9, RootID: 3},
+		AuthorID: 42, Content: `<img src="asdf" onerror="alert(1)"><img src="comments/guestbook/3/images/real.jpg">`,
+	}}}
+	store := &migrationStoreStub{objects: map[string][]byte{"comments/guestbook/3/images/real.jpg": []byte("real")}}
+	service := moderationmigration.NewService(repo, store)
+
+	_, err := service.RunBatch(context.Background(), moderationmigration.Cursor{Type: "guestbook"}, 10)
+
+	require.NoError(t, err)
+	require.Len(t, repo.persisted, 1)
+	require.Len(t, repo.persisted[0].Images, 1)
+	assert.Equal(t, "comments/guestbook/3/images/real.jpg", repo.persisted[0].Images[0].ObjectKey)
+	assert.Contains(t, repo.persisted[0].Content, `src="asdf"`)
+}
+
 func TestRunBatchExtractsEmbeddedCommentImagesInDocumentOrder(t *testing.T) {
 	repo := &migrationRepositoryStub{records: []moderationrepo.LegacyRecord{{
 		Subject:  moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 8, RootID: 2},

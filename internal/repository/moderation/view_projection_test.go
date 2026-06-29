@@ -22,8 +22,8 @@ func TestModerationViewPublicProjectionNeverLeaksPendingBody(t *testing.T) {
 			AddRow("article_comment", 2, 8, "active", "placeholder", nil, nil, 12, nil, "中风险原文", "medium", "pending", "[4]"))
 	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image LEFT JOIN moderation_image AS image_record").
 		WillReturnRows(moderationViewImageRows().
-			AddRow(11, 1, "comments/original-a.jpg", "moderation/previews/a.jpg", "pending", false).
-			AddRow(12, 1, "comments/original-b.gif", "system/moderation/gif-review.jpg", "pending", true))
+			AddRow(101, 11, 1, "comments/original-a.jpg", "moderation/previews/a.jpg", "pending", false).
+			AddRow(102, 12, 1, "comments/original-b.gif", "system/moderation/gif-review.jpg", "pending", true))
 
 	got, err := repository.LoadModerationView(context.Background(), refs, moderation.Viewer{Role: moderation.ViewerPublic})
 
@@ -53,8 +53,8 @@ func TestModerationViewAuthorGetsPendingEditorContentButKeepsApprovedDisplay(t *
 			AddRow("guestbook", 2, 7, "active", "visible", 10, 10, 12, "旧正文", "新中风险正文", "medium", "pending", "[4]"))
 	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image LEFT JOIN moderation_image AS image_record").
 		WillReturnRows(moderationViewImageRows().
-			AddRow(10, 1, "comments/approved.jpg", nil, "approved", false).
-			AddRow(12, 1, "comments/new.jpg", "moderation/previews/new.jpg", "pending", false))
+			AddRow(201, 10, 1, "comments/approved.jpg", nil, "approved", false).
+			AddRow(202, 12, 1, "comments/new.jpg", "moderation/previews/new.jpg", "pending", false))
 
 	got, err := repository.LoadModerationView(context.Background(), []moderation.SubjectRef{ref}, moderation.Viewer{
 		Role: moderation.ViewerAuthor, UserID: 7,
@@ -81,7 +81,7 @@ func TestModerationViewAuthorGetsPendingEditorContentButKeepsApprovedDisplay(t *
 
 func moderationViewImageRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
-		"revision_id", "seq", "object_key", "preview_object_key", "status", "is_gif",
+		"id", "revision_id", "seq", "object_key", "preview_object_key", "status", "is_gif",
 	})
 }
 

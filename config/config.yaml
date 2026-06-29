@@ -78,7 +78,7 @@ email:
 
 moderation:
   # 审核总开关；全量上线前生产可临时设为 false，恢复旧版 UGC 写入行为
-  enabled: false
+  enabled: true
   # enforce 实际执行审核决策；observe 仅用于本地规则调试
   mode: enforce
 

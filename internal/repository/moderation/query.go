@@ -312,6 +312,7 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 }
 
 type moderationViewImageRow struct {
+	ID               uint64
 	RevisionID       uint64
 	Seq              uint
 	ObjectKey        string
@@ -340,7 +341,7 @@ func (r *repository) loadModerationViewImages(ctx context.Context, rows []modera
 	}
 	var imageRows []moderationViewImageRow
 	err := r.db.WithContext(ctx).Raw(`
-SELECT revision_image.revision_id, revision_image.seq, revision_image.object_key,
+SELECT revision_image.id, revision_image.revision_id, revision_image.seq, revision_image.object_key,
        image_record.preview_object_key, image_record.status, revision_image.is_gif
 FROM moderation_revision_image AS revision_image
 LEFT JOIN moderation_image AS image_record
@@ -359,7 +360,7 @@ ORDER BY revision_image.revision_id ASC, revision_image.seq ASC, revision_image.
 			displayKey = *row.PreviewObjectKey
 		}
 		result[row.RevisionID] = append(result[row.RevisionID], ImageView{
-			Seq: row.Seq, SourceObjectKey: row.ObjectKey, DisplayObjectKey: displayKey,
+			RevisionImageID: row.ID, Seq: row.Seq, SourceObjectKey: row.ObjectKey, DisplayObjectKey: displayKey,
 			Approved: approved, IsGIF: row.IsGIF,
 		})
 	}

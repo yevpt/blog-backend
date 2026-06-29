@@ -163,19 +163,27 @@ func (s *Service) prepareRecord(ctx context.Context, record moderationrepo.Legac
 	if record.Subject.Type != moderationrepo.SubjectMoment {
 		keys = append(keys, extractImageSources(record.Content)...)
 	}
+	// 碎语图片来自受追踪的上传通道,缺失即真实数据损失应中断迁移;
+	// 评论/留言的内容来自不可信输入,嵌入 src 不可定位时静默跳过以保证整批迁移完成。
+	isMoment := record.Subject.Type == moderationrepo.SubjectMoment
 	record.Images = make([]moderationrepo.LegacyImage, 0, len(keys))
 	for index, value := range keys {
-		required := record.Subject.Type == moderationrepo.SubjectMoment || !storage.IsAbsoluteURL(strings.TrimSpace(value))
-		key, managed, err := s.managedObjectKey(value, required)
+		key, managed, err := s.managedObjectKey(value, isMoment)
 		if err != nil {
-			return moderationrepo.LegacyRecord{}, err
+			if isMoment {
+				return moderationrepo.LegacyRecord{}, err
+			}
+			continue
 		}
 		if !managed {
 			continue
 		}
 		image, err := s.fingerprintImage(ctx, key, uint(index+1))
 		if err != nil {
-			return moderationrepo.LegacyRecord{}, err
+			if isMoment {
+				return moderationrepo.LegacyRecord{}, err
+			}
+			continue
 		}
 		record.Images = append(record.Images, image)
 	}
