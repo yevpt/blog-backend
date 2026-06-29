@@ -104,6 +104,8 @@ type MomentMediaResp struct {
 	URL string `json:"url" example:"moments/cat.jpg"`
 	// AccessURL 可直接访问的图片地址。
 	AccessURL string `json:"access_url" example:"https://cdn.example.com/moments/cat.jpg"`
+	// DisplayMode 表示前端应按原图、模糊预览或 GIF 审核占位图展示。
+	DisplayMode string `json:"display_mode" enums:"original,blurred,gif_placeholder" example:"blurred"`
 	// Size 图片大小，单位字节。
 	Size uint `json:"size" example:"1024"`
 	// Seq 图片排序值。

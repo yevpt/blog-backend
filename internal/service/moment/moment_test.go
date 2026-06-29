@@ -264,6 +264,7 @@ func TestMomentService_List_NormalizesPaginationAndResolvesImages(t *testing.T) 
 	assert.Equal(t, &viewerID, repo.listViewerID)
 	require.Len(t, resp.List, 1)
 	assert.Equal(t, "https://cdn.example.com/moments/cat.jpg", resp.List[0].Images[0].AccessURL)
+	assert.Equal(t, "original", resp.List[0].Images[0].DisplayMode)
 	assert.Equal(t, []string{"moments/cat.jpg"}, resolver.objects)
 }
 
@@ -286,8 +287,12 @@ func TestMomentServiceListProjectsModerationInOneBatch(t *testing.T) {
 			PublicState: moderationrepo.PublicVisible, DisplayVersion: moderationrepo.DisplayLastApproved,
 			VisibleContent: "最后通过正文", HasPendingRevision: true,
 			PendingContent: &pending, PendingRiskLevel: &risk, PendingReviewStatus: &status,
-			CanInteract:   false,
-			VisibleImages: []moderationrepo.ImageView{{Seq: 1, DisplayObjectKey: "moderation/previews/a.jpg"}},
+			CanInteract: false,
+			VisibleImages: []moderationrepo.ImageView{
+				{Seq: 1, DisplayObjectKey: "moments/approved.jpg", Approved: true},
+				{Seq: 2, DisplayObjectKey: "moderation/previews/a.jpg"},
+				{Seq: 3, DisplayObjectKey: "system/moderation/gif-review.jpg", IsGIF: true},
+			},
 		},
 	}, nil)
 	svc := momentservice.NewMomentService(repo, &fakeURLResolver{}, nil, nil, nil, moderationSvc)
@@ -300,9 +305,14 @@ func TestMomentServiceListProjectsModerationInOneBatch(t *testing.T) {
 	assert.Equal(t, "最后通过正文", resp.List[0].Content)
 	assert.Equal(t, "last_approved", resp.List[0].Moderation.DisplayVersion)
 	assert.Equal(t, &pending, resp.List[0].Moderation.PendingContent)
-	require.Len(t, resp.List[0].Images, 1)
-	assert.Equal(t, "moderation/previews/a.jpg", resp.List[0].Images[0].URL)
-	assert.Equal(t, "https://cdn.example.com/moderation/previews/a.jpg", resp.List[0].Images[0].AccessURL)
+	require.Len(t, resp.List[0].Images, 3)
+	assert.Equal(t, "moments/approved.jpg", resp.List[0].Images[0].URL)
+	assert.Equal(t, "original", resp.List[0].Images[0].DisplayMode)
+	assert.Equal(t, "moderation/previews/a.jpg", resp.List[0].Images[1].URL)
+	assert.Equal(t, "https://cdn.example.com/moderation/previews/a.jpg", resp.List[0].Images[1].AccessURL)
+	assert.Equal(t, "blurred", resp.List[0].Images[1].DisplayMode)
+	assert.Equal(t, "system/moderation/gif-review.jpg", resp.List[0].Images[2].URL)
+	assert.Equal(t, "gif_placeholder", resp.List[0].Images[2].DisplayMode)
 }
 
 func TestMomentServiceSaveUsesModerationBeforeBusinessRepository(t *testing.T) {

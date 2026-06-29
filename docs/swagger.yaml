@@ -2361,6 +2361,14 @@ definitions:
         description: AccessURL 可直接访问的图片地址。
         example: https://cdn.example.com/moments/cat.jpg
         type: string
+      display_mode:
+        description: DisplayMode 表示前端应按原图、模糊预览或 GIF 审核占位图展示。
+        enum:
+        - original
+        - blurred
+        - gif_placeholder
+        example: blurred
+        type: string
       file_type:
         description: FileType 图片文件类型或扩展名。
         example: jpg

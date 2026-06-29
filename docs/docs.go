@@ -14438,6 +14438,16 @@ const docTemplate = `{
                     "type": "string",
                     "example": "https://cdn.example.com/moments/cat.jpg"
                 },
+                "display_mode": {
+                    "description": "DisplayMode 表示前端应按原图、模糊预览或 GIF 审核占位图展示。",
+                    "type": "string",
+                    "enum": [
+                        "original",
+                        "blurred",
+                        "gif_placeholder"
+                    ],
+                    "example": "blurred"
+                },
                 "file_type": {
                     "description": "FileType 图片文件类型或扩展名。",
                     "type": "string",

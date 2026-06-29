@@ -93,23 +93,36 @@ func (s *momentService) moderationImagesToDTO(images []moderationrepo.ImageView)
 		name := path.Base(image.DisplayObjectKey)
 		result = append(result, dto.MomentMediaResp{
 			Name: name, FileType: strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."),
-			URL: image.DisplayObjectKey, AccessURL: s.resolveImageURL(image.DisplayObjectKey), Seq: image.Seq,
+			URL: image.DisplayObjectKey, AccessURL: s.resolveImageURL(image.DisplayObjectKey),
+			DisplayMode: moderationImageDisplayMode(image), Seq: image.Seq,
 		})
 	}
 	return result
+}
+
+// moderationImageDisplayMode 根据安全图片投影返回稳定的前端展示模式。
+func moderationImageDisplayMode(image moderationrepo.ImageView) string {
+	if image.Approved {
+		return "original"
+	}
+	if image.IsGIF {
+		return "gif_placeholder"
+	}
+	return "blurred"
 }
 
 func (s *momentService) mediaToDTO(images []model.Media) []dto.MomentMediaResp {
 	rows := make([]dto.MomentMediaResp, 0, len(images))
 	for _, image := range images {
 		rows = append(rows, dto.MomentMediaResp{
-			ID:        image.ID,
-			Name:      image.Name,
-			FileType:  image.FileType,
-			URL:       image.URL,
-			AccessURL: s.resolveImageURL(image.URL),
-			Size:      image.Size,
-			Seq:       image.Seq,
+			ID:          image.ID,
+			Name:        image.Name,
+			FileType:    image.FileType,
+			URL:         image.URL,
+			AccessURL:   s.resolveImageURL(image.URL),
+			DisplayMode: "original",
+			Size:        image.Size,
+			Seq:         image.Seq,
 		})
 	}
 	return rows
