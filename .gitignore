@@ -30,6 +30,9 @@ docs/docs.go
 
 # air 临时文件
 
+# Git worktree
+.worktrees/
+
 # 编译产物
 tools/commitmsg/commitmsg
 tmp/
