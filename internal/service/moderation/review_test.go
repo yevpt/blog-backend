@@ -30,6 +30,22 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	record := pendingReviewRecord()
 	cleaner := &previewCleanerStub{}
 	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	repo.EXPECT().LoadSubject(gomock.Any(), record.Subject).Return(
+		moderationrepo.SubjectSnapshot{
+			Ref: moderationrepo.SubjectRef{
+				Type: moderationrepo.SubjectArticleComment, ID: 7, RootID: 3,
+			},
+			AuthorID: record.AuthorID, Content: "待审正文",
+		}, nil,
+	)
+	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
+		moderationrepo.ReviewNotificationContext{
+			ContentType: moderationrepo.SubjectArticleComment,
+			RootSnapshot: &moderationrepo.NotificationSnapshot{
+				Type: "article", ID: 3, Title: "测试文章",
+			},
+		}, nil,
+	)
 	repo.EXPECT().LoadRevisionPreviewKeys(gomock.Any(), record.RevisionID).
 		Return([]string{"moderation/previews/a.jpg"}, nil)
 	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -47,6 +63,11 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 			assert.Equal(t, int64(-1), cmd.ProfileChange.ViolationScoreDelta)
 			require.NotNil(t, cmd.Notification)
 			assert.Equal(t, record.AuthorID, cmd.Notification.RecipientUserID)
+			assert.Equal(t, "待审正文", cmd.Notification.ContentExcerpt)
+			assert.Equal(t, "approved", cmd.Notification.Decision)
+			assert.Equal(t, moderationrepo.SubjectArticleComment, cmd.Notification.ContentType)
+			require.NotNil(t, cmd.Notification.RootSnapshot)
+			assert.Equal(t, "测试文章", cmd.Notification.RootSnapshot.Title)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
 		})
 	repo.EXPECT().LoadModerationProfile(gomock.Any(), record.AuthorID, serviceNow).Return(moderationrepo.ModerationProfile{
@@ -85,6 +106,12 @@ func TestReviewServiceCorrectSanitizesContentAndRecordsViolation(t *testing.T) {
 	repo := repositorymock.NewMockRepository(ctrl)
 	record := pendingReviewRecord()
 	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	repo.EXPECT().LoadSubject(gomock.Any(), record.Subject).Return(
+		moderationrepo.SubjectSnapshot{Ref: record.Subject, AuthorID: record.AuthorID, Content: record.PublishedContent}, nil,
+	)
+	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
+		moderationrepo.ReviewNotificationContext{ContentType: record.Subject.Type}, nil,
+	)
 	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, cmd moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
 			require.NotNil(t, cmd.Review.PublishedContent)
@@ -129,7 +156,7 @@ func TestReviewServiceListDefaultsToPendingQueue(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
 	repo.EXPECT().ListReviewRecords(gomock.Any(), moderationrepo.ReviewFilter{
-		Page: 1, PageSize: 20, ReviewStatus: moderationrepo.ReviewPending,
+		Page: 1, PageSize: 20, ReviewStatus: reviewStatusPtr(moderationrepo.ReviewPending),
 	}).Return(moderationrepo.ReviewPage{Total: 1, Items: []moderationrepo.ReviewRecord{pendingReviewRecord()}}, nil)
 	service := newReviewService(repo, &processorStub{})
 
@@ -139,6 +166,35 @@ func TestReviewServiceListDefaultsToPendingQueue(t *testing.T) {
 	assert.Equal(t, int64(1), page.Total)
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, uint64(20), page.Items[0].RevisionID)
+}
+
+func TestReviewServiceListPassesPublicStateFilterAndMapsEmergencyHide(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	emergencyReason := "紧急下架劣迹内容"
+	hiddenAt := serviceNow
+	record := pendingReviewRecord()
+	record.State.PublicState = moderationrepo.PublicEmergencyHidden
+	record.State.EmergencyReason = &emergencyReason
+	record.State.EmergencyHiddenAt = &hiddenAt
+	emergencyState := moderationrepo.PublicEmergencyHidden
+	repo.EXPECT().ListReviewRecords(gomock.Any(), moderationrepo.ReviewFilter{
+		Page: 1, PageSize: 20, ReviewStatus: reviewStatusPtr(moderationrepo.ReviewApproved), PublicState: &emergencyState,
+	}).Return(moderationrepo.ReviewPage{Total: 1, Items: []moderationrepo.ReviewRecord{record}}, nil)
+	service := newReviewService(repo, &processorStub{})
+
+	cmdState := moderation.PublicState(moderationrepo.PublicEmergencyHidden)
+	page, err := service.List(context.Background(), moderation.ListReviewCommand{
+		ReviewStatus: serviceReviewStatusPtr(moderation.ReviewApproved), PublicState: &cmdState,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, moderation.PublicState(moderationrepo.PublicEmergencyHidden), page.Items[0].PublicState)
+	require.NotNil(t, page.Items[0].EmergencyHideReason)
+	assert.Equal(t, emergencyReason, *page.Items[0].EmergencyHideReason)
+	require.NotNil(t, page.Items[0].EmergencyHiddenAt)
+	assert.Equal(t, hiddenAt, *page.Items[0].EmergencyHiddenAt)
 }
 
 func TestReviewServiceDeletedItemReturnsTerminalError(t *testing.T) {
@@ -194,4 +250,34 @@ func pendingReviewRecord() moderationrepo.ReviewRecord {
 		RiskLevel: moderationrepo.RiskLow, PolicyAction: moderationrepo.ActionPostReview,
 		ReviewStatus: moderationrepo.ReviewPending, CreatedAt: serviceNow,
 	}
+}
+
+func reviewStatusPtr(status moderationrepo.ReviewStatus) *moderationrepo.ReviewStatus {
+	return &status
+}
+
+func serviceReviewStatusPtr(status moderation.ReviewStatus) *moderation.ReviewStatus {
+	return &status
+}
+
+func TestReviewServiceListIncludesAllStatusesWhenRequested(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	repo.EXPECT().ListReviewRecords(gomock.Any(), moderationrepo.ReviewFilter{
+		Page: 1, PageSize: 20,
+	}).Return(moderationrepo.ReviewPage{Total: 2, Items: []moderationrepo.ReviewRecord{
+		pendingReviewRecord(),
+		func() moderationrepo.ReviewRecord {
+			record := pendingReviewRecord()
+			record.ReviewStatus = moderationrepo.ReviewRejected
+			return record
+		}(),
+	}}, nil)
+	service := newReviewService(repo, &processorStub{})
+
+	page, err := service.List(context.Background(), moderation.ListReviewCommand{IncludeAllReviewStatuses: true})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), page.Total)
+	require.Len(t, page.Items, 2)
 }

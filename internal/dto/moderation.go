@@ -1,5 +1,16 @@
 package dto
 
+// ModerationImageResp 是作者待审版本中的图片投影，仅作者/管理员可见。
+type ModerationImageResp struct {
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	FileType    string `json:"file_type"`
+	URL         string `json:"url"`
+	AccessURL   string `json:"access_url"`
+	DisplayMode string `json:"display_mode"`
+	Seq         uint   `json:"seq"`
+}
+
 // ModerationView 描述内容当前公开形态和作者可见的待审状态。
 type ModerationView struct {
 	// Notice 是提交后可直接展示给用户的稳定提示。
@@ -16,6 +27,8 @@ type ModerationView struct {
 	ReviewStatus *string `json:"review_status,omitempty" example:"pending"`
 	// PendingContent 仅向作者和管理员返回，供编辑器显示。
 	PendingContent *string `json:"pending_content,omitempty"`
+	// PendingImages 仅向作者和管理员返回，供编辑器回显待审图片。
+	PendingImages []ModerationImageResp `json:"pending_images,omitempty"`
 	// CanInteract 表示后端当前是否允许点赞和回复。
 	CanInteract bool `json:"can_interact" example:"false"`
 }

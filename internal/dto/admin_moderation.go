@@ -8,7 +8,8 @@ type AdminModerationListReq struct {
 	PageSize     int    `form:"page_size" binding:"omitempty,min=1" example:"20"`
 	ContentType  string `form:"content_type" binding:"omitempty,oneof=moment article_comment moment_comment guestbook article_comment_reply moment_comment_reply guestbook_reply"`
 	RiskLevel    string `form:"risk_level" binding:"omitempty,oneof=low medium high"`
-	ReviewStatus string `form:"review_status" binding:"omitempty,oneof=pending approved rejected superseded" example:"pending"`
+	ReviewStatus string `form:"review_status" binding:"omitempty,oneof=pending approved rejected superseded all" example:"pending"`
+	PublicState  string `form:"public_state" binding:"omitempty,oneof=visible placeholder hidden emergency_hidden" example:"emergency_hidden"`
 }
 
 // AdminModerationReviewReq 是通过或驳回请求。
@@ -60,8 +61,12 @@ type AdminModerationItemResp struct {
 	DecisionReason   *string                           `json:"decision_reason,omitempty"`
 	ReviewerID       *uint64                           `json:"reviewer_id,omitempty"`
 	ReviewedAt       *time.Time                        `json:"reviewed_at,omitempty"`
-	CreatedAt        time.Time                         `json:"created_at"`
-	CanInteract      bool                              `json:"can_interact"`
+	// EmergencyHideReason 是紧急隐藏时管理员填写的原因，仅 public_state=emergency_hidden 时返回。
+	EmergencyHideReason *string    `json:"emergency_hide_reason,omitempty"`
+	// EmergencyHiddenAt 是紧急隐藏发生的时间，仅 public_state=emergency_hidden 时返回。
+	EmergencyHiddenAt   *time.Time `json:"emergency_hidden_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	CanInteract         bool       `json:"can_interact"`
 }
 
 // AdminModerationPageResp 是管理端审核版本分页响应。

@@ -64,6 +64,7 @@ func moderationItemToDTO(item moderationservice.ReviewItem) dto.AdminModerationI
 		RiskLevel: string(item.RiskLevel), PolicyAction: string(item.PolicyAction),
 		ReviewStatus: string(item.ReviewStatus), DecisionType: item.DecisionType,
 		DecisionReason: item.DecisionReason, ReviewerID: item.ReviewerID, ReviewedAt: item.ReviewedAt,
+		EmergencyHideReason: item.EmergencyHideReason, EmergencyHiddenAt: item.EmergencyHiddenAt,
 		CreatedAt: item.CreatedAt, CanInteract: item.CanInteract,
 	}
 	if item.MomentOptions != nil {

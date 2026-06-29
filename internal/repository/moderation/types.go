@@ -239,6 +239,22 @@ type ProfileChange struct {
 	UpdatedAt           time.Time
 }
 
+// NotificationSnapshot 与站内通知 metadata 快照字段对齐。
+type NotificationSnapshot struct {
+	Type    string `json:"type,omitempty"`
+	ID      uint64 `json:"id,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Excerpt string `json:"excerpt,omitempty"`
+}
+
+// ReviewNotificationContext 供审核结果系统通知展示内容归属。
+type ReviewNotificationContext struct {
+	ContentType   SubjectType
+	CommentID     *uint64
+	RootSnapshot  *NotificationSnapshot
+	QuoteSnapshot *NotificationSnapshot
+}
+
 // NotificationIntent 是审核事务内创建站内系统通知所需的最小数据。
 type NotificationIntent struct {
 	RecipientUserID uint64
@@ -247,6 +263,10 @@ type NotificationIntent struct {
 	ItemID          uint64
 	RevisionID      uint64
 	Decision        string
+	ContentType     SubjectType
+	CommentID       *uint64
+	RootSnapshot    *NotificationSnapshot
+	QuoteSnapshot   *NotificationSnapshot
 }
 
 // ApplyTransitionCommand 是一次完整审核事务的数据命令。
@@ -283,7 +303,8 @@ type ReviewFilter struct {
 	PageSize     int
 	ContentType  *SubjectType
 	RiskLevel    *RiskLevel
-	ReviewStatus ReviewStatus
+	ReviewStatus *ReviewStatus
+	PublicState  *PublicState
 }
 
 // ReviewRecord 汇总审核项状态与一个明确版本，供人工审核 service 使用。
@@ -569,6 +590,7 @@ type View struct {
 	PendingContent      *string
 	PendingRiskLevel    *RiskLevel
 	PendingReviewStatus *ReviewStatus
+	LastReviewStatus    *ReviewStatus
 	PendingRuleMatchIDs []uint64
 	VisibleImages       []ImageView
 	PendingImages       []ImageView

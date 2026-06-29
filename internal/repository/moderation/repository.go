@@ -10,6 +10,7 @@ import (
 // Repository 是 service 可 mock 的审核数据边界。
 type Repository interface {
 	LoadSubject(ctx context.Context, ref SubjectRef) (SubjectSnapshot, error)
+	LoadReviewNotificationContext(ctx context.Context, ref SubjectRef) (ReviewNotificationContext, error)
 	LoadItemState(ctx context.Context, ref SubjectRef) (ItemStateRecord, error)
 	LoadPolicyContext(ctx context.Context, userID uint64) (PolicyContext, error)
 	EnsureNewProfile(ctx context.Context, userID uint64, now time.Time) error

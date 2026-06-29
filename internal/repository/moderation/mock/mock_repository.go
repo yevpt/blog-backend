@@ -266,6 +266,21 @@ func (mr *MockRepositoryMockRecorder) LoadRevisionPreviewKeys(ctx, revisionID an
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRevisionPreviewKeys", reflect.TypeOf((*MockRepository)(nil).LoadRevisionPreviewKeys), ctx, revisionID)
 }
 
+// LoadReviewNotificationContext mocks base method.
+func (m *MockRepository) LoadReviewNotificationContext(ctx context.Context, ref moderation.SubjectRef) (moderation.ReviewNotificationContext, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadReviewNotificationContext", ctx, ref)
+	ret0, _ := ret[0].(moderation.ReviewNotificationContext)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadReviewNotificationContext indicates an expected call of LoadReviewNotificationContext.
+func (mr *MockRepositoryMockRecorder) LoadReviewNotificationContext(ctx, ref any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadReviewNotificationContext", reflect.TypeOf((*MockRepository)(nil).LoadReviewNotificationContext), ctx, ref)
+}
+
 // LoadSubject mocks base method.
 func (m *MockRepository) LoadSubject(ctx context.Context, ref moderation.SubjectRef) (moderation.SubjectSnapshot, error) {
 	m.ctrl.T.Helper()

@@ -486,9 +486,10 @@ func TestLoadModerationViewBatchesAndHidesPendingDetailsFromPublic(t *testing.T)
 			"content_type", "content_id", "author_id", "lifecycle_state", "public_state",
 			"materialized_revision_id", "approved_revision_id", "pending_revision_id",
 			"materialized_content", "pending_content", "pending_risk_level", "pending_review_status", "pending_rule_match_ids",
+			"rejected_revision_id", "rejected_content",
 		}).
-			AddRow("article_comment", 7, 42, "active", "visible", 11, 10, 11, "低风险正文", "低风险正文", "low", "pending", "[1]").
-			AddRow("moment", 8, 43, "active", "visible", 20, 20, 21, "旧通过正文", "中风险正文", "medium", "pending", "[2]"))
+			AddRow("article_comment", 7, 42, "active", "visible", 11, 10, 11, "低风险正文", "低风险正文", "low", "pending", "[1]", nil, nil).
+			AddRow("moment", 8, 43, "active", "visible", 20, 20, 21, "旧通过正文", "中风险正文", "medium", "pending", "[2]", nil, nil))
 	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image").
 		WillReturnRows(moderationViewImageRows())
 
@@ -511,7 +512,8 @@ func TestLoadModerationViewReturnsPendingDetailsOnlyToAuthor(t *testing.T) {
 			"content_type", "content_id", "author_id", "lifecycle_state", "public_state",
 			"materialized_revision_id", "approved_revision_id", "pending_revision_id",
 			"materialized_content", "pending_content", "pending_risk_level", "pending_review_status", "pending_rule_match_ids",
-		}).AddRow("moment", 8, 43, "active", "visible", 20, 20, 21, "旧正文", "待审正文", "medium", "pending", "[2,3]"))
+			"rejected_revision_id", "rejected_content",
+		}).AddRow("moment", 8, 43, "active", "visible", 20, 20, 21, "旧正文", "待审正文", "medium", "pending", "[2,3]", nil, nil))
 	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image").
 		WillReturnRows(moderationViewImageRows())
 

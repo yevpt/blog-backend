@@ -261,7 +261,19 @@ type moderationViewRow struct {
 	PendingRiskLevel       *string
 	PendingReviewStatus    *string
 	PendingRuleMatchIDs    *string
+	RejectedRevisionID     *uint64
+	RejectedContent        *string
 }
+
+const moderationViewSelect = `moderation_item.content_type, moderation_item.content_id, moderation_item.author_id, moderation_item.lifecycle_state, moderation_item.public_state, moderation_item.materialized_revision_id, moderation_item.approved_revision_id, moderation_item.pending_revision_id, materialized.published_content AS materialized_content, pending.submitted_content AS pending_content, pending.risk_level AS pending_risk_level, pending.review_status AS pending_review_status, pending.rule_match_ids AS pending_rule_match_ids, (
+SELECT rejected.id FROM moderation_revision AS rejected
+WHERE rejected.item_id = moderation_item.id AND rejected.review_status = 'rejected'
+ORDER BY rejected.reviewed_at DESC, rejected.id DESC LIMIT 1
+) AS rejected_revision_id, (
+SELECT rejected.published_content FROM moderation_revision AS rejected
+WHERE rejected.item_id = moderation_item.id AND rejected.review_status = 'rejected'
+ORDER BY rejected.reviewed_at DESC, rejected.id DESC LIMIT 1
+) AS rejected_content`
 
 func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, viewer Viewer) (map[SubjectKey]View, error) {
 	result := make(map[SubjectKey]View, len(refs))
@@ -277,7 +289,7 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 	}
 	var rows []moderationViewRow
 	err = r.db.WithContext(ctx).Table("moderation_item").
-		Select("moderation_item.content_type, moderation_item.content_id, moderation_item.author_id, moderation_item.lifecycle_state, moderation_item.public_state, moderation_item.materialized_revision_id, moderation_item.approved_revision_id, moderation_item.pending_revision_id, materialized.published_content AS materialized_content, pending.submitted_content AS pending_content, pending.risk_level AS pending_risk_level, pending.review_status AS pending_review_status, pending.rule_match_ids AS pending_rule_match_ids").
+		Select(moderationViewSelect).
 		Joins("LEFT JOIN moderation_revision AS materialized ON materialized.id = moderation_item.materialized_revision_id AND materialized.item_id = moderation_item.id").
 		Joins("LEFT JOIN moderation_revision AS pending ON pending.id = moderation_item.pending_revision_id AND pending.item_id = moderation_item.id").
 		Where("moderation_item.content_type IN ? AND moderation_item.content_id IN ?", types, ids).
@@ -304,7 +316,15 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 		}
 		canReadPending := viewer.Role == ViewerAdmin || (viewer.Role == ViewerAuthor && viewer.UserID == row.AuthorID)
 		if canReadPending && row.PendingRevisionID != nil {
-			view.PendingImages = imagesByRevision[*row.PendingRevisionID]
+			view.PendingImages = AuthorOriginalImageViews(imagesByRevision[*row.PendingRevisionID])
+		}
+		if canReadPending && row.RejectedRevisionID != nil && row.PublicState == string(PublicHidden) && row.MaterializedRevisionID == nil {
+			if len(view.VisibleImages) == 0 {
+				view.VisibleImages = AuthorOriginalImageViews(imagesByRevision[*row.RejectedRevisionID])
+			}
+		}
+		if canReadPending && row.PublicState == string(PublicPlaceholder) && row.MaterializedRevisionID == nil && row.PendingRevisionID != nil {
+			view.VisibleImages = view.PendingImages
 		}
 		result[key] = view
 	}
@@ -329,6 +349,9 @@ func (r *repository) loadModerationViewImages(ctx context.Context, rows []modera
 		}
 		if row.PendingRevisionID != nil {
 			revisionSet[*row.PendingRevisionID] = struct{}{}
+		}
+		if row.RejectedRevisionID != nil {
+			revisionSet[*row.RejectedRevisionID] = struct{}{}
 		}
 	}
 	result := make(map[uint64][]ImageView, len(revisionSet))
@@ -394,6 +417,11 @@ func projectView(row moderationViewRow, viewer Viewer) (View, error) {
 	}
 	canReadPending := viewer.Role == ViewerAdmin || (viewer.Role == ViewerAuthor && viewer.UserID == row.AuthorID)
 	if !canReadPending || row.PendingRevisionID == nil {
+		if canReadPending && row.PublicState == string(PublicHidden) && row.MaterializedContent == nil && row.RejectedContent != nil {
+			view.VisibleContent = *row.RejectedContent
+			rejected := ReviewRejected
+			view.LastReviewStatus = &rejected
+		}
 		return view, nil
 	}
 	view.PendingContent = cloneString(row.PendingContent)
@@ -409,6 +437,10 @@ func projectView(row moderationViewRow, viewer Viewer) (View, error) {
 		if err := json.Unmarshal([]byte(*row.PendingRuleMatchIDs), &view.PendingRuleMatchIDs); err != nil {
 			return View{}, err
 		}
+	}
+	// 中风险首次发布尚无 materialized 版本：作者需看到自己提交的正文。
+	if row.PublicState == string(PublicPlaceholder) && row.MaterializedRevisionID == nil && row.PendingContent != nil {
+		view.VisibleContent = *row.PendingContent
 	}
 	return view, nil
 }
@@ -453,4 +485,21 @@ func cloneString(value *string) *string {
 	}
 	copy := *value
 	return &copy
+}
+
+// AuthorOriginalImageViews 让作者看到自己上传的原图，而非审核预览或 GIF 占位图。
+func AuthorOriginalImageViews(images []ImageView) []ImageView {
+	if len(images) == 0 {
+		return nil
+	}
+	out := make([]ImageView, len(images))
+	for i, image := range images {
+		out[i] = image
+		if image.SourceObjectKey == "" {
+			continue
+		}
+		out[i].DisplayObjectKey = image.SourceObjectKey
+		out[i].Approved = true
+	}
+	return out
 }

@@ -17,7 +17,8 @@ import (
 // @Param page_size query int false "每页数量，默认 20，最大 100"
 // @Param content_type query string false "内容类型"
 // @Param risk_level query string false "风险：low、medium、high"
-// @Param review_status query string false "状态：pending、approved、rejected、superseded"
+// @Param review_status query string false "状态：pending、approved、rejected、superseded、all（全部）"
+// @Param public_state query string false "公开状态：visible、placeholder、hidden、emergency_hidden"
 // @Success 200 {object} response.Response{data=dto.AdminModerationPageResp}
 // @Failure 401 {object} response.Response
 // @Failure 403 {object} response.Response
@@ -37,8 +38,19 @@ func (h *AdminHandler) List(c *gin.Context) {
 		value := moderationservice.RiskLevel(req.RiskLevel)
 		cmd.RiskLevel = &value
 	}
-	if req.ReviewStatus != "" {
-		cmd.ReviewStatus = moderationservice.ReviewStatus(req.ReviewStatus)
+	switch req.ReviewStatus {
+	case "", "pending":
+		pending := moderationservice.ReviewPending
+		cmd.ReviewStatus = &pending
+	case "all":
+		cmd.IncludeAllReviewStatuses = true
+	default:
+		value := moderationservice.ReviewStatus(req.ReviewStatus)
+		cmd.ReviewStatus = &value
+	}
+	if req.PublicState != "" {
+		value := moderationservice.PublicState(req.PublicState)
+		cmd.PublicState = &value
 	}
 	page, err := h.svc.List(c.Request.Context(), cmd)
 	writeAdminResponse(c, moderationPageToDTO(page), err)

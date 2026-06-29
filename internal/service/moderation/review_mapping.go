@@ -16,6 +16,7 @@ func buildReviewTransition(
 	plan TransitionPlan,
 	now time.Time,
 	cfg config.ModerationConfig,
+	notifCtx moderationrepo.ReviewNotificationContext,
 ) moderationrepo.ApplyTransitionCommand {
 	reason := strings.TrimSpace(cmd.Reason)
 	reviewerID := cmd.ReviewerID
@@ -36,7 +37,7 @@ func buildReviewTransition(
 			Reason: optionalReviewReason(reason), CreatedAt: now,
 		},
 		ProfileChange: reviewProfileChange(event, record.AuthorID, now, cfg),
-		Notification:  reviewNotification(event, record, reason),
+		Notification:  reviewNotification(event, record, reason, notifCtx),
 		SyncImages:    true,
 	}
 	return persisted
@@ -62,9 +63,14 @@ func reviewProfileChange(event Event, authorID uint64, now time.Time, cfg config
 	return change
 }
 
-func reviewNotification(event Event, record moderationrepo.ReviewRecord, reason string) *moderationrepo.NotificationIntent {
+func reviewNotification(
+	event Event,
+	record moderationrepo.ReviewRecord,
+	reason string,
+	notifCtx moderationrepo.ReviewNotificationContext,
+) *moderationrepo.NotificationIntent {
 	title := "内容审核通过"
-	excerpt := "你的内容已通过审核。"
+	excerpt := reviewApprovedContentExcerpt(record)
 	decision := "approved"
 	switch event {
 	case EventCorrectAndApprove:
@@ -76,10 +82,25 @@ func reviewNotification(event Event, record moderationrepo.ReviewRecord, reason 
 		excerpt = reason
 		decision = "rejected"
 	}
+	contentType := notifCtx.ContentType
+	if contentType == "" {
+		contentType = record.Subject.Type
+	}
 	return &moderationrepo.NotificationIntent{
 		RecipientUserID: record.AuthorID, Title: title, ContentExcerpt: excerpt,
 		ItemID: record.ItemID, RevisionID: record.RevisionID, Decision: decision,
+		ContentType: contentType, CommentID: notifCtx.CommentID,
+		RootSnapshot: notifCtx.RootSnapshot, QuoteSnapshot: notifCtx.QuoteSnapshot,
 	}
+}
+
+// reviewApprovedContentExcerpt 取审核通过版本的公开正文摘要，供站内通知展示。
+func reviewApprovedContentExcerpt(record moderationrepo.ReviewRecord) string {
+	content := strings.TrimSpace(record.PublishedContent)
+	if content == "" {
+		content = strings.TrimSpace(record.SubmittedContent)
+	}
+	return content
 }
 
 func appliedReviewItem(
@@ -116,7 +137,8 @@ func reviewItemFromRecord(record moderationrepo.ReviewRecord) ReviewItem {
 		PolicyAction: PolicyAction(record.PolicyAction), ReviewStatus: ReviewStatus(record.ReviewStatus),
 		MomentOptions: cloneMomentOptions(record.MomentOptions), DecisionType: cloneString(record.DecisionType),
 		DecisionReason: cloneString(record.DecisionReason), ReviewerID: cloneUint64(record.ReviewerID),
-		ReviewedAt: cloneTime(record.ReviewedAt), CreatedAt: record.CreatedAt,
+		ReviewedAt: cloneTime(record.ReviewedAt), EmergencyHideReason: cloneString(record.State.EmergencyReason),
+		EmergencyHiddenAt: cloneTime(record.State.EmergencyHiddenAt), CreatedAt: record.CreatedAt,
 		CanInteract: itemSnapshot(record.State).CanInteract(),
 	}
 }

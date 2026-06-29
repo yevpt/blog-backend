@@ -137,28 +137,44 @@ func (r *repository) reviewQuery(ctx context.Context) *gorm.DB {
 }
 
 func applyReviewFilter(query *gorm.DB, filter ReviewFilter) *gorm.DB {
-	query = query.Where("moderation_revision.review_status = ?", filter.ReviewStatus)
+	if filter.ReviewStatus != nil {
+		query = query.Where("moderation_revision.review_status = ?", *filter.ReviewStatus)
+	}
 	if filter.ContentType != nil {
 		query = query.Where("moderation_item.content_type = ?", *filter.ContentType)
 	}
 	if filter.RiskLevel != nil {
 		query = query.Where("moderation_revision.risk_level = ?", *filter.RiskLevel)
 	}
+	if filter.PublicState != nil {
+		query = query.Where("moderation_item.public_state = ?", string(*filter.PublicState))
+	}
 	return query
+}
+
+func validPublicState(state PublicState) bool {
+	return state == PublicVisible || state == PublicPlaceholder ||
+		state == PublicHidden || state == PublicEmergencyHidden
 }
 
 func validateReviewFilter(filter ReviewFilter) error {
 	if filter.Page < 1 || filter.PageSize < 1 || filter.PageSize > 500 {
 		return ErrInvalidCommand
 	}
-	if filter.ReviewStatus != ReviewPending && filter.ReviewStatus != ReviewApproved &&
-		filter.ReviewStatus != ReviewRejected && filter.ReviewStatus != ReviewSuperseded {
-		return ErrInvalidCommand
+	if filter.ReviewStatus != nil {
+		status := *filter.ReviewStatus
+		if status != ReviewPending && status != ReviewApproved &&
+			status != ReviewRejected && status != ReviewSuperseded {
+			return ErrInvalidCommand
+		}
 	}
 	if filter.ContentType != nil && !validSubjectType(*filter.ContentType) {
 		return ErrInvalidCommand
 	}
 	if filter.RiskLevel != nil && *filter.RiskLevel != RiskLow && *filter.RiskLevel != RiskMedium && *filter.RiskLevel != RiskHigh {
+		return ErrInvalidCommand
+	}
+	if filter.PublicState != nil && !validPublicState(*filter.PublicState) {
 		return ErrInvalidCommand
 	}
 	return nil

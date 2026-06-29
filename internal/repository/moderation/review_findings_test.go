@@ -42,7 +42,8 @@ func TestModerationViewUsesStableSubjectKeyAcrossEquivalentReplyRefs(t *testing.
 			"content_type", "content_id", "author_id", "lifecycle_state", "public_state",
 			"materialized_revision_id", "approved_revision_id", "pending_revision_id",
 			"materialized_content", "pending_content", "pending_risk_level", "pending_review_status", "pending_rule_match_ids",
-		}).AddRow("article_comment_reply", 7, 42, "active", "visible", 20, 20, nil, "正文", nil, nil, nil, nil))
+			"rejected_revision_id", "rejected_content",
+		}).AddRow("article_comment_reply", 7, 42, "active", "visible", 20, 20, nil, "正文", nil, nil, nil, nil, nil, nil))
 	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image").
 		WillReturnRows(moderationViewImageRows())
 

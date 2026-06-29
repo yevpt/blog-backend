@@ -296,7 +296,8 @@ func TestServicePersistsPreparedImagesAndSelectsUnapprovedImagePolicy(t *testing
 	assert.True(t, decider.input.HasUnapprovedImage)
 	assert.Equal(t, "moderation/previews/a.jpg", result.Content)
 	require.Len(t, result.Images, 1)
-	assert.Equal(t, "moderation/previews/a.jpg", result.Images[0].DisplayObjectKey)
+	assert.Equal(t, "moments/7/a.jpg", result.Images[0].DisplayObjectKey)
+	assert.True(t, result.Images[0].Approved)
 }
 
 func TestServiceIdempotentRetryReturnsStoredResult(t *testing.T) {

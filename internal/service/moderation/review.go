@@ -15,11 +15,13 @@ import (
 
 // ListReviewCommand 是管理员审核列表的筛选条件。
 type ListReviewCommand struct {
-	Page         int
-	PageSize     int
-	ContentType  *SubjectType
-	RiskLevel    *RiskLevel
-	ReviewStatus ReviewStatus
+	Page                     int
+	PageSize                 int
+	ContentType              *SubjectType
+	RiskLevel                *RiskLevel
+	ReviewStatus             *ReviewStatus
+	IncludeAllReviewStatuses bool
+	PublicState              *PublicState
 }
 
 // ReviewCommand 定位一次基于明确待审版本和锁版本的人工决策。
@@ -57,6 +59,10 @@ type ReviewItem struct {
 	DecisionReason   *string
 	ReviewerID       *uint64
 	ReviewedAt       *time.Time
+	// EmergencyHideReason 是紧急隐藏原因，仅紧急隐藏态有值。
+	EmergencyHideReason *string
+	// EmergencyHiddenAt 是紧急隐藏发生时间，仅紧急隐藏态有值。
+	EmergencyHiddenAt   *time.Time
 	CreatedAt        time.Time
 	CanInteract      bool
 }
@@ -110,15 +116,17 @@ func NewReviewService(
 	return &reviewService{repo: repo, processor: processor, cleaner: cleaner, cfg: cfg, logger: logger, now: now}
 }
 
-// List 分页查询审核版本，默认只返回待审队列。
+// List 分页查询审核版本；未指定状态时默认只返回待审队列。
 func (s *reviewService) List(ctx context.Context, cmd ListReviewCommand) (ReviewPage, error) {
 	page, pageSize := s.normalizeReviewPage(cmd.Page, cmd.PageSize)
-	status := cmd.ReviewStatus
-	if status == "" {
-		status = ReviewPending
-	}
-	filter := moderationrepo.ReviewFilter{
-		Page: page, PageSize: pageSize, ReviewStatus: moderationrepo.ReviewStatus(status),
+	filter := moderationrepo.ReviewFilter{Page: page, PageSize: pageSize}
+	if !cmd.IncludeAllReviewStatuses {
+		status := ReviewPending
+		if cmd.ReviewStatus != nil {
+			status = *cmd.ReviewStatus
+		}
+		repoStatus := moderationrepo.ReviewStatus(status)
+		filter.ReviewStatus = &repoStatus
 	}
 	if cmd.ContentType != nil {
 		value := moderationrepo.SubjectType(*cmd.ContentType)
@@ -127,6 +135,10 @@ func (s *reviewService) List(ctx context.Context, cmd ListReviewCommand) (Review
 	if cmd.RiskLevel != nil {
 		value := moderationrepo.RiskLevel(*cmd.RiskLevel)
 		filter.RiskLevel = &value
+	}
+	if cmd.PublicState != nil {
+		value := moderationrepo.PublicState(*cmd.PublicState)
+		filter.PublicState = &value
 	}
 	result, err := s.repo.ListReviewRecords(ctx, filter)
 	if err != nil {
@@ -224,7 +236,7 @@ func (s *reviewService) applyReview(
 	if err != nil {
 		return ReviewItem{}, err
 	}
-	persisted := buildReviewTransition(record, cmd, event, corrected, plan, now, s.cfg)
+	persisted := buildReviewTransition(record, cmd, event, corrected, plan, now, s.cfg, s.loadReviewNotificationContext(ctx, record))
 	applied, err := s.repo.ApplyTransition(ctx, persisted)
 	if err != nil {
 		return ReviewItem{}, mapReviewRepositoryError(err)

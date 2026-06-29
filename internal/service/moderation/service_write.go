@@ -168,7 +168,7 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 	result := s.resultFromApplied(
 		applied, resolvedAuthorID(input, item), processed, previousContent, classification.Risk, action, plan,
 	)
-	result.Images = input.imageViews
+	result.Images = moderationrepo.AuthorOriginalImageViews(input.imageViews)
 	result.Content = rewriteImageKeys(result.Content, input.imageViews)
 	if result.PendingContent != nil {
 		value := rewriteImageKeys(*result.PendingContent, input.imageViews)

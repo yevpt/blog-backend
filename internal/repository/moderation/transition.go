@@ -552,11 +552,15 @@ func syncMaterializedImages(ctx context.Context, tx *gorm.DB, cmd ApplyTransitio
 }
 
 type reviewNotificationMetadata struct {
-	RecipientUserIDs []uint64 `json:"recipient_user_ids"`
+	RecipientUserIDs []uint64              `json:"recipient_user_ids"`
+	CommentID        *uint64               `json:"comment_id,omitempty"`
+	RootSnapshot     *NotificationSnapshot `json:"root_snapshot,omitempty"`
+	QuoteSnapshot    *NotificationSnapshot `json:"quote_snapshot,omitempty"`
 	Moderation       struct {
-		ItemID     uint64 `json:"item_id"`
-		RevisionID uint64 `json:"revision_id"`
-		Decision   string `json:"decision"`
+		ItemID      uint64 `json:"item_id"`
+		RevisionID  uint64 `json:"revision_id"`
+		Decision    string `json:"decision"`
+		ContentType string `json:"content_type,omitempty"`
 	} `json:"moderation"`
 }
 
@@ -568,6 +572,12 @@ func appendReviewNotification(ctx context.Context, tx *gorm.DB, itemID uint64, i
 	metadata.Moderation.ItemID = itemID
 	metadata.Moderation.RevisionID = intent.RevisionID
 	metadata.Moderation.Decision = intent.Decision
+	if intent.ContentType != "" {
+		metadata.Moderation.ContentType = string(intent.ContentType)
+	}
+	metadata.CommentID = intent.CommentID
+	metadata.RootSnapshot = intent.RootSnapshot
+	metadata.QuoteSnapshot = intent.QuoteSnapshot
 	encoded, err := json.Marshal(metadata)
 	if err != nil {
 		return err

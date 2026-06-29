@@ -28,6 +28,9 @@ func ProjectView(view View) (string, dto.ModerationView) {
 	if view.PendingReviewStatus != nil {
 		value := string(*view.PendingReviewStatus)
 		result.ReviewStatus = &value
+	} else if view.LastReviewStatus != nil && !view.HasPendingRevision {
+		value := string(*view.LastReviewStatus)
+		result.ReviewStatus = &value
 	}
 	return rewriteImageKeys(view.VisibleContent, view.VisibleImages), result
 }

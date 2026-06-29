@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	moderationhandler "github.com/vpt/blog-backend/internal/handler/moderation"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
@@ -19,6 +20,7 @@ import (
 type reviewServiceStub struct {
 	approveCommand moderationservice.ReviewCommand
 	rejectCommand  moderationservice.ReviewCommand
+	listCommand    moderationservice.ListReviewCommand
 	approveResult  moderationservice.ReviewItem
 	approveErr     error
 	rejectErr      error
@@ -71,7 +73,8 @@ func (s *operationsServiceStub) ReleaseUserSanction(context.Context, uint64, uin
 	return nil
 }
 
-func (s *reviewServiceStub) List(context.Context, moderationservice.ListReviewCommand) (moderationservice.ReviewPage, error) {
+func (s *reviewServiceStub) List(_ context.Context, cmd moderationservice.ListReviewCommand) (moderationservice.ReviewPage, error) {
+	s.listCommand = cmd
 	return moderationservice.ReviewPage{}, nil
 }
 
@@ -183,4 +186,30 @@ func serveReviewRequest(
 	}
 	action(ctx)
 	return recorder
+}
+
+func TestAdminListBindsPublicStateFilter(t *testing.T) {
+	stub := &reviewServiceStub{}
+	handler := moderationhandler.NewAdminHandler(stub)
+	recorder := serveReviewRequest(http.MethodGet,
+		"/admin/moderation/items?public_state=emergency_hidden&review_status=approved",
+		"", handler.List, true)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	require.NotNil(t, stub.listCommand.ReviewStatus)
+	assert.Equal(t, moderationservice.ReviewApproved, *stub.listCommand.ReviewStatus)
+	require.NotNil(t, stub.listCommand.PublicState)
+	assert.Equal(t, moderationservice.PublicEmergencyHidden, *stub.listCommand.PublicState)
+}
+
+func TestAdminListReviewStatusAllIncludesEveryStatus(t *testing.T) {
+	stub := &reviewServiceStub{}
+	handler := moderationhandler.NewAdminHandler(stub)
+	recorder := serveReviewRequest(http.MethodGet,
+		"/admin/moderation/items?review_status=all",
+		"", handler.List, true)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.True(t, stub.listCommand.IncludeAllReviewStatuses)
+	assert.Nil(t, stub.listCommand.ReviewStatus)
 }

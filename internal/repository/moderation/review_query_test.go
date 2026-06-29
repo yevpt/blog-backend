@@ -24,7 +24,7 @@ func TestListReviewRecordsReturnsPendingRevisionAndMomentOptions(t *testing.T) {
 		))
 
 	page, err := repository.ListReviewRecords(context.Background(), moderation.ReviewFilter{
-		Page: 1, PageSize: 20, ReviewStatus: moderation.ReviewPending,
+		Page: 1, PageSize: 20, ReviewStatus: reviewStatusPtr(moderation.ReviewPending),
 	})
 
 	require.NoError(t, err)
@@ -94,4 +94,8 @@ func reviewRecordRows() *sqlmock.Rows {
 		"policy_action", "review_status", "moment_status", "moment_comment_status",
 		"decision_type", "decision_reason", "reviewer_id", "reviewed_at", "created_at",
 	})
+}
+
+func reviewStatusPtr(status moderation.ReviewStatus) *moderation.ReviewStatus {
+	return &status
 }
