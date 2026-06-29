@@ -111,6 +111,7 @@ func validateModerationBounds(c ModerationConfig) error {
 		{path: "moderation.audit.obsolete_revision_retention_days", value: int64(c.Audit.ObsoleteRevisionRetentionDays)},
 		{path: "moderation.audit.cleanup_interval", value: int64(c.Audit.CleanupInterval)},
 		{path: "moderation.audit.cleanup_batch_size", value: int64(c.Audit.CleanupBatchSize)},
+		{path: "moderation.migration.batch_size", value: int64(c.Migration.BatchSize)},
 	}
 
 	for _, item := range values {

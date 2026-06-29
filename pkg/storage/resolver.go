@@ -29,6 +29,11 @@ type ObjectReader interface {
 	GetObject(ctx context.Context, objectName string) ([]byte, error)
 }
 
+// ImageObjectReader 以图片专用上限读取历史原图和 CDN 回源图片。
+type ImageObjectReader interface {
+	GetImageObject(ctx context.Context, objectName string) ([]byte, error)
+}
+
 // ObjectMetadata 是对象清理所需的最小元数据。
 type ObjectMetadata struct {
 	Key          string

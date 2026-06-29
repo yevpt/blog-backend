@@ -184,11 +184,11 @@
 - Backfills seven business content types as approved revision version 1 with decision `legacy_migration`.
 - Backfills current content, moment options, ordered images, global approved fingerprints, `trusted + active` user profiles, and singleton control.
 
-- [ ] Write sqlmock/service tests for all seven types, hidden moments, soft-deleted rows, ordered moment and embedded comment images, missing objects, idempotent reruns, cursor resume, and verification count/fingerprint failures.
-- [ ] Run migration package tests and confirm RED.
-- [ ] Implement per-batch transactions with `INSERT ... ON DUPLICATE KEY` semantics, bounded object reads, explicit cursor output, and a verification-only pass that performs no writes.
-- [ ] Run the CLI tests and `go test ./cmd/moderation-migrate ./internal/service/moderationmigration ./internal/repository/moderation -count=1`.
-- [ ] Commit with `feat(moderation): 新增历史内容审核迁移与校验`.
+- [x] Write sqlmock/service tests for all seven types, hidden moments, soft-deleted rows, ordered moment and embedded comment images, missing objects, idempotent reruns, cursor resume, and verification count/fingerprint failures.
+- [x] Run migration package tests and confirm RED.
+- [x] Implement per-batch transactions with `INSERT ... ON DUPLICATE KEY` semantics, bounded object reads, explicit cursor output, and a verification-only pass that performs no writes.
+- [x] Run the CLI tests and `go test ./cmd/moderation-migrate ./internal/service/moderationmigration ./internal/repository/moderation -count=1`.
+- [x] Commit with `feat(moderation): 新增历史内容审核迁移与校验`.
 
 ### Task 8: Production readiness gate
 

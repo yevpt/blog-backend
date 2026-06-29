@@ -83,6 +83,8 @@ moderation:
     obsolete_revision_retention_days: 365
     cleanup_interval: 24h
     cleanup_batch_size: 500
+  migration:
+    batch_size: 200
   notices:
     approved: 发布成功。
     low_submitted: 发布成功，内容会被审核。
@@ -108,6 +110,7 @@ moderation:
 	assert.Equal(t, 10, cfg.Moderation.RateLimit.PublishPerMinute)
 	assert.Equal(t, 30*time.Second, cfg.Moderation.Control.CacheTTL)
 	assert.Equal(t, 365, cfg.Moderation.Audit.ActionLogRetentionDays)
+	assert.Equal(t, 200, cfg.Moderation.Migration.BatchSize)
 	assert.Equal(t, "发布成功，内容会被审核。", cfg.Moderation.Notices.LowSubmitted)
 }
 
@@ -294,6 +297,7 @@ func validModerationConfig() config.ModerationConfig {
 			AttemptRetentionDays: 180, ActionLogRetentionDays: 365, ObsoleteRevisionRetentionDays: 365,
 			CleanupInterval: 24 * time.Hour, CleanupBatchSize: 500,
 		},
+		Migration: config.ModerationMigrationConfig{BatchSize: 200},
 		Notices: config.ModerationNoticesConfig{
 			Approved: "发布成功。", LowSubmitted: "发布成功，内容会被审核。", ReviewRequired: "内容已提交，等待人工审核。",
 			HighRejected: "内容存在较高风险，未能发布，请修改后重试。",

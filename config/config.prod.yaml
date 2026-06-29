@@ -12,6 +12,8 @@ moderation:
   # 审核全量上线前临时关闭；上线时改回 true 并重新部署
   enabled: false
   mode: enforce
+  migration:
+    batch_size: 200
 
 analytics:
   # 生产容器内 ip2region IPv4/IPv6 xdb 路径，可经 env 覆盖；为空则关闭对应版本地理解析

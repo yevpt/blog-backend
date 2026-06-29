@@ -34,6 +34,7 @@ type ModerationConfig struct {
 	RateLimit  ModerationRateLimitConfig  `mapstructure:"rate_limit"`
 	Control    ModerationControlConfig    `mapstructure:"control"`
 	Audit      ModerationAuditConfig      `mapstructure:"audit"`
+	Migration  ModerationMigrationConfig  `mapstructure:"migration"`
 	Notices    ModerationNoticesConfig    `mapstructure:"notices"`
 }
 
@@ -140,6 +141,11 @@ type ModerationAuditConfig struct {
 	ObsoleteRevisionRetentionDays int           `mapstructure:"obsolete_revision_retention_days"`
 	CleanupInterval               time.Duration `mapstructure:"cleanup_interval"`
 	CleanupBatchSize              int           `mapstructure:"cleanup_batch_size"`
+}
+
+// ModerationMigrationConfig 定义历史审核迁移的默认批次上限。
+type ModerationMigrationConfig struct {
+	BatchSize int `mapstructure:"batch_size"`
 }
 
 // ModerationNoticesConfig 定义对外稳定审核提示。
