@@ -92,6 +92,10 @@ func newApplicationService(
 			ReviewRequired: "内容已提交，等待人工审核。",
 			HighRejected:   "内容存在较高风险，未能发布，请修改后重试。",
 		},
+		Governance: config.ModerationGovernanceConfig{
+			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
+			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3, HighRiskBlocked: 5},
+		},
 	}
 	var mediaService moderation.MediaService
 	if len(media) > 0 {
@@ -483,9 +487,17 @@ func TestServiceHighRiskEditKeepsExistingVersion(t *testing.T) {
 			func(_ context.Context, attempt moderationrepo.BlockedAttempt) (moderationrepo.StoredResult, error) {
 				require.NotNil(t, attempt.ItemID)
 				assert.Equal(t, uint64(20), *attempt.ItemID)
+				require.NotNil(t, attempt.ProfileChange)
+				assert.Equal(t, int64(1), attempt.ProfileChange.HighRiskDelta)
+				assert.Equal(t, int64(5), attempt.ProfileChange.ViolationScoreDelta)
 				return moderationrepo.StoredResult{Kind: moderationrepo.ResultBlocked}, nil
 			},
 		),
+		repo.EXPECT().LoadModerationProfile(gomock.Any(), cmd.ActorID, serviceNow).Return(moderationrepo.ModerationProfile{
+			UserID: cmd.ActorID, TrustLevel: moderationrepo.TrustNormal, TrustSource: moderationrepo.TrustSourceAuto,
+			SanctionState: moderationrepo.SanctionActive, ViolationScore: 5,
+			LastViolationAt: &serviceNow, CreatedAt: serviceNow.AddDate(0, -2, 0), UpdatedAt: serviceNow,
+		}, nil),
 	)
 
 	_, err := newApplicationService(repo, processor, classifier, decider, zap.NewNop()).Edit(context.Background(), cmd)

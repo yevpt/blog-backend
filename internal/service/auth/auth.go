@@ -74,11 +74,17 @@ type authService struct {
 	store           storage.ObjectStore
 	resolver        storage.ObjectURLResolver
 	presence        analyticsservice.UserPresence
+	profile         ModerationProfileInitializer
 }
 
 // CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
 type CaptchaTokenConsumer interface {
 	ConsumeRegistrationToken(token string, ip string) error
+}
+
+// ModerationProfileInitializer 为新注册用户创建默认审核画像。
+type ModerationProfileInitializer interface {
+	EnsureNewProfile(ctx context.Context, userID uint64) error
 }
 
 func NewAuthService(
@@ -91,8 +97,9 @@ func NewAuthService(
 	avatar userservice.AvatarUploader,
 	store storage.ObjectStore,
 	presence analyticsservice.UserPresence,
+	profile ...ModerationProfileInitializer,
 ) AuthService {
-	return &authService{
+	service := &authService{
 		repo:            repo,
 		jwt:             jwt,
 		rdb:             rdb,
@@ -104,6 +111,10 @@ func NewAuthService(
 		resolver:        store,
 		presence:        presence,
 	}
+	if len(profile) > 0 {
+		service.profile = profile[0]
+	}
+	return service
 }
 
 func (s *authService) SendCode(to string, ip string, captchaToken string) error {
@@ -304,6 +315,10 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 			_ = s.store.DeleteObject(ctx, *avatarKey)
 		}
 		return nil, err
+	}
+	// 画像创建失败不回滚已成功的注册；首次发布仍会按 new + active 安全兜底。
+	if s.profile != nil {
+		_ = s.profile.EnsureNewProfile(ctx, uint64(user.ID))
 	}
 
 	return s.issueLoginResp(user)

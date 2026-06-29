@@ -48,7 +48,24 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 			assert.Equal(t, record.AuthorID, cmd.Notification.RecipientUserID)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
 		})
-	service := newReviewService(repo, &processorStub{}, cleaner)
+	repo.EXPECT().LoadModerationProfile(gomock.Any(), record.AuthorID, serviceNow).Return(moderationrepo.ModerationProfile{
+		UserID: record.AuthorID, TrustLevel: moderationrepo.TrustNew, TrustSource: moderationrepo.TrustSourceAuto,
+		SanctionState: moderationrepo.SanctionActive, CleanApprovalStreak: 3,
+		CreatedAt: serviceNow.AddDate(0, 0, -7), UpdatedAt: serviceNow,
+	}, nil)
+	repo.EXPECT().SetAutomaticTrust(gomock.Any(), moderationrepo.AutomaticTrustCommand{
+		UserID: record.AuthorID, TrustLevel: moderationrepo.TrustNormal, UpdatedAt: serviceNow,
+	}).Return(true, nil)
+	service := moderation.NewReviewService(repo, &processorStub{}, cleaner, config.ModerationConfig{
+		Content: config.ModerationContentConfig{
+			MomentMaxChars: 800, CommentMaxChars: 2000, GuestbookMaxChars: 2000, ReplyMaxChars: 2000,
+		},
+		Review: config.ModerationReviewConfig{QueueDefaultPageSize: 20, QueueMaxPageSize: 100, ReasonMaxChars: 1000},
+		Governance: config.ModerationGovernanceConfig{
+			NewToNormal:              config.ModerationPromotionConfig{MinAgeDays: 7, CleanApprovals: 3},
+			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
+		},
+	}, zap.NewNop(), func() time.Time { return serviceNow })
 
 	got, err := service.Approve(context.Background(), moderation.ReviewCommand{
 		ItemID: record.ItemID, RevisionID: record.RevisionID,

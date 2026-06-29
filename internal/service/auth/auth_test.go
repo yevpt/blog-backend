@@ -44,17 +44,27 @@ type mockCaptchaTokenConsumer struct {
 	consumedIP    string
 }
 
+type profileInitializerStub struct {
+	userID uint64
+	err    error
+}
+
+func (s *profileInitializerStub) EnsureNewProfile(_ context.Context, userID uint64) error {
+	s.userID = userID
+	return s.err
+}
+
 func (m *mockCaptchaTokenConsumer) ConsumeRegistrationToken(token string, ip string) error {
 	m.consumedToken = token
 	m.consumedIP = ip
 	return m.err
 }
 
-func setupService(t *testing.T) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
-	return setupServiceWithJWT(t, jwtpkg.NewManager("secret", 2, 168))
+func setupService(t *testing.T, initializers ...authservice.ModerationProfileInitializer) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
+	return setupServiceWithJWT(t, jwtpkg.NewManager("secret", 2, 168), initializers...)
 }
 
-func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
+func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager, initializers ...authservice.ModerationProfileInitializer) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
 
@@ -65,7 +75,7 @@ func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager) (authservice.Auth
 	mailer := &mockMailSender{}
 	captchaConsumer := &mockCaptchaTokenConsumer{}
 
-	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil, nil, nil, nil)
+	svc := authservice.NewAuthService(repo, jwtMgr, rdb, mailer, captchaConsumer, nil, nil, nil, nil, initializers...)
 	return svc, repo, rdb, mr, mailer, captchaConsumer
 }
 
@@ -189,7 +199,8 @@ func TestAuthService_ResetPassword_ValidCodeUpdatesPassword(t *testing.T) {
 }
 
 func TestAuthService_Register_Success(t *testing.T) {
-	svc, repo, rdb, mr, _, _ := setupService(t)
+	initializer := &profileInitializerStub{}
+	svc, repo, rdb, mr, _, _ := setupService(t, initializer)
 	defer mr.Close()
 
 	// 预写入验证码
@@ -216,6 +227,7 @@ func TestAuthService_Register_Success(t *testing.T) {
 	assert.Equal(t, "new@example.com", resp.User.Username)
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
+	assert.Equal(t, uint64(1), initializer.userID)
 }
 
 func TestAuthService_Register_WrongCode(t *testing.T) {

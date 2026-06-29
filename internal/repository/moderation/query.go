@@ -81,21 +81,26 @@ func (r *repository) LoadPolicyContext(ctx context.Context, userID uint64) (Poli
 		result.PublishingMode = PublishingMode(control.PublishingMode)
 		result.ControlVersion = control.LockVersion
 
-		var profile struct {
-			TrustLevel    string
-			SanctionState string
-			SanctionUntil *time.Time
-		}
-		err := tx.Table("user_moderation_profile").Select("trust_level", "sanction_state", "sanction_until").
-			Where("user_id = ?", userID).Take(&profile).Error
+		var row model.UserModerationProfile
+		err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("user_id = ?", userID).Take(&row).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		result.TrustLevel = TrustLevel(profile.TrustLevel)
-		result.SanctionState = SanctionState(profile.SanctionState)
+		profile := moderationProfileFromModel(row)
+		updates := releaseExpiredProfile(&profile, tx.NowFunc())
+		if len(updates) > 0 {
+			updates["updated_at"] = tx.NowFunc()
+			if err := tx.WithContext(ctx).Model(&model.UserModerationProfile{}).
+				Where("user_id = ?", userID).UpdateColumns(updates).Error; err != nil {
+				return err
+			}
+		}
+		result.TrustLevel = profile.TrustLevel
+		result.SanctionState = profile.SanctionState
 		result.SanctionUntil = profile.SanctionUntil
 		return nil
 	})
@@ -195,6 +200,9 @@ func (r *repository) RecordBlockedAttempt(ctx context.Context, attempt BlockedAt
 	if attempt.UserID == 0 || attempt.IdempotencyKey == "" || !validSubjectType(attempt.SubjectType) {
 		return StoredResult{}, ErrInvalidCommand
 	}
+	if attempt.ProfileChange != nil && attempt.ProfileChange.UserID != attempt.UserID {
+		return StoredResult{}, ErrInvalidCommand
+	}
 	ruleIDs, err := json.Marshal(attempt.RuleMatchIDs)
 	if err != nil {
 		return StoredResult{}, err
@@ -225,6 +233,9 @@ func (r *repository) RecordBlockedAttempt(ctx context.Context, attempt BlockedAt
 			return insert.Error
 		}
 		if err := tx.WithContext(ctx).Where("user_id = ? AND idempotency_key = ?", attempt.UserID, attempt.IdempotencyKey).Take(&row).Error; err != nil {
+			return err
+		}
+		if err := applyProfileChange(ctx, tx, attempt.ProfileChange); err != nil {
 			return err
 		}
 		result = StoredResult{

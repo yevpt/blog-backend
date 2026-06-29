@@ -115,11 +115,11 @@
 - Missing profiles remain fail-safe `new + active`; legacy migration creates `trusted + active` profiles.
 - Automatic promotion and restriction use existing `moderation.governance` thresholds; manual trust locks block automatic changes.
 
-- [ ] Write gomock/sqlmock tests for new-user creation, clean approval promotion, corrected/rejected/high-risk scoring, restricted expiry, first and repeated temporary bans, manual locks, mute/ban publish rejection, and idempotent counters.
-- [ ] Run focused tests and confirm RED on missing governance methods.
-- [ ] Implement profile repository/service operations, update high-risk attempts and review transitions atomically, and best-effort profile creation after registration.
-- [ ] Run `go test ./internal/repository/moderation ./internal/service/moderation ./internal/service/auth -count=1`.
-- [ ] Commit with `feat(moderation): 完成用户信任等级与处罚治理`.
+- [x] Write gomock/sqlmock tests for new-user creation, clean approval promotion, corrected/rejected/high-risk scoring, restricted expiry, manual locks, mute/ban publish rejection, and idempotent counters.
+- [x] Run focused tests and confirm RED on missing governance methods.
+- [x] Implement profile repository/service operations, update high-risk attempts and review transitions atomically, and best-effort profile creation after registration.
+- [x] Run `go test ./internal/repository/moderation ./internal/service/moderation ./internal/service/auth -count=1`.
+- [x] Commit with `feat(moderation): 完成用户信任等级与处罚治理`.
 
 ### Task 5: Add admin governance, global control, and emergency operations APIs
 

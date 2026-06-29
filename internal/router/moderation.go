@@ -46,6 +46,14 @@ func maybeNewModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, l
 	return newModerationReviewService(db, cfg, logger, store)
 }
 
+// maybeNewModerationGovernanceService 在审核开启时创建用户画像治理服务。
+func maybeNewModerationGovernanceService(db *gorm.DB, cfg config.ModerationConfig) moderationservice.GovernanceService {
+	if !cfg.Enabled {
+		return nil
+	}
+	return moderationservice.NewGovernanceService(moderationrepo.NewRepository(db), cfg.Governance, nil)
+}
+
 // newModerationReviewService 组装管理端人工审核服务，复用同一数据库事实源。
 
 func newModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) moderationservice.ReviewService {

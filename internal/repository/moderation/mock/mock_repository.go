@@ -57,6 +57,20 @@ func (mr *MockRepositoryMockRecorder) ApplyTransition(ctx, cmd any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyTransition", reflect.TypeOf((*MockRepository)(nil).ApplyTransition), ctx, cmd)
 }
 
+// EnsureNewProfile mocks base method.
+func (m *MockRepository) EnsureNewProfile(ctx context.Context, userID uint64, now time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureNewProfile", ctx, userID, now)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnsureNewProfile indicates an expected call of EnsureNewProfile.
+func (mr *MockRepositoryMockRecorder) EnsureNewProfile(ctx, userID, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureNewProfile", reflect.TypeOf((*MockRepository)(nil).EnsureNewProfile), ctx, userID, now)
+}
+
 // FindResultByIdempotencyKey mocks base method.
 func (m *MockRepository) FindResultByIdempotencyKey(ctx context.Context, userID uint64, key string) (*moderation.StoredResult, error) {
 	m.ctrl.T.Helper()
@@ -130,6 +144,21 @@ func (m *MockRepository) LoadItemState(ctx context.Context, ref moderation.Subje
 func (mr *MockRepositoryMockRecorder) LoadItemState(ctx, ref any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadItemState", reflect.TypeOf((*MockRepository)(nil).LoadItemState), ctx, ref)
+}
+
+// LoadModerationProfile mocks base method.
+func (m *MockRepository) LoadModerationProfile(ctx context.Context, userID uint64, now time.Time) (moderation.ModerationProfile, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadModerationProfile", ctx, userID, now)
+	ret0, _ := ret[0].(moderation.ModerationProfile)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadModerationProfile indicates an expected call of LoadModerationProfile.
+func (mr *MockRepositoryMockRecorder) LoadModerationProfile(ctx, userID, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadModerationProfile", reflect.TypeOf((*MockRepository)(nil).LoadModerationProfile), ctx, userID, now)
 }
 
 // LoadModerationView mocks base method.
@@ -235,6 +264,63 @@ func (m *MockRepository) RecordBlockedAttempt(ctx context.Context, attempt moder
 func (mr *MockRepositoryMockRecorder) RecordBlockedAttempt(ctx, attempt any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordBlockedAttempt", reflect.TypeOf((*MockRepository)(nil).RecordBlockedAttempt), ctx, attempt)
+}
+
+// ReleaseSanction mocks base method.
+func (m *MockRepository) ReleaseSanction(ctx context.Context, userID uint64, now time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReleaseSanction", ctx, userID, now)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ReleaseSanction indicates an expected call of ReleaseSanction.
+func (mr *MockRepositoryMockRecorder) ReleaseSanction(ctx, userID, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseSanction", reflect.TypeOf((*MockRepository)(nil).ReleaseSanction), ctx, userID, now)
+}
+
+// SetAutomaticTrust mocks base method.
+func (m *MockRepository) SetAutomaticTrust(ctx context.Context, cmd moderation.AutomaticTrustCommand) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetAutomaticTrust", ctx, cmd)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetAutomaticTrust indicates an expected call of SetAutomaticTrust.
+func (mr *MockRepositoryMockRecorder) SetAutomaticTrust(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetAutomaticTrust", reflect.TypeOf((*MockRepository)(nil).SetAutomaticTrust), ctx, cmd)
+}
+
+// SetSanction mocks base method.
+func (m *MockRepository) SetSanction(ctx context.Context, cmd moderation.SetSanctionCommand) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetSanction", ctx, cmd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetSanction indicates an expected call of SetSanction.
+func (mr *MockRepositoryMockRecorder) SetSanction(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetSanction", reflect.TypeOf((*MockRepository)(nil).SetSanction), ctx, cmd)
+}
+
+// SetTrust mocks base method.
+func (m *MockRepository) SetTrust(ctx context.Context, cmd moderation.SetTrustCommand) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTrust", ctx, cmd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetTrust indicates an expected call of SetTrust.
+func (mr *MockRepositoryMockRecorder) SetTrust(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTrust", reflect.TypeOf((*MockRepository)(nil).SetTrust), ctx, cmd)
 }
 
 // UpsertPendingImage mocks base method.

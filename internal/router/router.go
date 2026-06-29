@@ -224,7 +224,8 @@ func newRouteHandlers(
 	}
 	userPresence := analyticsservice.NewUserPresence(redisClient, userRepo, userCacheSvc, onlineWindow)
 	avatarSvc := avatarservice.NewService(objectStore, avatarservice.Options{})
-	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc, avatarSvc, objectStore, userPresence)
+	moderationGovernanceSvc := maybeNewModerationGovernanceService(db, cfg.Moderation)
+	authSvc := authservice.NewAuthService(userRepo, jwtManager, redisClient, mailer, captchaSvc, userCacheSvc, avatarSvc, objectStore, userPresence, moderationGovernanceSvc)
 	userSvc := userservice.NewUserService(userCacheSvc, userRepo, objectStore, avatarSvc, userPresence, userservice.SecurityDeps{
 		Redis:   redisClient,
 		Mailer:  mailer,

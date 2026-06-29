@@ -340,6 +340,10 @@ func TestRecordBlockedAttemptLocksProfileChecksBothDomainsThenWrites(t *testing.
 	attempt := moderation.BlockedAttempt{
 		UserID: 42, SubjectType: moderation.SubjectMoment, IdempotencyKey: "blocked-2",
 		RulesetVersion: 3, RuleMatchIDs: []uint64{7}, CreatedAt: fixedTime,
+		ProfileChange: &moderation.ProfileChange{
+			UserID: 42, HighRiskDelta: 1, ViolationScoreDelta: 5,
+			ResetCleanApproval: true, LastViolationAt: &fixedTime, UpdatedAt: fixedTime,
+		},
 	}
 	mock.ExpectBegin()
 	expectIdempotencyProfileLock(mock, 42)
@@ -351,6 +355,7 @@ func TestRecordBlockedAttemptLocksProfileChecksBothDomainsThenWrites(t *testing.
 		WithArgs(uint64(42), "blocked-2", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content_type", "item_id", "idempotency_key", "ruleset_version", "rule_match_ids", "created_at"}).
 			AddRow(33, 42, "moment", nil, "blocked-2", 3, "[7]", fixedTime))
+	mock.ExpectExec("UPDATE `user_moderation_profile` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	got, err := repository.RecordBlockedAttempt(context.Background(), attempt)

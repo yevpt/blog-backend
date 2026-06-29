@@ -392,6 +392,30 @@ func TestLoadPolicyContextDefaultsMissingProfileWithinOneReadTransaction(t *test
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestLoadPolicyContextLazilyReleasesExpiredSanction(t *testing.T) {
+	repository, mock := newRepository(t)
+	expired := fixedTime.Add(-time.Minute)
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT .* FROM `moderation_control` WHERE id = \\?").
+		WithArgs(uint64(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"publishing_mode", "lock_version"}).AddRow("open", 6))
+	mock.ExpectQuery("SELECT .* FROM `user_moderation_profile` WHERE user_id = \\?.*FOR UPDATE").
+		WithArgs(uint64(42), 1).
+		WillReturnRows(profileRows().AddRow(
+			42, "normal", "auto", false, "muted", expired, "temporary",
+			0, 0, 0, 0, 0, nil, nil, fixedTime.AddDate(0, -1, 0), fixedTime,
+		))
+	mock.ExpectExec("UPDATE `user_moderation_profile` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	got, err := repository.LoadPolicyContext(context.Background(), 42)
+
+	require.NoError(t, err)
+	assert.Equal(t, moderation.SanctionActive, got.SanctionState)
+	assert.Nil(t, got.SanctionUntil)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestLoadSubjectUsesTypedTableMappings(t *testing.T) {
 	tests := []struct {
 		name       string

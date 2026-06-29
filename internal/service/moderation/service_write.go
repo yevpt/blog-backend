@@ -340,10 +340,16 @@ func (s *applicationService) recordRiskBlock(
 		value := item.ItemID
 		itemID = &value
 	}
+	now := s.now()
 	_, err := s.repo.RecordBlockedAttempt(ctx, moderationrepo.BlockedAttempt{
 		UserID: input.actorID, SubjectType: input.subject.Type, ItemID: itemID,
 		IdempotencyKey: input.idempotencyKey, RulesetVersion: classification.RulesetVersion,
-		RuleMatchIDs: classification.RuleMatchIDs, CreatedAt: s.now(),
+		RuleMatchIDs: classification.RuleMatchIDs, CreatedAt: now,
+		ProfileChange: &moderationrepo.ProfileChange{
+			UserID: input.actorID, HighRiskDelta: 1,
+			ViolationScoreDelta: int64(s.cfg.Governance.ViolationWeights.HighRiskBlocked),
+			ResetCleanApproval:  true, LastViolationAt: &now, UpdatedAt: now,
+		},
 	})
 	if errors.Is(err, moderationrepo.ErrIdempotencyDomainConflict) {
 		return s.resolveRace(ctx, input)
@@ -354,6 +360,11 @@ func (s *applicationService) recordRiskBlock(
 			zap.String("content_type", string(input.subject.Type)),
 			zap.Error(err),
 		)
+	} else if governanceConfigured(s.cfg.Governance) {
+		if _, governanceErr := reconcileProfile(ctx, s.repo, input.actorID, s.cfg.Governance, now); governanceErr != nil {
+			s.logger.Warn("刷新用户审核画像失败，将在下次访问时重试",
+				zap.Uint64("user_id", input.actorID), zap.Error(governanceErr))
+		}
 	}
 	message := s.cfg.Notices.HighRejected
 	if input.isEdit {

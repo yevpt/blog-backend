@@ -355,6 +355,8 @@ type BlockedAttempt struct {
 	RulesetVersion uint64
 	RuleMatchIDs   []uint64
 	CreatedAt      time.Time
+	// ProfileChange 仅在首次写入该幂等阻断记录时计分。
+	ProfileChange *ProfileChange
 }
 
 // ResultKind 区分版本结果与阻断结果。
@@ -396,6 +398,14 @@ const (
 	TrustRestricted TrustLevel = "restricted"
 )
 
+// TrustSource 表示信任等级由系统自动计算还是管理员锁定。
+type TrustSource string
+
+const (
+	TrustSourceAuto   TrustSource = "auto"
+	TrustSourceManual TrustSource = "manual"
+)
+
 // SanctionState 是用户发布处罚状态。
 type SanctionState string
 
@@ -421,6 +431,52 @@ type PolicyContext struct {
 	SanctionUntil  *time.Time
 	PublishingMode PublishingMode
 	ControlVersion uint64
+}
+
+// ModerationProfile 是审核仓储返回的用户治理快照。
+type ModerationProfile struct {
+	UserID              uint64
+	TrustLevel          TrustLevel
+	TrustSource         TrustSource
+	ManualTrustLocked   bool
+	SanctionState       SanctionState
+	SanctionUntil       *time.Time
+	SanctionReason      *string
+	CleanApprovalStreak uint64
+	CorrectedCount      uint64
+	RejectedCount       uint64
+	HighRiskCount       uint64
+	ViolationScore      int64
+	LastViolationAt     *time.Time
+	RestrictedUntil     *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+// AutomaticTrustCommand 在未被管理员锁定时更新自动信任等级。
+type AutomaticTrustCommand struct {
+	UserID          uint64
+	TrustLevel      TrustLevel
+	RestrictedUntil *time.Time
+	UpdatedAt       time.Time
+}
+
+// SetTrustCommand 设置管理员校正的信任等级和锁定状态。
+type SetTrustCommand struct {
+	UserID          uint64
+	TrustLevel      TrustLevel
+	ManualLocked    bool
+	RestrictedUntil *time.Time
+	UpdatedAt       time.Time
+}
+
+// SetSanctionCommand 设置用户禁言或封禁；截止时间为空时只能由管理员释放。
+type SetSanctionCommand struct {
+	UserID uint64
+	State  SanctionState
+	Until  *time.Time
+	Reason *string
+	Now    time.Time
 }
 
 // RuleRecord 是启用规则的不可变值记录。

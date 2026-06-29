@@ -229,6 +229,12 @@ func (s *reviewService) applyReview(
 	if err != nil {
 		return ReviewItem{}, mapReviewRepositoryError(err)
 	}
+	if governanceConfigured(s.cfg.Governance) {
+		if _, governanceErr := reconcileProfile(ctx, s.repo, record.AuthorID, s.cfg.Governance, now); governanceErr != nil {
+			s.logger.Warn("刷新用户审核画像失败，将在下次访问时重试",
+				zap.Uint64("user_id", record.AuthorID), zap.Error(governanceErr))
+		}
+	}
 	if len(previewKeys) > 0 {
 		if cleanupErr := s.cleaner.DeletePreviewObjects(ctx, previewKeys); cleanupErr != nil {
 			s.logger.Warn("删除已通过图片预览失败，等待定期清理补偿", zap.Error(cleanupErr))

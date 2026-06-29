@@ -12,6 +12,12 @@ type Repository interface {
 	LoadSubject(ctx context.Context, ref SubjectRef) (SubjectSnapshot, error)
 	LoadItemState(ctx context.Context, ref SubjectRef) (ItemStateRecord, error)
 	LoadPolicyContext(ctx context.Context, userID uint64) (PolicyContext, error)
+	EnsureNewProfile(ctx context.Context, userID uint64, now time.Time) error
+	LoadModerationProfile(ctx context.Context, userID uint64, now time.Time) (ModerationProfile, error)
+	SetAutomaticTrust(ctx context.Context, cmd AutomaticTrustCommand) (bool, error)
+	SetTrust(ctx context.Context, cmd SetTrustCommand) error
+	SetSanction(ctx context.Context, cmd SetSanctionCommand) error
+	ReleaseSanction(ctx context.Context, userID uint64, now time.Time) error
 	FindResultByIdempotencyKey(ctx context.Context, userID uint64, key string) (*StoredResult, error)
 	ApplyTransition(ctx context.Context, cmd ApplyTransitionCommand) (AppliedTransition, error)
 	RecordBlockedAttempt(ctx context.Context, attempt BlockedAttempt) (StoredResult, error)
