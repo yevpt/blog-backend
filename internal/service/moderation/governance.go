@@ -153,10 +153,13 @@ func (s *governanceService) SetTrust(ctx context.Context, cmd SetTrustCommand) e
 	if cmd.UserID == 0 || cmd.ActorID == 0 || !validServiceTrust(cmd.TrustLevel) {
 		return ErrInvalidRequest
 	}
+	now := s.now()
+	if cmd.RestrictedUntil != nil && !cmd.RestrictedUntil.After(now) {
+		return ErrInvalidRequest
+	}
 	if cmd.TrustLevel != TrustRestricted {
 		cmd.RestrictedUntil = nil
 	}
-	now := s.now()
 	if err := s.repo.EnsureNewProfile(ctx, cmd.UserID, now); err != nil {
 		return err
 	}

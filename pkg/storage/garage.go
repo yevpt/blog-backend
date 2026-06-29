@@ -297,7 +297,12 @@ func (c *Client) listObjectPage(ctx context.Context, prefix, after string, limit
 	page := ObjectPage{Objects: make([]ObjectMetadata, 0, len(out.Contents)), HasMore: aws.ToBool(out.IsTruncated)}
 	for _, item := range out.Contents {
 		key := strings.TrimSpace(aws.ToString(item.Key))
-		if key == "" || strings.HasSuffix(key, "/") {
+		if key == "" {
+			continue
+		}
+		// 即使是目录占位对象也推进游标，避免分页永久卡在同一页。
+		page.NextAfter = key
+		if strings.HasSuffix(key, "/") {
 			continue
 		}
 		metadata := ObjectMetadata{Key: key, Size: aws.ToInt64(item.Size)}
@@ -305,7 +310,6 @@ func (c *Client) listObjectPage(ctx context.Context, prefix, after string, limit
 			metadata.LastModified = *item.LastModified
 		}
 		page.Objects = append(page.Objects, metadata)
-		page.NextAfter = key
 	}
 	return page, nil
 }

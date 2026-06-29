@@ -58,6 +58,12 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 	if stored != nil {
 		return s.resultFromStored(*stored, input.subject)
 	}
+	// 每次写入前协调自动等级，补偿先前审核后画像刷新失败，并及时释放到期限制。
+	if governanceConfigured(s.cfg.Governance) {
+		if _, err := reconcileProfile(ctx, s.repo, input.actorID, s.cfg.Governance, s.now()); err != nil {
+			return SubmitResult{}, err
+		}
+	}
 
 	policyContext, err := s.repo.LoadPolicyContext(ctx, input.actorID)
 	if err != nil {

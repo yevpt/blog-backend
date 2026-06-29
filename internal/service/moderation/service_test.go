@@ -93,7 +93,6 @@ func newApplicationService(
 			HighRejected:   "内容存在较高风险，未能发布，请修改后重试。",
 		},
 		Governance: config.ModerationGovernanceConfig{
-			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
 			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3, HighRiskBlocked: 5},
 		},
 	}
@@ -493,16 +492,46 @@ func TestServiceHighRiskEditKeepsExistingVersion(t *testing.T) {
 				return moderationrepo.StoredResult{Kind: moderationrepo.ResultBlocked}, nil
 			},
 		),
-		repo.EXPECT().LoadModerationProfile(gomock.Any(), cmd.ActorID, serviceNow).Return(moderationrepo.ModerationProfile{
-			UserID: cmd.ActorID, TrustLevel: moderationrepo.TrustNormal, TrustSource: moderationrepo.TrustSourceAuto,
-			SanctionState: moderationrepo.SanctionActive, ViolationScore: 5,
-			LastViolationAt: &serviceNow, CreatedAt: serviceNow.AddDate(0, -2, 0), UpdatedAt: serviceNow,
-		}, nil),
 	)
 
 	_, err := newApplicationService(repo, processor, classifier, decider, zap.NewNop()).Edit(context.Background(), cmd)
 	require.ErrorIs(t, err, moderation.ErrContentRiskRejected)
 	assert.Contains(t, err.Error(), "原内容不受影响")
+}
+
+func TestServiceReconcilesAutomaticRestrictionBeforePublishingPolicy(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := submitCommand()
+	violationAt := serviceNow.Add(-time.Hour)
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadModerationProfile(gomock.Any(), cmd.ActorID, serviceNow).Return(moderationrepo.ModerationProfile{
+			UserID: cmd.ActorID, TrustLevel: moderationrepo.TrustNormal, TrustSource: moderationrepo.TrustSourceAuto,
+			SanctionState: moderationrepo.SanctionActive, ViolationScore: 6, LastViolationAt: &violationAt,
+			CreatedAt: serviceNow.AddDate(0, -2, 0), UpdatedAt: serviceNow,
+		}, nil),
+		repo.EXPECT().SetAutomaticTrust(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, update moderationrepo.AutomaticTrustCommand) (bool, error) {
+				assert.Equal(t, moderationrepo.TrustRestricted, update.TrustLevel)
+				return true, nil
+			}),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(moderationrepo.PolicyContext{
+			TrustLevel: moderationrepo.TrustRestricted, SanctionState: moderationrepo.SanctionActive,
+			PublishingMode: moderationrepo.PublishingClosed,
+		}, nil),
+	)
+	cfg := config.ModerationConfig{
+		Enabled: true,
+		Governance: config.ModerationGovernanceConfig{
+			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
+		},
+	}
+	service := moderation.NewService(repo, &processorStub{}, &classifierStub{}, &deciderStub{}, nil, cfg, zap.NewNop(), func() time.Time { return serviceNow })
+
+	_, err := service.Submit(context.Background(), cmd)
+
+	require.ErrorIs(t, err, moderation.ErrPublishingForbidden)
 }
 
 func TestServiceHighRiskRaceReturnsFirstRevisionResult(t *testing.T) {

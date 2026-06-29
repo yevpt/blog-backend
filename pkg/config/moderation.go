@@ -102,6 +102,7 @@ type ModerationGovernanceConfig struct {
 	NormalToTrusted          ModerationPromotionConfig        `mapstructure:"normal_to_trusted"`
 	RestrictedScoreThreshold int                              `mapstructure:"restricted_score_threshold"`
 	RestrictedDuration       time.Duration                    `mapstructure:"restricted_duration"`
+	CleanApprovalScoreDecay  int                              `mapstructure:"clean_approval_score_decay"`
 	ViolationWeights         ModerationViolationWeightsConfig `mapstructure:"violation_weights"`
 }
 
@@ -127,11 +128,10 @@ type ModerationRateLimitConfig struct {
 
 // ModerationControlConfig 预留全站注册、发布控制参数。
 type ModerationControlConfig struct {
-	DefaultRegistrationMode    string        `mapstructure:"default_registration_mode"`
-	DefaultPublishingMode      string        `mapstructure:"default_publishing_mode"`
-	CacheTTL                   time.Duration `mapstructure:"cache_ttl"`
-	UserHideBatchSize          int           `mapstructure:"user_hide_batch_size"`
-	UserHideMaxItemsPerRequest int           `mapstructure:"user_hide_max_items_per_request"`
+	DefaultRegistrationMode    string `mapstructure:"default_registration_mode"`
+	DefaultPublishingMode      string `mapstructure:"default_publishing_mode"`
+	UserHideBatchSize          int    `mapstructure:"user_hide_batch_size"`
+	UserHideMaxItemsPerRequest int    `mapstructure:"user_hide_max_items_per_request"`
 }
 
 // ModerationAuditConfig 预留审核记录保留与清理参数。

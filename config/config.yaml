@@ -154,6 +154,8 @@ moderation:
       clean_approvals: 20
     restricted_score_threshold: 6
     restricted_duration: 168h
+    # 每次干净通过抵消的违规分，避免一次轻微修正永久阻断晋升
+    clean_approval_score_decay: 1
     violation_weights:
       corrected: 1
       rejected: 3
@@ -168,7 +170,6 @@ moderation:
   control:
     default_registration_mode: open
     default_publishing_mode: open
-    cache_ttl: 30s
     user_hide_batch_size: 200
     user_hide_max_items_per_request: 1000
 

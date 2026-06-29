@@ -44,6 +44,7 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 			assert.Equal(t, moderationrepo.ExistingRevision(record.RevisionID), cmd.Materialize)
 			require.NotNil(t, cmd.ProfileChange)
 			assert.Equal(t, int64(1), cmd.ProfileChange.CleanApprovalDelta)
+			assert.Equal(t, int64(-1), cmd.ProfileChange.ViolationScoreDelta)
 			require.NotNil(t, cmd.Notification)
 			assert.Equal(t, record.AuthorID, cmd.Notification.RecipientUserID)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
@@ -64,6 +65,7 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 		Governance: config.ModerationGovernanceConfig{
 			NewToNormal:              config.ModerationPromotionConfig{MinAgeDays: 7, CleanApprovals: 3},
 			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
+			CleanApprovalScoreDecay: 1,
 		},
 	}, zap.NewNop(), func() time.Time { return serviceNow })
 
@@ -169,7 +171,8 @@ func newReviewService(repo moderationrepo.Repository, processor moderation.Conte
 			QueueDefaultPageSize: 20, QueueMaxPageSize: 100, ReasonMaxChars: 1000,
 		},
 		Governance: config.ModerationGovernanceConfig{
-			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3},
+			CleanApprovalScoreDecay: 1,
+			ViolationWeights:        config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3},
 		},
 	}
 	var cleaner moderation.PreviewCleaner

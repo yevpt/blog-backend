@@ -66,6 +66,7 @@ moderation:
     normal_to_trusted: {min_age_days: 30, clean_approvals: 20}
     restricted_score_threshold: 6
     restricted_duration: 168h
+    clean_approval_score_decay: 1
     violation_weights: {corrected: 1, rejected: 3, high_risk_blocked: 5}
   rate_limit:
     publish_per_minute: 10
@@ -74,7 +75,6 @@ moderation:
   control:
     default_registration_mode: open
     default_publishing_mode: open
-    cache_ttl: 30s
     user_hide_batch_size: 200
     user_hide_max_items_per_request: 1000
   audit:
@@ -108,7 +108,6 @@ moderation:
 	assert.Equal(t, 20, cfg.Moderation.Review.QueueDefaultPageSize)
 	assert.Equal(t, 168*time.Hour, cfg.Moderation.Governance.RestrictedDuration)
 	assert.Equal(t, 10, cfg.Moderation.RateLimit.PublishPerMinute)
-	assert.Equal(t, 30*time.Second, cfg.Moderation.Control.CacheTTL)
 	assert.Equal(t, 365, cfg.Moderation.Audit.ActionLogRetentionDays)
 	assert.Equal(t, 200, cfg.Moderation.Migration.BatchSize)
 	assert.Equal(t, "发布成功，内容会被审核。", cfg.Moderation.Notices.LowSubmitted)
@@ -234,8 +233,8 @@ func TestValidateModeration(t *testing.T) {
 			c.Governance.NewToNormal.CleanApprovals = 0
 		}, wantErr: "moderation.governance.new_to_normal.clean_approvals"},
 		{name: "control bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
-			c.Control.CacheTTL = 0
-		}, wantErr: "moderation.control.cache_ttl"},
+			c.Control.UserHideBatchSize = 0
+		}, wantErr: "moderation.control.user_hide_batch_size"},
 		{name: "audit bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
 			c.Audit.CleanupBatchSize = 0
 		}, wantErr: "moderation.audit.cleanup_batch_size"},
@@ -286,11 +285,12 @@ func validModerationConfig() config.ModerationConfig {
 			NewToNormal:              config.ModerationPromotionConfig{MinAgeDays: 7, CleanApprovals: 3},
 			NormalToTrusted:          config.ModerationPromotionConfig{MinAgeDays: 30, CleanApprovals: 20},
 			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
-			ViolationWeights: config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3, HighRiskBlocked: 5},
+			CleanApprovalScoreDecay: 1,
+			ViolationWeights:        config.ModerationViolationWeightsConfig{Corrected: 1, Rejected: 3, HighRiskBlocked: 5},
 		},
 		RateLimit: config.ModerationRateLimitConfig{PublishPerMinute: 10, EditPerMinute: 10, TempUploadPerMinute: 10},
 		Control: config.ModerationControlConfig{
-			DefaultRegistrationMode: "open", DefaultPublishingMode: "open", CacheTTL: 30 * time.Second,
+			DefaultRegistrationMode: "open", DefaultPublishingMode: "open",
 			UserHideBatchSize: 200, UserHideMaxItemsPerRequest: 1000,
 		},
 		Audit: config.ModerationAuditConfig{

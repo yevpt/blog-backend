@@ -138,6 +138,21 @@ func TestGovernanceServiceSetTrustCreatesMissingProfileBeforeManualLock(t *testi
 	require.NoError(t, err)
 }
 
+func TestGovernanceServiceSetTrustRejectsExpiredRestriction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	past := now.Add(-time.Minute)
+	service := moderation.NewGovernanceService(repo, governanceConfig(), func() time.Time { return now })
+
+	err := service.SetTrust(context.Background(), moderation.SetTrustCommand{
+		UserID: 42, ActorID: 1, TrustLevel: moderation.TrustRestricted,
+		ManualLocked: true, RestrictedUntil: &past,
+	})
+
+	require.ErrorIs(t, err, moderation.ErrInvalidRequest)
+}
+
 func TestGovernanceServiceRegistrationAllowedUsesControlSingleton(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)

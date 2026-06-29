@@ -690,7 +690,7 @@ func applyProfileChange(ctx context.Context, tx *gorm.DB, change *ProfileChange)
 		"corrected_count":       gorm.Expr("corrected_count + ?", change.CorrectedDelta),
 		"rejected_count":        gorm.Expr("rejected_count + ?", change.RejectedDelta),
 		"high_risk_count":       gorm.Expr("high_risk_count + ?", change.HighRiskDelta),
-		"violation_score":       gorm.Expr("violation_score + ?", change.ViolationScoreDelta),
+		"violation_score":       gorm.Expr("GREATEST(0, violation_score + ?)", change.ViolationScoreDelta),
 		"updated_at":            change.UpdatedAt,
 	}
 	if change.TrustLevel != nil {

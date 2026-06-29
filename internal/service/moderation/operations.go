@@ -228,6 +228,11 @@ func (s *operationsService) SetUserSanction(ctx context.Context, cmd SetSanction
 	if s.governance == nil {
 		return ErrInvalidRequest
 	}
+	reason, err := s.optionalReason(cmd.Reason)
+	if err != nil {
+		return err
+	}
+	cmd.Reason = valueOrEmpty(reason)
 	return s.governance.SetSanction(ctx, cmd)
 }
 

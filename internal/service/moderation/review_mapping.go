@@ -47,6 +47,7 @@ func reviewProfileChange(event Event, authorID uint64, now time.Time, cfg config
 	switch event {
 	case EventApprove:
 		change.CleanApprovalDelta = 1
+		change.ViolationScoreDelta = -int64(cfg.Governance.CleanApprovalScoreDecay)
 	case EventCorrectAndApprove:
 		change.CorrectedDelta = 1
 		change.ViolationScoreDelta = int64(cfg.Governance.ViolationWeights.Corrected)

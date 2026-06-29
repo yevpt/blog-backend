@@ -165,7 +165,11 @@ func (s *Service) prepareRecord(ctx context.Context, record moderationrepo.Legac
 	}
 	record.Images = make([]moderationrepo.LegacyImage, 0, len(keys))
 	for index, value := range keys {
-		key, managed := s.managedObjectKey(value)
+		required := record.Subject.Type == moderationrepo.SubjectMoment || !storage.IsAbsoluteURL(strings.TrimSpace(value))
+		key, managed, err := s.managedObjectKey(value, required)
+		if err != nil {
+			return moderationrepo.LegacyRecord{}, err
+		}
 		if !managed {
 			continue
 		}
@@ -178,15 +182,21 @@ func (s *Service) prepareRecord(ctx context.Context, record moderationrepo.Legac
 	return record, nil
 }
 
-func (s *Service) managedObjectKey(value string) (string, bool) {
+func (s *Service) managedObjectKey(value string, required bool) (string, bool, error) {
 	if s.store == nil || strings.TrimSpace(value) == "" {
-		return "", false
+		if required {
+			return "", false, fmt.Errorf("%w: cannot resolve %q", ErrLegacyImageMissing, value)
+		}
+		return "", false, nil
 	}
 	key, err := s.store.ObjectKey(value)
 	if err != nil || strings.TrimSpace(key) == "" {
-		return "", false
+		if required {
+			return "", false, fmt.Errorf("%w: cannot resolve %q", ErrLegacyImageMissing, value)
+		}
+		return "", false, nil
 	}
-	return key, true
+	return key, true, nil
 }
 
 func (s *Service) fingerprintImage(ctx context.Context, key string, seq uint) (moderationrepo.LegacyImage, error) {
