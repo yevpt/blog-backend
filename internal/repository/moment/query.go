@@ -12,12 +12,12 @@ func (r *momentRepo) List(filter ListFilter, viewerID *uint) (*PageResult, error
 	page, pageSize := normalizePage(filter.Page, filter.PageSize)
 
 	var total int64
-	if err := r.publicMomentQuery(filter).Count(&total).Error; err != nil {
+	if err := r.publicMomentQuery(filter, viewerID).Count(&total).Error; err != nil {
 		return nil, err
 	}
 
 	var moments []model.Moment
-	query := r.publicMomentQuery(filter)
+	query := r.publicMomentQuery(filter, viewerID)
 	if filter.Random {
 		query = query.Order("RAND()").Limit(pageSize)
 	} else {
@@ -69,7 +69,7 @@ func (r *momentRepo) ListAdmin(filter AdminListFilter) (*PageResult, error) {
 
 func (r *momentRepo) FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate, error) {
 	var moment model.Moment
-	err := r.publicMomentBase().Select("moment.*").Where("moment.id = ?", id).First(&moment).Error
+	err := r.publicMomentBase(nil).Select("moment.*").Where("moment.id = ?", id).First(&moment).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrMomentNotFound
 	}
@@ -91,14 +91,14 @@ func (r *momentRepo) FindPublicDetail(id uint, viewerID *uint) (*MomentAggregate
 func (r *momentRepo) CountPublicByUser(userID uint) (int64, error) {
 	var total int64
 	filter := ListFilter{UserID: &userID}
-	if err := r.publicMomentQuery(filter).Count(&total).Error; err != nil {
+	if err := r.publicMomentQuery(filter, &userID).Count(&total).Error; err != nil {
 		return 0, err
 	}
 	return total, nil
 }
 
-func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
-	query := r.publicMomentBase()
+func (r *momentRepo) publicMomentQuery(filter ListFilter, viewerID *uint) *gorm.DB {
+	query := r.publicMomentBase(authorHiddenUserID(filter.UserID, viewerID))
 	if filter.UserID != nil {
 		query = query.Where("moment.user_id = ?", *filter.UserID)
 	}
@@ -112,10 +112,25 @@ func (r *momentRepo) publicMomentQuery(filter ListFilter) *gorm.DB {
 	return query
 }
 
-func (r *momentRepo) publicMomentBase() *gorm.DB {
+func (r *momentRepo) publicMomentBase(authorHiddenUserID *uint) *gorm.DB {
 	query := r.db.Model(&model.Moment{})
 	if !r.moderationEnabled {
 		return query.Where("moment.status = ?", uint8(1))
+	}
+	if authorHiddenUserID != nil {
+		return query.
+			Joins("LEFT JOIN moderation_item AS public_moderation ON public_moderation.content_type = ? AND public_moderation.content_id = moment.id", model.ModerationContentMoment).
+			Where(`(
+			(public_moderation.id IS NULL AND moment.status = ?)
+			OR (
+				public_moderation.lifecycle_state = ?
+				AND (
+					(public_moderation.public_state = ? AND moment.status = ?)
+					OR public_moderation.public_state = ?
+					OR (public_moderation.public_state = ? AND moment.user_id = ?)
+				)
+			)
+		)`, uint8(1), model.ModerationLifecycleActive, model.ModerationPublicVisible, uint8(1), model.ModerationPublicPlaceholder, model.ModerationPublicHidden, *authorHiddenUserID)
 	}
 	return query.
 		Joins("LEFT JOIN moderation_item AS public_moderation ON public_moderation.content_type = ? AND public_moderation.content_id = moment.id", model.ModerationContentMoment).
@@ -129,6 +144,13 @@ func (r *momentRepo) publicMomentBase() *gorm.DB {
 				)
 			)
 		)`, uint8(1), model.ModerationLifecycleActive, model.ModerationPublicVisible, uint8(1), model.ModerationPublicPlaceholder)
+}
+
+func authorHiddenUserID(filterUserID *uint, viewerID *uint) *uint {
+	if filterUserID == nil || viewerID == nil || *filterUserID != *viewerID {
+		return nil
+	}
+	return filterUserID
 }
 
 func (r *momentRepo) adminMomentQuery(filter AdminListFilter) *gorm.DB {

@@ -80,6 +80,9 @@ func (s *momentService) momentToDTO(aggregate momentrepo.MomentAggregate, rolesM
 		resp.Content = content
 		resp.Moderation = projected
 		resp.Images = s.moderationImagesToDTO(view.VisibleImages)
+		if len(view.PendingImages) > 0 {
+			resp.Moderation.PendingImages = s.moderationImagesToModerationDTO(view.PendingImages)
+		}
 	}
 	return resp, nil
 }
@@ -92,6 +95,23 @@ func (s *momentService) moderationImagesToDTO(images []moderationrepo.ImageView)
 		}
 		name := path.Base(image.DisplayObjectKey)
 		result = append(result, dto.MomentMediaResp{
+			ID: uint(image.RevisionImageID),
+			Name: name, FileType: strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."),
+			URL: image.DisplayObjectKey, AccessURL: s.resolveImageURL(image.DisplayObjectKey),
+			DisplayMode: moderationImageDisplayMode(image), Seq: image.Seq,
+		})
+	}
+	return result
+}
+
+func (s *momentService) moderationImagesToModerationDTO(images []moderationrepo.ImageView) []dto.ModerationImageResp {
+	result := make([]dto.ModerationImageResp, 0, len(images))
+	for _, image := range images {
+		if image.DisplayObjectKey == "" {
+			continue
+		}
+		name := path.Base(image.DisplayObjectKey)
+		result = append(result, dto.ModerationImageResp{
 			ID: uint(image.RevisionImageID),
 			Name: name, FileType: strings.TrimPrefix(strings.ToLower(path.Ext(name)), "."),
 			URL: image.DisplayObjectKey, AccessURL: s.resolveImageURL(image.DisplayObjectKey),

@@ -10,7 +10,7 @@ import (
 func (r *momentRepo) ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, error) {
 	page, pageSize := normalizePage(filter.Page, filter.PageSize)
 
-	baseQuery := r.feedMomentQuery(filter)
+	baseQuery := r.feedMomentQuery(filter, viewerID)
 
 	var total int64
 	if err := baseQuery.Count(&total).Error; err != nil {
@@ -19,7 +19,7 @@ func (r *momentRepo) ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, e
 
 	var moments []model.Moment
 	offset := (page - 1) * pageSize
-	if err := r.applyFeedOrder(r.feedMomentQuery(filter), filter.Sort).
+	if err := r.applyFeedOrder(r.feedMomentQuery(filter, viewerID), filter.Sort).
 		Select("moment.*").
 		Limit(pageSize).
 		Offset(offset).
@@ -34,8 +34,12 @@ func (r *momentRepo) ListFeed(filter FeedFilter, viewerID *uint) (*PageResult, e
 	return &PageResult{Total: total, Page: page, PageSize: pageSize, Moments: aggregates}, nil
 }
 
-func (r *momentRepo) feedMomentQuery(filter FeedFilter) *gorm.DB {
-	query := r.publicMomentBase()
+func (r *momentRepo) feedMomentQuery(filter FeedFilter, viewerID *uint) *gorm.DB {
+	hiddenOwnerID := (*uint)(nil)
+	if filter.Scope == FeedScopeOwner {
+		hiddenOwnerID = authorHiddenUserID(&filter.OwnerUserID, viewerID)
+	}
+	query := r.publicMomentBase(hiddenOwnerID)
 	switch filter.Scope {
 	case FeedScopeOwner:
 		query = query.Where("moment.user_id = ?", filter.OwnerUserID)

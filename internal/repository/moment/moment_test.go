@@ -36,7 +36,7 @@ func TestMomentRepository_CountPublicByUser_UsesPublicStatusFilter(t *testing.T)
 	repo := momentrepo.NewMomentRepository(db, true)
 
 	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moment`").
-		WithArgs(append(publicMomentVisibilityArgs(), uint(7))...).
+		WithArgs(append(publicMomentVisibilityArgsWithAuthorHidden(7), uint(7))...).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
 	count, err := repo.CountPublicByUser(7)
