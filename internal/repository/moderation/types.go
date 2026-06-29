@@ -424,6 +424,52 @@ const (
 	PublishingClosed       PublishingMode = "closed"
 )
 
+// RegistrationMode 是全站注册控制状态。
+type RegistrationMode string
+
+const (
+	RegistrationOpen   RegistrationMode = "open"
+	RegistrationClosed RegistrationMode = "closed"
+)
+
+// ControlRecord 是全站审核控制单例的仓储投影。
+type ControlRecord struct {
+	RegistrationMode RegistrationMode
+	PublishingMode   PublishingMode
+	Reason           *string
+	OperatorID       *uint64
+	ChangedAt        time.Time
+	LockVersion      uint64
+}
+
+// UpdateControlCommand 使用乐观锁更新全站审核控制。
+type UpdateControlCommand struct {
+	RegistrationMode    RegistrationMode
+	PublishingMode      PublishingMode
+	Reason              *string
+	OperatorID          uint64
+	ExpectedLockVersion uint64
+	ChangedAt           time.Time
+}
+
+// UserEmergencyBatchCommand 分批隐藏或恢复一个用户的公开内容。
+type UserEmergencyBatchCommand struct {
+	UserID  uint64
+	ActorID uint64
+	Cursor  uint64
+	Limit   int
+	Hide    bool
+	Reason  *string
+	Now     time.Time
+}
+
+// EmergencyBatchResult 返回本批处理数量和下一游标。
+type EmergencyBatchResult struct {
+	Processed  int
+	NextCursor uint64
+	HasMore    bool
+}
+
 // PolicyContext 是策略计算需要的数据库快照。
 type PolicyContext struct {
 	TrustLevel     TrustLevel
@@ -464,6 +510,7 @@ type AutomaticTrustCommand struct {
 // SetTrustCommand 设置管理员校正的信任等级和锁定状态。
 type SetTrustCommand struct {
 	UserID          uint64
+	ActorID         uint64
 	TrustLevel      TrustLevel
 	ManualLocked    bool
 	RestrictedUntil *time.Time
@@ -472,11 +519,19 @@ type SetTrustCommand struct {
 
 // SetSanctionCommand 设置用户禁言或封禁；截止时间为空时只能由管理员释放。
 type SetSanctionCommand struct {
-	UserID uint64
-	State  SanctionState
-	Until  *time.Time
-	Reason *string
-	Now    time.Time
+	UserID  uint64
+	ActorID uint64
+	State   SanctionState
+	Until   *time.Time
+	Reason  *string
+	Now     time.Time
+}
+
+// ReleaseSanctionCommand 记录管理员解除处罚操作。
+type ReleaseSanctionCommand struct {
+	UserID  uint64
+	ActorID uint64
+	Now     time.Time
 }
 
 // RuleRecord 是启用规则的不可变值记录。

@@ -32,6 +32,14 @@ type putRecord struct {
 	contentType string
 }
 
+type publishingGateStub struct {
+	allowed bool
+}
+
+func (s publishingGateStub) PublishingAllowed(context.Context, uint64) (bool, error) {
+	return s.allowed, nil
+}
+
 func (s *fakeObjectStore) ObjectURL(ctx context.Context, objectName string) (string, error) {
 	if s.urlErr != nil {
 		return "", s.urlErr
@@ -129,6 +137,18 @@ func TestService_UploadTempImage_RejectsInvalidDir(t *testing.T) {
 	})
 
 	require.ErrorIs(t, err, uploadservice.ErrUploadDirInvalid)
+}
+
+func TestServiceUploadCommentTempImageRejectsSanctionedUser(t *testing.T) {
+	store := &fakeObjectStore{}
+	svc := uploadservice.NewService(store, publishingGateStub{allowed: false})
+
+	_, err := svc.UploadTempImage(context.Background(), uploadservice.TempImageInput{
+		UserID: 7, Scene: "comment", Dir: "comments", Name: "cat.png", Data: smallPNG(t),
+	})
+
+	require.ErrorIs(t, err, uploadservice.ErrUploadForbidden)
+	assert.Empty(t, store.puts)
 }
 
 func TestService_UploadTempImage_SkipsUploadWhenObjectExists(t *testing.T) {

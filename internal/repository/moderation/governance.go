@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -67,46 +68,86 @@ func (r *repository) SetAutomaticTrust(ctx context.Context, cmd AutomaticTrustCo
 
 // SetTrust 保存管理员校正结果；解除锁定后画像重新交由自动规则维护。
 func (r *repository) SetTrust(ctx context.Context, cmd SetTrustCommand) error {
-	if cmd.UserID == 0 || !validTrustLevel(cmd.TrustLevel) || cmd.UpdatedAt.IsZero() {
+	if cmd.UserID == 0 || cmd.ActorID == 0 || !validTrustLevel(cmd.TrustLevel) || cmd.UpdatedAt.IsZero() {
 		return ErrInvalidCommand
 	}
 	source := TrustSourceAuto
 	if cmd.ManualLocked {
 		source = TrustSourceManual
 	}
-	result := r.db.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", cmd.UserID).
-		UpdateColumns(map[string]any{
-			"trust_level": cmd.TrustLevel, "trust_source": source,
-			"manual_trust_locked": cmd.ManualLocked, "restricted_until": cmd.RestrictedUntil,
-			"updated_at": cmd.UpdatedAt,
-		})
-	return requireProfileUpdate(result)
+	metadata, err := json.Marshal(map[string]any{"trust_level": cmd.TrustLevel, "manual_locked": cmd.ManualLocked})
+	if err != nil {
+		return err
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", cmd.UserID).
+			UpdateColumns(map[string]any{
+				"trust_level": cmd.TrustLevel, "trust_source": source,
+				"manual_trust_locked": cmd.ManualLocked, "restricted_until": cmd.RestrictedUntil,
+				"updated_at": cmd.UpdatedAt,
+			})
+		if err := requireProfileUpdate(result); err != nil {
+			return err
+		}
+		return appendGovernanceLog(ctx, tx, cmd.ActorID, cmd.UserID, EventTrustChange, nil, string(metadata), cmd.UpdatedAt)
+	})
 }
 
 // SetSanction 设置禁言或封禁状态。
 func (r *repository) SetSanction(ctx context.Context, cmd SetSanctionCommand) error {
-	if cmd.UserID == 0 || (cmd.State != SanctionMuted && cmd.State != SanctionBanned) || cmd.Now.IsZero() {
+	if cmd.UserID == 0 || cmd.ActorID == 0 || (cmd.State != SanctionMuted && cmd.State != SanctionBanned) || cmd.Now.IsZero() {
 		return ErrInvalidCommand
 	}
-	result := r.db.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", cmd.UserID).
-		UpdateColumns(map[string]any{
-			"sanction_state": cmd.State, "sanction_until": cmd.Until,
-			"sanction_reason": cmd.Reason, "updated_at": cmd.Now,
-		})
-	return requireProfileUpdate(result)
+	metadata, err := json.Marshal(map[string]any{"sanction_state": cmd.State, "until": cmd.Until})
+	if err != nil {
+		return err
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", cmd.UserID).
+			UpdateColumns(map[string]any{
+				"sanction_state": cmd.State, "sanction_until": cmd.Until,
+				"sanction_reason": cmd.Reason, "updated_at": cmd.Now,
+			})
+		if err := requireProfileUpdate(result); err != nil {
+			return err
+		}
+		return appendGovernanceLog(ctx, tx, cmd.ActorID, cmd.UserID, EventSanctionChange, cmd.Reason, string(metadata), cmd.Now)
+	})
 }
 
 // ReleaseSanction 由管理员立即解除处罚。
-func (r *repository) ReleaseSanction(ctx context.Context, userID uint64, now time.Time) error {
-	if userID == 0 || now.IsZero() {
+func (r *repository) ReleaseSanction(ctx context.Context, cmd ReleaseSanctionCommand) error {
+	if cmd.UserID == 0 || cmd.ActorID == 0 || cmd.Now.IsZero() {
 		return ErrInvalidCommand
 	}
-	result := r.db.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", userID).
-		UpdateColumns(map[string]any{
-			"sanction_state": SanctionActive, "sanction_until": nil,
-			"sanction_reason": nil, "updated_at": now,
-		})
-	return requireProfileUpdate(result)
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&model.UserModerationProfile{}).Where("user_id = ?", cmd.UserID).
+			UpdateColumns(map[string]any{
+				"sanction_state": SanctionActive, "sanction_until": nil,
+				"sanction_reason": nil, "updated_at": cmd.Now,
+			})
+		if err := requireProfileUpdate(result); err != nil {
+			return err
+		}
+		return appendGovernanceLog(ctx, tx, cmd.ActorID, cmd.UserID, EventSanctionChange, nil, `{"sanction_state":"active"}`, cmd.Now)
+	})
+}
+
+func appendGovernanceLog(
+	ctx context.Context,
+	tx *gorm.DB,
+	actorID uint64,
+	userID uint64,
+	action Event,
+	reason *string,
+	metadata string,
+	now time.Time,
+) error {
+	row := model.ModerationActionLog{
+		ActorUserID: &actorID, SubjectUserID: &userID, Action: string(action),
+		Reason: reason, MetadataJSON: &metadata, CreatedAt: now,
+	}
+	return tx.WithContext(ctx).Create(&row).Error
 }
 
 func defaultModerationProfile(userID uint64, now time.Time) ModerationProfile {

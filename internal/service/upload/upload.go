@@ -32,6 +32,7 @@ var (
 	ErrUploadDirInvalid      = errors.New("上传目录无效")
 	ErrUploadSceneInvalid    = errors.New("上传场景无效")
 	ErrUploadUnavailable     = errors.New("对象存储不可用")
+	ErrUploadForbidden       = errors.New("当前账号暂时不能上传待发布图片")
 )
 
 const (
@@ -53,10 +54,20 @@ type TempImageInput struct {
 
 type service struct {
 	store storage.ObjectStore
+	gate  PublishingGate
 }
 
-func NewService(store storage.ObjectStore) Service {
-	return &service{store: store}
+// PublishingGate 检查互动图片上传是否被用户处罚或全站发布开关阻止。
+type PublishingGate interface {
+	PublishingAllowed(ctx context.Context, userID uint64) (bool, error)
+}
+
+func NewService(store storage.ObjectStore, gates ...PublishingGate) Service {
+	result := &service{store: store}
+	if len(gates) > 0 {
+		result.gate = gates[0]
+	}
+	return result
 }
 
 func (s *service) UploadTempImage(ctx context.Context, input TempImageInput) (*dto.TempUploadResp, error) {
@@ -67,6 +78,15 @@ func (s *service) UploadTempImage(ctx context.Context, input TempImageInput) (*d
 	scene, err := normalizeTempScene(input.Scene)
 	if err != nil {
 		return nil, err
+	}
+	if scene == sceneComment && s.gate != nil {
+		allowed, gateErr := s.gate.PublishingAllowed(ctx, uint64(input.UserID))
+		if gateErr != nil {
+			return nil, ErrUploadUnavailable
+		}
+		if !allowed {
+			return nil, ErrUploadForbidden
+		}
 	}
 
 	var key string

@@ -57,6 +57,21 @@ func (mr *MockRepositoryMockRecorder) ApplyTransition(ctx, cmd any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyTransition", reflect.TypeOf((*MockRepository)(nil).ApplyTransition), ctx, cmd)
 }
 
+// ApplyUserEmergencyBatch mocks base method.
+func (m *MockRepository) ApplyUserEmergencyBatch(ctx context.Context, cmd moderation.UserEmergencyBatchCommand) (moderation.EmergencyBatchResult, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplyUserEmergencyBatch", ctx, cmd)
+	ret0, _ := ret[0].(moderation.EmergencyBatchResult)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ApplyUserEmergencyBatch indicates an expected call of ApplyUserEmergencyBatch.
+func (mr *MockRepositoryMockRecorder) ApplyUserEmergencyBatch(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyUserEmergencyBatch", reflect.TypeOf((*MockRepository)(nil).ApplyUserEmergencyBatch), ctx, cmd)
+}
+
 // EnsureNewProfile mocks base method.
 func (m *MockRepository) EnsureNewProfile(ctx context.Context, userID uint64, now time.Time) error {
 	m.ctrl.T.Helper()
@@ -99,6 +114,21 @@ func (m *MockRepository) ListReviewRecords(ctx context.Context, filter moderatio
 func (mr *MockRepositoryMockRecorder) ListReviewRecords(ctx, filter any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReviewRecords", reflect.TypeOf((*MockRepository)(nil).ListReviewRecords), ctx, filter)
+}
+
+// LoadControl mocks base method.
+func (m *MockRepository) LoadControl(ctx context.Context) (moderation.ControlRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadControl", ctx)
+	ret0, _ := ret[0].(moderation.ControlRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadControl indicates an expected call of LoadControl.
+func (mr *MockRepositoryMockRecorder) LoadControl(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadControl", reflect.TypeOf((*MockRepository)(nil).LoadControl), ctx)
 }
 
 // LoadCurrentReviewRecord mocks base method.
@@ -267,17 +297,17 @@ func (mr *MockRepositoryMockRecorder) RecordBlockedAttempt(ctx, attempt any) *go
 }
 
 // ReleaseSanction mocks base method.
-func (m *MockRepository) ReleaseSanction(ctx context.Context, userID uint64, now time.Time) error {
+func (m *MockRepository) ReleaseSanction(ctx context.Context, cmd moderation.ReleaseSanctionCommand) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReleaseSanction", ctx, userID, now)
+	ret := m.ctrl.Call(m, "ReleaseSanction", ctx, cmd)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // ReleaseSanction indicates an expected call of ReleaseSanction.
-func (mr *MockRepositoryMockRecorder) ReleaseSanction(ctx, userID, now any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) ReleaseSanction(ctx, cmd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseSanction", reflect.TypeOf((*MockRepository)(nil).ReleaseSanction), ctx, userID, now)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseSanction", reflect.TypeOf((*MockRepository)(nil).ReleaseSanction), ctx, cmd)
 }
 
 // SetAutomaticTrust mocks base method.
@@ -321,6 +351,20 @@ func (m *MockRepository) SetTrust(ctx context.Context, cmd moderation.SetTrustCo
 func (mr *MockRepositoryMockRecorder) SetTrust(ctx, cmd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTrust", reflect.TypeOf((*MockRepository)(nil).SetTrust), ctx, cmd)
+}
+
+// UpdateControl mocks base method.
+func (m *MockRepository) UpdateControl(ctx context.Context, cmd moderation.UpdateControlCommand) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateControl", ctx, cmd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateControl indicates an expected call of UpdateControl.
+func (mr *MockRepositoryMockRecorder) UpdateControl(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateControl", reflect.TypeOf((*MockRepository)(nil).UpdateControl), ctx, cmd)
 }
 
 // UpsertPendingImage mocks base method.

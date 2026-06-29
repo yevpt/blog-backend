@@ -120,7 +120,7 @@ func (r *fakeUserRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, er
 }
 func (r *fakeUserRepo) TouchLoginPresence(userID uint) error { return nil }
 func (r *fakeUserRepo) UpdateLastActiveAt(userID uint) error { return nil }
-func (r *fakeUserRepo) UpdateLastLoginAt(userID uint) error { return nil }
+func (r *fakeUserRepo) UpdateLastLoginAt(userID uint) error  { return nil }
 func (r *fakeUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
@@ -139,12 +139,12 @@ func (r *fakeUserRepo) UpsertUserSetting(userID uint, updates map[string]any) er
 	return nil
 }
 func (r *fakeUserRepo) CountByAvatarURL(avatarURL string) (int64, error) { return 0, nil }
-func (r *fakeUserRepo) ListAllWithManagedAvatar() ([]model.User, error)    { return nil, nil }
+func (r *fakeUserRepo) ListAllWithManagedAvatar() ([]model.User, error)  { return nil, nil }
 func (r *fakeUserRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) {
 	return 0, nil
 }
-func (r *fakeUserRepo) GrantVipRole(userID uint) error                   { return nil }
-func (r *fakeUserRepo) RevokeVipRole(userID uint) error                  { return nil }
+func (r *fakeUserRepo) GrantVipRole(userID uint) error  { return nil }
+func (r *fakeUserRepo) RevokeVipRole(userID uint) error { return nil }
 func (r *fakeUserRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
 	return nil, nil
 }
@@ -153,6 +153,20 @@ type fakeAvatarSaver struct {
 	objectName string
 	err        error
 	gotURL     string
+}
+
+type registrationGovernanceStub struct {
+	allowed bool
+	userID  uint64
+}
+
+func (s *registrationGovernanceStub) RegistrationAllowed(context.Context) (bool, error) {
+	return s.allowed, nil
+}
+
+func (s *registrationGovernanceStub) EnsureNewProfile(_ context.Context, userID uint64) error {
+	s.userID = userID
+	return nil
 }
 
 func (s *fakeAvatarSaver) SaveRemoteAvatar(ctx context.Context, avatarURL string) (string, error) {
@@ -196,7 +210,8 @@ func TestOAuthService_CallbackLoginCreatesUserAndBinding(t *testing.T) {
 	social := &fakeSocialRepo{}
 	user := &fakeUserRepo{roles: []string{roles.NormalRole}}
 	avatarSaver := &fakeAvatarSaver{objectName: "avatar/user/md5.jpg"}
-	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, avatarSaver, nil)
+	governance := &registrationGovernanceStub{allowed: true}
+	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, avatarSaver, nil, governance)
 
 	resp, err := svc.Callback(context.Background(), "github", "code", "state")
 
@@ -216,6 +231,24 @@ func TestOAuthService_CallbackLoginCreatesUserAndBinding(t *testing.T) {
 	assert.Equal(t, "access-token", social.createdSocial.AccessToken)
 	assert.NotEmpty(t, resp.Login.AccessToken)
 	assert.Equal(t, uint(7), resp.Login.User.ID)
+	assert.Equal(t, uint64(7), governance.userID)
+}
+
+func TestOAuthServiceCallbackLoginRejectsNewUserWhenRegistrationClosed(t *testing.T) {
+	flow := &fakeFlowManager{callback: &domain.CallbackResult{
+		Flow:    &domain.FlowContext{Action: domain.ActionLogin, Source: "github"},
+		Token:   &domain.TokenSet{AccessToken: "access-token"},
+		Profile: &domain.Profile{Source: "github", UUID: "remote-new"},
+	}}
+	social := &fakeSocialRepo{}
+	user := &fakeUserRepo{}
+	governance := &registrationGovernanceStub{allowed: false}
+	svc := serviceoauth.NewOAuthService(flow, social, user, jwtpkg.NewManager("secret", 2, 168), nil, nil, nil, governance)
+
+	_, err := svc.Callback(context.Background(), "github", "code", "state")
+
+	require.ErrorIs(t, err, serviceoauth.ErrRegistrationClosed)
+	assert.Nil(t, social.createdUser)
 }
 
 func TestOAuthService_CallbackLoginIgnoresAvatarFailure(t *testing.T) {

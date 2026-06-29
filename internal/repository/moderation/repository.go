@@ -17,7 +17,10 @@ type Repository interface {
 	SetAutomaticTrust(ctx context.Context, cmd AutomaticTrustCommand) (bool, error)
 	SetTrust(ctx context.Context, cmd SetTrustCommand) error
 	SetSanction(ctx context.Context, cmd SetSanctionCommand) error
-	ReleaseSanction(ctx context.Context, userID uint64, now time.Time) error
+	ReleaseSanction(ctx context.Context, cmd ReleaseSanctionCommand) error
+	LoadControl(ctx context.Context) (ControlRecord, error)
+	UpdateControl(ctx context.Context, cmd UpdateControlCommand) error
+	ApplyUserEmergencyBatch(ctx context.Context, cmd UserEmergencyBatchCommand) (EmergencyBatchResult, error)
 	FindResultByIdempotencyKey(ctx context.Context, userID uint64, key string) (*StoredResult, error)
 	ApplyTransition(ctx context.Context, cmd ApplyTransitionCommand) (AppliedTransition, error)
 	RecordBlockedAttempt(ctx context.Context, attempt BlockedAttempt) (StoredResult, error)

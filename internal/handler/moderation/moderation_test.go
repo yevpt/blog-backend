@@ -24,6 +24,53 @@ type reviewServiceStub struct {
 	rejectErr      error
 }
 
+type operationsServiceStub struct {
+	updateControlCommand moderationservice.UpdateControlCommand
+	hideItemCommand      moderationservice.EmergencyItemCommand
+}
+
+func (s *operationsServiceStub) GetControl(context.Context) (moderationservice.Control, error) {
+	return moderationservice.Control{}, nil
+}
+
+func (s *operationsServiceStub) UpdateControl(_ context.Context, cmd moderationservice.UpdateControlCommand) (moderationservice.Control, error) {
+	s.updateControlCommand = cmd
+	return moderationservice.Control{LockVersion: cmd.ExpectedLockVersion + 1}, nil
+}
+
+func (s *operationsServiceStub) HideItem(_ context.Context, cmd moderationservice.EmergencyItemCommand) (moderationservice.EmergencyItemResult, error) {
+	s.hideItemCommand = cmd
+	return moderationservice.EmergencyItemResult{ItemID: cmd.ItemID, PublicState: moderationservice.PublicEmergencyHidden}, nil
+}
+
+func (s *operationsServiceStub) RestoreItem(context.Context, moderationservice.EmergencyItemCommand) (moderationservice.EmergencyItemResult, error) {
+	return moderationservice.EmergencyItemResult{}, nil
+}
+
+func (s *operationsServiceStub) HideUserContent(context.Context, moderationservice.UserEmergencyBatchCommand) (moderationservice.EmergencyBatchResult, error) {
+	return moderationservice.EmergencyBatchResult{}, nil
+}
+
+func (s *operationsServiceStub) RestoreUserContent(context.Context, moderationservice.UserEmergencyBatchCommand) (moderationservice.EmergencyBatchResult, error) {
+	return moderationservice.EmergencyBatchResult{}, nil
+}
+
+func (s *operationsServiceStub) GetUserProfile(context.Context, uint64) (moderationservice.UserModerationProfile, error) {
+	return moderationservice.UserModerationProfile{}, nil
+}
+
+func (s *operationsServiceStub) SetUserTrust(context.Context, moderationservice.SetTrustCommand) error {
+	return nil
+}
+
+func (s *operationsServiceStub) SetUserSanction(context.Context, moderationservice.SetSanctionCommand) error {
+	return nil
+}
+
+func (s *operationsServiceStub) ReleaseUserSanction(context.Context, uint64, uint64) error {
+	return nil
+}
+
 func (s *reviewServiceStub) List(context.Context, moderationservice.ListReviewCommand) (moderationservice.ReviewPage, error) {
 	return moderationservice.ReviewPage{}, nil
 }
@@ -91,6 +138,31 @@ func TestAdminReviewInvalidBodyReturnsBusiness400(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Contains(t, recorder.Body.String(), `"code":400`)
 	assert.Zero(t, stub.approveCommand.ReviewerID)
+}
+
+func TestAdminUpdateControlUsesJWTActor(t *testing.T) {
+	ops := &operationsServiceStub{}
+	handler := moderationhandler.NewAdminHandler(&reviewServiceStub{}, ops)
+	recorder := serveReviewRequest(http.MethodPatch, "/admin/moderation/control",
+		`{"registration_mode":"closed","publishing_mode":"pre_review_all","reason":"维护","lock_version":3}`,
+		handler.UpdateControl, true)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, uint64(1), ops.updateControlCommand.OperatorID)
+	assert.Equal(t, uint64(3), ops.updateControlCommand.ExpectedLockVersion)
+	assert.Equal(t, moderationservice.RegistrationClosed, ops.updateControlCommand.RegistrationMode)
+}
+
+func TestAdminEmergencyHideRequiresReasonAndUsesJWTActor(t *testing.T) {
+	ops := &operationsServiceStub{}
+	handler := moderationhandler.NewAdminHandler(&reviewServiceStub{}, ops)
+	recorder := serveReviewRequest(http.MethodPost, "/admin/moderation/items/10/hide",
+		`{"reason":"紧急下架"}`, handler.HideItem, true)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, uint64(1), ops.hideItemCommand.ActorID)
+	assert.Equal(t, uint64(10), ops.hideItemCommand.ItemID)
+	assert.Equal(t, "紧急下架", ops.hideItemCommand.Reason)
 }
 
 func serveReviewRequest(

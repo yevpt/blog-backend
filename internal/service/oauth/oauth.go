@@ -24,6 +24,7 @@ var (
 	ErrUserNotFound        = errors.New("用户不存在")
 	ErrUserDisabled        = errors.New("账号已被禁用")
 	ErrLastLoginMethod     = errors.New("至少保留一种可用登录方式")
+	ErrRegistrationClosed  = errors.New("网站当前已暂停新用户注册")
 )
 
 // FlowManager 抽象 OAuth 协议流程，便于 service 测试时替换。
@@ -55,6 +56,13 @@ type service struct {
 	cache      userservice.UserCacheService
 	avatar     AvatarSaver
 	presence   analyticsservice.UserPresence
+	governance RegistrationGovernance
+}
+
+// RegistrationGovernance 控制 OAuth 自动建号并创建默认审核画像。
+type RegistrationGovernance interface {
+	RegistrationAllowed(ctx context.Context) (bool, error)
+	EnsureNewProfile(ctx context.Context, userID uint64) error
 }
 
 func NewOAuthService(
@@ -65,8 +73,9 @@ func NewOAuthService(
 	cache userservice.UserCacheService,
 	avatar AvatarSaver,
 	presence analyticsservice.UserPresence,
+	governance ...RegistrationGovernance,
 ) OAuthService {
-	return &service{
+	result := &service{
 		flow:       flow,
 		socialRepo: socialRepo,
 		userRepo:   userRepo,
@@ -75,6 +84,10 @@ func NewOAuthService(
 		avatar:     avatar,
 		presence:   presence,
 	}
+	if len(governance) > 0 {
+		result.governance = governance[0]
+	}
+	return result
 }
 
 func (s *service) Providers(ctx context.Context) []string {
@@ -179,6 +192,15 @@ func (s *service) login(ctx context.Context, result *domain.CallbackResult) (*dt
 		}
 		return s.issueLogin(ctx, user)
 	}
+	if s.governance != nil {
+		allowed, err := s.governance.RegistrationAllowed(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, ErrRegistrationClosed
+		}
+	}
 
 	user, socialUser, err := s.newOAuthUser(ctx, result)
 	if err != nil {
@@ -186,6 +208,10 @@ func (s *service) login(ctx context.Context, result *domain.CallbackResult) (*dt
 	}
 	if err := s.socialRepo.CreateUserWithSocialAuth(user, roles.NormalRoleId, socialUser); err != nil {
 		return nil, err
+	}
+	// 画像创建失败不回滚已完成的 OAuth 建号，首次发布仍按 new + active 兜底。
+	if s.governance != nil {
+		_ = s.governance.EnsureNewProfile(ctx, uint64(user.ID))
 	}
 	return s.issueLogin(ctx, user)
 }

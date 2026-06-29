@@ -238,7 +238,7 @@ func newRouteHandlers(
 	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
-	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc, userPresence)
+	oauthSvc := oauthservice.NewOAuthService(oauthManager, socialAuthRepo, userRepo, jwtManager, userCacheSvc, avatarSvc, userPresence, moderationGovernanceSvc)
 
 	uvSvc := uv.NewService(redisClient)
 
@@ -269,13 +269,14 @@ func newRouteHandlers(
 		panic(moderationErr)
 	}
 	moderationReviewSvc := maybeNewModerationReviewService(db, cfg.Moderation, log, objectStore)
+	moderationOperationsSvc := maybeNewModerationOperationsService(db, cfg.Moderation, moderationGovernanceSvc)
 	commentRepo := commentrepo.NewCommentRepository(db)
 	commentSvc := commentservice.NewCommentService(commentRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	guestbookRepo := guestbookrepo.NewGuestbookRepository(db)
 	guestbookSvc := guestbookservice.NewGuestbookService(guestbookRepo, objectStore, notificationPublisher, userRepo, moderationSvc)
 	momentRepo := momentrepo.NewMomentRepository(db, cfg.Moderation.Enabled)
 	momentSvc := momentservice.NewMomentService(momentRepo, objectStore, uvSvc, notificationPublisher, userRepo, moderationSvc)
-	uploadSvc := uploadservice.NewService(objectStore)
+	uploadSvc := uploadservice.NewService(objectStore, moderationGovernanceSvc)
 
 	// 组装站点统计上报链路：富化 → 实时层 → 异步落库 + 会话写入 → PV 去重。
 	analyticsCollectHandler, analyticsAdminHandler, analyticsPublicHandler, analyticsRuntime := newAnalyticsCollectHandler(log, db, redisClient, uvSvc, cfg.Analytics, userPresence)
@@ -299,7 +300,7 @@ func newRouteHandlers(
 		comment:             commenthandler.NewCommentHandler(commentSvc, cfg.Moderation.Enabled),
 		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc, cfg.Moderation.Enabled),
 		moment:              momenthandler.NewMomentHandler(momentSvc, cfg.Moderation.Enabled),
-		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc),
+		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, moderationOperationsSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
@@ -587,6 +588,19 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 		admin.POST("/moderation/items/:id/approve", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Approve)
 		admin.POST("/moderation/items/:id/correct", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Correct)
 		admin.POST("/moderation/items/:id/reject", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Reject)
+		if handlers.moderationAdmin.OperationsEnabled() {
+			admin.GET("/moderation/control", handlers.moderationAdmin.GetControl)
+			admin.PATCH("/moderation/control", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.UpdateControl)
+			admin.GET("/moderation/users/:id", handlers.moderationAdmin.GetUserProfile)
+			admin.PATCH("/moderation/users/:id/profile", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.UpdateUserProfile)
+			admin.POST("/moderation/users/:id/mute", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.MuteUser)
+			admin.POST("/moderation/users/:id/ban", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.BanUser)
+			admin.POST("/moderation/users/:id/release", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.ReleaseUser)
+			admin.POST("/moderation/items/:id/hide", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.HideItem)
+			admin.POST("/moderation/items/:id/restore", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.RestoreItem)
+			admin.POST("/moderation/users/:id/hide-content", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.HideUserContent)
+			admin.POST("/moderation/users/:id/restore-content", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.RestoreUserContent)
+		}
 	}
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)
 	admin.DELETE("/users/:id/roles/vip", handlers.userAdmin.RevokeVip)

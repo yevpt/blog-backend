@@ -45,13 +45,18 @@ type mockCaptchaTokenConsumer struct {
 }
 
 type profileInitializerStub struct {
-	userID uint64
-	err    error
+	userID              uint64
+	err                 error
+	registrationAllowed bool
 }
 
 func (s *profileInitializerStub) EnsureNewProfile(_ context.Context, userID uint64) error {
 	s.userID = userID
 	return s.err
+}
+
+func (s *profileInitializerStub) RegistrationAllowed(context.Context) (bool, error) {
+	return s.registrationAllowed, s.err
 }
 
 func (m *mockCaptchaTokenConsumer) ConsumeRegistrationToken(token string, ip string) error {
@@ -199,7 +204,7 @@ func TestAuthService_ResetPassword_ValidCodeUpdatesPassword(t *testing.T) {
 }
 
 func TestAuthService_Register_Success(t *testing.T) {
-	initializer := &profileInitializerStub{}
+	initializer := &profileInitializerStub{registrationAllowed: true}
 	svc, repo, rdb, mr, _, _ := setupService(t, initializer)
 	defer mr.Close()
 
@@ -228,6 +233,16 @@ func TestAuthService_Register_Success(t *testing.T) {
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
 	assert.Equal(t, uint64(1), initializer.userID)
+}
+
+func TestAuthServiceRegisterRejectsWhenRegistrationClosed(t *testing.T) {
+	initializer := &profileInitializerStub{registrationAllowed: false}
+	svc, _, _, mr, _, _ := setupService(t, initializer)
+	defer mr.Close()
+
+	_, err := svc.Register(&dto.RegisterReq{Email: "new@example.com", Password: "password123", Code: "123456"}, nil)
+
+	require.ErrorIs(t, err, authservice.ErrRegistrationClosed)
 }
 
 func TestAuthService_Register_WrongCode(t *testing.T) {

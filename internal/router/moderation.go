@@ -54,6 +54,18 @@ func maybeNewModerationGovernanceService(db *gorm.DB, cfg config.ModerationConfi
 	return moderationservice.NewGovernanceService(moderationrepo.NewRepository(db), cfg.Governance, nil)
 }
 
+// maybeNewModerationOperationsService 在审核开启时组装全站治理和紧急处置服务。
+func maybeNewModerationOperationsService(
+	db *gorm.DB,
+	cfg config.ModerationConfig,
+	governance moderationservice.GovernanceService,
+) moderationservice.OperationsService {
+	if !cfg.Enabled || governance == nil {
+		return nil
+	}
+	return moderationservice.NewOperationsService(moderationrepo.NewRepository(db), governance, cfg, nil)
+}
+
 // newModerationReviewService 组装管理端人工审核服务，复用同一数据库事实源。
 
 func newModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) moderationservice.ReviewService {

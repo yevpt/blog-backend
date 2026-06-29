@@ -37,6 +37,7 @@ var (
 	// ErrDailyLimitExceeded 当日发送次数达到上限（7次），次日自动重置
 	ErrDailyLimitExceeded = errors.New("今日发送次数已达上限")
 	ErrNicknameGenFailed  = errors.New("昵称生成失败，请手动指定昵称")
+	ErrRegistrationClosed = errors.New("网站当前已暂停新用户注册")
 )
 
 // dummyHashForTimingProtection 用于用户不存在时执行无意义的 bcrypt 比对，消除响应时差。
@@ -85,6 +86,7 @@ type CaptchaTokenConsumer interface {
 // ModerationProfileInitializer 为新注册用户创建默认审核画像。
 type ModerationProfileInitializer interface {
 	EnsureNewProfile(ctx context.Context, userID uint64) error
+	RegistrationAllowed(ctx context.Context) (bool, error)
 }
 
 func NewAuthService(
@@ -249,6 +251,15 @@ func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
 
 func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
 	ctx := context.Background()
+	if s.profile != nil {
+		allowed, err := s.profile.RegistrationAllowed(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, ErrRegistrationClosed
+		}
+	}
 
 	// 从 Redis 读取存储的验证码并与用户提交值对比
 	codeKey := fmt.Sprintf("email:code:%s", req.Email)

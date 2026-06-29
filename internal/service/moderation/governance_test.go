@@ -99,21 +99,58 @@ func TestGovernanceServiceSetSanctionRejectsPastDeadline(t *testing.T) {
 	require.ErrorIs(t, err, moderation.ErrInvalidRequest)
 }
 
+func TestGovernanceServiceSetAndReleaseSanctionRecordsActor(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	until := now.Add(24 * time.Hour)
+	reason := "反复发送广告"
+	repo.EXPECT().EnsureNewProfile(gomock.Any(), uint64(42), now).Return(nil)
+	repo.EXPECT().SetSanction(gomock.Any(), moderationrepo.SetSanctionCommand{
+		UserID: 42, ActorID: 1, State: moderationrepo.SanctionMuted,
+		Until: &until, Reason: &reason, Now: now,
+	}).Return(nil)
+	repo.EXPECT().ReleaseSanction(gomock.Any(), moderationrepo.ReleaseSanctionCommand{
+		UserID: 42, ActorID: 1, Now: now,
+	}).Return(nil)
+	service := moderation.NewGovernanceService(repo, governanceConfig(), func() time.Time { return now })
+
+	require.NoError(t, service.SetSanction(context.Background(), moderation.SetSanctionCommand{
+		UserID: 42, ActorID: 1, State: moderation.SanctionMuted, Until: &until, Reason: reason,
+	}))
+	require.NoError(t, service.ReleaseSanction(context.Background(), 42, 1))
+}
+
 func TestGovernanceServiceSetTrustCreatesMissingProfileBeforeManualLock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
 	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
 	repo.EXPECT().EnsureNewProfile(gomock.Any(), uint64(42), now).Return(nil)
 	repo.EXPECT().SetTrust(gomock.Any(), moderationrepo.SetTrustCommand{
-		UserID: 42, TrustLevel: moderationrepo.TrustTrusted, ManualLocked: true, UpdatedAt: now,
+		UserID: 42, ActorID: 1, TrustLevel: moderationrepo.TrustTrusted, ManualLocked: true, UpdatedAt: now,
 	}).Return(nil)
 	service := moderation.NewGovernanceService(repo, governanceConfig(), func() time.Time { return now })
 
 	err := service.SetTrust(context.Background(), moderation.SetTrustCommand{
-		UserID: 42, TrustLevel: moderation.TrustTrusted, ManualLocked: true,
+		UserID: 42, ActorID: 1, TrustLevel: moderation.TrustTrusted, ManualLocked: true,
 	})
 
 	require.NoError(t, err)
+}
+
+func TestGovernanceServiceRegistrationAllowedUsesControlSingleton(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	repo.EXPECT().LoadControl(gomock.Any()).Return(moderationrepo.ControlRecord{
+		RegistrationMode: moderationrepo.RegistrationClosed,
+		PublishingMode:   moderationrepo.PublishingOpen,
+	}, nil)
+	service := moderation.NewGovernanceService(repo, governanceConfig(), time.Now)
+
+	allowed, err := service.RegistrationAllowed(context.Background())
+
+	require.NoError(t, err)
+	assert.False(t, allowed)
 }
 
 func TestEvaluateTrustRestrictsAndExtendsFromLatestViolation(t *testing.T) {

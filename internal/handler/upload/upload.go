@@ -82,6 +82,8 @@ func (h *Handler) TempImage(c *gin.Context) {
 			errors.Is(err, uploadservice.ErrUploadSceneInvalid),
 			errors.Is(err, uploadservice.ErrUploadInvalid):
 			response.Fail(c, response.CodeBadRequest, err.Error())
+		case errors.Is(err, uploadservice.ErrUploadForbidden):
+			response.ForbiddenWithMessage(c, err.Error())
 		default:
 			response.ServerError(c)
 		}

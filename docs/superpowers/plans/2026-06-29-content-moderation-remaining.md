@@ -141,11 +141,11 @@
 - Failure: each batch is one MySQL transaction; no half-updated item inside a committed batch.
 - Cleanup: terminal deletion remains irreversible; restore clears only the emergency snapshot fields.
 
-- [ ] Write handler/service/repository tests for profile inspection/manual correction, mute/ban/release, registration/publishing switches, single-item hide/restore, cursor-based user hide, and rejected deleted-content restore.
-- [ ] Run focused tests and confirm RED on missing routes.
-- [ ] Implement DTO-only responses, admin handlers, bounded operations, cached control reads, and explicit routes that are absent when moderation is disabled.
-- [ ] Run `make swag`, verify no `model.*` appears in Swagger, and run handler/router tests.
-- [ ] Commit with `feat(moderation): 新增审核治理与紧急处置接口`.
+- [x] Write handler/service/repository tests for profile inspection/manual correction, mute/ban/release, registration/publishing switches, single-item hide/restore, cursor-based user hide, and rejected deleted-content restore.
+- [x] Run focused tests and confirm RED on missing routes.
+- [x] Implement DTO-only responses, admin handlers, bounded operations, database fact-source control reads, and explicit routes that are absent when moderation is disabled.
+- [x] Run `make swag`, verify no `model.*` appears in Swagger, and run handler/router tests.
+- [x] Commit with `feat(moderation): 新增审核治理与紧急处置接口`.
 
 ### Task 6: Add bounded cleanup workers
 

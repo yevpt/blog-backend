@@ -609,6 +609,51 @@ definitions:
     - password
     - username
     type: object
+  dto.AdminModerationControlReq:
+    properties:
+      lock_version:
+        example: 3
+        minimum: 1
+        type: integer
+      publishing_mode:
+        enum:
+        - open
+        - pre_review_all
+        - closed
+        example: pre_review_all
+        type: string
+      reason:
+        example: 临时维护
+        type: string
+      registration_mode:
+        enum:
+        - open
+        - closed
+        example: open
+        type: string
+    required:
+    - lock_version
+    - publishing_mode
+    - registration_mode
+    type: object
+  dto.AdminModerationControlResp:
+    properties:
+      changed_at:
+        type: string
+      lock_version:
+        example: 3
+        type: integer
+      operator_id:
+        type: integer
+      publishing_mode:
+        example: open
+        type: string
+      reason:
+        type: string
+      registration_mode:
+        example: open
+        type: string
+    type: object
   dto.AdminModerationCorrectReq:
     properties:
       content:
@@ -630,6 +675,43 @@ definitions:
     - lock_version
     - reason
     - revision_id
+    type: object
+  dto.AdminModerationEmergencyBatchReq:
+    properties:
+      cursor:
+        type: integer
+      limit:
+        example: 20
+        minimum: 1
+        type: integer
+      reason:
+        type: string
+    type: object
+  dto.AdminModerationEmergencyBatchResp:
+    properties:
+      has_more:
+        type: boolean
+      next_cursor:
+        type: integer
+      processed:
+        type: integer
+    type: object
+  dto.AdminModerationEmergencyItemResp:
+    properties:
+      item_id:
+        type: integer
+      lock_version:
+        type: integer
+      public_state:
+        type: string
+    type: object
+  dto.AdminModerationEmergencyReq:
+    properties:
+      reason:
+        example: 紧急下架
+        type: string
+    required:
+    - reason
     type: object
   dto.AdminModerationItemResp:
     properties:
@@ -709,6 +791,59 @@ definitions:
         example: 12
         type: integer
     type: object
+  dto.AdminModerationProfileReq:
+    properties:
+      manual_locked:
+        type: boolean
+      restricted_until:
+        type: string
+      trust_level:
+        enum:
+        - new
+        - normal
+        - trusted
+        - restricted
+        example: trusted
+        type: string
+    required:
+    - manual_locked
+    - trust_level
+    type: object
+  dto.AdminModerationProfileResp:
+    properties:
+      clean_approval_streak:
+        type: integer
+      corrected_count:
+        type: integer
+      created_at:
+        type: string
+      high_risk_count:
+        type: integer
+      last_violation_at:
+        type: string
+      manual_trust_locked:
+        type: boolean
+      rejected_count:
+        type: integer
+      restricted_until:
+        type: string
+      sanction_reason:
+        type: string
+      sanction_state:
+        type: string
+      sanction_until:
+        type: string
+      trust_level:
+        type: string
+      trust_source:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      violation_score:
+        type: integer
+    type: object
   dto.AdminModerationReviewReq:
     properties:
       lock_version:
@@ -725,6 +860,13 @@ definitions:
     required:
     - lock_version
     - revision_id
+    type: object
+  dto.AdminModerationSanctionReq:
+    properties:
+      reason:
+        type: string
+      until:
+        type: string
     type: object
   dto.AdminModerationSubjectResp:
     properties:
@@ -4695,6 +4837,76 @@ paths:
       summary: 后台分页查询留言
       tags:
       - 后台留言
+  /admin/moderation/control:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationControlResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询全站审核控制
+      tags:
+      - 内容审核管理
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 控制状态
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationControlReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationControlResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 更新全站审核控制
+      tags:
+      - 内容审核管理
   /admin/moderation/items:
     get:
       consumes:
@@ -4882,6 +5094,53 @@ paths:
       summary: 修正并通过待审内容
       tags:
       - 内容审核管理
+  /admin/moderation/items/{id}/hide:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 审核项 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 下架理由
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationEmergencyReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationEmergencyItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 紧急隐藏单条内容
+      tags:
+      - 内容审核管理
   /admin/moderation/items/{id}/reject:
     post:
       consumes:
@@ -4927,6 +5186,314 @@ paths:
           schema:
             $ref: '#/definitions/response.Response'
       summary: 驳回待审内容
+      tags:
+      - 内容审核管理
+  /admin/moderation/items/{id}/restore:
+    post:
+      parameters:
+      - description: 审核项 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationEmergencyItemResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 恢复单条紧急隐藏内容
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}:
+    get:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationProfileResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询用户审核画像
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}/ban:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 处罚期限和理由
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationSanctionReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 封禁用户发布能力
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}/hide-content:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 游标、数量和理由
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationEmergencyBatchReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationEmergencyBatchResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分批隐藏用户公开内容
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}/mute:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 处罚期限和理由
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationSanctionReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 禁言用户
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}/profile:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 信任等级
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationProfileReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 校正用户审核等级
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}/release:
+    post:
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 解除用户审核处罚
+      tags:
+      - 内容审核管理
+  /admin/moderation/users/{id}/restore-content:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 用户 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 游标和数量
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationEmergencyBatchReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationEmergencyBatchResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 分批恢复用户紧急隐藏内容
       tags:
       - 内容审核管理
   /admin/moments:

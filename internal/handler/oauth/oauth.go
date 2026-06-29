@@ -163,6 +163,7 @@ func writeOAuthError(c *gin.Context, err error) {
 	case errors.Is(err, serviceoauth.ErrSocialIdentityBound),
 		errors.Is(err, serviceoauth.ErrSourceAlreadyBound),
 		errors.Is(err, serviceoauth.ErrLastLoginMethod),
+		errors.Is(err, serviceoauth.ErrRegistrationClosed),
 		errors.Is(err, domain.ErrInvalidAction),
 		errors.Is(err, domain.ErrInvalidState),
 		errors.Is(err, domain.ErrProviderNotEnabled),

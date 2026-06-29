@@ -82,6 +82,39 @@ var _ articleservice.ArticleService = (*stubArticleServiceForRouter)(nil)
 
 type moderationReviewStub struct{}
 
+type moderationOperationsStub struct{}
+
+func (moderationOperationsStub) GetControl(context.Context) (moderationservice.Control, error) {
+	return moderationservice.Control{}, nil
+}
+func (moderationOperationsStub) UpdateControl(context.Context, moderationservice.UpdateControlCommand) (moderationservice.Control, error) {
+	return moderationservice.Control{}, nil
+}
+func (moderationOperationsStub) HideItem(context.Context, moderationservice.EmergencyItemCommand) (moderationservice.EmergencyItemResult, error) {
+	return moderationservice.EmergencyItemResult{}, nil
+}
+func (moderationOperationsStub) RestoreItem(context.Context, moderationservice.EmergencyItemCommand) (moderationservice.EmergencyItemResult, error) {
+	return moderationservice.EmergencyItemResult{}, nil
+}
+func (moderationOperationsStub) HideUserContent(context.Context, moderationservice.UserEmergencyBatchCommand) (moderationservice.EmergencyBatchResult, error) {
+	return moderationservice.EmergencyBatchResult{}, nil
+}
+func (moderationOperationsStub) RestoreUserContent(context.Context, moderationservice.UserEmergencyBatchCommand) (moderationservice.EmergencyBatchResult, error) {
+	return moderationservice.EmergencyBatchResult{}, nil
+}
+func (moderationOperationsStub) GetUserProfile(context.Context, uint64) (moderationservice.UserModerationProfile, error) {
+	return moderationservice.UserModerationProfile{}, nil
+}
+func (moderationOperationsStub) SetUserTrust(context.Context, moderationservice.SetTrustCommand) error {
+	return nil
+}
+func (moderationOperationsStub) SetUserSanction(context.Context, moderationservice.SetSanctionCommand) error {
+	return nil
+}
+func (moderationOperationsStub) ReleaseUserSanction(context.Context, uint64, uint64) error {
+	return nil
+}
+
 func (moderationReviewStub) List(context.Context, moderationservice.ListReviewCommand) (moderationservice.ReviewPage, error) {
 	return moderationservice.ReviewPage{}, nil
 }
@@ -226,15 +259,26 @@ func TestRegisterAdminRoutesRegistersModerationReviewRoutes(t *testing.T) {
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
 	registerAdminRoutes(r, routeHandlers{
-		moderationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}),
+		moderationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}, moderationOperationsStub{}),
 	}, jwtManager, nil)
 
 	want := map[string]string{
-		"GET /admin/moderation/items":              "",
-		"GET /admin/moderation/items/:id":          "",
-		"POST /admin/moderation/items/:id/approve": "",
-		"POST /admin/moderation/items/:id/correct": "",
-		"POST /admin/moderation/items/:id/reject":  "",
+		"GET /admin/moderation/items":                      "",
+		"GET /admin/moderation/items/:id":                  "",
+		"POST /admin/moderation/items/:id/approve":         "",
+		"POST /admin/moderation/items/:id/correct":         "",
+		"POST /admin/moderation/items/:id/reject":          "",
+		"GET /admin/moderation/control":                    "",
+		"PATCH /admin/moderation/control":                  "",
+		"GET /admin/moderation/users/:id":                  "",
+		"PATCH /admin/moderation/users/:id/profile":        "",
+		"POST /admin/moderation/items/:id/hide":            "",
+		"POST /admin/moderation/items/:id/restore":         "",
+		"POST /admin/moderation/users/:id/mute":            "",
+		"POST /admin/moderation/users/:id/ban":             "",
+		"POST /admin/moderation/users/:id/release":         "",
+		"POST /admin/moderation/users/:id/hide-content":    "",
+		"POST /admin/moderation/users/:id/restore-content": "",
 	}
 	for _, route := range r.Routes() {
 		key := route.Method + " " + route.Path

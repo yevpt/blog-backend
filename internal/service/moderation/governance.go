@@ -37,6 +37,7 @@ type UserModerationProfile struct {
 // SetTrustCommand 是管理员校正用户信任等级的命令。
 type SetTrustCommand struct {
 	UserID          uint64
+	ActorID         uint64
 	TrustLevel      TrustLevel
 	ManualLocked    bool
 	RestrictedUntil *time.Time
@@ -44,19 +45,22 @@ type SetTrustCommand struct {
 
 // SetSanctionCommand 是管理员设置禁言或封禁的命令。
 type SetSanctionCommand struct {
-	UserID uint64
-	State  SanctionState
-	Until  *time.Time
-	Reason string
+	UserID  uint64
+	ActorID uint64
+	State   SanctionState
+	Until   *time.Time
+	Reason  string
 }
 
 // GovernanceService 管理轻量信任等级和管理员处罚。
 type GovernanceService interface {
 	EnsureNewProfile(ctx context.Context, userID uint64) error
+	RegistrationAllowed(ctx context.Context) (bool, error)
+	PublishingAllowed(ctx context.Context, userID uint64) (bool, error)
 	GetProfile(ctx context.Context, userID uint64) (UserModerationProfile, error)
 	SetTrust(ctx context.Context, cmd SetTrustCommand) error
 	SetSanction(ctx context.Context, cmd SetSanctionCommand) error
-	ReleaseSanction(ctx context.Context, userID uint64) error
+	ReleaseSanction(ctx context.Context, userID, actorID uint64) error
 }
 
 type governanceService struct {
@@ -79,6 +83,27 @@ func (s *governanceService) EnsureNewProfile(ctx context.Context, userID uint64)
 		return ErrInvalidRequest
 	}
 	return s.repo.EnsureNewProfile(ctx, userID, s.now())
+}
+
+// RegistrationAllowed 返回当前全站注册开关；数据库是唯一事实源。
+func (s *governanceService) RegistrationAllowed(ctx context.Context) (bool, error) {
+	control, err := s.repo.LoadControl(ctx)
+	if err != nil {
+		return false, err
+	}
+	return control.RegistrationMode == moderationrepo.RegistrationOpen, nil
+}
+
+// PublishingAllowed 判断用户处罚和全站开关是否允许创建待发布资源。
+func (s *governanceService) PublishingAllowed(ctx context.Context, userID uint64) (bool, error) {
+	if userID == 0 {
+		return false, ErrInvalidRequest
+	}
+	policy, err := s.repo.LoadPolicyContext(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return policy.SanctionState == moderationrepo.SanctionActive && policy.PublishingMode != moderationrepo.PublishingClosed, nil
 }
 
 // GetProfile 读取画像、释放到期限制，并持久化本次自动等级计算。
@@ -125,7 +150,7 @@ func governanceConfigured(cfg config.ModerationGovernanceConfig) bool {
 
 // SetTrust 保存管理员校正；手工锁定后自动规则不会覆盖该等级。
 func (s *governanceService) SetTrust(ctx context.Context, cmd SetTrustCommand) error {
-	if cmd.UserID == 0 || !validServiceTrust(cmd.TrustLevel) {
+	if cmd.UserID == 0 || cmd.ActorID == 0 || !validServiceTrust(cmd.TrustLevel) {
 		return ErrInvalidRequest
 	}
 	if cmd.TrustLevel != TrustRestricted {
@@ -136,7 +161,7 @@ func (s *governanceService) SetTrust(ctx context.Context, cmd SetTrustCommand) e
 		return err
 	}
 	return s.repo.SetTrust(ctx, moderationrepo.SetTrustCommand{
-		UserID: cmd.UserID, TrustLevel: moderationrepo.TrustLevel(cmd.TrustLevel),
+		UserID: cmd.UserID, ActorID: cmd.ActorID, TrustLevel: moderationrepo.TrustLevel(cmd.TrustLevel),
 		ManualLocked: cmd.ManualLocked, RestrictedUntil: cmd.RestrictedUntil, UpdatedAt: now,
 	})
 }
@@ -144,7 +169,7 @@ func (s *governanceService) SetTrust(ctx context.Context, cmd SetTrustCommand) e
 // SetSanction 设置禁言或封禁；过去的截止时间会被拒绝。
 func (s *governanceService) SetSanction(ctx context.Context, cmd SetSanctionCommand) error {
 	now := s.now()
-	if cmd.UserID == 0 || (cmd.State != SanctionMuted && cmd.State != SanctionBanned) ||
+	if cmd.UserID == 0 || cmd.ActorID == 0 || (cmd.State != SanctionMuted && cmd.State != SanctionBanned) ||
 		(cmd.Until != nil && !cmd.Until.After(now)) {
 		return ErrInvalidRequest
 	}
@@ -157,17 +182,17 @@ func (s *governanceService) SetSanction(ctx context.Context, cmd SetSanctionComm
 		reasonPtr = &reason
 	}
 	return s.repo.SetSanction(ctx, moderationrepo.SetSanctionCommand{
-		UserID: cmd.UserID, State: moderationrepo.SanctionState(cmd.State),
+		UserID: cmd.UserID, ActorID: cmd.ActorID, State: moderationrepo.SanctionState(cmd.State),
 		Until: cmd.Until, Reason: reasonPtr, Now: now,
 	})
 }
 
 // ReleaseSanction 立即解除用户处罚。
-func (s *governanceService) ReleaseSanction(ctx context.Context, userID uint64) error {
-	if userID == 0 {
+func (s *governanceService) ReleaseSanction(ctx context.Context, userID, actorID uint64) error {
+	if userID == 0 || actorID == 0 {
 		return ErrInvalidRequest
 	}
-	return s.repo.ReleaseSanction(ctx, userID, s.now())
+	return s.repo.ReleaseSanction(ctx, moderationrepo.ReleaseSanctionCommand{UserID: userID, ActorID: actorID, Now: s.now()})
 }
 
 // EvaluateTrust 根据当前画像和配置计算自动信任等级；管理员锁定的等级保持不变。

@@ -5,9 +5,9 @@ import (
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 )
 
-func newModerationAdminHandler(svc moderationservice.ReviewService) *moderationhandler.AdminHandler {
+func newModerationAdminHandler(svc moderationservice.ReviewService, operations moderationservice.OperationsService) *moderationhandler.AdminHandler {
 	if svc == nil {
 		return nil
 	}
-	return moderationhandler.NewAdminHandler(svc)
+	return moderationhandler.NewAdminHandler(svc, operations)
 }

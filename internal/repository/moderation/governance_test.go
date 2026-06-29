@@ -85,6 +85,22 @@ func TestSetAutomaticTrustDoesNotOverrideManualLock(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestSetTrustWritesAuditLogInSameTransaction(t *testing.T) {
+	repository, mock := newRepository(t)
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `user_moderation_profile` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO `moderation_action_log`").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	err := repository.SetTrust(context.Background(), moderation.SetTrustCommand{
+		UserID: 42, ActorID: 1, TrustLevel: moderation.TrustTrusted,
+		ManualLocked: true, UpdatedAt: fixedTime,
+	})
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func profileRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
 		"user_id", "trust_level", "trust_source", "manual_trust_locked",
