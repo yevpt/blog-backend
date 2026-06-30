@@ -41,19 +41,19 @@ type reviewRecordRow struct {
 
 const reviewRecordSelect = "moderation_item.id AS item_id, moderation_item.content_type, moderation_item.content_id, moderation_item.author_id, moderation_item.lock_version, moderation_item.lifecycle_state, moderation_item.public_state, moderation_item.materialized_revision_id, moderation_item.approved_revision_id, moderation_item.pending_revision_id, moderation_item.state_before_emergency, moderation_item.emergency_hidden_reason, moderation_item.emergency_hidden_at, moderation_item.deleted_at, moderation_revision.id AS revision_id, moderation_revision.version AS revision_version, moderation_revision.submitted_content, moderation_revision.published_content, moderation_revision.risk_level, moderation_revision.policy_action, moderation_revision.review_status, moderation_revision.moment_status, moderation_revision.moment_comment_status, moderation_revision.decision_type, moderation_revision.decision_reason, moderation_revision.reviewer_id, moderation_revision.reviewed_at, moderation_revision.created_at"
 
-// ListReviewRecords 分页返回符合条件的审核版本，不在列表阶段读取业务关系。
+// ListReviewRecords 分页返回每个审核项的当前版本，不在列表阶段读取业务关系。
 func (r *repository) ListReviewRecords(ctx context.Context, filter ReviewFilter) (ReviewPage, error) {
 	if err := validateReviewFilter(filter); err != nil {
 		return ReviewPage{}, err
 	}
-	query := applyReviewFilter(r.reviewQuery(ctx), filter)
+	query := applyReviewFilter(r.currentReviewQuery(ctx), filter)
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		return ReviewPage{}, err
 	}
 	var rows []reviewRecordRow
 	offset := (filter.Page - 1) * filter.PageSize
-	if err := applyReviewFilter(r.reviewQuery(ctx), filter).
+	if err := applyReviewFilter(r.currentReviewQuery(ctx), filter).
 		Select(reviewRecordSelect).
 		Order("moderation_revision.created_at DESC,moderation_revision.id DESC").
 		Offset(offset).Limit(filter.PageSize).Scan(&rows).Error; err != nil {
@@ -134,6 +134,16 @@ func (r *repository) LoadCurrentReviewRecord(ctx context.Context, itemID uint64)
 func (r *repository) reviewQuery(ctx context.Context) *gorm.DB {
 	return r.db.WithContext(ctx).Table("moderation_revision").
 		Joins("JOIN moderation_item ON moderation_item.id = moderation_revision.item_id")
+}
+
+func (r *repository) currentReviewQuery(ctx context.Context) *gorm.DB {
+	return r.db.WithContext(ctx).Table("moderation_item").
+		Joins(`JOIN moderation_revision ON moderation_revision.id = COALESCE(
+			moderation_item.pending_revision_id,
+			(SELECT latest.id FROM moderation_revision AS latest
+			 WHERE latest.item_id = moderation_item.id
+			 ORDER BY latest.version DESC LIMIT 1)
+		)`)
 }
 
 func applyReviewFilter(query *gorm.DB, filter ReviewFilter) *gorm.DB {

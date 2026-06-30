@@ -12,10 +12,10 @@ import (
 
 func TestListReviewRecordsReturnsPendingRevisionAndMomentOptions(t *testing.T) {
 	repository, mock := newRepository(t)
-	mock.ExpectQuery("SELECT count\\(\\*\\) FROM `moderation_revision` JOIN moderation_item").
+	mock.ExpectQuery("SELECT count\\(\\*\\) " + currentRevisionJoinPattern).
 		WithArgs(moderation.ReviewPending).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
-	mock.ExpectQuery("SELECT .* FROM `moderation_revision` JOIN moderation_item.*ORDER BY moderation_revision.created_at DESC,moderation_revision.id DESC LIMIT \\?").
+	mock.ExpectQuery("SELECT .* "+currentRevisionJoinPattern+".*ORDER BY moderation_revision.created_at DESC,moderation_revision.id DESC LIMIT \\?").
 		WithArgs(moderation.ReviewPending, 20).
 		WillReturnRows(reviewRecordRows().AddRow(
 			uint64(10), "moment", uint64(7), uint64(42), uint64(3), "active", "placeholder",
@@ -35,6 +35,27 @@ func TestListReviewRecordsReturnsPendingRevisionAndMomentOptions(t *testing.T) {
 	assert.Equal(t, uint64(20), item.RevisionID)
 	require.NotNil(t, item.MomentOptions)
 	assert.Equal(t, moderation.MomentOptions{Status: 1, CommentStatus: 0}, *item.MomentOptions)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListReviewRecordsReturnsCurrentRevision(t *testing.T) {
+	repository, mock := newRepository(t)
+	mock.ExpectQuery("SELECT count\\(\\*\\) " + currentRevisionJoinPattern).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT .* " + currentRevisionJoinPattern + ".*ORDER BY moderation_revision.created_at DESC,moderation_revision.id DESC LIMIT \\?").
+		WithArgs(20).
+		WillReturnRows(reviewRecordRows().AddRow(
+			uint64(10), "moment", uint64(7), uint64(42), uint64(3), "active", "visible",
+			uint64(11), uint64(11), uint64(13), nil, nil, nil, nil, uint64(13), uint64(3), "当前待审原文", "当前待审正文",
+			"medium", "pre_review", "pending", uint8(1), uint8(1), nil, nil, nil, nil, fixedTime,
+		))
+
+	page, err := repository.ListReviewRecords(context.Background(), moderation.ReviewFilter{Page: 1, PageSize: 20})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), page.Total)
+	require.Len(t, page.Items, 1)
+	assert.Equal(t, uint64(13), page.Items[0].RevisionID)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -99,3 +120,5 @@ func reviewRecordRows() *sqlmock.Rows {
 func reviewStatusPtr(status moderation.ReviewStatus) *moderation.ReviewStatus {
 	return &status
 }
+
+const currentRevisionJoinPattern = "FROM `moderation_item` JOIN moderation_revision ON moderation_revision.id = COALESCE\\(.*moderation_item.pending_revision_id,.*\\(SELECT latest.id FROM moderation_revision AS latest WHERE latest.item_id = moderation_item.id ORDER BY latest.version DESC LIMIT 1\\).*\\)"
