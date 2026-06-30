@@ -9,13 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestWriteCSVTemplateContainsHeaderAndExample(t *testing.T) {
+func TestCSVTemplateContainsCompleteHeaderWithoutImportableRows(t *testing.T) {
 	var buf bytes.Buffer
 	require.NoError(t, WriteCSVTemplate(&buf))
 	output := buf.String()
 	assert.Contains(t, output, "#")
-	assert.Contains(t, output, "pattern,category,risk_level,effect,priority")
-	assert.Contains(t, output, "示例关键词请删除")
+	assert.Contains(t, output, "name,rule_type,pattern,category,effect,risk_level,priority")
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	require.NotEmpty(t, lines)
+	assert.Equal(t, "name,rule_type,pattern,category,effect,risk_level,priority", lines[len(lines)-1])
 }
 
 func TestWriteTXTTemplateContainsOnlyComments(t *testing.T) {

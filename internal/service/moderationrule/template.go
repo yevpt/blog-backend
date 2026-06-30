@@ -6,16 +6,16 @@ import (
 	"io"
 )
 
-// WriteCSVTemplate 写入带 # 说明行、标准表头和一条禁用示例的 CSV 模板。
+// WriteCSVTemplate 写入带 # 说明行和标准表头的 CSV 模板。
 // 模板不得包含会被误发布的真实敏感词。
 func WriteCSVTemplate(w io.Writer) error {
 	lines := []string{
 		"# 审核规则导入模板",
-		"# 列说明：pattern(必填) category risk_level effect priority",
-		"# pattern 为关键词文本，其余列可留空使用上传表单缺省值",
-		"# 示例行已禁用，请删除或替换后再上传",
-		"# pattern,category,risk_level,effect,priority",
-		"示例关键词请删除,other,medium,review,100",
+		"# 列说明：name rule_type pattern category effect risk_level priority",
+		"# keyword 示例：名称,keyword,关键词,other,review,medium,100",
+		"# regexp 示例：名称,regexp,^pattern$,other,review,high,100",
+		"# composite 示例：名称,composite,信号一&&信号二,other,review,high,100",
+		"name,rule_type,pattern,category,effect,risk_level,priority",
 	}
 	for _, line := range lines {
 		if _, err := fmt.Fprintln(w, line); err != nil {

@@ -34,6 +34,51 @@ func TestCSVParserAppliesDefaultsForMissingColumns(t *testing.T) {
 	assert.Equal(t, "review", rows[0].Effect)
 }
 
+func TestParseCSVSupportsAllRuleTypesAndCompleteFields(t *testing.T) {
+	input := strings.Join([]string{
+		"name,rule_type,pattern,category,effect,risk_level,priority",
+		"关键词,keyword,风险词,fraud,review,medium,10",
+		"正则,regexp,^risk-[0-9]+$,other,review,high,20",
+		"组合,composite,信号一&&信号二,abuse,review,low,30",
+		"默认类型,,普通词,other,allow,low,40",
+	}, "\n") + "\n"
+
+	rows, errs := parseCSV(strings.NewReader(input), testDefaults(), 1000)
+
+	require.Empty(t, errs)
+	require.Len(t, rows, 4)
+	require.NotNil(t, rows[0].Name)
+	assert.Equal(t, "关键词", *rows[0].Name)
+	assert.Equal(t, "keyword", rows[0].RuleType)
+	assert.Equal(t, int32(10), rows[0].Priority)
+	assert.Equal(t, "regexp", rows[1].RuleType)
+	assert.Equal(t, "composite", rows[2].RuleType)
+	assert.Equal(t, "keyword", rows[3].RuleType)
+}
+
+func TestParseCSVReportsRuleValidationErrorsWithLineNumbers(t *testing.T) {
+	input := strings.Join([]string{
+		"name,rule_type,pattern,category,effect,risk_level,priority",
+		"坏正则,regexp,[,other,review,medium,100",
+		"单信号,composite,只有一个,other,review,medium,100",
+		"放行正则,regexp,^allow$,other,allow,low,100",
+		"坏优先级,keyword,词,other,review,low,abc",
+	}, "\n") + "\n"
+
+	rows, parseErrs := parseCSV(strings.NewReader(input), testDefaults(), 1000)
+
+	require.Len(t, parseErrs, 1)
+	assert.Equal(t, 5, parseErrs[0].LineNumber)
+	assert.Equal(t, "priority", parseErrs[0].Field)
+	assert.Equal(t, "invalid_priority", parseErrs[0].Code)
+	require.Len(t, rows, 3)
+	for i, expectedLine := range []int{2, 3, 4} {
+		errs := validateParsedRow(testManagerConfig(), rows[i])
+		require.NotEmpty(t, errs)
+		assert.Equal(t, expectedLine, errs[0].LineNumber)
+	}
+}
+
 func TestCSVParserRejectsMissingPatternHeader(t *testing.T) {
 	input := "category,risk_level\nother,medium\n"
 	_, errs := parseCSV(strings.NewReader(input), testDefaults(), 1000)
@@ -71,16 +116,16 @@ func TestTXTParserUsesDefaultsForAllFields(t *testing.T) {
 }
 
 func TestValidateParsedRowRejectsInvalidCategory(t *testing.T) {
-	row := ParsedRow{LineNumber: 1, Pattern: "词", Category: "invalid", Effect: "review", RiskLevel: "medium"}
-	errs := validateParsedRow(row, 500)
+	row := ParsedRow{LineNumber: 1, RuleType: "keyword", Pattern: "词", Category: "invalid", Effect: "review", RiskLevel: "medium", Priority: 100}
+	errs := validateParsedRow(testManagerConfig(), row)
 	require.NotEmpty(t, errs)
 	assert.Equal(t, "invalid_category", errs[0].Code)
 }
 
 func TestValidateParsedRowRejectsLongPattern(t *testing.T) {
 	long := strings.Repeat("a", 501)
-	row := ParsedRow{LineNumber: 1, Pattern: long, Category: "other", Effect: "review", RiskLevel: "medium"}
-	errs := validateParsedRow(row, 500)
+	row := ParsedRow{LineNumber: 1, RuleType: "keyword", Pattern: long, Category: "other", Effect: "review", RiskLevel: "medium", Priority: 100}
+	errs := validateParsedRow(testManagerConfig(), row)
 	require.NotEmpty(t, errs)
 	assert.Equal(t, "pattern_too_long", errs[0].Code)
 }
@@ -140,6 +185,10 @@ func testDefaults() ImportDefaults {
 		RiskLevel: "medium",
 		Priority:  100,
 	}
+}
+
+func testManagerConfig() ManagerConfig {
+	return ManagerConfig{MaxPatternChars: 500}
 }
 
 func testImportRecord() repoMod.ImportRecord {

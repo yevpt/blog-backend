@@ -97,7 +97,7 @@ func (m *manager) validateImport(ctx context.Context, imp repoMod.ImportRecord) 
 	// 逐行校验枚举和长度，收集有效行的摘要。
 	for _, row := range rows {
 		result.totalRows++
-		rowErrs := validateParsedRow(row, m.cfg.MaxPatternChars)
+		rowErrs := validateParsedRow(m.cfg, row)
 		for _, e := range rowErrs {
 			_ = errorWriter.Write([]string{fmt.Sprintf("%d", e.LineNumber), e.Field, e.Value, e.Code, e.Message})
 			result.errorRows++
@@ -107,7 +107,7 @@ func (m *manager) validateImport(ctx context.Context, imp repoMod.ImportRecord) 
 		}
 
 		// 计算去重摘要。
-		hash, _ := computeDedupeHash(row.Effect, "keyword", row.Pattern)
+		hash, _ := computeDedupeHash(row.Effect, row.RuleType, row.Pattern)
 		if existingLine, exists := fileHashes[hash]; exists {
 			_ = errorWriter.Write([]string{fmt.Sprintf("%d", row.LineNumber), "pattern", row.Pattern, "duplicate_in_file", fmt.Sprintf("与第 %d 行重复", existingLine)})
 			result.duplicateRows++
@@ -198,9 +198,10 @@ func (m *manager) createCandidateFromImport(ctx context.Context, imp repoMod.Imp
 	// 构建 RuleDraft 切片。
 	drafts := make([]repoMod.RuleDraft, 0, len(rows))
 	for _, row := range rows {
-		hash, _ := computeDedupeHash(row.Effect, "keyword", row.Pattern)
+		hash, _ := computeDedupeHash(row.Effect, row.RuleType, row.Pattern)
 		drafts = append(drafts, repoMod.RuleDraft{
-			RuleType:   "keyword",
+			Name:       row.Name,
+			RuleType:   row.RuleType,
 			Pattern:    row.Pattern,
 			DedupeHash: hash,
 			Category:   row.Category,

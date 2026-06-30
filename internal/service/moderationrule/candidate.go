@@ -263,6 +263,9 @@ func inputToDraft(input RuleInput, hash repoMod.DedupeHash) repoMod.RuleDraft {
 
 // validateRuleInput 校验规则内容的安全边界。
 func validateRuleInput(cfg ManagerConfig, input RuleInput) error {
+	if input.Name != nil && utf8.RuneCountInString(strings.TrimSpace(*input.Name)) > 100 {
+		return fmt.Errorf("%w: 名称超过 100 字符", ErrInvalidRule)
+	}
 	if err := validateRuleType(input.RuleType); err != nil {
 		return err
 	}

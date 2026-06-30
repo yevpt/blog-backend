@@ -3,15 +3,16 @@ package moderationrule
 import (
 	"bufio"
 	"encoding/csv"
-	"fmt"
 	"io"
+	"strconv"
 	"strings"
-	"unicode/utf8"
 )
 
 // ParsedRow 是单行解析结果，字段按行值优先、缺省值兜底。
 type ParsedRow struct {
 	LineNumber int
+	Name       *string
+	RuleType   string
 	Pattern    string
 	Category   string
 	Effect     string
@@ -109,12 +110,9 @@ func parseTXT(r io.Reader, defaults ImportDefaults, maxRows int) ([]ParsedRow, [
 		if maxRows > 0 && len(rows) >= maxRows {
 			break
 		}
-		if utf8.RuneCountInString(line) > 500 {
-			errs = append(errs, RowError{LineNumber: lineNumber, Field: "pattern", Value: line, Code: "pattern_too_long", Message: "关键词超过 500 字符"})
-			continue
-		}
 		rows = append(rows, ParsedRow{
 			LineNumber: lineNumber,
+			RuleType:   "keyword",
 			Pattern:    line,
 			Category:   defaults.Category,
 			Effect:     defaults.Effect,
@@ -140,10 +138,21 @@ func applyCsvRow(record []string, colIndex map[string]int, defaults ImportDefaul
 	var errs []RowError
 	row := ParsedRow{
 		LineNumber: lineNumber,
+		RuleType:   "keyword",
 		Category:   defaults.Category,
 		Effect:     defaults.Effect,
 		RiskLevel:  defaults.RiskLevel,
 		Priority:   defaults.Priority,
+	}
+	if idx, ok := colIndex["name"]; ok && idx < len(record) {
+		if value := strings.TrimSpace(record[idx]); value != "" {
+			row.Name = &value
+		}
+	}
+	if idx, ok := colIndex["rule_type"]; ok && idx < len(record) {
+		if value := strings.TrimSpace(strings.ToLower(record[idx])); value != "" {
+			row.RuleType = value
+		}
 	}
 
 	if idx, ok := colIndex["pattern"]; ok && idx < len(record) {
@@ -168,28 +177,73 @@ func applyCsvRow(record []string, colIndex map[string]int, defaults ImportDefaul
 			row.RiskLevel = val
 		}
 	}
+	if idx, ok := colIndex["priority"]; ok && idx < len(record) {
+		if value := strings.TrimSpace(record[idx]); value != "" {
+			priority, err := strconv.ParseInt(value, 10, 32)
+			if err != nil {
+				errs = append(errs, RowError{LineNumber: lineNumber, Field: "priority", Value: value, Code: "invalid_priority", Message: "优先级必须是 32 位整数"})
+			} else {
+				row.Priority = int32(priority)
+			}
+		}
+	}
 
 	return row, errs
 }
 
-// validateParsedRow 校验单行内容的枚举和长度约束。
-func validateParsedRow(row ParsedRow, maxPatternChars int) []RowError {
-	var errs []RowError
-	if row.Pattern == "" {
-		errs = append(errs, RowError{LineNumber: row.LineNumber, Field: "pattern", Code: "pattern_empty", Message: "模式不能为空"})
-	} else if utf8.RuneCountInString(row.Pattern) > maxPatternChars {
-		errs = append(errs, RowError{LineNumber: row.LineNumber, Field: "pattern", Value: row.Pattern, Code: "pattern_too_long", Message: fmt.Sprintf("模式超过 %d 字符", maxPatternChars)})
+// validateParsedRow 复用单条规则校验，并将错误定位到导入行。
+func validateParsedRow(cfg ManagerConfig, row ParsedRow) []RowError {
+	err := validateRuleInput(cfg, RuleInput{
+		Name: row.Name, RuleType: row.RuleType, Pattern: row.Pattern, Category: row.Category,
+		Effect: row.Effect, RiskLevel: row.RiskLevel, Priority: row.Priority, SourceID: 1,
+	})
+	if err == nil {
+		return nil
 	}
-	if !isValidCategory(row.Category) {
-		errs = append(errs, RowError{LineNumber: row.LineNumber, Field: "category", Value: row.Category, Code: "invalid_category", Message: "分类无效"})
+	field, code := classifyRuleValidationError(err)
+	return []RowError{{LineNumber: row.LineNumber, Field: field, Value: parsedRowFieldValue(row, field), Code: code, Message: err.Error()}}
+}
+
+func classifyRuleValidationError(err error) (string, string) {
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "规则类型"):
+		return "rule_type", "invalid_rule_type"
+	case strings.Contains(message, "分类"):
+		return "category", "invalid_category"
+	case strings.Contains(message, "规则效果"), strings.Contains(message, "allow"):
+		return "effect", "invalid_effect"
+	case strings.Contains(message, "风险等级"):
+		return "risk_level", "invalid_risk_level"
+	case strings.Contains(message, "名称"):
+		return "name", "invalid_name"
+	case strings.Contains(message, "正则编译"):
+		return "pattern", "invalid_regexp"
+	case strings.Contains(message, "组合"):
+		return "pattern", "invalid_composite"
+	case strings.Contains(message, "超过"):
+		return "pattern", "pattern_too_long"
+	default:
+		return "pattern", "invalid_pattern"
 	}
-	if !isValidEffect(row.Effect) {
-		errs = append(errs, RowError{LineNumber: row.LineNumber, Field: "effect", Value: row.Effect, Code: "invalid_effect", Message: "规则效果无效"})
+}
+
+func parsedRowFieldValue(row ParsedRow, field string) string {
+	switch field {
+	case "name":
+		if row.Name != nil {
+			return *row.Name
+		}
+	case "rule_type":
+		return row.RuleType
+	case "category":
+		return row.Category
+	case "effect":
+		return row.Effect
+	case "risk_level":
+		return row.RiskLevel
 	}
-	if !isValidRiskLevel(row.RiskLevel) {
-		errs = append(errs, RowError{LineNumber: row.LineNumber, Field: "risk_level", Value: row.RiskLevel, Code: "invalid_risk_level", Message: "风险等级无效"})
-	}
-	return errs
+	return row.Pattern
 }
 
 func isValidCategory(value string) bool {
