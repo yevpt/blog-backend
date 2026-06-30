@@ -51,7 +51,7 @@ func (s *momentService) prepareModerationMomentImages(
 			return nil, ErrMomentImageInvalid
 		}
 		key := momentImageObjectKey(req.ImageURLs[index])
-		if key == "" {
+		if key == "" || !momentImageObjectOwnedByUser(key, authorID) {
 			return nil, ErrMomentImageInvalid
 		}
 		exists, existsErr := store.ObjectExists(ctx, key)
@@ -166,7 +166,7 @@ func (s *momentService) prepareMomentImages(ctx context.Context, moment model.Mo
 	}
 
 	for _, rawURL := range req.ImageURLs {
-		image, err := existingMomentImage(ctx, store, rawURL, uint(len(images)+1))
+		image, err := existingMomentImage(ctx, store, rawURL, moment.UserID, uint(len(images)+1))
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +214,7 @@ func (s *momentService) prepareOrderedMomentImages(
 				return nil, ErrMomentImageInvalid
 			}
 			seenURLs[index] = struct{}{}
-			image, err := existingMomentImage(ctx, store, req.ImageURLs[index], uint(len(images)+1))
+			image, err := existingMomentImage(ctx, store, req.ImageURLs[index], moment.UserID, uint(len(images)+1))
 			if err != nil {
 				return nil, err
 			}
@@ -275,12 +275,15 @@ func (s *momentService) momentObjectStore() (storage.ObjectStore, error) {
 	return store, nil
 }
 
-func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL string, seq uint) (model.Media, error) {
+func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL string, userID, seq uint) (model.Media, error) {
 	key := momentImageObjectKey(rawURL)
 	if key == "" {
 		if strings.TrimSpace(rawURL) == "" {
 			return model.Media{}, nil
 		}
+		return model.Media{}, ErrMomentImageInvalid
+	}
+	if !momentImageObjectOwnedByUser(key, userID) {
 		return model.Media{}, ErrMomentImageInvalid
 	}
 	exists, err := store.ObjectExists(ctx, key)
@@ -355,7 +358,7 @@ func (s *momentService) deleteUploadedMomentImages(ctx context.Context, uploaded
 	return cleanupErr
 }
 
-func (s *momentService) deleteRemovedMomentImages(ctx context.Context, urls []string) error {
+func (s *momentService) deleteRemovedMomentImages(ctx context.Context, userID, momentID uint, urls []string) error {
 	if len(urls) == 0 {
 		return nil
 	}
@@ -368,7 +371,7 @@ func (s *momentService) deleteRemovedMomentImages(ctx context.Context, urls []st
 	seen := map[string]struct{}{}
 	for _, rawURL := range urls {
 		key := momentImageObjectKey(rawURL)
-		if key == "" {
+		if key == "" || !momentImageObjectBelongsToMoment(key, userID, momentID) {
 			continue
 		}
 		if _, exists := seen[key]; exists {
@@ -390,10 +393,16 @@ type processedMomentImage struct {
 
 func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, error) {
 	if isMomentGifFile(file) {
-		if len(file.Data) > maxMomentGifOriginal {
+		validated, err := imagefile.Validate(file.Name, file.Data, maxMomentGifOriginal)
+		if errors.Is(err, imagefile.ErrImageTooLarge) {
 			return processedMomentImage{}, newMomentImageInvalidError(momentGifTooLargeMessage)
 		}
-		return processedMomentImage{Data: file.Data, ContentType: "image/gif", Ext: ".gif"}, nil
+		if err != nil || validated.ContentType != "image/gif" {
+			return processedMomentImage{}, newMomentImageInvalidError(
+				"图片无法读取，请确认文件未损坏，并尝试换一张 " + momentImageReadableFormatsText,
+			)
+		}
+		return processedMomentImage{Data: validated.Data, ContentType: validated.ContentType, Ext: validated.Ext}, nil
 	}
 
 	if len(file.Data) > maxMomentImageOriginal {
@@ -460,6 +469,20 @@ func uploadedMomentImageObjectName(moment model.Moment, image processedMomentIma
 func fileMD5(data []byte) string {
 	sum := md5.Sum(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func momentImageObjectOwnedByUser(key string, userID uint) bool {
+	if userID == 0 || key == "" {
+		return false
+	}
+	return strings.HasPrefix(key, fmt.Sprintf("%s%d/", momentImageObjectPrefix, userID))
+}
+
+func momentImageObjectBelongsToMoment(key string, userID, momentID uint) bool {
+	if userID == 0 || momentID == 0 || key == "" {
+		return false
+	}
+	return strings.HasPrefix(key, fmt.Sprintf("%s%d/%d/", momentImageObjectPrefix, userID, momentID))
 }
 
 func momentImageObjectKey(value string) string {

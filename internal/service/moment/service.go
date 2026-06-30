@@ -165,7 +165,7 @@ func (s *momentService) Save(req dto.MomentSaveReq, operatorID uint, roleNames [
 		return nil, mapRepoError(err)
 	}
 	rollbackUploaded = false
-	if err := s.deleteRemovedMomentImages(context.Background(), removedURLs); err != nil {
+	if err := s.deleteRemovedMomentImages(context.Background(), aggregate.Moment.UserID, aggregate.Moment.ID, removedURLs); err != nil {
 		return nil, err
 	}
 	return s.momentToDTO(*aggregate, nil, nil)
@@ -190,7 +190,7 @@ func (s *momentService) Delete(id uint, operatorID uint, roleNames []string) (*d
 		return nil, mapRepoError(err)
 	}
 	urls := mediaURLs(images)
-	if err := s.deleteRemovedMomentImages(context.Background(), urls); err != nil {
+	if err := s.deleteRemovedMomentImages(context.Background(), moment.UserID, moment.ID, urls); err != nil {
 		return nil, err
 	}
 	return &dto.MomentDeleteResp{ID: moment.ID}, nil

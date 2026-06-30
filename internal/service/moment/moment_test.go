@@ -9,6 +9,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/png"
 	"math/rand"
 	"testing"
@@ -346,12 +347,12 @@ func TestMomentServiceSaveUsesModerationBeforeBusinessRepository(t *testing.T) {
 func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	moderationSvc := moderationmock.NewMockService(ctrl)
-	fileData := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 32)...)
+	fileData := testGIF(t)
 	fileKey := "moments/7/moderation/" + md5Hex(fileData) + ".gif"
-	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/old.jpg": true}}
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/old.jpg": true}}
 	moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
 		ActorID: 7, AuthorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
-		Content: "碎语", ImageKeys: []string{"moments/7/old.jpg", fileKey}, IdempotencyKey: "moment-images",
+		Content: "碎语", ImageKeys: []string{"moments/7/8/old.jpg", fileKey}, IdempotencyKey: "moment-images",
 		MomentOptions: &moderationservice.MomentOptions{Status: 1, CommentStatus: 1},
 	}).Return(moderationservice.SubmitResult{
 		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9}, AuthorID: 7,
@@ -361,7 +362,7 @@ func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T)
 
 	resp, err := svc.Save(dto.MomentSaveReq{
 		Content: "碎语", Status: 1, CommentStatus: 1, IdempotencyKey: "moment-images",
-		ImageURLs:  []string{"moments/7/old.jpg"},
+		ImageURLs:  []string{"moments/7/8/old.jpg"},
 		ImageFiles: []dto.MomentImageFileReq{{Name: "cat.gif", ContentType: "image/gif", Data: fileData}},
 	}, 7, nil)
 
@@ -558,7 +559,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 	now := time.Now()
 	requestUserID := uint(99)
 	store := &fakeMomentObjectStore{
-		exists: map[string]bool{"moments/old.jpg": true},
+		exists: map[string]bool{"moments/7/8/old.jpg": true},
 	}
 	repo := &fakeMomentRepo{
 		saveResp: &momentrepo.MomentAggregate{
@@ -572,7 +573,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 		Content:       "  风  ",
 		Status:        1,
 		CommentStatus: 1,
-		ImageURLs:     []string{"https://cdn.example.com/blog/moments/old.jpg?sign=1"},
+		ImageURLs:     []string{"https://cdn.example.com/blog/moments/7/8/old.jpg?sign=1"},
 		ImageOrder:    []string{"file:0", "url:0"},
 		ImageFiles:    []dto.MomentImageFileReq{{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}},
 	}, 7, nil)
@@ -589,20 +590,20 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 	uploaded := store.uploadedData[repo.saveData.Images[0].URL]
 	assert.Equal(t, "moments/7/9/"+md5Hex(uploaded)+".png", repo.saveData.Images[0].URL)
 	assert.Equal(t, uint(len(uploaded)), repo.saveData.Images[0].Size)
-	assert.Equal(t, "moments/old.jpg", repo.saveData.Images[1].URL)
+	assert.Equal(t, "moments/7/8/old.jpg", repo.saveData.Images[1].URL)
 	assert.Equal(t, uint(2), repo.saveData.Images[1].Seq)
 	assert.Equal(t, uint(9), resp.ID)
 }
 
 func TestMomentService_Save_RejectsIncompleteImageOrder(t *testing.T) {
-	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/old.jpg": true}}
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/old.jpg": true}}
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
 		Status:        1,
 		CommentStatus: 1,
-		ImageURLs:     []string{"moments/old.jpg"},
+		ImageURLs:     []string{"moments/7/8/old.jpg"},
 		ImageOrder:    []string{"file:0"},
 		ImageFiles:    []dto.MomentImageFileReq{{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}},
 	}, 7, nil)
@@ -611,18 +612,77 @@ func TestMomentService_Save_RejectsIncompleteImageOrder(t *testing.T) {
 }
 
 func TestMomentService_Save_RejectsMissingExistingImage(t *testing.T) {
-	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/missing.jpg": false}}
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/missing.jpg": false}}
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
 		Status:        1,
 		CommentStatus: 1,
-		ImageURLs:     []string{"https://cdn.example.com/blog/moments/missing.jpg"},
+		ImageURLs:     []string{"https://cdn.example.com/blog/moments/7/missing.jpg"},
 	}, 7, nil)
 
 	require.ErrorIs(t, err, momentservice.ErrMomentImageNotFound)
 	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_RejectsReusingAnotherUsersImage(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/8/9/other.jpg": true}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"moments/8/9/other.jpg"},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_DoesNotDeleteAnotherUsersImageWhenRemoving(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/9/keep.jpg": true}}
+	repo := &fakeMomentRepo{
+		removed: []string{"moments/8/9/other.jpg"},
+		saveResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID:            ptrUint(9),
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"moments/7/9/keep.jpg"},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, store.deleteKeys)
+}
+
+func TestMomentService_Save_DoesNotDeleteCrossMomentImageWhenRemoving(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/9/keep.jpg": true}}
+	repo := &fakeMomentRepo{
+		removed: []string{"moments/7/8/shared.jpg"},
+		saveResp: &momentrepo.MomentAggregate{
+			Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+		},
+	}
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID:            ptrUint(9),
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"moments/7/9/keep.jpg"},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, store.deleteKeys)
 }
 
 func TestMomentService_Save_RejectsMoreThanNineImages(t *testing.T) {
@@ -745,7 +805,7 @@ func TestMomentService_Save_KeepsSmallGifOriginal(t *testing.T) {
 	}
 	svc := momentservice.NewMomentService(repo, store, nil, nil, nil, nil)
 
-	gif := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 128)...)
+	gif := testGIF(t)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
@@ -766,6 +826,28 @@ func TestMomentService_Save_KeepsSmallGifOriginal(t *testing.T) {
 	assert.Equal(t, uint(len(gif)), image.Size)
 	assert.Equal(t, gif, store.uploadedData[image.URL])
 	assert.Equal(t, "image/gif", store.uploadedType[image.URL])
+}
+
+func TestMomentService_Save_RejectsDisguisedNonGIF(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, nil)
+
+	fake := append([]byte("GIF89a"), bytes.Repeat([]byte{0}, 32)...)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageFiles: []dto.MomentImageFileReq{{
+			Name:        "motion.gif",
+			ContentType: "image/gif",
+			Data:        fake,
+		}},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+	assert.EqualError(t, err, "图片无法读取，请确认文件未损坏，并尝试换一张 JPG、PNG、WebP 或 300KB 以内的 GIF")
+	assert.Empty(t, store.putKeys)
 }
 
 func TestMomentService_Save_AcceptsWebP(t *testing.T) {
@@ -911,6 +993,14 @@ func TestMomentService_Delete_SucceedsWithNoMedia(t *testing.T) {
 func md5Hex(data []byte) string {
 	sum := md5.Sum(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func testGIF(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.White})
+	var buf bytes.Buffer
+	require.NoError(t, gif.Encode(&buf, img, nil))
+	return buf.Bytes()
 }
 
 func smallPNG(t *testing.T) []byte {
