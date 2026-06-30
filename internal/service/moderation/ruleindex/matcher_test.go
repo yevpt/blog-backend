@@ -1,6 +1,8 @@
 package ruleindex_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,4 +83,25 @@ func TestMatchRunsNormalizedRegexpAndCompositeRulesOutsideAllow(t *testing.T) {
 	assert.Equal(t, ruleindex.RiskHigh, got.Risk)
 	assert.Equal(t, []uint64{4, 3}, got.RuleIDs)
 	assert.Equal(t, []uint64{1}, got.SuppressedIDs)
+}
+
+func TestMatchManyRulesKeepsAllocationsBounded(t *testing.T) {
+	rules := make([]ruleindex.SourceRule, 0, 256)
+	var text strings.Builder
+	for index := range 256 {
+		pattern := fmt.Sprintf("匹配词%d", index)
+		rules = append(rules, ruleindex.SourceRule{
+			ID: uint64(index + 1), Type: "keyword", Pattern: pattern, Risk: "medium", Effect: "review",
+		})
+		text.WriteString(pattern)
+		text.WriteByte(' ')
+	}
+	snapshot := buildSnapshot(t, rules, defaultLimits())
+	normalized := textnorm.Normalize(text.String())
+
+	allocations := testing.AllocsPerRun(20, func() {
+		snapshot.Match(normalized)
+	})
+
+	assert.LessOrEqual(t, allocations, float64(10))
 }

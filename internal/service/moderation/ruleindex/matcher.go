@@ -1,7 +1,6 @@
 package ruleindex
 
 import (
-	"sort"
 	"strings"
 )
 
@@ -151,9 +150,7 @@ func (c *matchCollector) add(ruleIndex uint32) {
 }
 
 func (c *matchCollector) sort() {
-	sort.Slice(c.indexes, func(i, j int) bool {
-		return c.snapshot.betterRule(c.indexes[i], c.indexes[j])
-	})
+	c.snapshot.sortRuleIndexes(c.indexes)
 }
 
 func (s *Snapshot) addSuppressed(current []uint32, ruleIndex uint32) []uint32 {
@@ -166,8 +163,21 @@ func (s *Snapshot) addSuppressed(current []uint32, ruleIndex uint32) []uint32 {
 		return current
 	}
 	current = append(current, ruleIndex)
-	sort.Slice(current, func(i, j int) bool { return s.betterRule(current[i], current[j]) })
+	s.sortRuleIndexes(current)
 	return current
+}
+
+func (s *Snapshot) sortRuleIndexes(indexes []uint32) {
+	// 保留集合最多 128 项，插入排序避免反射排序在每次命中时分配。
+	for index := 1; index < len(indexes); index++ {
+		value := indexes[index]
+		position := index
+		for position > 0 && s.betterRule(value, indexes[position-1]) {
+			indexes[position] = indexes[position-1]
+			position--
+		}
+		indexes[position] = value
+	}
 }
 
 func (s *Snapshot) betterRule(left, right uint32) bool {
