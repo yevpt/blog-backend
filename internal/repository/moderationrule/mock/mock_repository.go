@@ -12,6 +12,7 @@ package mock
 import (
 	context "context"
 	reflect "reflect"
+	time "time"
 
 	moderationrule "github.com/vpt/blog-backend/internal/repository/moderationrule"
 	gomock "go.uber.org/mock/gomock"
@@ -55,6 +56,35 @@ func (mr *MockManagementRepositoryMockRecorder) CancelCandidate(ctx, id, actorID
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelCandidate", reflect.TypeOf((*MockManagementRepository)(nil).CancelCandidate), ctx, id, actorID)
 }
 
+// CancelImport mocks base method.
+func (m *MockManagementRepository) CancelImport(ctx context.Context, id, actorID uint64, now time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelImport", ctx, id, actorID, now)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CancelImport indicates an expected call of CancelImport.
+func (mr *MockManagementRepositoryMockRecorder) CancelImport(ctx, id, actorID, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelImport", reflect.TypeOf((*MockManagementRepository)(nil).CancelImport), ctx, id, actorID, now)
+}
+
+// ClaimNextImport mocks base method.
+func (m *MockManagementRepository) ClaimNextImport(ctx context.Context, now time.Time) (*moderationrule.ImportRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimNextImport", ctx, now)
+	ret0, _ := ret[0].(*moderationrule.ImportRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimNextImport indicates an expected call of ClaimNextImport.
+func (mr *MockManagementRepositoryMockRecorder) ClaimNextImport(ctx, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextImport", reflect.TypeOf((*MockManagementRepository)(nil).ClaimNextImport), ctx, now)
+}
+
 // ClaimNextRuleset mocks base method.
 func (m *MockManagementRepository) ClaimNextRuleset(ctx context.Context, status string) (*moderationrule.CandidateRecord, error) {
 	m.ctrl.T.Helper()
@@ -83,6 +113,21 @@ func (m *MockManagementRepository) CreateCandidate(ctx context.Context, cmd mode
 func (mr *MockManagementRepositoryMockRecorder) CreateCandidate(ctx, cmd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCandidate", reflect.TypeOf((*MockManagementRepository)(nil).CreateCandidate), ctx, cmd)
+}
+
+// CreateImport mocks base method.
+func (m *MockManagementRepository) CreateImport(ctx context.Context, cmd moderationrule.CreateImportCommand) (moderationrule.ImportRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateImport", ctx, cmd)
+	ret0, _ := ret[0].(moderationrule.ImportRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateImport indicates an expected call of CreateImport.
+func (mr *MockManagementRepositoryMockRecorder) CreateImport(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateImport", reflect.TypeOf((*MockManagementRepository)(nil).CreateImport), ctx, cmd)
 }
 
 // CurrentRuleset mocks base method.
@@ -174,6 +219,21 @@ func (mr *MockManagementRepositoryMockRecorder) GetCandidate(ctx, id any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCandidate", reflect.TypeOf((*MockManagementRepository)(nil).GetCandidate), ctx, id)
 }
 
+// GetImport mocks base method.
+func (m *MockManagementRepository) GetImport(ctx context.Context, id uint64) (moderationrule.ImportRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImport", ctx, id)
+	ret0, _ := ret[0].(moderationrule.ImportRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImport indicates an expected call of GetImport.
+func (mr *MockManagementRepositoryMockRecorder) GetImport(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImport", reflect.TypeOf((*MockManagementRepository)(nil).GetImport), ctx, id)
+}
+
 // GetRulesByIDs mocks base method.
 func (m *MockManagementRepository) GetRulesByIDs(ctx context.Context, ids []uint64) ([]moderationrule.RuleListRecord, error) {
 	m.ctrl.T.Helper()
@@ -217,6 +277,21 @@ func (m *MockManagementRepository) HasImportForRuleset(ctx context.Context, rule
 func (mr *MockManagementRepositoryMockRecorder) HasImportForRuleset(ctx, rulesetID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasImportForRuleset", reflect.TypeOf((*MockManagementRepository)(nil).HasImportForRuleset), ctx, rulesetID)
+}
+
+// ListImports mocks base method.
+func (m *MockManagementRepository) ListImports(ctx context.Context, afterID uint64, limit int) (moderationrule.ImportPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListImports", ctx, afterID, limit)
+	ret0, _ := ret[0].(moderationrule.ImportPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListImports indicates an expected call of ListImports.
+func (mr *MockManagementRepositoryMockRecorder) ListImports(ctx, afterID, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImports", reflect.TypeOf((*MockManagementRepository)(nil).ListImports), ctx, afterID, limit)
 }
 
 // ListRules mocks base method.
@@ -263,6 +338,21 @@ func (mr *MockManagementRepositoryMockRecorder) PublishCandidate(ctx, id, expect
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishCandidate", reflect.TypeOf((*MockManagementRepository)(nil).PublishCandidate), ctx, id, expectedBase)
 }
 
+// ResetInterruptedImports mocks base method.
+func (m *MockManagementRepository) ResetInterruptedImports(ctx context.Context, now time.Time) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetInterruptedImports", ctx, now)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ResetInterruptedImports indicates an expected call of ResetInterruptedImports.
+func (mr *MockManagementRepositoryMockRecorder) ResetInterruptedImports(ctx, now any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetInterruptedImports", reflect.TypeOf((*MockManagementRepository)(nil).ResetInterruptedImports), ctx, now)
+}
+
 // SaveRulesetBuildResult mocks base method.
 func (m *MockManagementRepository) SaveRulesetBuildResult(ctx context.Context, id uint64, result moderationrule.BuildResult) error {
 	m.ctrl.T.Helper()
@@ -303,4 +393,18 @@ func (m *MockManagementRepository) StreamRules(ctx context.Context, version uint
 func (mr *MockManagementRepositoryMockRecorder) StreamRules(ctx, version, visit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamRules", reflect.TypeOf((*MockManagementRepository)(nil).StreamRules), ctx, version, visit)
+}
+
+// UpdateImportValidation mocks base method.
+func (m *MockManagementRepository) UpdateImportValidation(ctx context.Context, cmd moderationrule.UpdateImportValidationCommand) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateImportValidation", ctx, cmd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateImportValidation indicates an expected call of UpdateImportValidation.
+func (mr *MockManagementRepositoryMockRecorder) UpdateImportValidation(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateImportValidation", reflect.TypeOf((*MockManagementRepository)(nil).UpdateImportValidation), ctx, cmd)
 }

@@ -147,6 +147,28 @@ type Job struct {
 	Status        string
 }
 
+// CreateImportInput 是创建导入任务的服务层输入。
+type CreateImportInput struct {
+	FileName         string
+	Format           string
+	FileSize         uint64
+	ObjectKey        string
+	SourceName       string
+	DefaultCategory  string
+	DefaultEffect    string
+	DefaultRiskLevel string
+	DefaultPriority  int32
+	OperatorID       uint64
+}
+
+// ImportDefaults 是 CSV/TXT 行值的缺省字段。
+type ImportDefaults struct {
+	Category  string
+	Effect    string
+	RiskLevel string
+	Priority  int32
+}
+
 // Service 是审核规则管理服务接口。
 type Service interface {
 	ListRules(ctx context.Context, query ListQuery) (moderationrule.RulePage, error)
@@ -158,6 +180,10 @@ type Service interface {
 	TestText(ctx context.Context, cmd TestTextCommand) (TestResult, error)
 	PublishCandidate(ctx context.Context, rulesetID, expectedBase, actorID uint64) error
 	CancelCandidate(ctx context.Context, rulesetID, actorID uint64) error
+	CreateImport(ctx context.Context, input CreateImportInput) (moderationrule.ImportRecord, error)
+	ListImports(ctx context.Context, afterID uint64, limit int) (moderationrule.ImportPage, error)
+	GetImport(ctx context.Context, id uint64) (moderationrule.ImportRecord, error)
+	CancelImport(ctx context.Context, id, actorID uint64) error
 }
 
 // Worker 是规则集后台构建和导入处理接口。

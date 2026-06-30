@@ -27,8 +27,16 @@ func (m *manager) Run(ctx context.Context) {
 	}
 }
 
-// ProcessOnce 尝试处理一个待构建规则集，没有时立即返回。
+// ProcessOnce 尝试处理一个导入任务和一个待构建规则集，没有时立即返回。
 func (m *manager) ProcessOnce(ctx context.Context) error {
+	if err := m.ProcessNextImport(ctx); err != nil {
+		return err
+	}
+	return m.ProcessNextRuleset(ctx)
+}
+
+// ProcessNextRuleset 认领并处理一个待构建规则集。
+func (m *manager) ProcessNextRuleset(ctx context.Context) error {
 	candidate, err := m.repo.ClaimNextRuleset(ctx, repoMod.StatusBuilding)
 	if err != nil {
 		return fmt.Errorf("认领待构建规则集: %w", err)

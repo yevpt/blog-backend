@@ -72,6 +72,35 @@ func (mr *MockServiceMockRecorder) CancelCandidate(ctx, rulesetID, actorID any) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelCandidate", reflect.TypeOf((*MockService)(nil).CancelCandidate), ctx, rulesetID, actorID)
 }
 
+// CancelImport mocks base method.
+func (m *MockService) CancelImport(ctx context.Context, id, actorID uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelImport", ctx, id, actorID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CancelImport indicates an expected call of CancelImport.
+func (mr *MockServiceMockRecorder) CancelImport(ctx, id, actorID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelImport", reflect.TypeOf((*MockService)(nil).CancelImport), ctx, id, actorID)
+}
+
+// CreateImport mocks base method.
+func (m *MockService) CreateImport(ctx context.Context, input moderationrule0.CreateImportInput) (moderationrule.ImportRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateImport", ctx, input)
+	ret0, _ := ret[0].(moderationrule.ImportRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateImport indicates an expected call of CreateImport.
+func (mr *MockServiceMockRecorder) CreateImport(ctx, input any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateImport", reflect.TypeOf((*MockService)(nil).CreateImport), ctx, input)
+}
+
 // CreateRule mocks base method.
 func (m *MockService) CreateRule(ctx context.Context, cmd moderationrule0.CreateRuleCommand) (moderationrule0.Job, error) {
 	m.ctrl.T.Helper()
@@ -85,6 +114,36 @@ func (m *MockService) CreateRule(ctx context.Context, cmd moderationrule0.Create
 func (mr *MockServiceMockRecorder) CreateRule(ctx, cmd any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRule", reflect.TypeOf((*MockService)(nil).CreateRule), ctx, cmd)
+}
+
+// GetImport mocks base method.
+func (m *MockService) GetImport(ctx context.Context, id uint64) (moderationrule.ImportRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetImport", ctx, id)
+	ret0, _ := ret[0].(moderationrule.ImportRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetImport indicates an expected call of GetImport.
+func (mr *MockServiceMockRecorder) GetImport(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetImport", reflect.TypeOf((*MockService)(nil).GetImport), ctx, id)
+}
+
+// ListImports mocks base method.
+func (m *MockService) ListImports(ctx context.Context, afterID uint64, limit int) (moderationrule.ImportPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListImports", ctx, afterID, limit)
+	ret0, _ := ret[0].(moderationrule.ImportPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListImports indicates an expected call of ListImports.
+func (mr *MockServiceMockRecorder) ListImports(ctx, afterID, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListImports", reflect.TypeOf((*MockService)(nil).ListImports), ctx, afterID, limit)
 }
 
 // ListRules mocks base method.

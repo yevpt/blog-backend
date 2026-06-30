@@ -2,6 +2,7 @@ package moderationrule
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -31,6 +32,13 @@ type ManagementRepository interface {
 	GetCandidate(ctx context.Context, id uint64) (CandidateRecord, error)
 	HasImportForRuleset(ctx context.Context, rulesetID uint64) (bool, error)
 	GetRulesByIDs(ctx context.Context, ids []uint64) ([]RuleListRecord, error)
+	CreateImport(ctx context.Context, cmd CreateImportCommand) (ImportRecord, error)
+	ClaimNextImport(ctx context.Context, now time.Time) (*ImportRecord, error)
+	UpdateImportValidation(ctx context.Context, cmd UpdateImportValidationCommand) error
+	ListImports(ctx context.Context, afterID uint64, limit int) (ImportPage, error)
+	GetImport(ctx context.Context, id uint64) (ImportRecord, error)
+	CancelImport(ctx context.Context, id, actorID uint64, now time.Time) error
+	ResetInterruptedImports(ctx context.Context, now time.Time) (int64, error)
 }
 
 type repository struct {

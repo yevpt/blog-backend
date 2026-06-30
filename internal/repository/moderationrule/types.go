@@ -169,3 +169,60 @@ const (
 	ImportStatusInvalid    = "invalid"
 	ImportStatusCanceled   = "canceled"
 )
+
+// ImportRecord 是导入任务的完整摘要。
+type ImportRecord struct {
+	ID               uint64
+	FileName         string
+	Format           string
+	FileSize         uint64
+	ObjectKey        string
+	SourceID         uint64
+	DefaultCategory  string
+	DefaultEffect    string
+	DefaultRiskLevel string
+	DefaultPriority  int32
+	ValidationStatus string
+	TotalRows        uint64
+	ValidRows        uint64
+	DuplicateRows    uint64
+	ErrorRows        uint64
+	ErrorObjectKey   *string
+	RulesetID        *uint64
+	OperatorID       uint64
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+// CreateImportCommand 定义创建导入任务的输入。
+type CreateImportCommand struct {
+	FileName         string
+	Format           string
+	FileSize         uint64
+	ObjectKey        string
+	SourceID         uint64
+	DefaultCategory  string
+	DefaultEffect    string
+	DefaultRiskLevel string
+	DefaultPriority  int32
+	OperatorID       uint64
+}
+
+// UpdateImportValidationCommand 定义校验结果写回参数。
+type UpdateImportValidationCommand struct {
+	ID               uint64
+	ValidationStatus string
+	TotalRows        uint64
+	ValidRows        uint64
+	DuplicateRows    uint64
+	ErrorRows        uint64
+	ErrorObjectKey   *string
+	RulesetID        *uint64
+}
+
+// ImportPage 是导入历史的游标分页结果。
+type ImportPage struct {
+	Imports    []ImportRecord
+	NextCursor uint64
+	HasMore    bool
+}
