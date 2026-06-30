@@ -1692,7 +1692,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.webp 并写入 avatar_url。",
+                "description": "管理员新增友情链接；必须随表单上传 logo 文件，服务端校验后入库（最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP）并写入 avatar_url，对象 key 为 avatar/link/{md5}.{ext}。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1751,7 +1751,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 2MB",
+                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 256KB",
                         "name": "logo",
                         "in": "formData",
                         "required": true
@@ -1805,7 +1805,7 @@ const docTemplate = `{
         },
         "/admin/friend-links/{id}": {
             "put": {
-                "description": "管理员修改友情链接；logo 可选，上传时保存为 avatar/link/{md5}.webp 并替换 avatar_url，未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。",
+                "description": "管理员修改友情链接；logo 可选，上传时按入库规范处理（最长边 ≤120px、体积 ≤20KB；已合规原样保留，超出压缩为 WebP）并替换 avatar_url，对象 key 为 avatar/link/{md5}.{ext}；未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1868,7 +1868,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 2MB；未传则保留原头像",
+                        "description": "友链 Logo 图片（JPG、PNG、WebP），最大 256KB；未传则保留原头像",
                         "name": "logo",
                         "in": "formData"
                     }
@@ -5991,7 +5991,7 @@ const docTemplate = `{
         },
         "/admin/users/avatars/normalize": {
             "post": {
-                "description": "管理员检查本站托管头像是否超出 120px / 20KB JPEG 规范；超出则压缩替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true 时无法处理的头像会被清空。",
+                "description": "管理员检查本站托管头像是否超出 120px / 20KB 规范；已合规的 JPG/PNG/WebP 原样保留，超出则压缩为 WebP 替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true 时无法处理的头像会被清空。",
                 "consumes": [
                     "application/json"
                 ],
@@ -7655,7 +7655,7 @@ const docTemplate = `{
         },
         "/auth/register": {
             "post": {
-                "description": "使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。注册成功返回与登录相同的双 token 与用户信息。",
+                "description": "使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 256KB，不支持 GIF）。注册成功返回与登录相同的双 token 与用户信息。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -11236,7 +11236,7 @@ const docTemplate = `{
         },
         "/uploads/temp": {
             "post": {
-                "description": "登录用户上传临时图片。默认 scene=article，仅支持 images/covers/mobile-covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。",
+                "description": "登录用户上传临时图片。默认 scene=article，仅支持 images/covers/mobile-covers，上传最大 10MB、入库最大 3MB；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 3MB 并压缩到 500KB 内，GIF 最大 300KB。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -11263,7 +11263,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "file",
-                        "description": "图片文件；article 最大 10MB，comment 普通图片最大 1MB、GIF 最大 300KB",
+                        "description": "图片文件；article 最大 10MB、入库 3MB，comment 普通图片最大 3MB、GIF 最大 300KB",
                         "name": "file",
                         "in": "formData",
                         "required": true
@@ -11459,7 +11459,7 @@ const docTemplate = `{
         },
         "/users/me/avatar": {
             "post": {
-                "description": "登录用户上传头像图片，服务端校验后压缩到 120px 内、20KB 内 JPEG 并更新 avatar_url；不支持 GIF，原始文件最大 2MB。",
+                "description": "登录用户上传头像图片，服务端校验后入库：最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP 并更新 avatar_url；不支持 GIF，原始文件最大 256KB。",
                 "consumes": [
                     "multipart/form-data"
                 ],
