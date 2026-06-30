@@ -165,8 +165,10 @@ func (h *AdminHandler) DownloadImportErrors(c *gin.Context) {
 // @Param default_risk_level formData string true "缺省风险等级"
 // @Param default_priority formData int false "缺省优先级"
 // @Success 202 {object} response.Response{data=dto.AdminModerationImportResp}
+// @Failure 400 {object} response.Response
 // @Failure 401 {object} response.Response
 // @Failure 403 {object} response.Response
+// @Failure 429 {object} response.Response
 // @Failure 500 {object} response.Response
 // @Router /admin/moderation/rule-imports [post]
 func (h *AdminHandler) CreateImport(c *gin.Context) {
