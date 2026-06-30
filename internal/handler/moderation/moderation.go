@@ -9,19 +9,27 @@ import (
 
 // AdminHandler 只负责管理端审核参数、身份与响应映射。
 type AdminHandler struct {
-	svc       moderationservice.ReviewService
-	ops       moderationservice.OperationsService
-	ruleSvc   rulemod.Service
-	userCache userservice.UserCacheService
+	svc                    moderationservice.ReviewService
+	ops                    moderationservice.OperationsService
+	ruleSvc                rulemod.Service
+	userCache              userservice.UserCacheService
+	ruleImportMaxFileBytes int
 }
 
 // NewAdminHandler 创建审核管理处理器。
 func NewAdminHandler(svc moderationservice.ReviewService, userCache userservice.UserCacheService, operations ...moderationservice.OperationsService) *AdminHandler {
-	handler := &AdminHandler{svc: svc, userCache: userCache}
+	handler := &AdminHandler{svc: svc, userCache: userCache, ruleImportMaxFileBytes: 50 * 1024 * 1024}
 	if len(operations) > 0 {
 		handler.ops = operations[0]
 	}
 	return handler
+}
+
+// SetRuleImportMaxFileBytes 注入规则导入的单文件大小上限。
+func (h *AdminHandler) SetRuleImportMaxFileBytes(maxBytes int) {
+	if h != nil && maxBytes > 0 {
+		h.ruleImportMaxFileBytes = maxBytes
+	}
 }
 
 // SetRuleService 注入规则管理服务，在路由装配时调用。

@@ -1,7 +1,10 @@
 package moderationrule
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -10,6 +13,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	repoMod "github.com/vpt/blog-backend/internal/repository/moderationrule"
+	repoModMock "github.com/vpt/blog-backend/internal/repository/moderationrule/mock"
 )
 
 func TestCSVParserAcceptsQuotedNewlineAndLeadingComments(t *testing.T) {
@@ -131,15 +135,18 @@ func TestValidateParsedRowRejectsLongPattern(t *testing.T) {
 }
 
 func TestCreateImportEnsuresSourceFirst(t *testing.T) {
-	repo, mgr := newTestManager(t)
+	ctrl := gomock.NewController(t)
+	repo := repoModMock.NewMockManagementRepository(ctrl)
+	mgr := NewManager(repo, &importStoreStub{}, &fakeReplacer{}, testManagerConfig(), nil)
 	repo.EXPECT().EnsureSource(gomock.Any(), "测试来源").Return(repoMod.SourceRecord{ID: 1, Name: "测试来源"}, nil)
 	repo.EXPECT().CreateImport(gomock.Any(), gomock.Any()).Return(testImportRecord(), nil)
+	content := "pattern\n测试\n"
 
 	_, err := mgr.CreateImport(context.Background(), CreateImportInput{
 		FileName:         "test.csv",
 		Format:           "csv",
-		FileSize:         1024,
-		ObjectKey:        "moderation/imports/test.csv",
+		FileSize:         uint64(len(content)),
+		Body:             strings.NewReader(content),
 		SourceName:       "测试来源",
 		DefaultCategory:  "fraud",
 		DefaultEffect:    "review",
@@ -151,6 +158,39 @@ func TestCreateImportEnsuresSourceFirst(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCreateImportUploadsBodyAndCompensatesWhenTaskCreationFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repoModMock.NewMockManagementRepository(ctrl)
+	store := &importStoreStub{}
+	mgr := NewManager(repo, store, &fakeReplacer{}, testManagerConfig(), nil)
+	repo.EXPECT().EnsureSource(gomock.Any(), "测试来源").Return(repoMod.SourceRecord{ID: 3, Name: "测试来源"}, nil)
+	repo.EXPECT().CreateImport(gomock.Any(), gomock.Any()).Return(repoMod.ImportRecord{}, errors.New("db down"))
+
+	content := "pattern\n风险词\n"
+	_, err := mgr.CreateImport(context.Background(), CreateImportInput{
+		FileName: "rules.csv", Format: "csv", FileSize: uint64(len(content)), Body: strings.NewReader(content),
+		SourceName: "测试来源", DefaultCategory: "fraud", DefaultEffect: "review",
+		DefaultRiskLevel: "medium", DefaultPriority: 100, OperatorID: 9,
+	})
+
+	require.Error(t, err)
+	require.Len(t, store.putKeys, 1)
+	assert.Regexp(t, `^moderation/imports/9/[0-9a-f-]+\.csv$`, store.putKeys[0])
+	assert.Equal(t, store.putKeys, store.deletedKeys)
+}
+
+func TestCreateImportRejectsFormatExtensionMismatch(t *testing.T) {
+	_, mgr := newTestManager(t)
+
+	_, err := mgr.CreateImport(context.Background(), CreateImportInput{
+		FileName: "rules.txt", Format: "csv", FileSize: 5, Body: strings.NewReader("测试\n"),
+		SourceName: "来源", DefaultCategory: "fraud", DefaultEffect: "review",
+		DefaultRiskLevel: "medium", DefaultPriority: 100, OperatorID: 1,
+	})
+
+	assert.ErrorIs(t, err, ErrInvalidRule)
+}
+
 func TestCreateImportRejectsInvalidFormat(t *testing.T) {
 	_, mgr := newTestManager(t)
 
@@ -158,7 +198,7 @@ func TestCreateImportRejectsInvalidFormat(t *testing.T) {
 		FileName:         "test.zip",
 		Format:           "zip",
 		FileSize:         1024,
-		ObjectKey:        "test",
+		Body:             strings.NewReader("测试"),
 		SourceName:       "来源",
 		DefaultCategory:  "fraud",
 		DefaultEffect:    "review",
@@ -168,6 +208,26 @@ func TestCreateImportRejectsInvalidFormat(t *testing.T) {
 	})
 
 	assert.Error(t, err)
+}
+
+type importStoreStub struct {
+	putKeys     []string
+	deletedKeys []string
+}
+
+func (s *importStoreStub) PutObjectStream(_ context.Context, key string, body io.Reader, _ int64, _ string) error {
+	_, err := io.Copy(io.Discard, body)
+	s.putKeys = append(s.putKeys, key)
+	return err
+}
+
+func (s *importStoreStub) OpenObject(context.Context, string, int64) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader(nil)), nil
+}
+
+func (s *importStoreStub) DeleteObject(_ context.Context, key string) error {
+	s.deletedKeys = append(s.deletedKeys, key)
+	return nil
 }
 
 func TestCancelImportReturnsNotFoundForMissing(t *testing.T) {

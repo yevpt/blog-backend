@@ -1,7 +1,10 @@
 package moderation_test
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,8 +16,8 @@ import (
 
 	moderationhandler "github.com/vpt/blog-backend/internal/handler/moderation"
 	repoMod "github.com/vpt/blog-backend/internal/repository/moderationrule"
-	rulemock "github.com/vpt/blog-backend/internal/service/moderationrule/mock"
 	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
+	rulemock "github.com/vpt/blog-backend/internal/service/moderationrule/mock"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -150,6 +153,44 @@ func TestCancelImportReturns404ForMissing(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, recorder.Code)
 }
 
+func TestCreateImportAcceptsMultipartFile(t *testing.T) {
+	svc, handler := newRuleAdminHandlerWithMock(t)
+	svc.EXPECT().CreateImport(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, input rulemod.CreateImportInput) (repoMod.ImportRecord, error) {
+		body, err := io.ReadAll(input.Body)
+		assert.NoError(t, err)
+		assert.Equal(t, "rules.csv", input.FileName)
+		assert.Equal(t, "csv", input.Format)
+		assert.Equal(t, "pattern\n测试\n", string(body))
+		assert.Equal(t, uint64(1), input.OperatorID)
+		return repoMod.ImportRecord{ID: 10, FileName: input.FileName}, nil
+	})
+
+	recorder := serveRuleImportMultipart(handler, "rules.csv", "pattern\n测试\n", "csv")
+
+	assert.Equal(t, http.StatusAccepted, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"id":10`)
+}
+
+func TestCreateImportRejectsMissingAndEmptyFile(t *testing.T) {
+	_, handler := newRuleAdminHandlerWithMock(t)
+
+	missing := serveRuleImportMultipart(handler, "", "", "csv")
+	empty := serveRuleImportMultipart(handler, "rules.csv", "", "csv")
+
+	assert.Contains(t, missing.Body.String(), `"code":400`)
+	assert.Contains(t, empty.Body.String(), `"code":400`)
+}
+
+func TestCreateImportRejectsOversizedMultipartBody(t *testing.T) {
+	_, handler := newRuleAdminHandlerWithMock(t)
+	handler.SetRuleImportMaxFileBytes(4)
+
+	recorder := serveRuleImportMultipart(handler, "rules.csv", "pattern\n测试\n", "csv")
+
+	assert.Contains(t, recorder.Body.String(), `"code":400`)
+	assert.Contains(t, recorder.Body.String(), "上传内容过大")
+}
+
 func TestRuleTextTestReturnsHits(t *testing.T) {
 	svc, handler := newRuleAdminHandlerWithMock(t)
 	svc.EXPECT().TestText(gomock.Any(), gomock.Any()).Return(rulemod.TestResult{
@@ -209,6 +250,31 @@ func serveRuleAdminWithParams(method, path, body string, action gin.HandlerFunc,
 		jwtpkg.SetClaims(ctx, &jwtpkg.Claims{UserId: 1})
 	}
 	action(ctx)
+	return recorder
+}
+
+func serveRuleImportMultipart(handler *moderationhandler.AdminHandler, filename, content, format string) *httptest.ResponseRecorder {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	_ = writer.WriteField("format", format)
+	_ = writer.WriteField("source_name", "测试来源")
+	_ = writer.WriteField("default_category", "fraud")
+	_ = writer.WriteField("default_effect", "review")
+	_ = writer.WriteField("default_risk_level", "medium")
+	_ = writer.WriteField("default_priority", "100")
+	if filename != "" {
+		part, _ := writer.CreateFormFile("file", filename)
+		_, _ = part.Write([]byte(content))
+	}
+	_ = writer.Close()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/admin/moderation/rule-imports", &body)
+	ctx.Request.Header.Set("Content-Type", writer.FormDataContentType())
+	jwtpkg.SetClaims(ctx, &jwtpkg.Claims{UserId: 1})
+	handler.CreateImport(ctx)
 	return recorder
 }
 

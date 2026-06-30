@@ -53,11 +53,11 @@ import (
 	dashboardservice "github.com/vpt/blog-backend/internal/service/dashboard"
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	guestbookservice "github.com/vpt/blog-backend/internal/service/guestbook"
+	moderationruleworker "github.com/vpt/blog-backend/internal/service/moderationrule"
 	momentservice "github.com/vpt/blog-backend/internal/service/moment"
 	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
-	moderationruleworker "github.com/vpt/blog-backend/internal/service/moderationrule"
 	tagservice "github.com/vpt/blog-backend/internal/service/tag"
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
@@ -75,34 +75,34 @@ import (
 const corsAllowedOriginsEnv = "CORS_ALLOWED_ORIGINS"
 
 type routeHandlers struct {
-	health              *handler.HealthHandler
-	test                *handler.TestHandler
-	auth                *authhandler.AuthHandler
-	oauth               *oauthhandler.OAuthHandler
-	captcha             *captchahandler.CaptchaHandler
-	article             *articlehandler.ArticleHandler
-	comment             *commenthandler.CommentHandler
-	guestbook           *guestbookhandler.GuestbookHandler
-	moment              *momenthandler.MomentHandler
-	moderationAdmin     *moderationhandler.AdminHandler
-	notification        *notificationhandler.NotificationHandler
-	notificationAdmin   *notificationhandler.NotificationAdminHandler
-	user                *userhandler.UserHandler
-	userAdmin           *userhandler.UserAdminHandler
-	category            *categoryhandler.CategoryHandler
-	tag                 *taghandler.TagHandler
-	music               *musichandler.MusicHandler
-	friendLink          *friendlinkhandler.FriendLinkHandler
-	upload              *uploadhandler.Handler
-	analyticsCollect    *analyticshandler.CollectHandler
-	analyticsAdmin      *analyticshandler.AdminHandler
-	analyticsPublic     *analyticshandler.PublicHandler
-	analyticsRuntime    AnalyticsRuntime
+	health               *handler.HealthHandler
+	test                 *handler.TestHandler
+	auth                 *authhandler.AuthHandler
+	oauth                *oauthhandler.OAuthHandler
+	captcha              *captchahandler.CaptchaHandler
+	article              *articlehandler.ArticleHandler
+	comment              *commenthandler.CommentHandler
+	guestbook            *guestbookhandler.GuestbookHandler
+	moment               *momenthandler.MomentHandler
+	moderationAdmin      *moderationhandler.AdminHandler
+	notification         *notificationhandler.NotificationHandler
+	notificationAdmin    *notificationhandler.NotificationAdminHandler
+	user                 *userhandler.UserHandler
+	userAdmin            *userhandler.UserAdminHandler
+	category             *categoryhandler.CategoryHandler
+	tag                  *taghandler.TagHandler
+	music                *musichandler.MusicHandler
+	friendLink           *friendlinkhandler.FriendLinkHandler
+	upload               *uploadhandler.Handler
+	analyticsCollect     *analyticshandler.CollectHandler
+	analyticsAdmin       *analyticshandler.AdminHandler
+	analyticsPublic      *analyticshandler.PublicHandler
+	analyticsRuntime     AnalyticsRuntime
 	moderationRuleWorker moderationruleworker.Worker
-	dashboard           *dashboardhandler.Handler
-	userCache           userservice.UserCacheService
-	moderationRateLimit config.ModerationRateLimitConfig
-	runtime             Runtime
+	dashboard            *dashboardhandler.Handler
+	userCache            userservice.UserCacheService
+	moderationRateLimit  config.ModerationRateLimitConfig
+	runtime              Runtime
 }
 
 // AnalyticsRuntime 暴露统计上报链路中需要被 worker 复用的实例。
@@ -311,7 +311,7 @@ func newRouteHandlers(
 		comment:             commenthandler.NewCommentHandler(commentSvc, cfg.Moderation.Enabled),
 		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc, cfg.Moderation.Enabled),
 		moment:              momenthandler.NewMomentHandler(momentSvc, cfg.Moderation.Enabled),
-		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, moderationRuntime.ruleSvc),
+		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, cfg.Moderation.Rules.MaxImportFileMB, moderationRuntime.ruleSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),

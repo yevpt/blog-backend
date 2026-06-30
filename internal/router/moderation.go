@@ -7,8 +7,8 @@ import (
 	"github.com/vpt/blog-backend/internal/repository/moderationrule"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
-	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
 	"github.com/vpt/blog-backend/internal/service/moderationmedia"
+	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"go.uber.org/zap"
@@ -42,7 +42,7 @@ func newModerationService(ctx context.Context, db *gorm.DB, cfg config.Moderatio
 	}
 
 	// 构造规则管理服务，与核心审核共享同一分类器。
-	streamStore, _ := store.(storage.ObjectStreamStore)
+	streamStore, _ := store.(rulemod.ImportObjectStore)
 	ruleSvc := rulemod.NewManager(
 		ruleRepo,
 		streamStore,
@@ -73,6 +73,7 @@ func ruleManagerConfig(cfg config.ModerationRulesConfig) rulemod.ManagerConfig {
 		MaxKeywordRules:      cfg.MaxKeywordRules,
 		MaxEnabledRegexRules: cfg.MaxEnabledRegexRules,
 		MaxImportRows:        cfg.MaxImportRows,
+		MaxImportFileMB:      cfg.MaxImportFileMB,
 		MaxRuleMatches:       cfg.MaxRuleMatchesPerContent,
 		MaxIndexMemoryMB:     cfg.MaxIndexMemoryMB,
 		MaxBuildPeakMemoryMB: cfg.MaxBuildPeakMemoryMB,

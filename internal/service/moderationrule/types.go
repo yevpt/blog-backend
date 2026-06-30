@@ -3,6 +3,7 @@ package moderationrule
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/vpt/blog-backend/internal/repository/moderationrule"
@@ -152,13 +153,20 @@ type CreateImportInput struct {
 	FileName         string
 	Format           string
 	FileSize         uint64
-	ObjectKey        string
+	Body             io.Reader
 	SourceName       string
 	DefaultCategory  string
 	DefaultEffect    string
 	DefaultRiskLevel string
 	DefaultPriority  int32
 	OperatorID       uint64
+}
+
+// ImportObjectStore 提供规则导入所需的最小对象流与补偿删除能力。
+type ImportObjectStore interface {
+	PutObjectStream(ctx context.Context, objectName string, body io.Reader, size int64, contentType string) error
+	OpenObject(ctx context.Context, objectName string, maxBytes int64) (io.ReadCloser, error)
+	DeleteObject(ctx context.Context, objectName string) error
 }
 
 // ImportDefaults 是 CSV/TXT 行值的缺省字段。

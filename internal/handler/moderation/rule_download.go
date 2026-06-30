@@ -13,8 +13,6 @@ import (
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
-const maxModerationImportFileBytes = 50 * 1024 * 1024
-
 // DownloadTemplate 下载导入模板。
 // @Summary 下载规则导入模板
 // @Description 下载 CSV 或 TXT 格式的导入模板，不含真实敏感词。
@@ -186,18 +184,16 @@ func (h *AdminHandler) CreateImport(c *gin.Context) {
 		return
 	}
 
-	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(maxModerationImportFileBytes)) {
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(h.ruleImportMaxFileBytes)) {
 		return
 	}
 
 	// 绑定表单参数（非文件字段）。
 	var req dto.AdminModerationRuleImportCreateReq
-	if !reqbind.Query(c, &req) {
+	if !reqbind.Form(c, &req) {
 		return
 	}
 
-	// 文件上传和对象存储流式保存由 Task 5 路由装配时注入存储依赖后完整实现。
-	// 当前阶段使用 handler 伪造的对象 key 供测试验证参数绑定和身份校验。
 	file, header, err := c.Request.FormFile("file")
 	if multipartlimit.RespondParseError(c, err) {
 		return
@@ -207,13 +203,23 @@ func (h *AdminHandler) CreateImport(c *gin.Context) {
 		return
 	}
 	defer file.Close()
+	if multipartlimit.RejectExcessFileParts(c, 1) {
+		return
+	}
+	if header.Size <= 0 {
+		response.Fail(c, response.CodeBadRequest, "文件不能为空")
+		return
+	}
+	if header.Size > int64(h.ruleImportMaxFileBytes) {
+		response.Fail(c, response.CodeBadRequest, multipartlimit.ErrBodyTooLarge.Error())
+		return
+	}
 
-	objectKey := "moderation/imports/" + strconv.FormatUint(actorID, 10) + "/" + header.Filename
 	imp, err := h.ruleSvc.CreateImport(c.Request.Context(), rulemod.CreateImportInput{
 		FileName:         header.Filename,
 		Format:           req.Format,
 		FileSize:         uint64(header.Size),
-		ObjectKey:        objectKey,
+		Body:             file,
 		SourceName:       req.SourceName,
 		DefaultCategory:  req.DefaultCategory,
 		DefaultEffect:    req.DefaultEffect,

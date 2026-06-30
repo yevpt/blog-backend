@@ -11,12 +11,14 @@ func newModerationAdminHandler(
 	svc moderationservice.ReviewService,
 	userCache userservice.UserCacheService,
 	operations moderationservice.OperationsService,
+	maxImportFileMB int,
 	ruleSvc ...rulemod.Service,
 ) *moderationhandler.AdminHandler {
 	if svc == nil {
 		return nil
 	}
 	handler := moderationhandler.NewAdminHandler(svc, userCache, operations)
+	handler.SetRuleImportMaxFileBytes(maxImportFileMB * 1024 * 1024)
 	if len(ruleSvc) > 0 && ruleSvc[0] != nil {
 		handler.SetRuleService(ruleSvc[0])
 	}

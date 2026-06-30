@@ -233,15 +233,23 @@ func normalizeImportFormat(format string) (string, error) {
 }
 
 // validateImportInput 校验导入创建参数。
-func validateImportInput(input CreateImportInput) error {
+func validateImportInput(cfg ManagerConfig, input CreateImportInput) error {
 	if strings.TrimSpace(input.FileName) == "" {
 		return fmt.Errorf("%w: 文件名不能为空", ErrInvalidRule)
 	}
 	if input.FileSize == 0 {
 		return fmt.Errorf("%w: 文件大小不能为零", ErrInvalidRule)
 	}
-	if input.ObjectKey == "" {
-		return fmt.Errorf("%w: 对象键不能为空", ErrInvalidRule)
+	if input.Body == nil {
+		return fmt.Errorf("%w: 文件内容不能为空", ErrInvalidRule)
+	}
+	maxBytes := uint64(cfg.MaxImportFileMB) * 1024 * 1024
+	if maxBytes > 0 && input.FileSize > maxBytes {
+		return fmt.Errorf("%w: 文件超过 %d MB", ErrInvalidRule, cfg.MaxImportFileMB)
+	}
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(input.FileName)), ".")
+	if ext != input.Format {
+		return fmt.Errorf("%w: 文件扩展名与格式不一致", ErrInvalidRule)
 	}
 	name := strings.TrimSpace(input.SourceName)
 	if name == "" {

@@ -1,10 +1,16 @@
 package moderationrule
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"time"
+	"unicode/utf8"
 
+	"github.com/google/uuid"
 	repoMod "github.com/vpt/blog-backend/internal/repository/moderationrule"
 	"go.uber.org/zap"
 )
@@ -63,26 +69,50 @@ func (m *manager) processImport(ctx context.Context, imp *repoMod.ImportRecord) 
 	return nil
 }
 
-// CreateImport 创建导入任务，先确保来源存在再写入任务记录。
+// CreateImport 校验并上传导入文件，数据库写入失败时删除新对象。
 func (m *manager) CreateImport(ctx context.Context, input CreateImportInput) (repoMod.ImportRecord, error) {
-	if err := validateImportInput(input); err != nil {
-		return repoMod.ImportRecord{}, err
-	}
 	format, err := normalizeImportFormat(input.Format)
 	if err != nil {
 		return repoMod.ImportRecord{}, err
 	}
+	input.Format = format
+	if err := validateImportInput(m.cfg, input); err != nil {
+		return repoMod.ImportRecord{}, err
+	}
+	if m.store == nil {
+		return repoMod.ImportRecord{}, errors.New("规则导入存储未初始化")
+	}
+
+	file, err := stageImportBody(input.Body, input.FileSize)
+	if err != nil {
+		return repoMod.ImportRecord{}, fmt.Errorf("%w: %s", ErrInvalidRule, err.Error())
+	}
+	defer func() {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+	}()
+
+	objectKey := fmt.Sprintf("moderation/imports/%d/%s.%s", input.OperatorID, uuid.NewString(), format)
+	if err := m.store.PutObjectStream(ctx, objectKey, file, int64(input.FileSize), importContentType(format)); err != nil {
+		return repoMod.ImportRecord{}, fmt.Errorf("上传导入文件: %w", err)
+	}
+	compensate := func() {
+		if deleteErr := m.store.DeleteObject(ctx, objectKey); deleteErr != nil {
+			m.logger.Error("删除未建任务的导入对象失败", zap.String("object_key", objectKey), zap.Error(deleteErr))
+		}
+	}
 
 	source, err := m.repo.EnsureSource(ctx, input.SourceName)
 	if err != nil {
+		compensate()
 		return repoMod.ImportRecord{}, fmt.Errorf("确保来源存在: %w", err)
 	}
 
-	return m.repo.CreateImport(ctx, repoMod.CreateImportCommand{
+	imp, err := m.repo.CreateImport(ctx, repoMod.CreateImportCommand{
 		FileName:         input.FileName,
 		Format:           format,
 		FileSize:         input.FileSize,
-		ObjectKey:        input.ObjectKey,
+		ObjectKey:        objectKey,
 		SourceID:         source.ID,
 		DefaultCategory:  input.DefaultCategory,
 		DefaultEffect:    input.DefaultEffect,
@@ -90,6 +120,62 @@ func (m *manager) CreateImport(ctx context.Context, input CreateImportInput) (re
 		DefaultPriority:  input.DefaultPriority,
 		OperatorID:       input.OperatorID,
 	})
+	if err != nil {
+		compensate()
+		return repoMod.ImportRecord{}, fmt.Errorf("创建导入任务: %w", err)
+	}
+	return imp, nil
+}
+
+func stageImportBody(body io.Reader, expectedSize uint64) (*os.File, error) {
+	file, err := os.CreateTemp("", "moderation-rule-import-*")
+	if err != nil {
+		return nil, fmt.Errorf("创建导入临时文件: %w", err)
+	}
+	cleanup := func() {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+	}
+	written, err := io.Copy(file, io.LimitReader(body, int64(expectedSize)+1))
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("读取导入文件: %w", err)
+	}
+	if written != int64(expectedSize) {
+		cleanup()
+		return nil, errors.New("文件大小与申报值不一致")
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, err
+	}
+	reader := bufio.NewReader(file)
+	for {
+		r, size, readErr := reader.ReadRune()
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			cleanup()
+			return nil, fmt.Errorf("校验 UTF-8: %w", readErr)
+		}
+		if r == utf8.RuneError && size == 1 {
+			cleanup()
+			return nil, errors.New("文件必须是 UTF-8 编码")
+		}
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		cleanup()
+		return nil, err
+	}
+	return file, nil
+}
+
+func importContentType(format string) string {
+	if format == "csv" {
+		return "text/csv; charset=utf-8"
+	}
+	return "text/plain; charset=utf-8"
 }
 
 // ListImports 分页查询导入历史。

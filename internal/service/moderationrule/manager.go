@@ -8,7 +8,6 @@ import (
 
 	repoMod "github.com/vpt/blog-backend/internal/repository/moderationrule"
 	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
-	"github.com/vpt/blog-backend/pkg/storage"
 	"go.uber.org/zap"
 )
 
@@ -18,6 +17,7 @@ type ManagerConfig struct {
 	MaxKeywordRules      int
 	MaxEnabledRegexRules int
 	MaxImportRows        int
+	MaxImportFileMB      int
 	MaxRuleMatches       int
 	MaxIndexMemoryMB     int
 	MaxBuildPeakMemoryMB int
@@ -29,7 +29,7 @@ type ManagerConfig struct {
 // manager 同时实现 Service 和 Worker，持有唯一的候选缓存和当前快照引用。
 type manager struct {
 	repo     repoMod.ManagementRepository
-	store    storage.ObjectStreamStore
+	store    ImportObjectStore
 	replacer SnapshotReplacer
 	limits   ruleindex.Limits
 	cfg      ManagerConfig
@@ -48,7 +48,7 @@ type manager struct {
 // NewManager 创建规则管理服务，所有依赖由调用方注入。
 func NewManager(
 	repo repoMod.ManagementRepository,
-	store storage.ObjectStreamStore,
+	store ImportObjectStore,
 	replacer SnapshotReplacer,
 	cfg ManagerConfig,
 	logger *zap.Logger,
@@ -66,7 +66,7 @@ func NewWorker(svc Service) Worker {
 
 func newManager(
 	repo repoMod.ManagementRepository,
-	store storage.ObjectStreamStore,
+	store ImportObjectStore,
 	replacer SnapshotReplacer,
 	cfg ManagerConfig,
 	logger *zap.Logger,
@@ -76,14 +76,14 @@ func newManager(
 	}
 	normalizeManagerConfig(&cfg)
 	return &manager{
-		repo:        repo,
-		store:       store,
-		replacer:    replacer,
-		limits:      managerLimits(cfg),
-		cfg:         cfg,
-		logger:      logger,
-		cache:       newCandidateCache(cfg.CandidateCacheTTL, time.Now),
-		publishMu:   make(chan struct{}, 1),
+		repo:         repo,
+		store:        store,
+		replacer:     replacer,
+		limits:       managerLimits(cfg),
+		cfg:          cfg,
+		logger:       logger,
+		cache:        newCandidateCache(cfg.CandidateCacheTTL, time.Now),
+		publishMu:    make(chan struct{}, 1),
 		pollInterval: cfg.PollInterval,
 	}
 }
@@ -167,13 +167,15 @@ func (m *manager) Status(ctx context.Context) (Status, error) {
 	return status, nil
 }
 
-
 func normalizeManagerConfig(cfg *ManagerConfig) {
 	if cfg.PollInterval <= 0 {
 		cfg.PollInterval = 5 * time.Second
 	}
 	if cfg.CandidateCacheTTL <= 0 {
 		cfg.CandidateCacheTTL = 10 * time.Minute
+	}
+	if cfg.MaxImportFileMB <= 0 {
+		cfg.MaxImportFileMB = 50
 	}
 }
 
