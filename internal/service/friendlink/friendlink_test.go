@@ -36,6 +36,10 @@ type fakeFriendLinkRepository struct {
 	updateResp   *model.FriendLink
 	updateErr    error
 
+	deleteID   uint
+	deleteResp *model.FriendLink
+	deleteErr  error
+
 	countByAvatarURL map[string]int64
 }
 
@@ -79,7 +83,11 @@ func (r *fakeFriendLinkRepository) Update(id uint, data friendlinkrepo.FriendLin
 }
 
 func (r *fakeFriendLinkRepository) Delete(id uint) (*model.FriendLink, error) {
-	return nil, nil
+	r.deleteID = id
+	if r.deleteErr != nil {
+		return nil, r.deleteErr
+	}
+	return r.deleteResp, nil
 }
 
 func (r *fakeFriendLinkRepository) CountByAvatarURL(avatarURL string) (int64, error) {
@@ -351,6 +359,45 @@ func TestFriendLinkService_Update_KeepsExistingAvatarWhenLogoOmitted(t *testing.
 	assert.False(t, repo.updateData.UpdateAvatarUrl)
 	assert.Nil(t, repo.updateData.AvatarUrl)
 	assert.Empty(t, store.puts)
+	assert.Empty(t, store.deletes)
+}
+
+func TestFriendLinkService_Delete_CleansUpUnreferencedLogo(t *testing.T) {
+	logo := "avatar/link/old.jpg"
+	repo := &fakeFriendLinkRepository{
+		deleteResp: &model.FriendLink{
+			Base:      model.Base{ID: 3},
+			Name:      "友站",
+			Site:      "https://friend.example.com",
+			AvatarUrl: &logo,
+			Seq:       1,
+			Status:    1,
+		},
+	}
+	store := &fakeFriendLinkObjectStore{}
+	svc := friendlink.NewFriendLinkService(repo, store)
+
+	resp, err := svc.Delete(3)
+	require.NoError(t, err)
+	assert.Equal(t, uint(3), resp.ID)
+	assert.Equal(t, uint(3), repo.deleteID)
+	assert.Equal(t, []string{logo}, store.deletes)
+}
+
+func TestFriendLinkService_Delete_KeepsSharedLogo(t *testing.T) {
+	logo := "avatar/link/shared.jpg"
+	repo := &fakeFriendLinkRepository{
+		deleteResp: &model.FriendLink{
+			Base:      model.Base{ID: 3},
+			AvatarUrl: &logo,
+		},
+		countByAvatarURL: map[string]int64{logo: 1},
+	}
+	store := &fakeFriendLinkObjectStore{}
+	svc := friendlink.NewFriendLinkService(repo, store)
+
+	_, err := svc.Delete(3)
+	require.NoError(t, err)
 	assert.Empty(t, store.deletes)
 }
 

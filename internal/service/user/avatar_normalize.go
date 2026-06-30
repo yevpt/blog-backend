@@ -10,7 +10,10 @@ import (
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
-const managedAvatarListPrefix = "avatar/user/"
+const (
+	managedAvatarListPrefix         = "avatar/user/"
+	managedFriendLinkLogoListPrefix = "avatar/link/"
+)
 
 // storageObjectLister 列出对象存储前缀下的 key。
 type storageObjectLister interface {
@@ -23,10 +26,16 @@ type AvatarNormalizer interface {
 	ReprocessStoredAvatar(ctx context.Context, data []byte, targetKey string) (avatarservice.SaveResult, error)
 }
 
+// FriendLinkLogoRefs 查询友链 Logo 在库内的引用计数。
+type FriendLinkLogoRefs interface {
+	CountByAvatarURL(avatarURL string) (int64, error)
+}
+
 // AdminDeps 管理端用户服务可选依赖。
 type AdminDeps struct {
-	Store  storage.ObjectStore
-	Avatar AvatarNormalizer
+	Store      storage.ObjectStore
+	Avatar     AvatarNormalizer
+	FriendLink FriendLinkLogoRefs
 }
 
 func (s *adminService) NormalizeAvatars(ctx context.Context, req *dto.NormalizeAvatarsReq) (*dto.NormalizeAvatarsResp, error) {
@@ -154,15 +163,40 @@ func (s *adminService) purgeDanglingAvatarObjects(ctx context.Context, resp *dto
 		return err
 	}
 	referenced := collectReferencedAvatarKeys(s.store, users)
-	keys, err := lister.ListObjectKeys(ctx, managedAvatarListPrefix)
+	if err := s.purgeUnreferencedObjects(ctx, resp, lister, managedAvatarListPrefix, func(key string) (bool, error) {
+		_, ok := referenced[key]
+		return ok, nil
+	}); err != nil {
+		return err
+	}
+	if s.friendLink == nil {
+		return nil
+	}
+	return s.purgeUnreferencedObjects(ctx, resp, lister, managedFriendLinkLogoListPrefix, func(key string) (bool, error) {
+		return s.isFriendLinkLogoKeyReferenced(ctx, key)
+	})
+}
+
+func (s *adminService) purgeUnreferencedObjects(
+	ctx context.Context,
+	resp *dto.NormalizeAvatarsResp,
+	lister storageObjectLister,
+	prefix string,
+	isReferenced func(string) (bool, error),
+) error {
+	keys, err := lister.ListObjectKeys(ctx, prefix)
 	if err != nil {
 		return err
 	}
 	for _, key := range keys {
-		if !avatarservice.IsManagedAvatarKey(key) {
+		if !isManagedObjectKeyUnderPrefix(key, prefix) {
 			continue
 		}
-		if _, ok := referenced[key]; ok {
+		referenced, err := isReferenced(key)
+		if err != nil {
+			return err
+		}
+		if referenced {
 			continue
 		}
 		if err := s.store.DeleteObject(ctx, key); err != nil {
@@ -182,6 +216,19 @@ func (s *adminService) purgeDanglingAvatarObjects(ctx context.Context, resp *dto
 		})
 	}
 	return nil
+}
+
+func (s *adminService) isFriendLinkLogoKeyReferenced(_ context.Context, objectKey string) (bool, error) {
+	if s.friendLink == nil || !isManagedObjectKeyUnderPrefix(objectKey, managedFriendLinkLogoListPrefix) {
+		return false, nil
+	}
+	count, err := s.friendLink.CountByAvatarURL(objectKey)
+	return count > 0, err
+}
+
+func isManagedObjectKeyUnderPrefix(key, prefix string) bool {
+	key = strings.TrimSpace(key)
+	return key != "" && strings.HasPrefix(key, prefix)
 }
 
 func (s *adminService) normalizeUserAvatar(ctx context.Context, user *model.User, clearInvalid bool) dto.NormalizeAvatarItem {

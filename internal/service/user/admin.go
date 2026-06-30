@@ -17,10 +17,11 @@ type AdminService interface {
 }
 
 type adminService struct {
-	repo   userrepo.UserRepository
-	cache  UserCacheService
-	store  storage.ObjectStore
-	avatar AvatarNormalizer
+	repo       userrepo.UserRepository
+	cache      UserCacheService
+	store      storage.ObjectStore
+	avatar     AvatarNormalizer
+	friendLink FriendLinkLogoRefs
 }
 
 // NewAdminService 创建管理端用户服务。
@@ -29,6 +30,7 @@ func NewAdminService(repo userrepo.UserRepository, cache UserCacheService, deps 
 	if len(deps) > 0 {
 		svc.store = deps[0].Store
 		svc.avatar = deps[0].Avatar
+		svc.friendLink = deps[0].FriendLink
 	}
 	return svc
 }

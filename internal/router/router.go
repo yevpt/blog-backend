@@ -241,9 +241,11 @@ func newRouteHandlers(
 		Captcha: captchaSvc,
 	})
 	presenceProvider := userservice.NewPresenceProvider(userPresence, userRepo)
+	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc, userservice.AdminDeps{
-		Store:  objectStore,
-		Avatar: avatarSvc,
+		Store:      objectStore,
+		Avatar:     avatarSvc,
+		FriendLink: friendLinkRepo,
 	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
@@ -270,7 +272,6 @@ func newRouteHandlers(
 	tagRepo := tagrepo.NewTagRepository(db)
 	tagSvc := tagservice.NewTagService(tagRepo, articleSvc)
 
-	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
 	moderationRuntime, moderationErr := maybeNewModerationService(context.Background(), db, cfg.Moderation, log, objectStore)

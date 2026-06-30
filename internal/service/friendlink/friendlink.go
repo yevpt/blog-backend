@@ -193,6 +193,9 @@ func (s *friendLinkService) Delete(id uint) (*dto.FriendLinkItemResp, error) {
 	if deleted == nil {
 		return nil, ErrFriendLinkNotFound
 	}
+	if err := s.cleanupUnusedFriendLinkLogo(context.Background(), deleted.AvatarUrl); err != nil {
+		return nil, err
+	}
 
 	return s.friendLinkToDTO(deleted), nil
 }
@@ -377,6 +380,10 @@ func (s *friendLinkService) deleteCreatedFriendLinkLogo(ctx context.Context, log
 		return nil
 	}
 	return s.store.DeleteObject(ctx, logo.ObjectKey)
+}
+
+func (s *friendLinkService) cleanupUnusedFriendLinkLogo(ctx context.Context, avatarURL *string) error {
+	return s.cleanupReplacedFriendLinkLogo(ctx, avatarURL, "")
 }
 
 func (s *friendLinkService) cleanupReplacedFriendLinkLogo(ctx context.Context, oldAvatarURL *string, newAvatarURL string) error {

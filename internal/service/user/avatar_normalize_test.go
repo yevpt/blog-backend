@@ -288,6 +288,42 @@ func TestAdminService_NormalizeAvatars_PurgesDanglingObjects(t *testing.T) {
 	assert.Contains(t, store.deleted, oldOrphan)
 }
 
+type stubFriendLinkLogoRefs struct {
+	counts map[string]int64
+}
+
+func (s *stubFriendLinkLogoRefs) CountByAvatarURL(avatarURL string) (int64, error) {
+	if s.counts == nil {
+		return 0, nil
+	}
+	return s.counts[avatarURL], nil
+}
+
+func TestAdminService_NormalizeAvatars_PurgesUnreferencedFriendLinkLogos(t *testing.T) {
+	orphan := "avatar/link/orphan.png"
+	referenced := "avatar/link/active.png"
+	repo := &normalizeAvatarRepo{}
+	store := &normalizeAvatarStore{
+		listKeys: []string{orphan, referenced},
+	}
+	svc := user.NewAdminService(repo, &stubUserCacheService{}, user.AdminDeps{
+		Store: store,
+		Avatar: &stubAvatarNormalizer{},
+		FriendLink: &stubFriendLinkLogoRefs{
+			counts: map[string]int64{
+				orphan:     0,
+				referenced: 1,
+			},
+		},
+	})
+
+	resp, err := svc.NormalizeAvatars(context.Background(), &dto.NormalizeAvatarsReq{})
+	require.NoError(t, err)
+	assert.Equal(t, 1, resp.Purged)
+	assert.Contains(t, store.deleted, orphan)
+	assert.NotContains(t, store.deleted, referenced)
+}
+
 func TestAdminService_NormalizeAvatars_DeletesOldKeyAfterExtensionChange(t *testing.T) {
 	old := "avatar/user/foo.png"
 	newKey := "avatar/user/foo.jpg"
