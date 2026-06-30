@@ -2216,7 +2216,7 @@
                     },
                     {
                         "type": "string",
-                        "description": "状态：pending、approved、rejected、superseded",
+                        "description": "状态：pending、approved、rejected、superseded、all（全部）",
                         "name": "review_status",
                         "in": "query"
                     },
@@ -2667,6 +2667,1043 @@
                                     "properties": {
                                         "data": {
                                             "$ref": "#/definitions/dto.AdminModerationEmergencyItemResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rule-imports": {
+            "get": {
+                "description": "按游标分页查询导入任务历史。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "查询导入历史",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "游标",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationImportPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "管理员上传 CSV 或 TXT 文件并创建导入任务。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "创建规则导入任务",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "规则文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "格式：csv 或 txt",
+                        "name": "format",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "来源名称",
+                        "name": "source_name",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "缺省分类",
+                        "name": "default_category",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "缺省效果",
+                        "name": "default_effect",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "缺省风险等级",
+                        "name": "default_risk_level",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "缺省优先级",
+                        "name": "default_priority",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationImportResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rule-imports/template": {
+            "get": {
+                "description": "下载 CSV 或 TXT 格式的导入模板，不含真实敏感词。",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "下载规则导入模板",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "模板格式：csv 或 txt",
+                        "name": "format",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rule-imports/{id}": {
+            "get": {
+                "description": "返回导入任务进度、统计和候选版本。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "查询导入任务详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导入任务 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationImportResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "取消尚未发布的导入任务。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "取消导入任务",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导入任务 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rule-imports/{id}/errors": {
+            "get": {
+                "description": "流式下载逐行错误报告 CSV。",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "下载导入错误报告",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导入任务 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rule-imports/{id}/publish": {
+            "post": {
+                "description": "确认发布 ready 候选，需带期望版本号。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "发布导入候选规则集",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "导入任务 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "发布请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationRuleImportPublishReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules": {
+            "get": {
+                "description": "管理员按游标分页、筛选条件查询规则。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "查询审核规则列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "游标，上一页最后一条规则 ID",
+                        "name": "cursor",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 20，最大 100",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "精确规则 ID",
+                        "name": "id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "模式搜索",
+                        "name": "pattern",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索模式：exact、prefix",
+                        "name": "search_mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分类",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "规则类型",
+                        "name": "rule_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "风险等级",
+                        "name": "risk_level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "规则效果",
+                        "name": "effect",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "来源 ID",
+                        "name": "source_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "启用状态",
+                        "name": "active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRulePageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建单条规则并触发候选构建发布。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "新增审核规则",
+                "parameters": [
+                    {
+                        "description": "规则内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationRuleSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRuleJobResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules/batch-status": {
+            "post": {
+                "description": "最多 1000 个 ID，批量启用或停用并发布候选版本。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "批量启停审核规则",
+                "parameters": [
+                    {
+                        "description": "批量操作请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationRuleBatchStatusReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRuleJobResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules/export": {
+            "get": {
+                "description": "流式导出当前筛选结果的 UTF-8 BOM CSV，防止公式注入。",
+                "produces": [
+                    "text/csv"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "导出审核规则",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "模式搜索",
+                        "name": "pattern",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "搜索模式：exact、prefix",
+                        "name": "search_mode",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "分类",
+                        "name": "category",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "规则类型",
+                        "name": "rule_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "风险等级",
+                        "name": "risk_level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "规则效果",
+                        "name": "effect",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "来源 ID",
+                        "name": "source_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "启用状态",
+                        "name": "active",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules/metadata": {
+            "get": {
+                "description": "返回分类、类型、风险、效果和来源目录。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "查询规则目录元数据",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRuleMetadataResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules/status": {
+            "get": {
+                "description": "返回当前版本、候选任务、规则数和索引统计。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "查询规则集状态",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRuleStatusResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules/test": {
+            "post": {
+                "description": "使用当前或候选规则集执行文本试跑，返回命中详情。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "审核规则文本试跑",
+                "parameters": [
+                    {
+                        "description": "试跑请求",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationRuleTestReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRuleTestResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/moderation/rules/{id}": {
+            "patch": {
+                "description": "创建新规则替代旧规则，旧规则在发布后停用。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "审核规则管理"
+                ],
+                "summary": "替代审核规则",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "被替代的规则 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "新规则内容",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.AdminModerationRuleSaveReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationRuleJobResp"
                                         }
                                     }
                                 }
@@ -12038,6 +13075,74 @@
                 }
             }
         },
+        "dto.AdminModerationAuthorResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string",
+                    "example": "https://cdn.example.com/avatar.png"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 12
+                },
+                "nickname": {
+                    "type": "string",
+                    "example": "张三"
+                }
+            }
+        },
+        "dto.AdminModerationCandidateStatusResp": {
+            "type": "object",
+            "properties": {
+                "base_ruleset_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "build_peak_bytes": {
+                    "type": "integer",
+                    "example": 9000
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "failure_code": {
+                    "type": "string"
+                },
+                "index_bytes": {
+                    "type": "integer",
+                    "example": 4500
+                },
+                "rule_count": {
+                    "type": "integer",
+                    "example": 1100
+                },
+                "ruleset_id": {
+                    "type": "integer",
+                    "example": 8
+                },
+                "status": {
+                    "type": "string",
+                    "example": "ready"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AdminModerationCategoryEntry": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "example": "fraud"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "欺诈"
+                }
+            }
+        },
         "dto.AdminModerationControlReq": {
             "type": "object",
             "required": [
@@ -12185,9 +13290,106 @@
                 }
             }
         },
+        "dto.AdminModerationImportPageResp": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationImportResp"
+                    }
+                },
+                "next_cursor": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.AdminModerationImportResp": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "default_category": {
+                    "type": "string",
+                    "example": "fraud"
+                },
+                "default_effect": {
+                    "type": "string",
+                    "example": "review"
+                },
+                "default_priority": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "default_risk_level": {
+                    "type": "string",
+                    "example": "medium"
+                },
+                "duplicate_rows": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "error_object_key": {
+                    "type": "string"
+                },
+                "error_rows": {
+                    "type": "integer",
+                    "example": 40
+                },
+                "file_name": {
+                    "type": "string",
+                    "example": "rules.csv"
+                },
+                "file_size": {
+                    "type": "integer",
+                    "example": 1024
+                },
+                "format": {
+                    "type": "string",
+                    "example": "csv"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "operator_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "ruleset_id": {
+                    "type": "integer"
+                },
+                "source_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "total_rows": {
+                    "type": "integer",
+                    "example": 1000
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "valid_rows": {
+                    "type": "integer",
+                    "example": 950
+                },
+                "validation_status": {
+                    "type": "string",
+                    "example": "valid"
+                }
+            }
+        },
         "dto.AdminModerationItemResp": {
             "type": "object",
             "properties": {
+                "author": {
+                    "$ref": "#/definitions/dto.AdminModerationAuthorResp"
+                },
                 "author_id": {
                     "type": "integer",
                     "example": 42
@@ -12405,6 +13607,370 @@
                 }
             }
         },
+        "dto.AdminModerationRuleBatchStatusReq": {
+            "type": "object",
+            "required": [
+                "expected_ruleset_version",
+                "rule_ids"
+            ],
+            "properties": {
+                "active": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "expected_ruleset_version": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "rule_ids": {
+                    "type": "array",
+                    "maxItems": 1000,
+                    "minItems": 1,
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            }
+        },
+        "dto.AdminModerationRuleImportPublishReq": {
+            "type": "object",
+            "required": [
+                "expected_ruleset_version"
+            ],
+            "properties": {
+                "expected_ruleset_version": {
+                    "type": "integer",
+                    "example": 7
+                }
+            }
+        },
+        "dto.AdminModerationRuleJobResp": {
+            "type": "object",
+            "properties": {
+                "base_ruleset_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "ruleset_id": {
+                    "type": "integer",
+                    "example": 8
+                },
+                "status": {
+                    "type": "string",
+                    "example": "building"
+                }
+            }
+        },
+        "dto.AdminModerationRuleMetadataResp": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationCategoryEntry"
+                    }
+                },
+                "effects": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "risk_levels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "rule_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationSourceEntry"
+                    }
+                }
+            }
+        },
+        "dto.AdminModerationRulePageResp": {
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationRuleResp"
+                    }
+                },
+                "next_cursor": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.AdminModerationRuleResp": {
+            "type": "object",
+            "properties": {
+                "activated_ruleset_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "active": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "category": {
+                    "type": "string",
+                    "example": "fraud"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deactivated_ruleset_id": {
+                    "type": "integer"
+                },
+                "effect": {
+                    "type": "string",
+                    "example": "review"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 42
+                },
+                "name": {
+                    "type": "string"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "风险词"
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "replaces_rule_id": {
+                    "type": "integer"
+                },
+                "risk_level": {
+                    "type": "string",
+                    "example": "medium"
+                },
+                "rule_type": {
+                    "type": "string",
+                    "example": "keyword"
+                },
+                "source_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AdminModerationRuleSaveReq": {
+            "type": "object",
+            "required": [
+                "category",
+                "effect",
+                "expected_ruleset_version",
+                "pattern",
+                "risk_level",
+                "rule_type",
+                "source_id"
+            ],
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "example": "other"
+                },
+                "effect": {
+                    "type": "string",
+                    "enum": [
+                        "review",
+                        "allow"
+                    ],
+                    "example": "review"
+                },
+                "expected_ruleset_version": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "涉政词"
+                },
+                "pattern": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "example": "风险词"
+                },
+                "priority": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "risk_level": {
+                    "type": "string",
+                    "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                    ],
+                    "example": "medium"
+                },
+                "rule_type": {
+                    "type": "string",
+                    "enum": [
+                        "keyword",
+                        "regexp",
+                        "composite"
+                    ],
+                    "example": "keyword"
+                },
+                "source_id": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "dto.AdminModerationRuleStatusResp": {
+            "type": "object",
+            "properties": {
+                "build_duration_ms": {
+                    "type": "integer",
+                    "example": 500
+                },
+                "build_peak_bytes": {
+                    "type": "integer",
+                    "example": 8192
+                },
+                "candidate": {
+                    "$ref": "#/definitions/dto.AdminModerationCandidateStatusResp"
+                },
+                "composite_count": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "current_ruleset_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "index_bytes": {
+                    "type": "integer",
+                    "example": 4096
+                },
+                "keyword_count": {
+                    "type": "integer",
+                    "example": 950
+                },
+                "regexp_count": {
+                    "type": "integer",
+                    "example": 30
+                },
+                "rule_count": {
+                    "type": "integer",
+                    "example": 1000
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AdminModerationRuleTestHitResp": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "example": "fraud"
+                },
+                "effect": {
+                    "type": "string",
+                    "example": "review"
+                },
+                "excerpt": {
+                    "type": "string",
+                    "example": "包含风险内容"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "风险"
+                },
+                "risk_level": {
+                    "type": "string",
+                    "example": "high"
+                },
+                "rule_id": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "rule_type": {
+                    "type": "string",
+                    "example": "keyword"
+                }
+            }
+        },
+        "dto.AdminModerationRuleTestReq": {
+            "type": "object",
+            "required": [
+                "text"
+            ],
+            "properties": {
+                "ruleset_id": {
+                    "type": "integer",
+                    "example": 8
+                },
+                "text": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "example": "这是一段测试文本"
+                }
+            }
+        },
+        "dto.AdminModerationRuleTestResp": {
+            "type": "object",
+            "properties": {
+                "hits": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationRuleTestHitResp"
+                    }
+                },
+                "risk": {
+                    "type": "string",
+                    "example": "high"
+                },
+                "rule_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "ruleset_id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "suppressed_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "truncated": {
+                    "type": "boolean"
+                }
+            }
+        },
         "dto.AdminModerationSanctionReq": {
             "type": "object",
             "properties": {
@@ -12413,6 +13979,19 @@
                 },
                 "until": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.AdminModerationSourceEntry": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "name": {
+                    "type": "string",
+                    "example": "手工维护"
                 }
             }
         },
@@ -14282,6 +15861,32 @@
                 }
             }
         },
+        "dto.ModerationImageResp": {
+            "type": "object",
+            "properties": {
+                "access_url": {
+                    "type": "string"
+                },
+                "display_mode": {
+                    "type": "string"
+                },
+                "file_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "seq": {
+                    "type": "integer"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.ModerationView": {
             "type": "object",
             "properties": {
@@ -14308,6 +15913,13 @@
                 "pending_content": {
                     "description": "PendingContent 仅向作者和管理员返回，供编辑器显示。",
                     "type": "string"
+                },
+                "pending_images": {
+                    "description": "PendingImages 仅向作者和管理员返回，供编辑器回显待审图片。",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.ModerationImageResp"
+                    }
                 },
                 "pending_risk_level": {
                     "description": "PendingRiskLevel 仅向作者和管理员返回。",

@@ -61,3 +61,43 @@
 - 清理 worker 只在审核开启时运行；它保护当前物化、最后通过、待审和仍有操作日志引用的版本。
 - 图片审核记录按 `last_used_at` 和 `approval_retention_days` 清理。每次复用已通过图片都会刷新最后访问时间。
 - 生产始终使用 `enforce`；`observe` 仅限本地调试。
+
+## 规则管理上线
+
+审核规则管理 API、批量导入和单实例构建 worker 在审核开启后自动注册路由并启动。初始规则集为空，需通过管理端导入或逐条新增。
+
+### 资源规划
+
+| 规则规模 | 推荐内存 | 构建峰值预估 | 说明 |
+|----------|----------|-------------|------|
+| ~10 万关键词 | 1 GB | 120–300 MB | 日常维护推荐规模 |
+| 接近 50 万关键词 | 2–4 GB | 600 MB–1.2 GB | 设计上限，需基准验证 |
+
+- `max_index_memory_mb` 超过时终止构建，当前快照不变。
+- `max_build_peak_memory_mb` 必须大于 `max_index_memory_mb`，默认 1024。
+- 索引文件保存在 Garage `moderation/rulesets/` 前缀，失败和 superseded 产物按 `ruleset_artifact_retention_days` 清理。
+- 导入原文件和错误报告保存在 `moderation/imports/` 前缀，按 `import_artifact_retention_days` 清理。
+
+### 初始导入
+
+1. 通过管理端下载 CSV 或 TXT 模板，填写规则。
+2. 在管理端上传文件，设置来源名称和缺省字段。
+3. Worker 自动校验、去重、构建索引；校验失败时可下载错误报告。
+4. 构建完成后候选规则集状态为 `ready`；管理员确认后发布。
+5. 无导入关联的单条新增/修改/批量启停会自动构建并发布。
+
+### 回滚
+
+规则管理出现故障时：
+
+1. 将 `moderation.enabled` 改回 `false` 并重新部署，规则路由和构建 worker 不启动。
+2. 不删除规则表和规则集版本；当前已发布规则集保持不变。
+3. 失败候选的未发布规则行由清理 worker 自动删除。
+
+### 基准命令
+
+```bash
+go test ./internal/service/moderation/ruleindex -run '^$' -bench 'Benchmark(Build100K|Build500K|Match)' -benchmem -count=1
+```
+
+详细基准见 `docs/moderation-rule-index-benchmark.md`。

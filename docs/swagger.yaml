@@ -609,6 +609,54 @@ definitions:
     - password
     - username
     type: object
+  dto.AdminModerationAuthorResp:
+    properties:
+      avatar_url:
+        example: https://cdn.example.com/avatar.png
+        type: string
+      id:
+        example: 12
+        type: integer
+      nickname:
+        example: 张三
+        type: string
+    type: object
+  dto.AdminModerationCandidateStatusResp:
+    properties:
+      base_ruleset_id:
+        example: 7
+        type: integer
+      build_peak_bytes:
+        example: 9000
+        type: integer
+      created_at:
+        type: string
+      failure_code:
+        type: string
+      index_bytes:
+        example: 4500
+        type: integer
+      rule_count:
+        example: 1100
+        type: integer
+      ruleset_id:
+        example: 8
+        type: integer
+      status:
+        example: ready
+        type: string
+      updated_at:
+        type: string
+    type: object
+  dto.AdminModerationCategoryEntry:
+    properties:
+      key:
+        example: fraud
+        type: string
+      name:
+        example: 欺诈
+        type: string
+    type: object
   dto.AdminModerationControlReq:
     properties:
       lock_version:
@@ -713,8 +761,77 @@ definitions:
     required:
     - reason
     type: object
+  dto.AdminModerationImportPageResp:
+    properties:
+      has_more:
+        type: boolean
+      list:
+        items:
+          $ref: '#/definitions/dto.AdminModerationImportResp'
+        type: array
+      next_cursor:
+        type: integer
+    type: object
+  dto.AdminModerationImportResp:
+    properties:
+      created_at:
+        type: string
+      default_category:
+        example: fraud
+        type: string
+      default_effect:
+        example: review
+        type: string
+      default_priority:
+        example: 100
+        type: integer
+      default_risk_level:
+        example: medium
+        type: string
+      duplicate_rows:
+        example: 10
+        type: integer
+      error_object_key:
+        type: string
+      error_rows:
+        example: 40
+        type: integer
+      file_name:
+        example: rules.csv
+        type: string
+      file_size:
+        example: 1024
+        type: integer
+      format:
+        example: csv
+        type: string
+      id:
+        example: 1
+        type: integer
+      operator_id:
+        example: 1
+        type: integer
+      ruleset_id:
+        type: integer
+      source_id:
+        example: 1
+        type: integer
+      total_rows:
+        example: 1000
+        type: integer
+      updated_at:
+        type: string
+      valid_rows:
+        example: 950
+        type: integer
+      validation_status:
+        example: valid
+        type: string
+    type: object
   dto.AdminModerationItemResp:
     properties:
+      author:
+        $ref: '#/definitions/dto.AdminModerationAuthorResp'
       author_id:
         example: 42
         type: integer
@@ -869,11 +986,280 @@ definitions:
     - lock_version
     - revision_id
     type: object
+  dto.AdminModerationRuleBatchStatusReq:
+    properties:
+      active:
+        example: false
+        type: boolean
+      expected_ruleset_version:
+        example: 7
+        type: integer
+      rule_ids:
+        example:
+        - 1
+        - 2
+        - 3
+        items:
+          type: integer
+        maxItems: 1000
+        minItems: 1
+        type: array
+    required:
+    - expected_ruleset_version
+    - rule_ids
+    type: object
+  dto.AdminModerationRuleImportPublishReq:
+    properties:
+      expected_ruleset_version:
+        example: 7
+        type: integer
+    required:
+    - expected_ruleset_version
+    type: object
+  dto.AdminModerationRuleJobResp:
+    properties:
+      base_ruleset_id:
+        example: 7
+        type: integer
+      ruleset_id:
+        example: 8
+        type: integer
+      status:
+        example: building
+        type: string
+    type: object
+  dto.AdminModerationRuleMetadataResp:
+    properties:
+      categories:
+        items:
+          $ref: '#/definitions/dto.AdminModerationCategoryEntry'
+        type: array
+      effects:
+        items:
+          type: string
+        type: array
+      risk_levels:
+        items:
+          type: string
+        type: array
+      rule_types:
+        items:
+          type: string
+        type: array
+      sources:
+        items:
+          $ref: '#/definitions/dto.AdminModerationSourceEntry'
+        type: array
+    type: object
+  dto.AdminModerationRulePageResp:
+    properties:
+      has_more:
+        type: boolean
+      list:
+        items:
+          $ref: '#/definitions/dto.AdminModerationRuleResp'
+        type: array
+      next_cursor:
+        type: integer
+    type: object
+  dto.AdminModerationRuleResp:
+    properties:
+      activated_ruleset_id:
+        example: 7
+        type: integer
+      active:
+        example: true
+        type: boolean
+      category:
+        example: fraud
+        type: string
+      created_at:
+        type: string
+      deactivated_ruleset_id:
+        type: integer
+      effect:
+        example: review
+        type: string
+      id:
+        example: 42
+        type: integer
+      name:
+        type: string
+      pattern:
+        example: 风险词
+        type: string
+      priority:
+        example: 100
+        type: integer
+      replaces_rule_id:
+        type: integer
+      risk_level:
+        example: medium
+        type: string
+      rule_type:
+        example: keyword
+        type: string
+      source_id:
+        example: 1
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  dto.AdminModerationRuleSaveReq:
+    properties:
+      category:
+        example: other
+        type: string
+      effect:
+        enum:
+        - review
+        - allow
+        example: review
+        type: string
+      expected_ruleset_version:
+        example: 7
+        type: integer
+      name:
+        example: 涉政词
+        maxLength: 100
+        type: string
+      pattern:
+        example: 风险词
+        maxLength: 500
+        type: string
+      priority:
+        example: 100
+        type: integer
+      risk_level:
+        enum:
+        - low
+        - medium
+        - high
+        example: medium
+        type: string
+      rule_type:
+        enum:
+        - keyword
+        - regexp
+        - composite
+        example: keyword
+        type: string
+      source_id:
+        example: 1
+        type: integer
+    required:
+    - category
+    - effect
+    - expected_ruleset_version
+    - pattern
+    - risk_level
+    - rule_type
+    - source_id
+    type: object
+  dto.AdminModerationRuleStatusResp:
+    properties:
+      build_duration_ms:
+        example: 500
+        type: integer
+      build_peak_bytes:
+        example: 8192
+        type: integer
+      candidate:
+        $ref: '#/definitions/dto.AdminModerationCandidateStatusResp'
+      composite_count:
+        example: 20
+        type: integer
+      current_ruleset_id:
+        example: 7
+        type: integer
+      index_bytes:
+        example: 4096
+        type: integer
+      keyword_count:
+        example: 950
+        type: integer
+      regexp_count:
+        example: 30
+        type: integer
+      rule_count:
+        example: 1000
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  dto.AdminModerationRuleTestHitResp:
+    properties:
+      category:
+        example: fraud
+        type: string
+      effect:
+        example: review
+        type: string
+      excerpt:
+        example: 包含风险内容
+        type: string
+      pattern:
+        example: 风险
+        type: string
+      risk_level:
+        example: high
+        type: string
+      rule_id:
+        example: 5
+        type: integer
+      rule_type:
+        example: keyword
+        type: string
+    type: object
+  dto.AdminModerationRuleTestReq:
+    properties:
+      ruleset_id:
+        example: 8
+        type: integer
+      text:
+        example: 这是一段测试文本
+        maxLength: 10000
+        type: string
+    required:
+    - text
+    type: object
+  dto.AdminModerationRuleTestResp:
+    properties:
+      hits:
+        items:
+          $ref: '#/definitions/dto.AdminModerationRuleTestHitResp'
+        type: array
+      risk:
+        example: high
+        type: string
+      rule_ids:
+        items:
+          type: integer
+        type: array
+      ruleset_id:
+        example: 7
+        type: integer
+      suppressed_ids:
+        items:
+          type: integer
+        type: array
+      truncated:
+        type: boolean
+    type: object
   dto.AdminModerationSanctionReq:
     properties:
       reason:
         type: string
       until:
+        type: string
+    type: object
+  dto.AdminModerationSourceEntry:
+    properties:
+      id:
+        example: 1
+        type: integer
+      name:
+        example: 手工维护
         type: string
     type: object
   dto.AdminModerationSubjectResp:
@@ -2249,6 +2635,23 @@ definitions:
       user:
         $ref: '#/definitions/dto.UserResp'
     type: object
+  dto.ModerationImageResp:
+    properties:
+      access_url:
+        type: string
+      display_mode:
+        type: string
+      file_type:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      seq:
+        type: integer
+      url:
+        type: string
+    type: object
   dto.ModerationView:
     properties:
       can_interact:
@@ -2270,6 +2673,11 @@ definitions:
       pending_content:
         description: PendingContent 仅向作者和管理员返回，供编辑器显示。
         type: string
+      pending_images:
+        description: PendingImages 仅向作者和管理员返回，供编辑器回显待审图片。
+        items:
+          $ref: '#/definitions/dto.ModerationImageResp'
+        type: array
       pending_risk_level:
         description: PendingRiskLevel 仅向作者和管理员返回。
         example: low
@@ -4945,7 +5353,7 @@ paths:
         in: query
         name: risk_level
         type: string
-      - description: 状态：pending、approved、rejected、superseded
+      - description: 状态：pending、approved、rejected、superseded、all（全部）
         in: query
         name: review_status
         type: string
@@ -5247,6 +5655,663 @@ paths:
       summary: 恢复单条紧急隐藏内容
       tags:
       - 内容审核管理
+  /admin/moderation/rule-imports:
+    get:
+      description: 按游标分页查询导入任务历史。
+      parameters:
+      - description: 游标
+        in: query
+        name: cursor
+        type: integer
+      - description: 每页数量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationImportPageResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询导入历史
+      tags:
+      - 审核规则管理
+    post:
+      consumes:
+      - multipart/form-data
+      description: 管理员上传 CSV 或 TXT 文件并创建导入任务。
+      parameters:
+      - description: 规则文件
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: 格式：csv 或 txt
+        in: formData
+        name: format
+        required: true
+        type: string
+      - description: 来源名称
+        in: formData
+        name: source_name
+        required: true
+        type: string
+      - description: 缺省分类
+        in: formData
+        name: default_category
+        required: true
+        type: string
+      - description: 缺省效果
+        in: formData
+        name: default_effect
+        required: true
+        type: string
+      - description: 缺省风险等级
+        in: formData
+        name: default_risk_level
+        required: true
+        type: string
+      - description: 缺省优先级
+        in: formData
+        name: default_priority
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationImportResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 创建规则导入任务
+      tags:
+      - 审核规则管理
+  /admin/moderation/rule-imports/{id}:
+    delete:
+      description: 取消尚未发布的导入任务。
+      parameters:
+      - description: 导入任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 取消导入任务
+      tags:
+      - 审核规则管理
+    get:
+      description: 返回导入任务进度、统计和候选版本。
+      parameters:
+      - description: 导入任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationImportResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询导入任务详情
+      tags:
+      - 审核规则管理
+  /admin/moderation/rule-imports/{id}/errors:
+    get:
+      description: 流式下载逐行错误报告 CSV。
+      parameters:
+      - description: 导入任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 下载导入错误报告
+      tags:
+      - 审核规则管理
+  /admin/moderation/rule-imports/{id}/publish:
+    post:
+      consumes:
+      - application/json
+      description: 确认发布 ready 候选，需带期望版本号。
+      parameters:
+      - description: 导入任务 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 发布请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationRuleImportPublishReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 发布导入候选规则集
+      tags:
+      - 审核规则管理
+  /admin/moderation/rule-imports/template:
+    get:
+      description: 下载 CSV 或 TXT 格式的导入模板，不含真实敏感词。
+      parameters:
+      - description: 模板格式：csv 或 txt
+        in: query
+        name: format
+        required: true
+        type: string
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 下载规则导入模板
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules:
+    get:
+      description: 管理员按游标分页、筛选条件查询规则。
+      parameters:
+      - description: 游标，上一页最后一条规则 ID
+        in: query
+        name: cursor
+        type: integer
+      - description: 每页数量，默认 20，最大 100
+        in: query
+        name: limit
+        type: integer
+      - description: 精确规则 ID
+        in: query
+        name: id
+        type: integer
+      - description: 模式搜索
+        in: query
+        name: pattern
+        type: string
+      - description: 搜索模式：exact、prefix
+        in: query
+        name: search_mode
+        type: string
+      - description: 分类
+        in: query
+        name: category
+        type: string
+      - description: 规则类型
+        in: query
+        name: rule_type
+        type: string
+      - description: 风险等级
+        in: query
+        name: risk_level
+        type: string
+      - description: 规则效果
+        in: query
+        name: effect
+        type: string
+      - description: 来源 ID
+        in: query
+        name: source_id
+        type: integer
+      - description: 启用状态
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRulePageResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询审核规则列表
+      tags:
+      - 审核规则管理
+    post:
+      consumes:
+      - application/json
+      description: 创建单条规则并触发候选构建发布。
+      parameters:
+      - description: 规则内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationRuleSaveReq'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRuleJobResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 新增审核规则
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: 创建新规则替代旧规则，旧规则在发布后停用。
+      parameters:
+      - description: 被替代的规则 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: 新规则内容
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationRuleSaveReq'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRuleJobResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 替代审核规则
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules/batch-status:
+    post:
+      consumes:
+      - application/json
+      description: 最多 1000 个 ID，批量启用或停用并发布候选版本。
+      parameters:
+      - description: 批量操作请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationRuleBatchStatusReq'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRuleJobResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 批量启停审核规则
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules/export:
+    get:
+      description: 流式导出当前筛选结果的 UTF-8 BOM CSV，防止公式注入。
+      parameters:
+      - description: 模式搜索
+        in: query
+        name: pattern
+        type: string
+      - description: 搜索模式：exact、prefix
+        in: query
+        name: search_mode
+        type: string
+      - description: 分类
+        in: query
+        name: category
+        type: string
+      - description: 规则类型
+        in: query
+        name: rule_type
+        type: string
+      - description: 风险等级
+        in: query
+        name: risk_level
+        type: string
+      - description: 规则效果
+        in: query
+        name: effect
+        type: string
+      - description: 来源 ID
+        in: query
+        name: source_id
+        type: integer
+      - description: 启用状态
+        in: query
+        name: active
+        type: boolean
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 导出审核规则
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules/metadata:
+    get:
+      description: 返回分类、类型、风险、效果和来源目录。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRuleMetadataResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询规则目录元数据
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules/status:
+    get:
+      description: 返回当前版本、候选任务、规则数和索引统计。
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRuleStatusResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 查询规则集状态
+      tags:
+      - 审核规则管理
+  /admin/moderation/rules/test:
+    post:
+      consumes:
+      - application/json
+      description: 使用当前或候选规则集执行文本试跑，返回命中详情。
+      parameters:
+      - description: 试跑请求
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.AdminModerationRuleTestReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/dto.AdminModerationRuleTestResp'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.Response'
+      summary: 审核规则文本试跑
+      tags:
+      - 审核规则管理
   /admin/moderation/users/{id}:
     get:
       parameters:
