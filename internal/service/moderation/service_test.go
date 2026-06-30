@@ -11,6 +11,7 @@ import (
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	repositorymock "github.com/vpt/blog-backend/internal/repository/moderation/mock"
 	"github.com/vpt/blog-backend/internal/service/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
 	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"go.uber.org/mock/gomock"
@@ -47,7 +48,7 @@ func (c *classifierStub) Classify(moderation.ProcessedContent) moderation.Classi
 	return c.out
 }
 
-func (c *classifierStub) ReplaceSnapshot(moderation.RuleSnapshot) error { return nil }
+func (c *classifierStub) ReplaceSnapshot(*ruleindex.Snapshot) error { return nil }
 
 type deciderStub struct {
 	calls  int
@@ -126,7 +127,7 @@ func TestServiceSubmitLowPostReview(t *testing.T) {
 	repo := repositorymock.NewMockRepository(ctrl)
 	processor := &processorStub{}
 	classifier := &classifierStub{out: moderation.Classification{
-		Risk: moderation.RiskLow, RuleMatchIDs: []uint64{3}, RulesetVersion: 9,
+		Risk: moderation.RiskLow, RuleMatchIDs: []uint64{3}, RuleMatchesTruncated: true, RulesetVersion: 9,
 	}}
 	decider := &deciderStub{action: moderation.ActionPostReview}
 	cmd := submitCommand()
@@ -143,6 +144,7 @@ func TestServiceSubmitLowPostReview(t *testing.T) {
 				assert.Equal(t, moderationrepo.ReviewPending, persisted.Revision.ReviewStatus)
 				assert.Equal(t, uint64(9), persisted.Revision.RulesetVersion)
 				assert.Equal(t, []uint64{3}, persisted.Revision.RuleMatchIDs)
+				assert.True(t, persisted.Revision.RuleMatchesTruncated)
 				assert.True(t, persisted.Next.Pending.IsNew)
 				assert.True(t, persisted.Next.Materialized.IsNew)
 				assert.False(t, persisted.Next.Approved.IsNew)
@@ -238,7 +240,7 @@ func TestServiceSubmitHighRiskStillRejectsWhenAuditFails(t *testing.T) {
 	repo := repositorymock.NewMockRepository(ctrl)
 	processor := &processorStub{}
 	classifier := &classifierStub{out: moderation.Classification{
-		Risk: moderation.RiskHigh, RuleMatchIDs: []uint64{99}, RulesetVersion: 8,
+		Risk: moderation.RiskHigh, RuleMatchIDs: []uint64{99}, RuleMatchesTruncated: true, RulesetVersion: 8,
 	}}
 	decider := &deciderStub{action: moderation.ActionBlock}
 	cmd := submitCommand()
@@ -250,6 +252,7 @@ func TestServiceSubmitHighRiskStillRejectsWhenAuditFails(t *testing.T) {
 		repo.EXPECT().RecordBlockedAttempt(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, attempt moderationrepo.BlockedAttempt) (moderationrepo.StoredResult, error) {
 				assert.Equal(t, []uint64{99}, attempt.RuleMatchIDs)
+				assert.True(t, attempt.RuleMatchesTruncated)
 				assert.Equal(t, uint64(8), attempt.RulesetVersion)
 				return moderationrepo.StoredResult{}, errors.New("audit down")
 			},

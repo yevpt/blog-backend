@@ -18,10 +18,14 @@ func TestNewModerationServiceLoadsRulesBeforeReturningRuntime(t *testing.T) {
 	require.NoError(t, err)
 	gdb, err := gorm.Open(mysql.New(mysql.Config{Conn: db, SkipInitializeWithVersion: true}), &gorm.Config{})
 	require.NoError(t, err)
-	mock.ExpectQuery("SELECT .* FROM `moderation_rule` WHERE enabled = .*ORDER BY priority ASC,id ASC").
-		WithArgs(true).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "rule_type", "pattern", "risk_level", "priority", "ruleset_version", "enabled"}).
-			AddRow(1, "基础规则", "keyword", "测试风险词", "medium", 1, 1, true))
+	mock.ExpectQuery("SELECT .* FROM `moderation_ruleset` WHERE status = .*ORDER BY id DESC LIMIT").
+		WithArgs("published", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "status", "index_object_key", "index_format_version", "index_sha256", "index_bytes"}).
+			AddRow(1, "published", nil, 1, nil, 0))
+	mock.ExpectQuery("SELECT .* FROM moderation_rule AS rule JOIN moderation_ruleset AS activation").
+		WithArgs("published", "superseded", uint64(1), uint64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "rule_type", "pattern", "risk_level", "effect", "priority"}).
+			AddRow(1, "keyword", "测试风险词", "medium", "review", 1))
 
 	service, err := newModerationService(context.Background(), gdb, config.ModerationConfig{}, zap.NewNop(), nil)
 
@@ -35,7 +39,7 @@ func TestNewModerationServiceFailsClosedWhenInitialRuleLoadFails(t *testing.T) {
 	require.NoError(t, err)
 	gdb, err := gorm.Open(mysql.New(mysql.Config{Conn: db, SkipInitializeWithVersion: true}), &gorm.Config{})
 	require.NoError(t, err)
-	mock.ExpectQuery("SELECT .* FROM `moderation_rule`").WillReturnError(errors.New("database unavailable"))
+	mock.ExpectQuery("SELECT .* FROM `moderation_ruleset`").WillReturnError(errors.New("database unavailable"))
 
 	service, err := newModerationService(context.Background(), gdb, config.ModerationConfig{}, zap.NewNop(), nil)
 

@@ -350,7 +350,7 @@ func (s *applicationService) recordRiskBlock(
 	_, err := s.repo.RecordBlockedAttempt(ctx, moderationrepo.BlockedAttempt{
 		UserID: input.actorID, SubjectType: input.subject.Type, ItemID: itemID,
 		IdempotencyKey: input.idempotencyKey, RulesetVersion: classification.RulesetVersion,
-		RuleMatchIDs: classification.RuleMatchIDs, CreatedAt: now,
+		RuleMatchIDs: classification.RuleMatchIDs, RuleMatchesTruncated: classification.RuleMatchesTruncated, CreatedAt: now,
 		ProfileChange: &moderationrepo.ProfileChange{
 			UserID: input.actorID, HighRiskDelta: 1,
 			ViolationScoreDelta: int64(s.cfg.Governance.ViolationWeights.HighRiskBlocked),

@@ -4,63 +4,57 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
-	"strings"
 	"sync/atomic"
 
-	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	"github.com/vpt/blog-backend/internal/repository/moderationrule"
+	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
+	"github.com/vpt/blog-backend/internal/service/moderation/textnorm"
 	"go.uber.org/zap"
 )
 
 type classifier struct {
 	logger   *zap.Logger
-	snapshot atomic.Pointer[compiledSnapshot]
+	snapshot atomic.Pointer[ruleindex.Snapshot]
 }
 
-type compiledSnapshot struct {
-	version uint64
-	rules   []runtimeRule
-}
-
-type runtimeRule struct {
-	id      uint64
-	risk    RiskLevel
-	keyword string
-	regexp  *regexp.Regexp
-	signals []string
-}
-
-// NewClassifier 创建分类器；初始快照无效时保持冷加载降级状态。
-func NewClassifier(logger *zap.Logger, initial RuleSnapshot) Classifier {
+// NewClassifier 创建分类器；nil 初始快照保持冷加载降级状态。
+func NewClassifier(logger *zap.Logger, initial *ruleindex.Snapshot) Classifier {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 	result := &classifier{logger: logger}
-	if err := result.replaceSnapshot(initial); err != nil {
-		logger.Warn("初始化文本审核规则失败，启用中风险降级", zap.Error(err))
+	if initial != nil {
+		if err := result.replaceSnapshot(initial); err != nil {
+			logger.Warn("初始化文本审核规则失败，启用中风险降级", zap.Error(err))
+		}
 	}
 	return result
 }
 
-// NewClassifierFromRepository 从数据库加载当前启用规则并构造运行时分类器。
-func NewClassifierFromRepository(ctx context.Context, repo moderationrepo.Repository, logger *zap.Logger) (Classifier, error) {
-	records, err := repo.LoadEnabledRules(ctx)
+// NewClassifierFromRepository 从当前已发布版本的规则行流构建运行时分类器。
+func NewClassifierFromRepository(
+	ctx context.Context,
+	repo moderationrule.SnapshotRepository,
+	limits ruleindex.Limits,
+	logger *zap.Logger,
+) (Classifier, error) {
+	if repo == nil {
+		return nil, errors.New("规则快照仓库不能为空")
+	}
+	current, err := repo.CurrentRuleset(ctx)
 	if err != nil {
 		return nil, err
 	}
-	snapshot := RuleSnapshot{Rules: make([]CompiledRule, 0, len(records))}
-	for _, record := range records {
-		if record.RulesetVersion > snapshot.Version {
-			snapshot.Version = record.RulesetVersion
-		}
-		snapshot.Rules = append(snapshot.Rules, CompiledRule{
-			ID: record.ID, Type: RuleType(record.RuleType), Risk: RiskLevel(record.RiskLevel), Pattern: record.Pattern,
+	source := func(ctx context.Context, visit func(ruleindex.SourceRule) error) error {
+		return repo.StreamRules(ctx, current.ID, func(record moderationrule.RuleRecord) error {
+			return visit(ruleindex.SourceRule{
+				ID: record.ID, Type: record.RuleType, Pattern: record.Pattern,
+				Risk: record.RiskLevel, Effect: record.Effect, Priority: record.Priority,
+			})
 		})
 	}
-	if snapshot.Version == 0 {
-		snapshot.Version = 1
-	}
-	if _, err := compileSnapshot(snapshot); err != nil {
+	snapshot, _, err := ruleindex.Build(ctx, current.ID, source, limits)
+	if err != nil {
 		return nil, err
 	}
 	return NewClassifier(logger, snapshot), nil
@@ -72,138 +66,49 @@ func (c *classifier) Classify(processed ProcessedContent) Classification {
 		return Classification{Risk: RiskMedium}
 	}
 
-	normalized := NormalizeText(processed.PlainText)
-	result := Classification{Risk: RiskLow, RuleMatchIDs: make([]uint64, 0), RulesetVersion: snapshot.version}
-	for _, rule := range snapshot.rules {
-		if !rule.matches(normalized) {
-			continue
-		}
-		result.RuleMatchIDs = append(result.RuleMatchIDs, rule.id)
-		if riskRank(rule.risk) > riskRank(result.Risk) {
-			result.Risk = rule.risk
-		}
+	matched := snapshot.Match(textnorm.Normalize(processed.PlainText))
+	return Classification{
+		Risk:                 classificationRisk(matched.Risk),
+		RuleMatchIDs:         matched.RuleIDs,
+		RuleMatchesTruncated: matched.Truncated,
+		RulesetVersion:       snapshot.Version(),
 	}
-	return result
 }
 
-func (c *classifier) ReplaceSnapshot(next RuleSnapshot) error {
+func (c *classifier) ReplaceSnapshot(next *ruleindex.Snapshot) error {
 	err := c.replaceSnapshot(next)
 	if err != nil {
-		c.logger.Warn("文本审核规则替换失败，保留最后有效快照",
-			zap.Uint64("ruleset_version", next.Version),
-			zap.Error(err),
-		)
+		fields := []zap.Field{zap.Error(err)}
+		if next != nil {
+			fields = append(fields, zap.Uint64("ruleset_version", next.Version()))
+		}
+		c.logger.Warn("文本审核规则替换失败，保留最后有效快照", fields...)
 	}
 	return err
 }
 
-func (c *classifier) replaceSnapshot(next RuleSnapshot) error {
-	compiled, err := compileSnapshot(next)
-	if err != nil {
-		return err
+func (c *classifier) replaceSnapshot(next *ruleindex.Snapshot) error {
+	if next == nil || next.Version() == 0 || next.Stats().RuleCount == 0 {
+		return errors.New("规则快照无效")
 	}
-
 	for {
 		current := c.snapshot.Load()
-		if current != nil && next.Version <= current.version {
-			return fmt.Errorf("ruleset version must increase: current=%d next=%d", current.version, next.Version)
+		if current != nil && next.Version() <= current.Version() {
+			return fmt.Errorf("ruleset version must increase: current=%d next=%d", current.Version(), next.Version())
 		}
-		if c.snapshot.CompareAndSwap(current, compiled) {
+		if c.snapshot.CompareAndSwap(current, next) {
 			return nil
 		}
 	}
 }
 
-func compileSnapshot(snapshot RuleSnapshot) (*compiledSnapshot, error) {
-	if len(snapshot.Rules) == 0 {
-		return nil, ErrEmptyRuleset
-	}
-
-	rules := make([]runtimeRule, 0, len(snapshot.Rules))
-	for _, source := range snapshot.Rules {
-		compiled, err := compileRule(source)
-		if err != nil {
-			return nil, fmt.Errorf("compile moderation rule %d: %w", source.ID, err)
-		}
-		rules = append(rules, compiled)
-	}
-	return &compiledSnapshot{version: snapshot.Version, rules: rules}, nil
-}
-
-func compileRule(source CompiledRule) (runtimeRule, error) {
-	if source.ID == 0 {
-		return runtimeRule{}, errors.New("rule ID must be positive")
-	}
-	if riskRank(source.Risk) == 0 {
-		return runtimeRule{}, fmt.Errorf("invalid risk level %q", source.Risk)
-	}
-
-	rule := runtimeRule{id: source.ID, risk: source.Risk}
-	switch source.Type {
-	case RuleKeyword:
-		rule.keyword = NormalizeText(source.Pattern)
-		if rule.keyword == "" {
-			return runtimeRule{}, errors.New("keyword cannot be empty")
-		}
-	case RuleRegexp:
-		compiled, err := compileNormalizedRegexp(source.Pattern)
-		if err != nil {
-			return runtimeRule{}, fmt.Errorf("invalid RE2 pattern: %w", err)
-		}
-		rule.regexp = compiled
-	case RuleComposite:
-		signals, err := compileCompositeSignals(source.Pattern)
-		if err != nil {
-			return runtimeRule{}, err
-		}
-		rule.signals = signals
-	default:
-		return runtimeRule{}, fmt.Errorf("invalid rule type %q", source.Type)
-	}
-	return rule, nil
-}
-
-func compileCompositeSignals(pattern string) ([]string, error) {
-	parts := strings.Split(pattern, "&&")
-	if len(parts) < 2 {
-		return nil, errors.New("composite rule requires at least two && signals")
-	}
-
-	signals := make([]string, 0, len(parts))
-	for _, part := range parts {
-		normalized := NormalizeText(part)
-		if normalized == "" {
-			return nil, errors.New("composite signal cannot be empty")
-		}
-		signals = append(signals, normalized)
-	}
-	return signals, nil
-}
-
-func (r runtimeRule) matches(text string) bool {
-	if r.keyword != "" {
-		return strings.Contains(text, r.keyword)
-	}
-	if r.regexp != nil {
-		return r.regexp.MatchString(text)
-	}
-	for _, signal := range r.signals {
-		if !strings.Contains(text, signal) {
-			return false
-		}
-	}
-	return len(r.signals) > 0
-}
-
-func riskRank(risk RiskLevel) int {
+func classificationRisk(risk ruleindex.Risk) RiskLevel {
 	switch risk {
-	case RiskLow:
-		return 1
-	case RiskMedium:
-		return 2
-	case RiskHigh:
-		return 3
+	case ruleindex.RiskLow:
+		return RiskLow
+	case ruleindex.RiskHigh:
+		return RiskHigh
 	default:
-		return 0
+		return RiskMedium
 	}
 }

@@ -61,7 +61,7 @@ func transitionCommand() moderation.ApplyTransitionCommand {
 		Revision: &moderation.RevisionDraft{
 			SubmitterID: 42, IdempotencyKey: "request-1", SubmittedContent: "原文", PublishedContent: "安全正文",
 			RiskLevel: moderation.RiskLow, PolicyAction: moderation.ActionAutoApprove,
-			ReviewStatus: moderation.ReviewApproved, RulesetVersion: 2, RuleMatchIDs: []uint64{1},
+			ReviewStatus: moderation.ReviewApproved, RulesetVersion: 2, RuleMatchIDs: []uint64{1}, RuleMatchesTruncated: true,
 		},
 		Materialize: moderation.NewRevision(),
 		Log:         &moderation.ActionLog{ActorUserID: uint64Pointer(42), Action: moderation.EventSubmit, CreatedAt: fixedTime},
@@ -83,7 +83,7 @@ func TestApplyTransitionLocksCreatesVersionMaterializesAndCommits(t *testing.T) 
 	expectLockedArticleSubject(mock, "旧正文")
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(MAX(version), 0) FROM `moderation_revision` WHERE item_id = ?")).
 		WithArgs(uint64(10)).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
-	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
+	mock.ExpectExec("INSERT INTO `moderation_revision` .*`rule_matches_truncated`").WillReturnResult(sqlmock.NewResult(101, 1))
 	mock.ExpectExec("INSERT INTO `moderation_revision_image`").
 		WithArgs(uint64(101), uint(1), "moments/42/a.jpg", "sha", "md5", uint64(10), "image/jpeg", false, fixedTime, fixedTime).
 		WillReturnResult(sqlmock.NewResult(201, 1))
@@ -314,18 +314,18 @@ func TestRecordBlockedAttemptIsIdempotentAndStoresNoBody(t *testing.T) {
 	repository, mock := newRepository(t)
 	attempt := moderation.BlockedAttempt{
 		UserID: 42, SubjectType: moderation.SubjectMoment, IdempotencyKey: "blocked-1",
-		RulesetVersion: 3, RuleMatchIDs: []uint64{7, 9}, CreatedAt: fixedTime,
+		RulesetVersion: 3, RuleMatchIDs: []uint64{7, 9}, RuleMatchesTruncated: true, CreatedAt: fixedTime,
 	}
 
 	mock.ExpectBegin()
 	expectNoIdempotencyResult(mock, 42, "blocked-1")
 	mock.ExpectExec("INSERT INTO `moderation_attempt` .*ON DUPLICATE KEY UPDATE `id`=`id`").
-		WithArgs(uint64(42), moderation.SubjectMoment, nil, "blocked-1", uint64(3), "[7,9]", fixedTime).
+		WithArgs(uint64(42), moderation.SubjectMoment, nil, "blocked-1", uint64(3), "[7,9]", true, fixedTime).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery("SELECT .* FROM `moderation_attempt` WHERE user_id = \\? AND idempotency_key = \\?").
 		WithArgs(uint64(42), "blocked-1", 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content_type", "item_id", "idempotency_key", "ruleset_version", "rule_match_ids", "created_at"}).
-			AddRow(33, 42, "moment", nil, "blocked-1", 3, "[7,9]", fixedTime))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content_type", "item_id", "idempotency_key", "ruleset_version", "rule_match_ids", "rule_matches_truncated", "created_at"}).
+			AddRow(33, 42, "moment", nil, "blocked-1", 3, "[7,9]", true, fixedTime))
 	mock.ExpectCommit()
 
 	got, err := repository.RecordBlockedAttempt(context.Background(), attempt)
@@ -456,23 +456,6 @@ func TestLoadSubjectUsesTypedTableMappings(t *testing.T) {
 			require.NoError(t, mock.ExpectationsWereMet())
 		})
 	}
-}
-
-func TestLoadEnabledRulesUsesDeterministicOrder(t *testing.T) {
-	repository, mock := newRepository(t)
-	mock.ExpectQuery("SELECT .* FROM `moderation_rule` WHERE enabled = \\? ORDER BY priority ASC,id ASC").
-		WithArgs(true).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "rule_type", "pattern", "risk_level", "priority", "enabled", "ruleset_version", "created_at", "updated_at"}).
-			AddRow(2, "规则二", "regexp", "x+", "medium", 10, true, 3, fixedTime, fixedTime).
-			AddRow(5, "规则五", "keyword", "词", "high", 10, true, 3, fixedTime, fixedTime))
-
-	got, err := repository.LoadEnabledRules(context.Background())
-
-	require.NoError(t, err)
-	require.Len(t, got, 2)
-	assert.Equal(t, uint64(2), got[0].ID)
-	assert.Equal(t, uint64(5), got[1].ID)
-	require.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestLoadModerationViewBatchesAndHidesPendingDetailsFromPublic(t *testing.T) {

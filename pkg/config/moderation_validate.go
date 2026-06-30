@@ -133,8 +133,17 @@ func validateModerationBounds(c ModerationConfig) error {
 	if c.Review.QueueDefaultPageSize > c.Review.QueueMaxPageSize {
 		return fmt.Errorf("moderation.review.queue_default_page_size: must not exceed queue_max_page_size")
 	}
+	if c.Rules.MaxPatternChars > 500 {
+		return fmt.Errorf("moderation.rules.max_pattern_chars: must not exceed 500")
+	}
+	if c.Rules.MaxKeywordRules > 500000 {
+		return fmt.Errorf("moderation.rules.max_keyword_rules: must not exceed 500000")
+	}
 	if c.Rules.MaxEnabledRegexRules > 500 {
 		return fmt.Errorf("moderation.rules.max_enabled_regex_rules: must not exceed 500")
+	}
+	if c.Rules.MaxRuleMatchesPerContent > 128 {
+		return fmt.Errorf("moderation.rules.max_rule_matches_per_content: must not exceed 128")
 	}
 	if c.Rules.MaxBuildPeakMemoryMB <= c.Rules.MaxIndexMemoryMB {
 		return fmt.Errorf("moderation.rules.max_build_peak_memory_mb: must exceed max_index_memory_mb")

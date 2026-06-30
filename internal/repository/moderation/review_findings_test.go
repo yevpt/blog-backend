@@ -340,7 +340,7 @@ func TestRecordBlockedAttemptLocksProfileChecksBothDomainsThenWrites(t *testing.
 	repository, mock := newRepository(t)
 	attempt := moderation.BlockedAttempt{
 		UserID: 42, SubjectType: moderation.SubjectMoment, IdempotencyKey: "blocked-2",
-		RulesetVersion: 3, RuleMatchIDs: []uint64{7}, CreatedAt: fixedTime,
+		RulesetVersion: 3, RuleMatchIDs: []uint64{7}, RuleMatchesTruncated: true, CreatedAt: fixedTime,
 		ProfileChange: &moderation.ProfileChange{
 			UserID: 42, HighRiskDelta: 1, ViolationScoreDelta: 5,
 			ResetCleanApproval: true, LastViolationAt: &fixedTime, UpdatedAt: fixedTime,
@@ -354,8 +354,8 @@ func TestRecordBlockedAttemptLocksProfileChecksBothDomainsThenWrites(t *testing.
 	mock.ExpectExec("INSERT INTO `moderation_attempt`").WillReturnResult(sqlmock.NewResult(33, 1))
 	mock.ExpectQuery("SELECT .* FROM `moderation_attempt` WHERE user_id = \\? AND idempotency_key = \\?").
 		WithArgs(uint64(42), "blocked-2", 1).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content_type", "item_id", "idempotency_key", "ruleset_version", "rule_match_ids", "created_at"}).
-			AddRow(33, 42, "moment", nil, "blocked-2", 3, "[7]", fixedTime))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "content_type", "item_id", "idempotency_key", "ruleset_version", "rule_match_ids", "rule_matches_truncated", "created_at"}).
+			AddRow(33, 42, "moment", nil, "blocked-2", 3, "[7]", true, fixedTime))
 	mock.ExpectExec("UPDATE `user_moderation_profile` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 

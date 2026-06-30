@@ -345,7 +345,8 @@ func createRevision(ctx context.Context, tx *gorm.DB, itemID uint64, draft *Revi
 		PublishedContent: draft.PublishedContent, RiskLevel: string(draft.RiskLevel),
 		PolicyAction: string(draft.PolicyAction), ReviewStatus: string(draft.ReviewStatus),
 		RulesetVersion: draft.RulesetVersion, RuleMatchIDs: string(ruleIDs),
-		DecisionType: draft.DecisionType, DecisionReason: draft.DecisionReason,
+		RuleMatchesTruncated: draft.RuleMatchesTruncated,
+		DecisionType:         draft.DecisionType, DecisionReason: draft.DecisionReason,
 		ReviewerID: draft.ReviewerID, ReviewedAt: draft.ReviewedAt,
 	}
 	if draft.MomentOptions != nil {

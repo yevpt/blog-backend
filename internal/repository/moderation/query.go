@@ -210,7 +210,7 @@ func (r *repository) RecordBlockedAttempt(ctx context.Context, attempt BlockedAt
 	row := model.ModerationAttempt{
 		UserID: attempt.UserID, ContentType: string(attempt.SubjectType), ItemID: attempt.ItemID,
 		IdempotencyKey: attempt.IdempotencyKey, RulesetVersion: attempt.RulesetVersion,
-		RuleMatchIDs: string(ruleIDs), CreatedAt: attempt.CreatedAt,
+		RuleMatchIDs: string(ruleIDs), RuleMatchesTruncated: attempt.RuleMatchesTruncated, CreatedAt: attempt.CreatedAt,
 	}
 	var result StoredResult
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -226,8 +226,8 @@ func (r *repository) RecordBlockedAttempt(ctx context.Context, attempt BlockedAt
 			return nil
 		}
 		insert := tx.WithContext(ctx).Exec(
-			"INSERT INTO `moderation_attempt` (`user_id`,`content_type`,`item_id`,`idempotency_key`,`ruleset_version`,`rule_match_ids`,`created_at`) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `id`=`id`",
-			row.UserID, SubjectType(row.ContentType), row.ItemID, row.IdempotencyKey, row.RulesetVersion, row.RuleMatchIDs, row.CreatedAt,
+			"INSERT INTO `moderation_attempt` (`user_id`,`content_type`,`item_id`,`idempotency_key`,`ruleset_version`,`rule_match_ids`,`rule_matches_truncated`,`created_at`) VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE `id`=`id`",
+			row.UserID, SubjectType(row.ContentType), row.ItemID, row.IdempotencyKey, row.RulesetVersion, row.RuleMatchIDs, row.RuleMatchesTruncated, row.CreatedAt,
 		)
 		if insert.Error != nil {
 			return insert.Error

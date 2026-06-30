@@ -154,21 +154,22 @@ type ItemState struct {
 
 // RevisionDraft 是不可变审核版本的创建数据。
 type RevisionDraft struct {
-	SubmitterID      uint64
-	IdempotencyKey   string
-	SubmittedContent string
-	PublishedContent string
-	RiskLevel        RiskLevel
-	PolicyAction     PolicyAction
-	ReviewStatus     ReviewStatus
-	RulesetVersion   uint64
-	RuleMatchIDs     []uint64
-	DecisionType     *string
-	DecisionReason   *string
-	ReviewerID       *uint64
-	ReviewedAt       *time.Time
-	MomentOptions    *MomentOptions
-	Images           []RevisionImageDraft
+	SubmitterID          uint64
+	IdempotencyKey       string
+	SubmittedContent     string
+	PublishedContent     string
+	RiskLevel            RiskLevel
+	PolicyAction         PolicyAction
+	ReviewStatus         ReviewStatus
+	RulesetVersion       uint64
+	RuleMatchIDs         []uint64
+	RuleMatchesTruncated bool
+	DecisionType         *string
+	DecisionReason       *string
+	ReviewerID           *uint64
+	ReviewedAt           *time.Time
+	MomentOptions        *MomentOptions
+	Images               []RevisionImageDraft
 }
 
 const (
@@ -369,13 +370,14 @@ type MaterializeCommand struct {
 
 // BlockedAttempt 是高风险阻断的最小审计记录，不包含正文或摘要。
 type BlockedAttempt struct {
-	UserID         uint64
-	SubjectType    SubjectType
-	ItemID         *uint64
-	IdempotencyKey string
-	RulesetVersion uint64
-	RuleMatchIDs   []uint64
-	CreatedAt      time.Time
+	UserID               uint64
+	SubjectType          SubjectType
+	ItemID               *uint64
+	IdempotencyKey       string
+	RulesetVersion       uint64
+	RuleMatchIDs         []uint64
+	RuleMatchesTruncated bool
+	CreatedAt            time.Time
 	// ProfileChange 仅在首次写入该幂等阻断记录时计分。
 	ProfileChange *ProfileChange
 }
@@ -553,17 +555,6 @@ type ReleaseSanctionCommand struct {
 	UserID  uint64
 	ActorID uint64
 	Now     time.Time
-}
-
-// RuleRecord 是启用规则的不可变值记录。
-type RuleRecord struct {
-	ID             uint64
-	Name           string
-	RuleType       string
-	Pattern        string
-	RiskLevel      RiskLevel
-	Priority       int
-	RulesetVersion uint64
 }
 
 // ViewerRole 决定批量审核视图可返回的字段。

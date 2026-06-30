@@ -303,6 +303,22 @@ func TestModerationRulesConfigRejectsUnsafeBounds(t *testing.T) {
 	cfg = validModerationConfig()
 	cfg.Rules.MaxBuildPeakMemoryMB = cfg.Rules.MaxIndexMemoryMB
 	assert.ErrorContains(t, cfg.Validate("test"), "must exceed")
+
+	for _, tt := range []struct {
+		name    string
+		mutate  func(*config.ModerationRulesConfig)
+		wantErr string
+	}{
+		{name: "pattern hard limit", mutate: func(c *config.ModerationRulesConfig) { c.MaxPatternChars = 501 }, wantErr: "must not exceed 500"},
+		{name: "keyword hard limit", mutate: func(c *config.ModerationRulesConfig) { c.MaxKeywordRules = 500001 }, wantErr: "must not exceed 500000"},
+		{name: "match hard limit", mutate: func(c *config.ModerationRulesConfig) { c.MaxRuleMatchesPerContent = 129 }, wantErr: "must not exceed 128"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validModerationConfig()
+			tt.mutate(&cfg.Rules)
+			assert.ErrorContains(t, cfg.Validate("test"), tt.wantErr)
+		})
+	}
 }
 
 func validModerationConfig() config.ModerationConfig {

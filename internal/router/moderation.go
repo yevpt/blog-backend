@@ -4,7 +4,9 @@ import (
 	"context"
 
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	"github.com/vpt/blog-backend/internal/repository/moderationrule"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
 	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -24,7 +26,8 @@ func maybeNewModerationService(ctx context.Context, db *gorm.DB, cfg config.Mode
 // newModerationService 在任何普通内容写服务构造前完成规则加载，初始化失败时由启动层终止服务。
 func newModerationService(ctx context.Context, db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) (moderationservice.Service, error) {
 	repo := moderationrepo.NewRepository(db)
-	classifier, err := moderationservice.NewClassifierFromRepository(ctx, repo, logger)
+	snapshotRepo := moderationrule.NewRepository(db)
+	classifier, err := moderationservice.NewClassifierFromRepository(ctx, snapshotRepo, moderationRuleIndexLimits(cfg.Rules), logger)
 	if err != nil {
 		return nil, err
 	}
@@ -36,6 +39,17 @@ func newModerationService(ctx context.Context, db *gorm.DB, cfg config.Moderatio
 		repo, moderationservice.NewContentProcessor(), classifier,
 		moderationservice.NewPolicyDecider(), media, cfg, logger, nil,
 	), nil
+}
+
+func moderationRuleIndexLimits(cfg config.ModerationRulesConfig) ruleindex.Limits {
+	return ruleindex.Limits{
+		MaxKeywordRules:         cfg.MaxKeywordRules,
+		MaxRegexpRules:          cfg.MaxEnabledRegexRules,
+		MaxPatternRunes:         cfg.MaxPatternChars,
+		MaxMatchIDs:             cfg.MaxRuleMatchesPerContent,
+		MaxIndexMemoryBytes:     uint64(cfg.MaxIndexMemoryMB) * 1024 * 1024,
+		MaxBuildPeakMemoryBytes: uint64(cfg.MaxBuildPeakMemoryMB) * 1024 * 1024,
+	}
 }
 
 // maybeNewModerationReviewService 在审核开启时组装管理端人工审核服务。

@@ -7,22 +7,22 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
 
-	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
-	repositorymock "github.com/vpt/blog-backend/internal/repository/moderation/mock"
+	"github.com/vpt/blog-backend/internal/repository/moderationrule"
 	"github.com/vpt/blog-backend/internal/service/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
 )
 
 func TestNewClassifierFromRepositoryLoadsCurrentRuleSnapshot(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	repo := repositorymock.NewMockRepository(ctrl)
-	repo.EXPECT().LoadEnabledRules(gomock.Any()).Return([]moderationrepo.RuleRecord{
-		{ID: 1, RuleType: "keyword", Pattern: "风险词", RiskLevel: moderationrepo.RiskMedium, RulesetVersion: 3},
-	}, nil)
+	repo := &snapshotRepositoryStub{
+		ruleset: moderationrule.RulesetRecord{ID: 3, Status: "published"},
+		rules: []moderationrule.RuleRecord{
+			{ID: 1, RuleType: "keyword", Pattern: "风险词", RiskLevel: "medium", Effect: "review"},
+		},
+	}
 
-	classifier, err := moderation.NewClassifierFromRepository(context.Background(), repo, zap.NewNop())
+	classifier, err := moderation.NewClassifierFromRepository(context.Background(), repo, defaultClassifierLimits(), zap.NewNop())
 
 	require.NoError(t, err)
 	got := classifier.Classify(processed("命中风险词"))
@@ -87,9 +87,9 @@ func TestNormalizeRemovesDefaultIgnorableEvasionCharacters(t *testing.T) {
 
 func TestClassifierMatchesKeywordRegexAndCompositeRules(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleKeyword, moderation.RiskMedium, "加 微"),
-		rule(2, moderation.RuleRegexp, moderation.RiskMedium, `vx\d{3}`),
-		rule(3, moderation.RuleComposite, moderation.RiskHigh, "扫码 && 入群"),
+		rule(1, "keyword", "medium", "加 微"),
+		rule(2, "regexp", "medium", `vx\d{3}`),
+		rule(3, "composite", "high", "扫码 && 入群"),
 	))
 
 	got := classifier.Classify(processed("加微，vx123；请掃碼后入群"))
@@ -100,8 +100,8 @@ func TestClassifierMatchesKeywordRegexAndCompositeRules(t *testing.T) {
 
 func TestClassifierNormalizesRegexpLiteralRunes(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleRegexp, moderation.RiskHigh, `違禁`),
-		rule(2, moderation.RuleRegexp, moderation.RiskMedium, `VX\d+`),
+		rule(1, "regexp", "high", `違禁`),
+		rule(2, "regexp", "medium", `VX\d+`),
 	))
 
 	got := classifier.Classify(processed("违禁 vx123"))
@@ -112,7 +112,7 @@ func TestClassifierNormalizesRegexpLiteralRunes(t *testing.T) {
 
 func TestClassifierPreservesRegexpEscapesClassesAndUnicodeProperties(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleRegexp, moderation.RiskHigh, `\A\x56\x58\d+[a-z]\p{Han}\z`),
+		rule(1, "regexp", "high", `\A\x56\x58\d+[a-z]\p{Han}\z`),
 	))
 
 	got := classifier.Classify(processed("VX123q禁"))
@@ -123,7 +123,7 @@ func TestClassifierPreservesRegexpEscapesClassesAndUnicodeProperties(t *testing.
 
 func TestClassifierRemovesDefaultIgnorablesFromRegexpLiteralAndContent(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleRegexp, moderation.RiskHigh, "違\u034f禁"),
+		rule(1, "regexp", "high", "違\u034f禁"),
 	))
 
 	got := classifier.Classify(processed("违\ufe0f\U000E0100禁"))
@@ -134,10 +134,10 @@ func TestClassifierRemovesDefaultIgnorablesFromRegexpLiteralAndContent(t *testin
 
 func TestClassifierUsesHighestRiskAndExactMatchedRuleIDs(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(10, moderation.RuleKeyword, moderation.RiskLow, "普通"),
-		rule(20, moderation.RuleKeyword, moderation.RiskMedium, "加微"),
-		rule(30, moderation.RuleKeyword, moderation.RiskHigh, "违禁"),
-		rule(40, moderation.RuleKeyword, moderation.RiskHigh, "未命中"),
+		rule(10, "keyword", "low", "普通"),
+		rule(20, "keyword", "medium", "加微"),
+		rule(30, "keyword", "high", "违禁"),
+		rule(40, "keyword", "high", "未命中"),
 	))
 
 	got := classifier.Classify(processed("普通，加 微，违\u200b禁"))
@@ -146,33 +146,22 @@ func TestClassifierUsesHighestRiskAndExactMatchedRuleIDs(t *testing.T) {
 	assert.ElementsMatch(t, []uint64{10, 20, 30}, got.RuleMatchIDs)
 }
 
-func TestClassifierRejectsInvalidRegexSnapshot(t *testing.T) {
-	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleKeyword, moderation.RiskLow, "安全"),
-	))
+func TestNewClassifierFromRepositoryRejectsInvalidRegexRule(t *testing.T) {
+	repo := &snapshotRepositoryStub{
+		ruleset: moderationrule.RulesetRecord{ID: 2, Status: "published"},
+		rules: []moderationrule.RuleRecord{
+			{ID: 2, RuleType: "regexp", Pattern: "(", RiskLevel: "high", Effect: "review"},
+		},
+	}
 
-	err := classifier.ReplaceSnapshot(snapshotVersion(2,
-		rule(2, moderation.RuleRegexp, moderation.RiskHigh, "("),
-	))
+	classifier, err := moderation.NewClassifierFromRepository(context.Background(), repo, defaultClassifierLimits(), zap.NewNop())
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "invalid RE2 pattern")
-	assert.Equal(t, moderation.RiskLow, classifier.Classify(processed("安全")).Risk)
+	assert.Nil(t, classifier)
 }
 
 func TestClassifierEmptyColdSnapshotDegradesToMedium(t *testing.T) {
-	classifier := moderation.NewClassifier(zap.NewNop(), moderation.RuleSnapshot{})
-
-	got := classifier.Classify(processed("普通内容"))
-
-	assert.Equal(t, moderation.RiskMedium, got.Risk)
-	assert.Empty(t, got.RuleMatchIDs)
-}
-
-func TestClassifierInvalidColdSnapshotDegradesToMedium(t *testing.T) {
-	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleRegexp, moderation.RiskHigh, "("),
-	))
+	classifier := moderation.NewClassifier(zap.NewNop(), nil)
 
 	got := classifier.Classify(processed("普通内容"))
 
@@ -181,15 +170,13 @@ func TestClassifierInvalidColdSnapshotDegradesToMedium(t *testing.T) {
 }
 
 func TestClassifierKeepsImmutableLastGoodSnapshot(t *testing.T) {
-	rules := []moderation.CompiledRule{
-		rule(1, moderation.RuleKeyword, moderation.RiskHigh, "原始词"),
+	rules := []ruleindex.SourceRule{
+		rule(1, "keyword", "high", "原始词"),
 	}
-	classifier := moderation.NewClassifier(zap.NewNop(), moderation.RuleSnapshot{Version: 1, Rules: rules})
+	classifier := moderation.NewClassifier(zap.NewNop(), snapshotVersion(1, rules...))
 	rules[0].Pattern = "篡改词"
 
-	err := classifier.ReplaceSnapshot(snapshotVersion(2,
-		rule(2, moderation.RuleRegexp, moderation.RiskHigh, "("),
-	))
+	err := classifier.ReplaceSnapshot(nil)
 
 	require.Error(t, err)
 	assert.Equal(t, moderation.RiskHigh, classifier.Classify(processed("原始詞")).Risk)
@@ -198,10 +185,10 @@ func TestClassifierKeepsImmutableLastGoodSnapshot(t *testing.T) {
 
 func TestClassifierRejectsEmptyRefreshAndKeepsLastGoodSnapshot(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleKeyword, moderation.RiskHigh, "保留词"),
+		rule(1, "keyword", "high", "保留词"),
 	))
 
-	err := classifier.ReplaceSnapshot(moderation.RuleSnapshot{Version: 2})
+	err := classifier.ReplaceSnapshot(nil)
 
 	require.Error(t, err)
 	assert.Equal(t, moderation.RiskHigh, classifier.Classify(processed("保留词")).Risk)
@@ -209,11 +196,11 @@ func TestClassifierRejectsEmptyRefreshAndKeepsLastGoodSnapshot(t *testing.T) {
 
 func TestClassifierRejectsRulesetVersionRegression(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshotVersion(2,
-		rule(1, moderation.RuleKeyword, moderation.RiskHigh, "旧规则"),
+		rule(1, "keyword", "high", "旧规则"),
 	))
 
 	err := classifier.ReplaceSnapshot(snapshotVersion(1,
-		rule(2, moderation.RuleKeyword, moderation.RiskHigh, "回退规则"),
+		rule(2, "keyword", "high", "回退规则"),
 	))
 
 	require.Error(t, err)
@@ -223,7 +210,7 @@ func TestClassifierRejectsRulesetVersionRegression(t *testing.T) {
 
 func TestClassifierOnlyReadsSanitizedPlainText(t *testing.T) {
 	classifier := moderation.NewClassifier(zap.NewNop(), snapshot(
-		rule(1, moderation.RuleKeyword, moderation.RiskHigh, "脚本风险"),
+		rule(1, "keyword", "high", "脚本风险"),
 	))
 	content := moderation.ProcessedContent{
 		Published: `<script>脚本风险</script><p>安全正文</p>`,
@@ -235,23 +222,55 @@ func TestClassifierOnlyReadsSanitizedPlainText(t *testing.T) {
 	assert.Equal(t, moderation.RiskLow, got.Risk)
 }
 
-func snapshot(rules ...moderation.CompiledRule) moderation.RuleSnapshot {
+func snapshot(rules ...ruleindex.SourceRule) *ruleindex.Snapshot {
 	return snapshotVersion(1, rules...)
 }
 
-func snapshotVersion(version uint64, rules ...moderation.CompiledRule) moderation.RuleSnapshot {
-	return moderation.RuleSnapshot{Version: version, Rules: rules}
+func snapshotVersion(version uint64, rules ...ruleindex.SourceRule) *ruleindex.Snapshot {
+	snapshot, _, err := ruleindex.Build(context.Background(), version, func(ctx context.Context, visit func(ruleindex.SourceRule) error) error {
+		for _, current := range rules {
+			if err := visit(current); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, defaultClassifierLimits())
+	if err != nil {
+		panic(err)
+	}
+	return snapshot
 }
 
-func rule(id uint64, ruleType moderation.RuleType, risk moderation.RiskLevel, pattern string) moderation.CompiledRule {
-	return moderation.CompiledRule{
-		ID:      id,
-		Type:    ruleType,
-		Risk:    risk,
-		Pattern: pattern,
-	}
+func rule(id uint64, ruleType, risk, pattern string) ruleindex.SourceRule {
+	return ruleindex.SourceRule{ID: id, Type: ruleType, Risk: risk, Pattern: pattern, Effect: "review"}
 }
 
 func processed(text string) moderation.ProcessedContent {
 	return moderation.ProcessedContent{PlainText: strings.TrimSpace(text)}
+}
+
+func defaultClassifierLimits() ruleindex.Limits {
+	return ruleindex.Limits{MaxKeywordRules: 500000, MaxRegexpRules: 200, MaxPatternRunes: 500, MaxMatchIDs: 128}
+}
+
+type snapshotRepositoryStub struct {
+	ruleset moderationrule.RulesetRecord
+	rules   []moderationrule.RuleRecord
+	err     error
+}
+
+func (s *snapshotRepositoryStub) CurrentRuleset(context.Context) (moderationrule.RulesetRecord, error) {
+	return s.ruleset, s.err
+}
+
+func (s *snapshotRepositoryStub) StreamRules(ctx context.Context, _ uint64, visit func(moderationrule.RuleRecord) error) error {
+	if s.err != nil {
+		return s.err
+	}
+	for _, current := range s.rules {
+		if err := visit(current); err != nil {
+			return err
+		}
+	}
+	return nil
 }
