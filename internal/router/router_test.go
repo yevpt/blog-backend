@@ -123,6 +123,10 @@ func (moderationReviewStub) Get(context.Context, uint64) (moderationservice.Revi
 	return moderationservice.ReviewItem{}, nil
 }
 
+func (moderationReviewStub) History(context.Context, moderationservice.ReviewHistoryCommand) (moderationservice.ReviewHistoryPage, error) {
+	return moderationservice.ReviewHistoryPage{}, nil
+}
+
 func (moderationReviewStub) Approve(context.Context, moderationservice.ReviewCommand) (moderationservice.ReviewItem, error) {
 	return moderationservice.ReviewItem{}, nil
 }
@@ -265,6 +269,7 @@ func TestRegisterAdminRoutesRegistersModerationReviewRoutes(t *testing.T) {
 	want := map[string]string{
 		"GET /admin/moderation/items":                      "",
 		"GET /admin/moderation/items/:id":                  "",
+		"GET /admin/moderation/items/:id/history":          "",
 		"POST /admin/moderation/items/:id/approve":         "",
 		"POST /admin/moderation/items/:id/correct":         "",
 		"POST /admin/moderation/items/:id/reject":          "",

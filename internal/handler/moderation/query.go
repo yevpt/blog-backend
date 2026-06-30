@@ -83,6 +83,39 @@ func (h *AdminHandler) Get(c *gin.Context) {
 	writeAdminResponse(c, dtoItem, err)
 }
 
+// History 查询审核项审计历史。
+// @Summary 查询内容审核审计历史
+// @Description 管理员分页查看审核项的修订、图片快照和操作事件；每页最多 100 条。
+// @Tags 内容审核管理
+// @Accept json
+// @Produce json
+// @Param id path int true "审核项 ID"
+// @Param page query int false "页码，从 1 开始"
+// @Param page_size query int false "每页数量，默认 20，最大 100"
+// @Success 200 {object} response.Response{data=dto.AdminModerationHistoryResp}
+// @Failure 401 {object} response.Response
+// @Failure 403 {object} response.Response
+// @Failure 404 {object} response.Response
+// @Failure 500 {object} response.Response
+// @Router /admin/moderation/items/{id}/history [get]
+func (h *AdminHandler) History(c *gin.Context) {
+	if _, ok := requiredReviewerID(c); !ok {
+		return
+	}
+	itemID, ok := reqbind.PathUint(c, "id", "审核项 ID")
+	if !ok {
+		return
+	}
+	var req dto.AdminModerationHistoryReq
+	if !reqbind.Query(c, &req) {
+		return
+	}
+	page, err := h.svc.History(c.Request.Context(), moderationservice.ReviewHistoryCommand{
+		ItemID: uint64(itemID), Page: req.Page, PageSize: req.PageSize,
+	})
+	writeAdminResponse(c, h.moderationHistoryToDTO(c.Request.Context(), page), err)
+}
+
 func (h *AdminHandler) populateAuthors(ctx context.Context, page *dto.AdminModerationPageResp) {
 	if h.userCache == nil {
 		return

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -21,6 +22,9 @@ type reviewServiceStub struct {
 	approveCommand moderationservice.ReviewCommand
 	rejectCommand  moderationservice.ReviewCommand
 	listCommand    moderationservice.ListReviewCommand
+	historyCommand moderationservice.ReviewHistoryCommand
+	historyResult  moderationservice.ReviewHistoryPage
+	historyCalled  bool
 	approveResult  moderationservice.ReviewItem
 	approveErr     error
 	rejectErr      error
@@ -80,6 +84,12 @@ func (s *reviewServiceStub) List(_ context.Context, cmd moderationservice.ListRe
 
 func (s *reviewServiceStub) Get(context.Context, uint64) (moderationservice.ReviewItem, error) {
 	return moderationservice.ReviewItem{}, nil
+}
+
+func (s *reviewServiceStub) History(_ context.Context, cmd moderationservice.ReviewHistoryCommand) (moderationservice.ReviewHistoryPage, error) {
+	s.historyCommand = cmd
+	s.historyCalled = true
+	return s.historyResult, nil
 }
 
 func (s *reviewServiceStub) Approve(_ context.Context, cmd moderationservice.ReviewCommand) (moderationservice.ReviewItem, error) {
@@ -212,4 +222,64 @@ func TestAdminListReviewStatusAllIncludesEveryStatus(t *testing.T) {
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.True(t, stub.listCommand.IncludeAllReviewStatuses)
 	assert.Nil(t, stub.listCommand.ReviewStatus)
+}
+
+type historyURLResolverStub struct{}
+
+func (historyURLResolverStub) ObjectURL(_ context.Context, objectKey string) (string, error) {
+	return "https://cdn.example.com/" + objectKey + "?signed=ok", nil
+}
+
+func TestAdminModerationHistoryMapsImagesAndEvents(t *testing.T) {
+	revisionID := uint64(20)
+	actorID := uint64(1)
+	now := time.Date(2026, 6, 30, 12, 0, 0, 0, time.UTC)
+	stub := &reviewServiceStub{historyResult: moderationservice.ReviewHistoryPage{
+		Total: 1, Page: 1, PageSize: 20,
+		Revisions: []moderationservice.ReviewItem{{
+			ItemID: 10, RevisionID: revisionID, RevisionVersion: 2,
+			ReviewStatus: moderationservice.ReviewApproved, CreatedAt: now,
+		}},
+		Images: map[uint64][]moderationservice.ReviewHistoryImage{
+			revisionID: {{Seq: 0, ObjectKey: "moderation/history/moments/10/a.jpg", MediaType: "image/jpeg"}},
+		},
+		Events: []moderationservice.ReviewHistoryEvent{{
+			ID: 30, RevisionID: &revisionID, ActorUserID: &actorID,
+			Action: moderationservice.EventApprove, CreatedAt: now,
+		}},
+	}}
+	handler := moderationhandler.NewAdminHandler(stub, nil)
+	handler.SetObjectURLResolver(historyURLResolverStub{})
+
+	recorder := serveReviewRequest(http.MethodGet, "/admin/moderation/items/10/history?page=1&page_size=20", "", handler.History, true)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, moderationservice.ReviewHistoryCommand{ItemID: 10, Page: 1, PageSize: 20}, stub.historyCommand)
+	body := recorder.Body.String()
+	assert.Contains(t, body, `"object_key":"moderation/history/moments/10/a.jpg"`)
+	assert.Contains(t, body, `"access_url":"https://cdn.example.com/moderation/history/moments/10/a.jpg?signed=ok"`)
+	assert.Contains(t, body, `"display_mode":"visible"`)
+	assert.Contains(t, body, `"action":"approve"`)
+	assert.NotContains(t, body, "storage_secret")
+}
+
+func TestAdminModerationHistoryRequiresIdentity(t *testing.T) {
+	stub := &reviewServiceStub{}
+	handler := moderationhandler.NewAdminHandler(stub, nil)
+
+	recorder := serveReviewRequest(http.MethodGet, "/admin/moderation/items/10/history", "", handler.History, false)
+
+	assert.Equal(t, http.StatusUnauthorized, recorder.Code)
+	assert.False(t, stub.historyCalled)
+}
+
+func TestAdminModerationHistoryRejectsPageSizeAboveLimit(t *testing.T) {
+	stub := &reviewServiceStub{}
+	handler := moderationhandler.NewAdminHandler(stub, nil)
+
+	recorder := serveReviewRequest(http.MethodGet, "/admin/moderation/items/10/history?page_size=101", "", handler.History, true)
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"code":400`)
+	assert.False(t, stub.historyCalled)
 }

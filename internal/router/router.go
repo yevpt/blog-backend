@@ -311,7 +311,7 @@ func newRouteHandlers(
 		comment:             commenthandler.NewCommentHandler(commentSvc, cfg.Moderation.Enabled),
 		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc, cfg.Moderation.Enabled),
 		moment:              momenthandler.NewMomentHandler(momentSvc, cfg.Moderation.Enabled),
-		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, cfg.Moderation.Rules.MaxImportFileMB, moderationRuntime.ruleSvc),
+		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, cfg.Moderation.Rules.MaxImportFileMB, objectStore, moderationRuntime.ruleSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
@@ -600,6 +600,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	if handlers.moderationAdmin != nil {
 		admin.GET("/moderation/items", handlers.moderationAdmin.List)
 		admin.GET("/moderation/items/:id", handlers.moderationAdmin.Get)
+		admin.GET("/moderation/items/:id/history", handlers.moderationAdmin.History)
 		admin.POST("/moderation/items/:id/approve", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Approve)
 		admin.POST("/moderation/items/:id/correct", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Correct)
 		admin.POST("/moderation/items/:id/reject", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.Reject)

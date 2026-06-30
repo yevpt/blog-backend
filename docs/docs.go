@@ -2567,6 +2567,86 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/moderation/items/{id}/history": {
+            "get": {
+                "description": "管理员分页查看审核项的修订、图片快照和操作事件；每页最多 100 条。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "内容审核管理"
+                ],
+                "summary": "查询内容审核审计历史",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "审核项 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "页码，从 1 开始",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "每页数量，默认 20，最大 100",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminModerationHistoryResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/moderation/items/{id}/reject": {
             "post": {
                 "consumes": [
@@ -13306,6 +13386,191 @@ const docTemplate = `{
                 "reason": {
                     "type": "string",
                     "example": "紧急下架"
+                }
+            }
+        },
+        "dto.AdminModerationHistoryEventResp": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "example": "approve"
+                },
+                "actor_user_id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 30
+                },
+                "metadata_json": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "revision_id": {
+                    "type": "integer",
+                    "example": 20
+                }
+            }
+        },
+        "dto.AdminModerationHistoryImageResp": {
+            "type": "object",
+            "properties": {
+                "access_url": {
+                    "type": "string",
+                    "example": "https://cdn.example.com/moderation/history/moments/10/a.jpg"
+                },
+                "display_mode": {
+                    "type": "string",
+                    "enum": [
+                        "visible",
+                        "pending",
+                        "blocked"
+                    ],
+                    "example": "visible"
+                },
+                "is_gif": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "media_type": {
+                    "type": "string",
+                    "example": "image/jpeg"
+                },
+                "object_key": {
+                    "type": "string",
+                    "example": "moderation/history/moments/10/a.jpg"
+                },
+                "seq": {
+                    "type": "integer",
+                    "example": 0
+                }
+            }
+        },
+        "dto.AdminModerationHistoryResp": {
+            "type": "object",
+            "properties": {
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationHistoryEventResp"
+                    }
+                },
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationHistoryRevisionResp"
+                    }
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "dto.AdminModerationHistoryRevisionResp": {
+            "type": "object",
+            "properties": {
+                "author": {
+                    "$ref": "#/definitions/dto.AdminModerationAuthorResp"
+                },
+                "author_id": {
+                    "type": "integer",
+                    "example": 42
+                },
+                "can_interact": {
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "decision_reason": {
+                    "type": "string"
+                },
+                "decision_type": {
+                    "type": "string"
+                },
+                "emergency_hidden_at": {
+                    "description": "EmergencyHiddenAt 是紧急隐藏发生的时间，仅 public_state=emergency_hidden 时返回。",
+                    "type": "string"
+                },
+                "emergency_hide_reason": {
+                    "description": "EmergencyHideReason 是紧急隐藏时管理员填写的原因，仅 public_state=emergency_hidden 时返回。",
+                    "type": "string"
+                },
+                "images": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminModerationHistoryImageResp"
+                    }
+                },
+                "item_id": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "lifecycle_state": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "lock_version": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "moment_options": {
+                    "$ref": "#/definitions/dto.AdminModerationMomentOptionsResp"
+                },
+                "policy_action": {
+                    "type": "string",
+                    "example": "pre_review"
+                },
+                "public_state": {
+                    "type": "string",
+                    "example": "visible"
+                },
+                "published_content": {
+                    "type": "string"
+                },
+                "review_status": {
+                    "type": "string",
+                    "example": "pending"
+                },
+                "reviewed_at": {
+                    "type": "string"
+                },
+                "reviewer_id": {
+                    "type": "integer"
+                },
+                "revision_id": {
+                    "type": "integer",
+                    "example": 20
+                },
+                "revision_version": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "risk_level": {
+                    "type": "string",
+                    "example": "medium"
+                },
+                "subject": {
+                    "$ref": "#/definitions/dto.AdminModerationSubjectResp"
+                },
+                "submitted_content": {
+                    "type": "string"
                 }
             }
         },

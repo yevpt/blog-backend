@@ -12,6 +12,12 @@ type AdminModerationListReq struct {
 	PublicState  string `form:"public_state" binding:"omitempty,oneof=visible placeholder hidden emergency_hidden" example:"emergency_hidden"`
 }
 
+// AdminModerationHistoryReq 是管理端审核历史分页参数。
+type AdminModerationHistoryReq struct {
+	Page     int `form:"page" binding:"omitempty,min=1" example:"1"`
+	PageSize int `form:"page_size" binding:"omitempty,min=1,max=100" example:"20"`
+}
+
 // AdminModerationReviewReq 是通过或驳回请求。
 type AdminModerationReviewReq struct {
 	RevisionID  uint64 `json:"revision_id" binding:"required,min=1" example:"20"`
@@ -70,11 +76,11 @@ type AdminModerationItemResp struct {
 	ReviewerID       *uint64                           `json:"reviewer_id,omitempty"`
 	ReviewedAt       *time.Time                        `json:"reviewed_at,omitempty"`
 	// EmergencyHideReason 是紧急隐藏时管理员填写的原因，仅 public_state=emergency_hidden 时返回。
-	EmergencyHideReason *string    `json:"emergency_hide_reason,omitempty"`
+	EmergencyHideReason *string `json:"emergency_hide_reason,omitempty"`
 	// EmergencyHiddenAt 是紧急隐藏发生的时间，仅 public_state=emergency_hidden 时返回。
-	EmergencyHiddenAt   *time.Time `json:"emergency_hidden_at,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	CanInteract         bool       `json:"can_interact"`
+	EmergencyHiddenAt *time.Time `json:"emergency_hidden_at,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	CanInteract       bool       `json:"can_interact"`
 }
 
 // AdminModerationPageResp 是管理端审核版本分页响应。
@@ -83,4 +89,40 @@ type AdminModerationPageResp struct {
 	Page     int                       `json:"page" example:"1"`
 	PageSize int                       `json:"page_size" example:"20"`
 	List     []AdminModerationItemResp `json:"list"`
+}
+
+// AdminModerationHistoryImageResp 是历史修订的有序图片快照。
+type AdminModerationHistoryImageResp struct {
+	Seq         uint   `json:"seq" example:"0"`
+	ObjectKey   string `json:"object_key" example:"moderation/history/moments/10/a.jpg"`
+	AccessURL   string `json:"access_url" example:"https://cdn.example.com/moderation/history/moments/10/a.jpg"`
+	DisplayMode string `json:"display_mode" enums:"visible,pending,blocked" example:"visible"`
+	MediaType   string `json:"media_type" example:"image/jpeg"`
+	IsGIF       bool   `json:"is_gif" example:"false"`
+}
+
+// AdminModerationHistoryRevisionResp 是单个历史修订及其图片快照。
+type AdminModerationHistoryRevisionResp struct {
+	AdminModerationItemResp
+	Images []AdminModerationHistoryImageResp `json:"images"`
+}
+
+// AdminModerationHistoryEventResp 是审核项操作事件。
+type AdminModerationHistoryEventResp struct {
+	ID           uint64    `json:"id" example:"30"`
+	RevisionID   *uint64   `json:"revision_id,omitempty" example:"20"`
+	ActorUserID  *uint64   `json:"actor_user_id,omitempty" example:"1"`
+	Action       string    `json:"action" example:"approve"`
+	Reason       *string   `json:"reason,omitempty"`
+	MetadataJSON *string   `json:"metadata_json,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// AdminModerationHistoryResp 是管理端审核项审计历史分页响应。
+type AdminModerationHistoryResp struct {
+	Total    int64                                `json:"total" example:"3"`
+	Page     int                                  `json:"page" example:"1"`
+	PageSize int                                  `json:"page_size" example:"20"`
+	List     []AdminModerationHistoryRevisionResp `json:"list"`
+	Events   []AdminModerationHistoryEventResp    `json:"events"`
 }

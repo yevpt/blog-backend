@@ -1,7 +1,9 @@
 package moderation
 
 import (
+	"context"
 	"errors"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
@@ -18,6 +20,55 @@ func requiredReviewerID(c *gin.Context) (uint64, bool) {
 		return 0, false
 	}
 	return uint64(claims.UserId), true
+}
+
+func (h *AdminHandler) moderationHistoryToDTO(ctx context.Context, page moderationservice.ReviewHistoryPage) dto.AdminModerationHistoryResp {
+	revisions := make([]dto.AdminModerationHistoryRevisionResp, 0, len(page.Revisions))
+	for _, revision := range page.Revisions {
+		images := make([]dto.AdminModerationHistoryImageResp, 0, len(page.Images[revision.RevisionID]))
+		for _, image := range page.Images[revision.RevisionID] {
+			images = append(images, dto.AdminModerationHistoryImageResp{
+				Seq: image.Seq, ObjectKey: image.ObjectKey,
+				AccessURL:   h.resolveHistoryImageURL(ctx, image.ObjectKey),
+				DisplayMode: historyImageDisplayMode(revision.ReviewStatus, image.ObjectKey),
+				MediaType:   image.MediaType, IsGIF: image.IsGIF,
+			})
+		}
+		revisions = append(revisions, dto.AdminModerationHistoryRevisionResp{
+			AdminModerationItemResp: moderationItemToDTO(revision), Images: images,
+		})
+	}
+	events := make([]dto.AdminModerationHistoryEventResp, 0, len(page.Events))
+	for _, event := range page.Events {
+		events = append(events, dto.AdminModerationHistoryEventResp{
+			ID: event.ID, RevisionID: event.RevisionID, ActorUserID: event.ActorUserID,
+			Action: string(event.Action), Reason: event.Reason, MetadataJSON: event.MetadataJSON, CreatedAt: event.CreatedAt,
+		})
+	}
+	return dto.AdminModerationHistoryResp{
+		Total: page.Total, Page: page.Page, PageSize: page.PageSize, List: revisions, Events: events,
+	}
+}
+
+func (h *AdminHandler) resolveHistoryImageURL(ctx context.Context, objectKey string) string {
+	if h.resolver == nil || strings.TrimSpace(objectKey) == "" {
+		return objectKey
+	}
+	accessURL, err := h.resolver.ObjectURL(ctx, objectKey)
+	if err != nil {
+		return objectKey
+	}
+	return accessURL
+}
+
+func historyImageDisplayMode(status moderationservice.ReviewStatus, objectKey string) string {
+	if status == moderationservice.ReviewRejected {
+		return "blocked"
+	}
+	if status == moderationservice.ReviewPending || strings.HasPrefix(objectKey, "moderation/staging/") {
+		return "pending"
+	}
+	return "visible"
 }
 
 func bindItemID(c *gin.Context) (uint64, bool) {

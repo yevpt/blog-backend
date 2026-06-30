@@ -5,6 +5,7 @@ import (
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
+	"github.com/vpt/blog-backend/pkg/storage"
 )
 
 // AdminHandler 只负责管理端审核参数、身份与响应映射。
@@ -14,6 +15,14 @@ type AdminHandler struct {
 	ruleSvc                rulemod.Service
 	userCache              userservice.UserCacheService
 	ruleImportMaxFileBytes int
+	resolver               storage.ObjectURLResolver
+}
+
+// SetObjectURLResolver 注入历史图片的管理端访问地址解析器。
+func (h *AdminHandler) SetObjectURLResolver(resolver storage.ObjectURLResolver) {
+	if h != nil {
+		h.resolver = resolver
+	}
 }
 
 // NewAdminHandler 创建审核管理处理器。
