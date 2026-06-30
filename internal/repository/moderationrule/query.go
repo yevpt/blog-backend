@@ -26,14 +26,10 @@ func (r *repository) ListRules(ctx context.Context, filter RuleFilter) (RulePage
 	}
 	limit := normalizeListLimit(filter.Limit)
 
-	// Active 过滤需要当前已发布版本，仅在筛选时查询以避免无谓开销。
-	var currentVersion uint64
-	if filter.Active != nil {
-		version, err := r.currentPublishedVersion(ctx)
-		if err != nil {
-			return RulePage{}, err
-		}
-		currentVersion = version
+	// 列表展示和 Active 筛选都以当前已发布版本为准。
+	currentVersion, err := r.currentPublishedVersion(ctx)
+	if err != nil {
+		return RulePage{}, err
 	}
 
 	query := r.db.WithContext(ctx).
@@ -78,9 +74,9 @@ func (r *repository) ListRules(ctx context.Context, filter RuleFilter) (RulePage
 	if filter.Active != nil {
 		if *filter.Active {
 			query = query.Where("activated_ruleset_id <= ?", currentVersion).
-				Where("deactivated_ruleset_id IS NULL")
+				Where("deactivated_ruleset_id IS NULL OR deactivated_ruleset_id > ?", currentVersion)
 		} else {
-			query = query.Where("deactivated_ruleset_id <= ?", currentVersion)
+			query = query.Where("activated_ruleset_id > ? OR deactivated_ruleset_id <= ?", currentVersion, currentVersion)
 		}
 	}
 
@@ -103,9 +99,8 @@ func (r *repository) ListRules(ctx context.Context, filter RuleFilter) (RulePage
 		); err != nil {
 			return RulePage{}, fmt.Errorf("扫描规则行: %w", err)
 		}
-		if filter.Active != nil {
-			rec.Active = *filter.Active
-		}
+		rec.Active = rec.ActivatedRulesetID <= currentVersion &&
+			(rec.DeactivatedRulesetID == nil || *rec.DeactivatedRulesetID > currentVersion)
 		rules = append(rules, rec)
 	}
 	if err := rows.Err(); err != nil {
@@ -282,18 +277,18 @@ func (r *repository) CurrentStatus(ctx context.Context) (StatusRecord, error) {
 
 	// 查询当前候选规则集（building 或 ready），没有时返回 nil。
 	var candidate struct {
-		ID              uint64
-		Status          string
-		BaseRulesetID   uint64
-		RuleCount       uint64
-		KeywordCount    uint64
-		RegexpCount     uint64
-		CompositeCount  uint64
-		IndexBytes      uint64
-		BuildPeakBytes  uint64
-		FailureCode     *string
-		CreatedAt       time.Time
-		UpdatedAt       time.Time
+		ID             uint64
+		Status         string
+		BaseRulesetID  uint64
+		RuleCount      uint64
+		KeywordCount   uint64
+		RegexpCount    uint64
+		CompositeCount uint64
+		IndexBytes     uint64
+		BuildPeakBytes uint64
+		FailureCode    *string
+		CreatedAt      time.Time
+		UpdatedAt      time.Time
 	}
 	err = r.db.WithContext(ctx).
 		Table("moderation_ruleset").

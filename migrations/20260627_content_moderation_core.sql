@@ -183,8 +183,7 @@ CREATE TABLE IF NOT EXISTS `moderation_control` (
 INSERT INTO `moderation_rule`
   (`id`, `name`, `rule_type`, `pattern`, `risk_level`, `priority`, `enabled`, `ruleset_version`, `created_at`, `updated_at`)
 VALUES
-  (1, '礼貌用语基线', 'keyword', '谢谢', 'low', 1000, 1, 1, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3)),
-  (2, '停用规则示例', 'keyword', '示例停用词', 'medium', 1000, 0, 1, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
+  (1, '礼貌用语基线', 'keyword', '谢谢', 'low', 1000, 1, 1, CURRENT_TIMESTAMP(3), CURRENT_TIMESTAMP(3))
 ON DUPLICATE KEY UPDATE `id` = VALUES(`id`);
 
 INSERT INTO `moderation_control`

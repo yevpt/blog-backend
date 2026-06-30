@@ -17,6 +17,7 @@ import (
 
 func TestListRulesUsesIDCursorAndPrefixSearch(t *testing.T) {
 	repo, mock := newManagementRepository(t)
+	expectPublishedVersion(mock, 7)
 	rows := ruleListRows()
 	for i := 1; i <= 51; i++ {
 		rows.AddRow(ruleListRowValues(uint64(100+i), "keyword", "风险"+string(rune('a'+i))+"_test")...)
@@ -38,6 +39,7 @@ func TestListRulesUsesIDCursorAndPrefixSearch(t *testing.T) {
 
 func TestListRulesExactIDOverridesCursor(t *testing.T) {
 	repo, mock := newManagementRepository(t)
+	expectPublishedVersion(mock, 7)
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule WHERE id = ? ORDER BY id ASC LIMIT ?")).
 		WithArgs(uint64(42), 2).
 		WillReturnRows(ruleListRows().AddRow(ruleListRowValues(42, "keyword", "测试")...))
@@ -53,6 +55,7 @@ func TestListRulesExactIDOverridesCursor(t *testing.T) {
 
 func TestListRulesExactPatternOverridesPrefix(t *testing.T) {
 	repo, mock := newManagementRepository(t)
+	expectPublishedVersion(mock, 7)
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule WHERE pattern = ? ORDER BY id ASC LIMIT ?")).
 		WithArgs("精确词", 21).
 		WillReturnRows(ruleListRows().AddRow(ruleListRowValues(1, "keyword", "精确词")...))
@@ -69,8 +72,8 @@ func TestListRulesActiveFilterUsesCurrentPublishedVersion(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT `id` FROM `moderation_ruleset` WHERE status = ? ORDER BY id DESC LIMIT ?")).
 		WithArgs("published", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule WHERE activated_ruleset_id <= ? AND deactivated_ruleset_id IS NULL ORDER BY id ASC LIMIT ?")).
-		WithArgs(uint64(7), 11).
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule WHERE activated_ruleset_id <= ? AND (deactivated_ruleset_id IS NULL OR deactivated_ruleset_id > ?) ORDER BY id ASC LIMIT ?")).
+		WithArgs(uint64(7), uint64(7), 11).
 		WillReturnRows(ruleListRows().AddRow(ruleListRowValues(1, "keyword", "活动")...))
 
 	active := true
@@ -86,15 +89,39 @@ func TestListRulesInactiveFilterExcludesActiveRules(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT `id` FROM `moderation_ruleset` WHERE status = ? ORDER BY id DESC LIMIT ?")).
 		WithArgs("published", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
-	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule WHERE deactivated_ruleset_id <= ? ORDER BY id ASC LIMIT ?")).
-		WithArgs(uint64(7), 11).
-		WillReturnRows(ruleListRows().AddRow(ruleListRowValues(2, "keyword", "已停用")...))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule WHERE activated_ruleset_id > ? OR deactivated_ruleset_id <= ? ORDER BY id ASC LIMIT ?")).
+		WithArgs(uint64(7), uint64(7), 11).
+		WillReturnRows(ruleListRows().AddRow(ruleListRowValuesWithDeactivation(2, "已停用", uint64Pointer(7))...))
 
 	inactive := false
 	page, err := repo.ListRules(context.Background(), moderationrule.RuleFilter{Limit: 10, Active: &inactive})
 
 	require.NoError(t, err)
 	assert.False(t, page.Rules[0].Active)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestListRulesComputesActiveFromCurrentPublishedRuleset(t *testing.T) {
+	repo, mock := newManagementRepository(t)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT `id` FROM `moderation_ruleset` WHERE status = ? ORDER BY id DESC LIMIT ?")).
+		WithArgs("published", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+	deactivatedAtCurrent := uint64(7)
+	deactivatedInCandidate := uint64(8)
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT rule.id,rule.name,rule.rule_type,rule.pattern,rule.category,rule.effect,rule.risk_level,rule.priority,rule.source_id,rule.activated_ruleset_id,rule.deactivated_ruleset_id,rule.replaces_rule_id,rule.created_at,rule.updated_at FROM moderation_rule AS rule ORDER BY id ASC LIMIT ?")).
+		WithArgs(11).
+		WillReturnRows(ruleListRows().
+			AddRow(ruleListRowValuesWithDeactivation(1, "当前启用", nil)...).
+			AddRow(ruleListRowValuesWithDeactivation(2, "当前停用", &deactivatedAtCurrent)...).
+			AddRow(ruleListRowValuesWithDeactivation(3, "候选停用", &deactivatedInCandidate)...))
+
+	page, err := repo.ListRules(context.Background(), moderationrule.RuleFilter{Limit: 10})
+
+	require.NoError(t, err)
+	require.Len(t, page.Rules, 3)
+	assert.True(t, page.Rules[0].Active)
+	assert.False(t, page.Rules[1].Active)
+	assert.True(t, page.Rules[2].Active)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -233,10 +260,24 @@ func newManagementRepository(t *testing.T) (moderationrule.ManagementRepository,
 	return moderationrule.NewRepository(gdb), mock
 }
 
+func expectPublishedVersion(mock sqlmock.Sqlmock, version uint64) {
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT `id` FROM `moderation_ruleset` WHERE status = ? ORDER BY id DESC LIMIT ?")).
+		WithArgs("published", 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(version))
+}
+
 func ruleListRows() *sqlmock.Rows {
 	return sqlmock.NewRows([]string{"id", "name", "rule_type", "pattern", "category", "effect", "risk_level", "priority", "source_id", "activated_ruleset_id", "deactivated_ruleset_id", "replaces_rule_id", "created_at", "updated_at"})
 }
 
 func ruleListRowValues(id uint64, ruleType, pattern string) []driver.Value {
 	return []driver.Value{id, nil, ruleType, pattern, "fraud", "review", "medium", int32(100), uint64(1), uint64(1), nil, nil, time.Now(), time.Now()}
+}
+
+func ruleListRowValuesWithDeactivation(id uint64, pattern string, deactivatedRulesetID *uint64) []driver.Value {
+	return []driver.Value{id, nil, "keyword", pattern, "fraud", "review", "medium", int32(100), uint64(1), uint64(1), deactivatedRulesetID, nil, time.Now(), time.Now()}
+}
+
+func uint64Pointer(value uint64) *uint64 {
+	return &value
 }
