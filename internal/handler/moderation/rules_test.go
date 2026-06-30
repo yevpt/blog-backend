@@ -3,6 +3,7 @@ package moderation_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -191,6 +192,35 @@ func TestCreateImportRejectsOversizedMultipartBody(t *testing.T) {
 	assert.Contains(t, recorder.Body.String(), "上传内容过大")
 }
 
+func TestDownloadImportErrorsStreamsCSV(t *testing.T) {
+	svc, handler := newRuleAdminHandlerWithMock(t)
+	svc.EXPECT().OpenImportErrors(gomock.Any(), uint64(10)).Return(io.NopCloser(strings.NewReader("row,message\n2,错误\n")), nil)
+
+	recorder := serveRuleAdminWithParams(http.MethodGet, "/admin/moderation/rule-imports/10/errors", "", handler.DownloadImportErrors, true, gin.Params{{Key: "id", Value: "10"}})
+
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "row,message\n2,错误\n", recorder.Body.String())
+	assert.Contains(t, recorder.Header().Get("Content-Disposition"), "moderation-import-10-errors.csv")
+}
+
+func TestDownloadImportErrorsReturns404WithoutReport(t *testing.T) {
+	svc, handler := newRuleAdminHandlerWithMock(t)
+	svc.EXPECT().OpenImportErrors(gomock.Any(), uint64(10)).Return(nil, rulemod.ErrImportReportNotFound)
+
+	recorder := serveRuleAdminWithParams(http.MethodGet, "/admin/moderation/rule-imports/10/errors", "", handler.DownloadImportErrors, true, gin.Params{{Key: "id", Value: "10"}})
+
+	assert.Equal(t, http.StatusNotFound, recorder.Code)
+}
+
+func TestDownloadImportErrorsReturns500WhenObjectReadFails(t *testing.T) {
+	svc, handler := newRuleAdminHandlerWithMock(t)
+	svc.EXPECT().OpenImportErrors(gomock.Any(), uint64(10)).Return(nil, errors.New("garage down"))
+
+	recorder := serveRuleAdminWithParams(http.MethodGet, "/admin/moderation/rule-imports/10/errors", "", handler.DownloadImportErrors, true, gin.Params{{Key: "id", Value: "10"}})
+
+	assert.Equal(t, http.StatusInternalServerError, recorder.Code)
+}
+
 func TestRuleTextTestReturnsHits(t *testing.T) {
 	svc, handler := newRuleAdminHandlerWithMock(t)
 	svc.EXPECT().TestText(gomock.Any(), gomock.Any()).Return(rulemod.TestResult{
@@ -315,6 +345,9 @@ func (s *noOpRuleService) ListImports(context.Context, uint64, int) (repoMod.Imp
 }
 func (s *noOpRuleService) GetImport(context.Context, uint64) (repoMod.ImportRecord, error) {
 	return repoMod.ImportRecord{}, nil
+}
+func (s *noOpRuleService) OpenImportErrors(context.Context, uint64) (io.ReadCloser, error) {
+	return nil, rulemod.ErrImportReportNotFound
 }
 func (s *noOpRuleService) CancelImport(context.Context, uint64, uint64) error {
 	return nil

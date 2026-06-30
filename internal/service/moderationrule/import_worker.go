@@ -188,6 +188,30 @@ func (m *manager) GetImport(ctx context.Context, id uint64) (repoMod.ImportRecor
 	return m.repo.GetImport(ctx, id)
 }
 
+// OpenImportErrors 校验导入任务后打开有界错误报告流。
+func (m *manager) OpenImportErrors(ctx context.Context, id uint64) (io.ReadCloser, error) {
+	imp, err := m.repo.GetImport(ctx, id)
+	if err != nil {
+		if isRepoNotFound(err) {
+			return nil, ErrImportReportNotFound
+		}
+		return nil, fmt.Errorf("读取导入任务: %w", err)
+	}
+	expectedKey := fmt.Sprintf("moderation/imports/%d/errors.csv", imp.ID)
+	if imp.ValidationStatus != repoMod.ImportStatusInvalid || imp.ErrorObjectKey == nil || *imp.ErrorObjectKey != expectedKey {
+		return nil, ErrImportReportNotFound
+	}
+	if m.store == nil {
+		return nil, errors.New("规则导入存储未初始化")
+	}
+	maxBytes := int64(m.cfg.MaxImportFileMB+1) * 1024 * 1024
+	reader, err := m.store.OpenObject(ctx, expectedKey, maxBytes)
+	if err != nil {
+		return nil, fmt.Errorf("打开导入错误报告: %w", err)
+	}
+	return reader, nil
+}
+
 // CancelImport 取消导入任务。
 func (m *manager) CancelImport(ctx context.Context, id, actorID uint64) error {
 	if err := m.repo.CancelImport(ctx, id, actorID, time.Now()); err != nil {

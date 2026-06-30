@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -137,23 +138,17 @@ func (h *AdminHandler) DownloadImportErrors(c *gin.Context) {
 		return
 	}
 
-	imp, err := h.ruleSvc.GetImport(c.Request.Context(), uint64(id))
+	reader, err := h.ruleSvc.OpenImportErrors(c.Request.Context(), uint64(id))
 	if err != nil {
 		writeRuleErrorResponse(c, err)
 		return
 	}
-	if imp.ErrorObjectKey == nil || *imp.ErrorObjectKey == "" {
-		response.NotFound(c)
-		return
-	}
+	defer reader.Close()
 
-	// 错误报告对象 key 由 handler 直接通过对象存储 URL 重定向或代理下载。
-	// 此处使用 service 的对象存储能力流式输出。
 	c.Header("Content-Type", "text/csv; charset=utf-8")
-	c.Header("Content-Disposition", `attachment; filename="moderation-import-`+strconv.FormatUint(imp.ID, 10)+`-errors.csv"`)
+	c.Header("Content-Disposition", `attachment; filename="moderation-import-`+strconv.FormatUint(uint64(id), 10)+`-errors.csv"`)
 	c.Status(http.StatusOK)
-	// 对象流下载在 Task 5 路由装配时注入存储依赖后实现。
-	// 当前阶段返回空体，不影响测试中的 mock 验证。
+	_, _ = io.Copy(c.Writer, reader)
 }
 
 // CreateImport 创建导入任务。

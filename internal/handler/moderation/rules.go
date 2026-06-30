@@ -430,7 +430,7 @@ func writeRuleErrorResponse(c *gin.Context, err error) {
 		response.Fail(c, response.CodeBadRequest, "索引内存超限")
 	case errors.Is(err, rulemod.ErrImportInvalid):
 		response.Fail(c, response.CodeBadRequest, "导入文件无效")
-	case errors.Is(err, rulemod.ErrCandidateNotFound), errors.Is(err, rulemod.ErrRuleNotFound):
+	case errors.Is(err, rulemod.ErrCandidateNotFound), errors.Is(err, rulemod.ErrRuleNotFound), errors.Is(err, rulemod.ErrImportReportNotFound):
 		response.NotFound(c)
 	case errors.Is(err, rulemod.ErrCandidateNotReady):
 		response.Fail(c, response.CodeBadRequest, "候选规则集尚未就绪")
@@ -502,7 +502,7 @@ func ruleStatusToDTO(status rulemod.Status) dto.AdminModerationRuleStatusResp {
 			BaseRulesetID: status.Candidate.BaseRulesetID, RuleCount: status.Candidate.RuleCount,
 			IndexBytes: status.Candidate.IndexBytes, BuildPeakBytes: status.Candidate.BuildPeakBytes,
 			FailureCode: status.Candidate.FailureCode,
-			CreatedAt: status.Candidate.CreatedAt, UpdatedAt: status.Candidate.UpdatedAt,
+			CreatedAt:   status.Candidate.CreatedAt, UpdatedAt: status.Candidate.UpdatedAt,
 		}
 	}
 	return resp

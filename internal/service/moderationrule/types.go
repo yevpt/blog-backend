@@ -191,6 +191,7 @@ type Service interface {
 	CreateImport(ctx context.Context, input CreateImportInput) (moderationrule.ImportRecord, error)
 	ListImports(ctx context.Context, afterID uint64, limit int) (moderationrule.ImportPage, error)
 	GetImport(ctx context.Context, id uint64) (moderationrule.ImportRecord, error)
+	OpenImportErrors(ctx context.Context, id uint64) (io.ReadCloser, error)
 	CancelImport(ctx context.Context, id, actorID uint64) error
 }
 

@@ -11,6 +11,7 @@ package mock
 
 import (
 	context "context"
+	io "io"
 	reflect "reflect"
 
 	moderationrule "github.com/vpt/blog-backend/internal/repository/moderationrule"
@@ -18,6 +19,73 @@ import (
 	moderationrule0 "github.com/vpt/blog-backend/internal/service/moderationrule"
 	gomock "go.uber.org/mock/gomock"
 )
+
+// MockImportObjectStore is a mock of ImportObjectStore interface.
+type MockImportObjectStore struct {
+	ctrl     *gomock.Controller
+	recorder *MockImportObjectStoreMockRecorder
+	isgomock struct{}
+}
+
+// MockImportObjectStoreMockRecorder is the mock recorder for MockImportObjectStore.
+type MockImportObjectStoreMockRecorder struct {
+	mock *MockImportObjectStore
+}
+
+// NewMockImportObjectStore creates a new mock instance.
+func NewMockImportObjectStore(ctrl *gomock.Controller) *MockImportObjectStore {
+	mock := &MockImportObjectStore{ctrl: ctrl}
+	mock.recorder = &MockImportObjectStoreMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockImportObjectStore) EXPECT() *MockImportObjectStoreMockRecorder {
+	return m.recorder
+}
+
+// DeleteObject mocks base method.
+func (m *MockImportObjectStore) DeleteObject(ctx context.Context, objectName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteObject", ctx, objectName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteObject indicates an expected call of DeleteObject.
+func (mr *MockImportObjectStoreMockRecorder) DeleteObject(ctx, objectName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteObject", reflect.TypeOf((*MockImportObjectStore)(nil).DeleteObject), ctx, objectName)
+}
+
+// OpenObject mocks base method.
+func (m *MockImportObjectStore) OpenObject(ctx context.Context, objectName string, maxBytes int64) (io.ReadCloser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenObject", ctx, objectName, maxBytes)
+	ret0, _ := ret[0].(io.ReadCloser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OpenObject indicates an expected call of OpenObject.
+func (mr *MockImportObjectStoreMockRecorder) OpenObject(ctx, objectName, maxBytes any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenObject", reflect.TypeOf((*MockImportObjectStore)(nil).OpenObject), ctx, objectName, maxBytes)
+}
+
+// PutObjectStream mocks base method.
+func (m *MockImportObjectStore) PutObjectStream(ctx context.Context, objectName string, body io.Reader, size int64, contentType string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PutObjectStream", ctx, objectName, body, size, contentType)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PutObjectStream indicates an expected call of PutObjectStream.
+func (mr *MockImportObjectStoreMockRecorder) PutObjectStream(ctx, objectName, body, size, contentType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PutObjectStream", reflect.TypeOf((*MockImportObjectStore)(nil).PutObjectStream), ctx, objectName, body, size, contentType)
+}
 
 // MockService is a mock of Service interface.
 type MockService struct {
@@ -174,6 +242,21 @@ func (m *MockService) Metadata(ctx context.Context) (moderationrule0.Metadata, e
 func (mr *MockServiceMockRecorder) Metadata(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Metadata", reflect.TypeOf((*MockService)(nil).Metadata), ctx)
+}
+
+// OpenImportErrors mocks base method.
+func (m *MockService) OpenImportErrors(ctx context.Context, id uint64) (io.ReadCloser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenImportErrors", ctx, id)
+	ret0, _ := ret[0].(io.ReadCloser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OpenImportErrors indicates an expected call of OpenImportErrors.
+func (mr *MockServiceMockRecorder) OpenImportErrors(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenImportErrors", reflect.TypeOf((*MockService)(nil).OpenImportErrors), ctx, id)
 }
 
 // PublishCandidate mocks base method.
