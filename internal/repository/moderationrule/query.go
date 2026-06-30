@@ -350,3 +350,47 @@ func normalizeListLimit(limit int) int {
 	}
 	return limit
 }
+
+// GetRulesByIDs 批量查询指定 ID 的规则记录，顺序不保证。
+func (r *repository) GetRulesByIDs(ctx context.Context, ids []uint64) ([]RuleListRecord, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("规则管理仓库未初始化")
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	rows, err := r.db.WithContext(ctx).
+		Table("moderation_rule AS rule").
+		Select(
+			"rule.id", "rule.name", "rule.rule_type", "rule.pattern", "rule.category",
+			"rule.effect", "rule.risk_level", "rule.priority", "rule.source_id",
+			"rule.activated_ruleset_id", "rule.deactivated_ruleset_id", "rule.replaces_rule_id",
+			"rule.created_at", "rule.updated_at",
+		).
+		Where("id IN ?", ids).
+		Order("id ASC").
+		Rows()
+	if err != nil {
+		return nil, fmt.Errorf("批量查询规则: %w", err)
+	}
+	defer rows.Close()
+
+	rules := make([]RuleListRecord, 0, len(ids))
+	for rows.Next() {
+		var rec RuleListRecord
+		if err := rows.Scan(
+			&rec.ID, &rec.Name, &rec.RuleType, &rec.Pattern, &rec.Category,
+			&rec.Effect, &rec.RiskLevel, &rec.Priority, &rec.SourceID,
+			&rec.ActivatedRulesetID, &rec.DeactivatedRulesetID, &rec.ReplacesRuleID,
+			&rec.CreatedAt, &rec.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("扫描规则行: %w", err)
+		}
+		rules = append(rules, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("读取规则行流: %w", err)
+	}
+	return rules, nil
+}

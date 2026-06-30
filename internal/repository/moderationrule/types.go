@@ -1,6 +1,15 @@
 package moderationrule
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+// 仓储层稳定错误，供 service 层映射。
+var (
+	ErrRulesetConflict   = errors.New("规则集版本冲突")
+	ErrCandidateNotFound = errors.New("候选规则集不存在")
+)
 
 // RulesetRecord 是当前已发布规则集的启动元数据。
 type RulesetRecord struct {
@@ -85,6 +94,8 @@ type CandidateRecord struct {
 	CompositeCount uint64
 	IndexBytes     uint64
 	BuildPeakBytes uint64
+	IndexObjectKey string
+	IndexSHA256    string
 	FailureCode    *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -105,3 +116,56 @@ type StatusRecord struct {
 	UpdatedAt        time.Time
 	Candidate        *CandidateRecord
 }
+
+// RuleDraft 是候选规则集中待写入的新规则事实。
+type RuleDraft struct {
+	Name       *string
+	RuleType   string
+	Pattern    string
+	DedupeHash DedupeHash
+	Category   string
+	Effect     string
+	RiskLevel  string
+	Priority   int32
+	SourceID   uint64
+}
+
+// CreateCandidateCommand 定义创建候选规则集的原子输入。
+type CreateCandidateCommand struct {
+	BaseRulesetID uint64
+	ActorID       uint64
+	Additions     []RuleDraft
+	RemoveRuleIDs []uint64
+}
+
+// BuildResult 是索引构建完成后写回数据库的统计和对象元数据。
+type BuildResult struct {
+	RuleCount      uint64
+	KeywordCount   uint64
+	RegexpCount    uint64
+	CompositeCount uint64
+	IndexBytes     uint64
+	BuildPeakBytes uint64
+	BuildDurationMS uint64
+	IndexObjectKey  string
+	IndexSHA256     string
+}
+
+// RulesetStatus 常量定义规则集的生命周期状态。
+const (
+	StatusBuilding   = "building"
+	StatusReady      = "ready"
+	StatusPublishing = "publishing"
+	StatusPublished  = "published"
+	StatusFailed     = "failed"
+	StatusSuperseded = "superseded"
+)
+
+// ImportValidationStatus 常量定义导入校验状态。
+const (
+	ImportStatusQueued     = "queued"
+	ImportStatusValidating = "validating"
+	ImportStatusValid      = "valid"
+	ImportStatusInvalid    = "invalid"
+	ImportStatusCanceled   = "canceled"
+)

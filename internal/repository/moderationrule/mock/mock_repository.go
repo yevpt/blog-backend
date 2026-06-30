@@ -41,6 +41,50 @@ func (m *MockManagementRepository) EXPECT() *MockManagementRepositoryMockRecorde
 	return m.recorder
 }
 
+// CancelCandidate mocks base method.
+func (m *MockManagementRepository) CancelCandidate(ctx context.Context, id, actorID uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CancelCandidate", ctx, id, actorID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CancelCandidate indicates an expected call of CancelCandidate.
+func (mr *MockManagementRepositoryMockRecorder) CancelCandidate(ctx, id, actorID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CancelCandidate", reflect.TypeOf((*MockManagementRepository)(nil).CancelCandidate), ctx, id, actorID)
+}
+
+// ClaimNextRuleset mocks base method.
+func (m *MockManagementRepository) ClaimNextRuleset(ctx context.Context, status string) (*moderationrule.CandidateRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ClaimNextRuleset", ctx, status)
+	ret0, _ := ret[0].(*moderationrule.CandidateRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ClaimNextRuleset indicates an expected call of ClaimNextRuleset.
+func (mr *MockManagementRepositoryMockRecorder) ClaimNextRuleset(ctx, status any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ClaimNextRuleset", reflect.TypeOf((*MockManagementRepository)(nil).ClaimNextRuleset), ctx, status)
+}
+
+// CreateCandidate mocks base method.
+func (m *MockManagementRepository) CreateCandidate(ctx context.Context, cmd moderationrule.CreateCandidateCommand) (moderationrule.CandidateRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCandidate", ctx, cmd)
+	ret0, _ := ret[0].(moderationrule.CandidateRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateCandidate indicates an expected call of CreateCandidate.
+func (mr *MockManagementRepositoryMockRecorder) CreateCandidate(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCandidate", reflect.TypeOf((*MockManagementRepository)(nil).CreateCandidate), ctx, cmd)
+}
+
 // CurrentRuleset mocks base method.
 func (m *MockManagementRepository) CurrentRuleset(ctx context.Context) (moderationrule.RulesetRecord, error) {
 	m.ctrl.T.Helper()
@@ -86,6 +130,20 @@ func (mr *MockManagementRepositoryMockRecorder) EnsureSource(ctx, name any) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureSource", reflect.TypeOf((*MockManagementRepository)(nil).EnsureSource), ctx, name)
 }
 
+// FailRuleset mocks base method.
+func (m *MockManagementRepository) FailRuleset(ctx context.Context, id uint64, failureCode string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FailRuleset", ctx, id, failureCode)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// FailRuleset indicates an expected call of FailRuleset.
+func (mr *MockManagementRepositoryMockRecorder) FailRuleset(ctx, id, failureCode any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FailRuleset", reflect.TypeOf((*MockManagementRepository)(nil).FailRuleset), ctx, id, failureCode)
+}
+
 // FindDuplicateHashes mocks base method.
 func (m *MockManagementRepository) FindDuplicateHashes(ctx context.Context, currentRulesetID uint64, hashes []moderationrule.DedupeHash) (map[moderationrule.DedupeHash]uint64, error) {
 	m.ctrl.T.Helper()
@@ -99,6 +157,66 @@ func (m *MockManagementRepository) FindDuplicateHashes(ctx context.Context, curr
 func (mr *MockManagementRepositoryMockRecorder) FindDuplicateHashes(ctx, currentRulesetID, hashes any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindDuplicateHashes", reflect.TypeOf((*MockManagementRepository)(nil).FindDuplicateHashes), ctx, currentRulesetID, hashes)
+}
+
+// GetCandidate mocks base method.
+func (m *MockManagementRepository) GetCandidate(ctx context.Context, id uint64) (moderationrule.CandidateRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetCandidate", ctx, id)
+	ret0, _ := ret[0].(moderationrule.CandidateRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetCandidate indicates an expected call of GetCandidate.
+func (mr *MockManagementRepositoryMockRecorder) GetCandidate(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCandidate", reflect.TypeOf((*MockManagementRepository)(nil).GetCandidate), ctx, id)
+}
+
+// GetRulesByIDs mocks base method.
+func (m *MockManagementRepository) GetRulesByIDs(ctx context.Context, ids []uint64) ([]moderationrule.RuleListRecord, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRulesByIDs", ctx, ids)
+	ret0, _ := ret[0].([]moderationrule.RuleListRecord)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRulesByIDs indicates an expected call of GetRulesByIDs.
+func (mr *MockManagementRepositoryMockRecorder) GetRulesByIDs(ctx, ids any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRulesByIDs", reflect.TypeOf((*MockManagementRepository)(nil).GetRulesByIDs), ctx, ids)
+}
+
+// GetRulesetRemovals mocks base method.
+func (m *MockManagementRepository) GetRulesetRemovals(ctx context.Context, rulesetID uint64) ([]uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRulesetRemovals", ctx, rulesetID)
+	ret0, _ := ret[0].([]uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRulesetRemovals indicates an expected call of GetRulesetRemovals.
+func (mr *MockManagementRepositoryMockRecorder) GetRulesetRemovals(ctx, rulesetID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRulesetRemovals", reflect.TypeOf((*MockManagementRepository)(nil).GetRulesetRemovals), ctx, rulesetID)
+}
+
+// HasImportForRuleset mocks base method.
+func (m *MockManagementRepository) HasImportForRuleset(ctx context.Context, rulesetID uint64) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasImportForRuleset", ctx, rulesetID)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasImportForRuleset indicates an expected call of HasImportForRuleset.
+func (mr *MockManagementRepositoryMockRecorder) HasImportForRuleset(ctx, rulesetID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasImportForRuleset", reflect.TypeOf((*MockManagementRepository)(nil).HasImportForRuleset), ctx, rulesetID)
 }
 
 // ListRules mocks base method.
@@ -129,6 +247,48 @@ func (m *MockManagementRepository) ListSources(ctx context.Context) ([]moderatio
 func (mr *MockManagementRepositoryMockRecorder) ListSources(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSources", reflect.TypeOf((*MockManagementRepository)(nil).ListSources), ctx)
+}
+
+// PublishCandidate mocks base method.
+func (m *MockManagementRepository) PublishCandidate(ctx context.Context, id, expectedBase uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishCandidate", ctx, id, expectedBase)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishCandidate indicates an expected call of PublishCandidate.
+func (mr *MockManagementRepositoryMockRecorder) PublishCandidate(ctx, id, expectedBase any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishCandidate", reflect.TypeOf((*MockManagementRepository)(nil).PublishCandidate), ctx, id, expectedBase)
+}
+
+// SaveRulesetBuildResult mocks base method.
+func (m *MockManagementRepository) SaveRulesetBuildResult(ctx context.Context, id uint64, result moderationrule.BuildResult) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SaveRulesetBuildResult", ctx, id, result)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SaveRulesetBuildResult indicates an expected call of SaveRulesetBuildResult.
+func (mr *MockManagementRepositoryMockRecorder) SaveRulesetBuildResult(ctx, id, result any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveRulesetBuildResult", reflect.TypeOf((*MockManagementRepository)(nil).SaveRulesetBuildResult), ctx, id, result)
+}
+
+// StreamCandidateRules mocks base method.
+func (m *MockManagementRepository) StreamCandidateRules(ctx context.Context, baseVersion, candidateID uint64, visit func(moderationrule.RuleRecord) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StreamCandidateRules", ctx, baseVersion, candidateID, visit)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StreamCandidateRules indicates an expected call of StreamCandidateRules.
+func (mr *MockManagementRepositoryMockRecorder) StreamCandidateRules(ctx, baseVersion, candidateID, visit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamCandidateRules", reflect.TypeOf((*MockManagementRepository)(nil).StreamCandidateRules), ctx, baseVersion, candidateID, visit)
 }
 
 // StreamRules mocks base method.
