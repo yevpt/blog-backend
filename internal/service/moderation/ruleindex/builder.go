@@ -67,7 +67,10 @@ func Build(ctx context.Context, version uint64, source Source, limits Limits) (*
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return b.addRule(rule)
+		if err := b.addRule(rule); err != nil {
+			return err
+		}
+		return b.checkBuildPeakBudget()
 	})
 	if err != nil {
 		return nil, Stats{}, err
@@ -90,6 +93,12 @@ func normalizeLimits(limits Limits) (Limits, error) {
 	}
 	if limits.MaxMatchIDs == 0 {
 		limits.MaxMatchIDs = defaultMaxMatchIDs
+	}
+	if limits.MaxIndexMemoryBytes == 0 {
+		limits.MaxIndexMemoryBytes = defaultMaxIndexBytes
+	}
+	if limits.MaxBuildPeakMemoryBytes == 0 {
+		limits.MaxBuildPeakMemoryBytes = defaultMaxPeakBytes
 	}
 	if limits.MaxKeywordRules < 0 || limits.MaxRegexpRules < 0 || limits.MaxPatternRunes < 0 || limits.MaxMatchIDs < 0 {
 		return Limits{}, fmt.Errorf("%w: 配置必须为正数", ErrIndexLimit)

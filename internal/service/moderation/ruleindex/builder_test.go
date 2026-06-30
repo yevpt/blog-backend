@@ -89,7 +89,7 @@ func TestBuilderRejectsLimitsAboveGlobalCapacity(t *testing.T) {
 	}
 }
 
-func buildSnapshot(t *testing.T, rules []ruleindex.SourceRule, limits ruleindex.Limits) *ruleindex.Snapshot {
+func buildSnapshot(t testing.TB, rules []ruleindex.SourceRule, limits ruleindex.Limits) *ruleindex.Snapshot {
 	t.Helper()
 	snapshot, _, err := ruleindex.Build(context.Background(), 1, sliceSource(rules), limits)
 	require.NoError(t, err)

@@ -12,6 +12,8 @@ const (
 	defaultMaxPatternRunes = 500
 	defaultMaxMatchIDs     = 128
 	hardMaxRegexpRules     = 500
+	defaultMaxIndexBytes   = 512 * 1024 * 1024
+	defaultMaxPeakBytes    = 1024 * 1024 * 1024
 )
 
 var (
@@ -19,6 +21,8 @@ var (
 	ErrIndexLimit = errors.New("规则索引超过安全边界")
 	// ErrEmptyRuleset 表示规则源没有可构建的规则。
 	ErrEmptyRuleset = errors.New("规则集不能为空")
+	// ErrIndexCorrupt 表示索引文件格式、结构或校验和无效。
+	ErrIndexCorrupt = errors.New("规则索引文件损坏")
 )
 
 // Risk 是索引内部使用的紧凑风险等级。
@@ -67,6 +71,7 @@ type Limits struct {
 	MaxMatchIDs             int
 	MaxIndexMemoryBytes     uint64
 	MaxBuildPeakMemoryBytes uint64
+	CurrentIndexMemoryBytes uint64
 }
 
 // Stats 描述紧凑快照的确定性结构与容量统计。

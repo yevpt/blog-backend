@@ -6,6 +6,9 @@ import (
 )
 
 func (b *builder) compact(ctx context.Context, version uint64) (*Snapshot, Stats, error) {
+	if err := b.checkProjectedIndexBudget(); err != nil {
+		return nil, Stats{}, err
+	}
 	states := make([]state, len(b.states))
 	edges := make([]edge, len(b.edges))
 	outputs := make([]uint32, len(b.outputs))
@@ -74,7 +77,10 @@ func (b *builder) compact(ctx context.Context, version uint64) (*Snapshot, Stats
 		DirectOutputCount: len(outputs),
 	}
 	snapshot.stats = stats
-	return snapshot, stats, nil
+	if err := snapshot.finalizeMemoryStats(b); err != nil {
+		return nil, Stats{}, err
+	}
+	return snapshot, snapshot.stats, nil
 }
 
 func linkedEdgeCount(edges []buildEdge, first uint32) int {
