@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
@@ -580,7 +581,14 @@ func normalizeMusicAdminListReq(req *dto.MusicAdminListReq) {
 }
 
 func readMusicUploadFile(c *gin.Context, maxBytes int) ([]byte, string, bool) {
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(maxBytes)) {
+		return nil, "", false
+	}
+
 	header, err := c.FormFile("file")
+	if multipartlimit.RespondParseError(c, err) {
+		return nil, "", false
+	}
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, "缺少上传文件")
 		return nil, "", false

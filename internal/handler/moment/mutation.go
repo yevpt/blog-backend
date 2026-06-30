@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -16,6 +17,7 @@ import (
 const (
 	maxMomentImageUploadBytes = 3 * 1024 * 1024
 	maxMomentGifUploadBytes   = 300 * 1024
+	maxMomentImageFileCount   = 9
 )
 
 // Save 新增或更新碎语。
@@ -42,6 +44,10 @@ const (
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /moments [post]
 func (h *MomentHandler) Save(c *gin.Context) {
+	if !multipartlimit.Guard(c, multipartlimit.MultiFileMaxBody(maxMomentImageFileCount, maxMomentImageUploadBytes)) {
+		return
+	}
+
 	userID, roleNames, ok := requiredUser(c)
 	if !ok {
 		return
@@ -69,7 +75,9 @@ func bindMomentSaveReq(c *gin.Context) (*dto.MomentSaveReq, bool) {
 
 	files, err := readMomentImageFiles(c)
 	if err != nil {
-		response.Fail(c, response.CodeBadRequest, err.Error())
+		if !errors.Is(err, multipartlimit.ErrBodyTooLarge) && !errors.Is(err, multipartlimit.ErrTooManyFiles) {
+			response.Fail(c, response.CodeBadRequest, err.Error())
+		}
 		return nil, false
 	}
 	req.ImageFiles = files
@@ -78,10 +86,19 @@ func bindMomentSaveReq(c *gin.Context) (*dto.MomentSaveReq, bool) {
 
 func readMomentImageFiles(c *gin.Context) ([]dto.MomentImageFileReq, error) {
 	form, err := c.MultipartForm()
+	if multipartlimit.RespondParseError(c, err) {
+		return nil, multipartlimit.ErrBodyTooLarge
+	}
 	if err != nil {
 		return nil, err
 	}
 	headers := form.File["images"]
+	if multipartlimit.RejectExcessFileParts(c, maxMomentImageFileCount) {
+		return nil, multipartlimit.ErrTooManyFiles
+	}
+	if len(headers) > maxMomentImageFileCount {
+		return nil, errors.New("图片数量不能超过 9 张")
+	}
 	files := make([]dto.MomentImageFileReq, 0, len(headers))
 	for _, header := range headers {
 		file, err := header.Open()

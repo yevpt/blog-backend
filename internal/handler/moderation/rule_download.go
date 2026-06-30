@@ -7,10 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
 	"github.com/vpt/blog-backend/pkg/response"
 )
+
+const maxModerationImportFileBytes = 50 * 1024 * 1024
 
 // DownloadTemplate 下载导入模板。
 // @Summary 下载规则导入模板
@@ -183,6 +186,10 @@ func (h *AdminHandler) CreateImport(c *gin.Context) {
 		return
 	}
 
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(maxModerationImportFileBytes)) {
+		return
+	}
+
 	// 绑定表单参数（非文件字段）。
 	var req dto.AdminModerationRuleImportCreateReq
 	if !reqbind.Query(c, &req) {
@@ -192,6 +199,9 @@ func (h *AdminHandler) CreateImport(c *gin.Context) {
 	// 文件上传和对象存储流式保存由 Task 5 路由装配时注入存储依赖后完整实现。
 	// 当前阶段使用 handler 伪造的对象 key 供测试验证参数绑定和身份校验。
 	file, header, err := c.Request.FormFile("file")
+	if multipartlimit.RespondParseError(c, err) {
+		return
+	}
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, "文件参数错误")
 		return

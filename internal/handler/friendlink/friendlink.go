@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	friendlinkservice "github.com/vpt/blog-backend/internal/service/friendlink"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -84,7 +85,7 @@ func (h *FriendLinkHandler) ListAdmin(c *gin.Context) {
 
 // Create 新增友情链接。
 // @Summary 新增友情链接
-// @Description 管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.webp 并写入 avatar_url。
+// @Description 管理员新增友情链接；必须随表单上传 logo 文件，服务端校验后入库（最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP）并写入 avatar_url，对象 key 为 avatar/link/{md5}.{ext}。
 // @Tags 友情链接
 // @Accept multipart/form-data
 // @Produce json
@@ -113,7 +114,7 @@ func (h *FriendLinkHandler) Create(c *gin.Context) {
 
 // Update 修改友情链接。
 // @Summary 修改友情链接
-// @Description 管理员修改友情链接；logo 可选，上传时保存为 avatar/link/{md5}.webp 并替换 avatar_url，未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。
+// @Description 管理员修改友情链接；logo 可选，上传时按入库规范处理（最长边 ≤120px、体积 ≤20KB；已合规原样保留，超出压缩为 WebP）并替换 avatar_url，对象 key 为 avatar/link/{md5}.{ext}；未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。
 // @Tags 友情链接
 // @Accept multipart/form-data
 // @Produce json
@@ -172,6 +173,10 @@ func bindFriendLinkID(c *gin.Context) (uint, bool) {
 }
 
 func bindFriendLinkCreateReq(c *gin.Context) (*dto.FriendLinkCreateReq, bool) {
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(friendlinkservice.MaxFriendLinkLogoBytes)) {
+		return nil, false
+	}
+
 	var req dto.FriendLinkCreateReq
 	if !reqbind.Form(c, &req) {
 		return nil, false
@@ -185,6 +190,10 @@ func bindFriendLinkCreateReq(c *gin.Context) (*dto.FriendLinkCreateReq, bool) {
 }
 
 func bindFriendLinkUpdateReq(c *gin.Context) (*dto.FriendLinkUpdateReq, bool) {
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(friendlinkservice.MaxFriendLinkLogoBytes)) {
+		return nil, false
+	}
+
 	var req dto.FriendLinkUpdateReq
 	if !reqbind.Form(c, &req) {
 		return nil, false
@@ -211,6 +220,9 @@ func readFriendLinkLogo(c *gin.Context) (*dto.UploadedImageFile, bool) {
 
 func readFriendLinkLogoOptional(c *gin.Context) (*dto.UploadedImageFile, bool) {
 	header, err := c.FormFile("logo")
+	if multipartlimit.RespondParseError(c, err) {
+		return nil, false
+	}
 	if err != nil {
 		if errors.Is(err, http.ErrMissingFile) {
 			return nil, true

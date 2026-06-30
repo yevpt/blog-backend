@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/gin-gonic/gin"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -39,11 +40,21 @@ func (h *Handler) TempImage(c *gin.Context) {
 		return
 	}
 
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(uploadservice.MaxTempImageBytes)) {
+		return
+	}
+
 	scene := c.PostForm("scene")
 	dir := c.PostForm("dir")
 	header, err := c.FormFile("file")
+	if multipartlimit.RespondParseError(c, err) {
+		return
+	}
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, "缺少上传文件")
+		return
+	}
+	if multipartlimit.RejectExcessFileParts(c, 1) {
 		return
 	}
 	file, err := header.Open()

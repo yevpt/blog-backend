@@ -9,16 +9,28 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 )
 
 // ReadSingleImageFile 从 multipart 表单读取单张图片，并限制读取大小。
 func ReadSingleImageFile(c *gin.Context, field string, maxBytes int, rejectGIF bool) (name string, data []byte, err error) {
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(maxBytes)) {
+		return "", nil, multipartlimit.ErrBodyTooLarge
+	}
+
 	header, err := c.FormFile(field)
 	if err != nil {
+		if multipartlimit.RespondParseError(c, err) {
+			return "", nil, multipartlimit.ErrBodyTooLarge
+		}
 		if errors.Is(err, http.ErrMissingFile) {
 			return "", nil, nil
 		}
 		return "", nil, err
+	}
+	if multipartlimit.RejectExcessFileParts(c, 1) {
+		return "", nil, multipartlimit.ErrTooManyFiles
 	}
 
 	file, err := header.Open()

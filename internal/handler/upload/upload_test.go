@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/dto"
 	uploadhandler "github.com/vpt/blog-backend/internal/handler/upload"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -112,6 +113,23 @@ func TestHandler_TempImage_ReturnsServerErrorOnUnknownError(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestHandler_TempImage_RejectsOversizedBody(t *testing.T) {
+	r := newUploadRouter(&stubUploadService{})
+	oversized := bytes.Repeat([]byte("x"), int(multipartlimit.SingleFileMaxBody(uploadservice.MaxTempImageBytes))+1)
+	body, contentType := tempUploadBody(t, "images", "big.png", oversized)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/authed/uploads/temp", body)
+	req.Header.Set("Content-Type", contentType)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, multipartlimit.ErrBodyTooLarge.Error(), resp.Message)
 }
 
 func tempUploadBody(t *testing.T, dir string, name string, data []byte) (*bytes.Buffer, string) {

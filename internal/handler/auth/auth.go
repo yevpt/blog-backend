@@ -6,8 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
+	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
@@ -117,12 +119,19 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 // @Success 200 {object} response.Response{data=dto.LoginResp} "统一响应；code=0 表示注册成功并已登录，code=400 表示参数错误或业务错误"
 // @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
+	if !multipartlimit.Guard(c, multipartlimit.MultiFileMaxBody(1, avatarservice.MaxRawAvatarBytes)) {
+		return
+	}
+
 	var req dto.RegisterReq
 	if !reqbind.Form(c, &req) {
 		return
 	}
 
 	avatar, err := readRegisterAvatar(c)
+	if errors.Is(err, multipartlimit.ErrBodyTooLarge) || errors.Is(err, multipartlimit.ErrTooManyFiles) {
+		return
+	}
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
