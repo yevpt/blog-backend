@@ -121,7 +121,7 @@ func (r *normalizeAvatarRepo) FindRolesByUserID(id uint) ([]string, error)    { 
 func (r *normalizeAvatarRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
 	return nil, nil
 }
-func (r *normalizeAvatarRepo) TouchLoginPresence(id uint) error  { return nil }
+func (r *normalizeAvatarRepo) TouchLoginPresence(id uint) error { return nil }
 func (r *normalizeAvatarRepo) UpdateLastActiveAt(id uint) error { return nil }
 func (r *normalizeAvatarRepo) UpdateLastLoginAt(id uint) error  { return nil }
 func (r *normalizeAvatarRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
@@ -307,7 +307,7 @@ func TestAdminService_NormalizeAvatars_PurgesUnreferencedFriendLinkLogos(t *test
 		listKeys: []string{orphan, referenced},
 	}
 	svc := user.NewAdminService(repo, &stubUserCacheService{}, user.AdminDeps{
-		Store: store,
+		Store:  store,
 		Avatar: &stubAvatarNormalizer{},
 		FriendLink: &stubFriendLinkLogoRefs{
 			counts: map[string]int64{
@@ -512,7 +512,7 @@ func testSmallJPEG(t *testing.T) []byte {
 
 func testOversizedPNG(t *testing.T) []byte {
 	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, 200, 200))
+	img := image.NewRGBA(image.Rect(0, 0, 241, 241))
 	var buf bytes.Buffer
 	require.NoError(t, png.Encode(&buf, img))
 	return buf.Bytes()
