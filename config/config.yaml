@@ -149,7 +149,7 @@ moderation:
     preview_max_edge: 48
     static_placeholder_key: "system/moderation/image-review.jpg"
     gif_placeholder_key: "system/moderation/gif-review.jpg"
-    approval_retention_days: 180
+    approval_retention_days: 90
     temp_retention: 24h
     orphan_min_age: 24h
     cleanup_interval: 24h
@@ -185,10 +185,10 @@ moderation:
     user_hide_max_items_per_request: 1000
 
   audit:
-    attempt_retention_days: 180
-    action_log_retention_days: 365
+    attempt_retention_days: 90
+    action_log_retention_days: 90
     # 不清理当前物化、最后通过或待审版本
-    obsolete_revision_retention_days: 365
+    obsolete_revision_retention_days: 90
     cleanup_interval: 24h
     cleanup_batch_size: 500
 

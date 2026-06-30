@@ -27,6 +27,12 @@ moderation:
     ruleset_artifact_retention_days: 7
     import_history_retention_days: 30
     require_non_empty_in_enforce: true
+  image:
+    approval_retention_days: 90
+  audit:
+    attempt_retention_days: 90
+    action_log_retention_days: 90
+    obsolete_revision_retention_days: 90
   migration:
     batch_size: 100
 

@@ -133,6 +133,8 @@ func (w *Worker) cleanupObjectPrefixes(ctx context.Context, now time.Time) int {
 		{prefix: "temp/", maxAge: w.cfg.Image.TempRetention},
 		{prefix: "comments/moderation/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true},
 		{prefix: "moments/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true, moderationOnly: true},
+		{prefix: "moderation/staging/", maxAge: w.cfg.Image.OrphanMinAge},
+		{prefix: "moderation/history/", maxAge: time.Duration(w.cfg.Image.ApprovalRetentionDays) * 24 * time.Hour},
 	}
 	deleted := 0
 	for _, target := range targets {

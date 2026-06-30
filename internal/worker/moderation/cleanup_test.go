@@ -109,3 +109,38 @@ func cleanupConfig() config.ModerationConfig {
 		},
 	}
 }
+
+// TestCleanupStagingAndHistoryPrefixes 验证新追加的两个清理目标：
+// - moderation/staging/ 使用 OrphanMinAge 超龄即删，不做引用检查
+// - moderation/history/ 使用 ApprovalRetentionDays 保留窗口，不做引用检查
+func TestCleanupStagingAndHistoryPrefixes(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	repo := &cleanupRepositoryStub{
+		referenced: map[string]struct{}{},
+	}
+	store := &cleanupStoreStub{
+		pages: map[string]storage.ObjectPage{
+			// staging：48h > OrphanMinAge(24h)，应被删除
+			"moderation/staging/": {Objects: []storage.ObjectMetadata{
+				{Key: "moderation/staging/old.jpg", LastModified: now.Add(-48 * time.Hour)},
+				{Key: "moderation/staging/fresh.jpg", LastModified: now.Add(-time.Hour)},
+			}},
+			// history：180d + 1h 超出 ApprovalRetentionDays(180d)，应被删除；newer 不删
+			"moderation/history/": {Objects: []storage.ObjectMetadata{
+				{Key: "moderation/history/old.jpg", LastModified: now.Add(-(180*24*time.Hour + time.Hour))},
+				{Key: "moderation/history/newer.jpg", LastModified: now.Add(-72 * time.Hour)},
+			}},
+		},
+	}
+	core, _ := observer.New(zap.WarnLevel)
+	worker := moderationworker.NewWorker(repo, store, cleanupConfig(), zap.New(core), func() time.Time { return now })
+
+	_, err := worker.CleanupOnce(context.Background())
+
+	require.NoError(t, err)
+	assert.ElementsMatch(t,
+		[]string{"moderation/staging/old.jpg", "moderation/history/old.jpg"},
+		store.deleted,
+	)
+}
+
