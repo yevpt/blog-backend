@@ -13,6 +13,7 @@ import (
 	"github.com/vpt/blog-backend/internal/repository/moderationrule"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func TestListRulesUsesIDCursorAndPrefixSearch(t *testing.T) {
@@ -248,6 +249,10 @@ func TestCurrentStatusNoCandidateReturnsOnlyPublished(t *testing.T) {
 }
 
 func newManagementRepository(t *testing.T) (moderationrule.ManagementRepository, sqlmock.Sqlmock) {
+	return newManagementRepositoryWithLogger(t, nil)
+}
+
+func newManagementRepositoryWithLogger(t *testing.T, logger gormlogger.Interface) (moderationrule.ManagementRepository, sqlmock.Sqlmock) {
 	t.Helper()
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -255,7 +260,11 @@ func newManagementRepository(t *testing.T) (moderationrule.ManagementRepository,
 		mock.ExpectClose()
 		require.NoError(t, db.Close())
 	})
-	gdb, err := gorm.Open(mysql.New(mysql.Config{Conn: db, SkipInitializeWithVersion: true}), &gorm.Config{})
+	config := &gorm.Config{}
+	if logger != nil {
+		config.Logger = logger
+	}
+	gdb, err := gorm.Open(mysql.New(mysql.Config{Conn: db, SkipInitializeWithVersion: true}), config)
 	require.NoError(t, err)
 	return moderationrule.NewRepository(gdb), mock
 }

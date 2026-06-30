@@ -152,15 +152,16 @@ func (r *repository) ClaimNextRuleset(ctx context.Context, status string) (*Cand
 	var claimed CandidateRecord
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var ruleset model.ModerationRuleset
-		if err := tx.Where("status = ?", status).
+		result := tx.Where("status = ?", status).
 			Order("id ASC").
 			Limit(1).
 			Clauses(clause.Locking{Strength: "UPDATE"}).
-			Take(&ruleset).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
-			}
-			return fmt.Errorf("查询待处理规则集: %w", err)
+			Find(&ruleset)
+		if result.Error != nil {
+			return fmt.Errorf("查询待处理规则集: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return nil
 		}
 		if err := tx.Model(&ruleset).Update("status", StatusBuilding).Error; err != nil {
 			return fmt.Errorf("认领规则集: %w", err)
@@ -234,9 +235,9 @@ func (r *repository) CancelCandidate(ctx context.Context, id, actorID uint64) er
 		Table("moderation_ruleset").
 		Where("id = ? AND status IN ?", id, []string{StatusBuilding, StatusReady}).
 		Updates(map[string]any{
-			"status":     StatusFailed,
+			"status":       StatusFailed,
 			"failure_code": "canceled",
-			"updated_at": time.Now(),
+			"updated_at":   time.Now(),
 		})
 	if result.Error != nil {
 		return fmt.Errorf("取消候选规则集: %w", result.Error)
@@ -320,20 +321,20 @@ func (r *repository) GetCandidate(ctx context.Context, id uint64) (CandidateReco
 		return CandidateRecord{}, errors.New("规则管理仓库未初始化")
 	}
 	var row struct {
-		ID              uint64
-		Status          string
-		BaseRulesetID   *uint64
-		RuleCount       uint64
-		KeywordCount    uint64
-		RegexpCount     uint64
-		CompositeCount  uint64
-		IndexBytes      uint64
-		BuildPeakBytes  uint64
-		IndexObjectKey  *string
-		IndexSHA256     *string
-		FailureCode     *string
-		CreatedAt       time.Time
-		UpdatedAt       time.Time
+		ID             uint64
+		Status         string
+		BaseRulesetID  *uint64
+		RuleCount      uint64
+		KeywordCount   uint64
+		RegexpCount    uint64
+		CompositeCount uint64
+		IndexBytes     uint64
+		BuildPeakBytes uint64
+		IndexObjectKey *string
+		IndexSHA256    *string
+		FailureCode    *string
+		CreatedAt      time.Time
+		UpdatedAt      time.Time
 	}
 	err := r.db.WithContext(ctx).
 		Table("moderation_ruleset").

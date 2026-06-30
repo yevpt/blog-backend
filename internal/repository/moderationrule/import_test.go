@@ -2,7 +2,9 @@ package moderationrule_test
 
 import (
 	"context"
+	"errors"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vpt/blog-backend/internal/repository/moderationrule"
+	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 func TestCreateImportStoresQueuedJob(t *testing.T) {
@@ -68,7 +72,8 @@ func TestClaimNextImportLocksAndUpdatesToValidating(t *testing.T) {
 }
 
 func TestClaimNextImportReturnsNilWhenNoQueued(t *testing.T) {
-	repo, mock := newManagementRepository(t)
+	observer := &gormErrorObserver{}
+	repo, mock := newManagementRepositoryWithLogger(t, observer)
 	mock.ExpectBegin()
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `moderation_rule_import` WHERE validation_status = ? ORDER BY id ASC LIMIT ?")).
 		WithArgs("queued", 1).
@@ -79,6 +84,23 @@ func TestClaimNextImportReturnsNilWhenNoQueued(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Nil(t, imp)
+	assert.False(t, observer.Contains(gorm.ErrRecordNotFound))
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestClaimNextImportReturnsDatabaseError(t *testing.T) {
+	repo, mock := newManagementRepository(t)
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `moderation_rule_import` WHERE validation_status = ? ORDER BY id ASC LIMIT ?")).
+		WithArgs("queued", 1).
+		WillReturnError(errors.New("db down"))
+	mock.ExpectRollback()
+
+	imp, err := repo.ClaimNextImport(context.Background(), time.Now())
+
+	assert.Nil(t, imp)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db down")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -95,4 +117,33 @@ func TestResetInterruptedImportsSetsQueued(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+type gormErrorObserver struct {
+	mu   sync.Mutex
+	errs []error
+}
+
+func (o *gormErrorObserver) LogMode(gormlogger.LogLevel) gormlogger.Interface { return o }
+func (o *gormErrorObserver) Info(context.Context, string, ...any)             {}
+func (o *gormErrorObserver) Warn(context.Context, string, ...any)             {}
+func (o *gormErrorObserver) Error(context.Context, string, ...any)            {}
+func (o *gormErrorObserver) Trace(_ context.Context, _ time.Time, _ func() (string, int64), err error) {
+	if err == nil {
+		return
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.errs = append(o.errs, err)
+}
+
+func (o *gormErrorObserver) Contains(target error) bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for _, err := range o.errs {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
 }

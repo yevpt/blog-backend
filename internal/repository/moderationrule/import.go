@@ -48,15 +48,16 @@ func (r *repository) ClaimNextImport(ctx context.Context, now time.Time) (*Impor
 	var claimed ImportRecord
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var imp model.ModerationRuleImport
-		if err := tx.Where("validation_status = ?", ImportStatusQueued).
+		result := tx.Where("validation_status = ?", ImportStatusQueued).
 			Order("id ASC").
 			Limit(1).
 			Clauses(clause.Locking{Strength: "UPDATE"}).
-			Take(&imp).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil
-			}
-			return fmt.Errorf("查询待处理导入任务: %w", err)
+			Find(&imp)
+		if result.Error != nil {
+			return fmt.Errorf("查询待处理导入任务: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return nil
 		}
 		if err := tx.Model(&imp).Updates(map[string]any{
 			"validation_status": ImportStatusValidating,
