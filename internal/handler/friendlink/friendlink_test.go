@@ -150,6 +150,34 @@ func TestFriendLinkHandler_Create_RejectsTooLargeLogo(t *testing.T) {
 	assert.Equal(t, friendlinkservice.ErrFriendLinkLogoTooLarge.Error(), resp.Message)
 }
 
+func TestFriendLinkHandler_Create_RejectsExcessFileParts(t *testing.T) {
+	stub := &stubFriendLinkService{}
+	r := newFriendLinkRouter(stub)
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	require.NoError(t, writer.WriteField("name", "友站"))
+	require.NoError(t, writer.WriteField("site", "https://friend.example.com"))
+	require.NoError(t, writer.WriteField("seq", "1"))
+	for _, field := range []string{"logo", "extra"} {
+		part, err := writer.CreateFormFile(field, field+".png")
+		require.NoError(t, err)
+		_, err = part.Write([]byte("fake-image"))
+		require.NoError(t, err)
+	}
+	require.NoError(t, writer.Close())
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/admin/friend-links", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	r.ServeHTTP(w, req)
+
+	assert.Empty(t, stub.createReq.Name)
+	var resp response.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, response.CodeBadRequest, resp.Code)
+	assert.Equal(t, "上传文件过多", resp.Message)
+}
+
 func TestFriendLinkHandler_GetPublic_NotFoundReturns404(t *testing.T) {
 	stub := &stubFriendLinkService{getErr: friendlinkservice.ErrFriendLinkNotFound}
 	r := newFriendLinkRouter(stub)

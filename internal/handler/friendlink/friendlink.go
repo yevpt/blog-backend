@@ -223,6 +223,9 @@ func readFriendLinkLogoOptional(c *gin.Context) (*dto.UploadedImageFile, bool) {
 	if multipartlimit.RespondParseError(c, err) {
 		return nil, false
 	}
+	if multipartlimit.RejectExcessFileParts(c, 1) {
+		return nil, false
+	}
 	if err != nil {
 		if errors.Is(err, http.ErrMissingFile) {
 			return nil, true

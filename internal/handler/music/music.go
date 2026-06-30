@@ -589,6 +589,9 @@ func readMusicUploadFile(c *gin.Context, maxBytes int) ([]byte, string, bool) {
 	if multipartlimit.RespondParseError(c, err) {
 		return nil, "", false
 	}
+	if multipartlimit.RejectExcessFileParts(c, 1) {
+		return nil, "", false
+	}
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, "缺少上传文件")
 		return nil, "", false
