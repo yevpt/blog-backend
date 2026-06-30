@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,26 @@ func newStorageTestRedis(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 		mr.Close()
 	})
 	return rdb, mr
+}
+
+func TestCachedObjectURLResolverPutObjectStream_InvalidatesURL(t *testing.T) {
+	rdb, _ := newStorageTestRedis(t)
+	api := &fakeObjectAPI{}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+	resolver := NewCachedObjectURLResolver(client, rdb, time.Hour)
+	require.NoError(t, rdb.Set(context.Background(), "garage:moderation/rules.csv", "cached", time.Hour).Err())
+
+	err := resolver.PutObjectStream(
+		context.Background(),
+		"moderation/rules.csv",
+		strings.NewReader("rules"),
+		5,
+		"text/csv",
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(5), api.putSize)
+	assert.Zero(t, rdb.Exists(context.Background(), "garage:moderation/rules.csv").Val())
 }
 
 // TestCachedObjectURLResolver_UsesCDNKeyAndCachesURL 验证 CDN 模式按原始对象 key 缓存签名 URL。

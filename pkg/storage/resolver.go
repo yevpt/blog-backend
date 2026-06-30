@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"io"
 	"strings"
 	"time"
 )
@@ -27,6 +28,12 @@ type ObjectKeyResolver interface {
 // ObjectReader 从对象存储读取原始字节，供需要校验内容而非仅解析 URL 的服务使用。
 type ObjectReader interface {
 	GetObject(ctx context.Context, objectName string) ([]byte, error)
+}
+
+// ObjectStreamStore 提供有界对象流读写能力，避免大型产物整块驻留内存。
+type ObjectStreamStore interface {
+	PutObjectStream(ctx context.Context, objectName string, body io.Reader, size int64, contentType string) error
+	OpenObject(ctx context.Context, objectName string, maxBytes int64) (io.ReadCloser, error)
 }
 
 // ImageObjectReader 以图片专用上限读取历史原图和 CDN 回源图片。

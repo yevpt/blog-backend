@@ -185,6 +185,16 @@ func IsObjectNotFound(err error) bool {
 
 // putObject 将完整对象内容写入 Garage。
 func (c *Client) putObject(ctx context.Context, objectName string, data []byte, contentType string) error {
+	return c.putObjectStream(ctx, objectName, bytes.NewReader(data), int64(len(data)), contentType)
+}
+
+func (c *Client) putObjectStream(
+	ctx context.Context,
+	objectName string,
+	body io.Reader,
+	size int64,
+	contentType string,
+) error {
 	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
 		return errors.New("对象存储客户端未初始化")
 	}
@@ -192,12 +202,16 @@ func (c *Client) putObject(ctx context.Context, objectName string, data []byte, 
 	if objectName == "" {
 		return errors.New("对象名不能为空")
 	}
+	if body == nil || size < 0 {
+		return errors.New("对象流参数无效")
+	}
 
 	_, err := c.impl.objectAPI.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(c.impl.bucket),
-		Key:         aws.String(objectName),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String(contentType),
+		Bucket:        aws.String(c.impl.bucket),
+		Key:           aws.String(objectName),
+		Body:          body,
+		ContentLength: aws.Int64(size),
+		ContentType:   aws.String(contentType),
 	})
 	return err
 }
@@ -211,6 +225,16 @@ func (c *Client) getImageObject(ctx context.Context, objectName string) ([]byte,
 }
 
 func (c *Client) getObjectWithMaxBytes(ctx context.Context, objectName string, maxBytes int) ([]byte, error) {
+	body, err := c.openObject(ctx, objectName, int64(maxBytes))
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+
+	return io.ReadAll(body)
+}
+
+func (c *Client) openObject(ctx context.Context, objectName string, maxBytes int64) (io.ReadCloser, error) {
 	if c == nil || c.impl == nil || c.impl.objectAPI == nil {
 		return nil, errors.New("对象存储客户端未初始化")
 	}
@@ -229,16 +253,69 @@ func (c *Client) getObjectWithMaxBytes(ctx context.Context, objectName string, m
 	if err != nil {
 		return nil, err
 	}
-	defer out.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(out.Body, int64(maxBytes)+1))
-	if err != nil {
+	if out == nil || out.Body == nil {
+		return nil, errors.New("对象响应体为空")
+	}
+	if out.ContentLength != nil && *out.ContentLength > maxBytes {
+		err := objectTooLargeError(maxBytes)
+		if closeErr := out.Body.Close(); closeErr != nil {
+			return nil, errors.Join(err, closeErr)
+		}
 		return nil, err
 	}
-	if len(body) > maxBytes {
-		return nil, fmt.Errorf("%w: %d", ErrObjectTooLarge, maxBytes)
+	return &boundedObjectReadCloser{body: out.Body, remaining: maxBytes, limit: maxBytes}, nil
+}
+
+type boundedObjectReadCloser struct {
+	body      io.ReadCloser
+	remaining int64
+	limit     int64
+	closed    bool
+	tooLarge  bool
+}
+
+func (r *boundedObjectReadCloser) Read(p []byte) (int, error) {
+	if r.tooLarge {
+		return 0, objectTooLargeError(r.limit)
 	}
-	return body, nil
+	if r.closed {
+		return 0, io.ErrClosedPipe
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	readSize := int64(len(p))
+	if r.remaining < readSize {
+		readSize = r.remaining + 1
+	}
+	n, err := r.body.Read(p[:int(readSize)])
+	if int64(n) <= r.remaining {
+		r.remaining -= int64(n)
+		return n, err
+	}
+
+	delivered := int(r.remaining)
+	r.remaining = 0
+	r.tooLarge = true
+	_ = r.closeBody()
+	return delivered, objectTooLargeError(r.limit)
+}
+
+func (r *boundedObjectReadCloser) Close() error {
+	return r.closeBody()
+}
+
+func (r *boundedObjectReadCloser) closeBody() error {
+	if r.closed {
+		return nil
+	}
+	r.closed = true
+	return r.body.Close()
+}
+
+func objectTooLargeError(maxBytes int64) error {
+	return fmt.Errorf("%w: %d", ErrObjectTooLarge, maxBytes)
 }
 
 func (c *Client) listObjectKeys(ctx context.Context, prefix string) ([]string, error) {

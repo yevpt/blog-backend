@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -64,6 +65,16 @@ func (c *Client) ObjectExists(ctx context.Context, objectName string) (bool, err
 func (c *Client) PutObject(ctx context.Context, objectName string, data []byte, contentType string) error {
 	// 调用方负责传入最终对象 bytes；本方法不创建任何临时文件。
 	return c.putObject(ctx, objectName, data, contentType)
+}
+
+// PutObjectStream 将定长对象流直接写入 Garage。
+func (c *Client) PutObjectStream(ctx context.Context, objectName string, body io.Reader, size int64, contentType string) error {
+	return c.putObjectStream(ctx, objectName, body, size, contentType)
+}
+
+// OpenObject 打开不超过指定字节上限的对象流，调用方负责关闭返回值。
+func (c *Client) OpenObject(ctx context.Context, objectName string, maxBytes int64) (io.ReadCloser, error) {
+	return c.openObject(ctx, objectName, maxBytes)
 }
 
 // GetObject 从 Garage 直读对象内容，供管理端归一化等需要绕过 CDN 的场景使用。
@@ -148,6 +159,26 @@ func (r *CachedObjectURLResolver) PutObject(ctx context.Context, objectName stri
 	}
 	r.invalidateObjectURLCache(ctx, objectName)
 	return nil
+}
+
+// PutObjectStream 将定长对象流写入 Garage，并清除对应 URL 缓存。
+func (r *CachedObjectURLResolver) PutObjectStream(
+	ctx context.Context,
+	objectName string,
+	body io.Reader,
+	size int64,
+	contentType string,
+) error {
+	if err := r.impl.client.PutObjectStream(ctx, objectName, body, size, contentType); err != nil {
+		return err
+	}
+	r.invalidateObjectURLCache(ctx, objectName)
+	return nil
+}
+
+// OpenObject 打开底层 Garage 对象流。
+func (r *CachedObjectURLResolver) OpenObject(ctx context.Context, objectName string, maxBytes int64) (io.ReadCloser, error) {
+	return r.impl.client.OpenObject(ctx, objectName, maxBytes)
 }
 
 // GetObject 从 Garage 直读对象内容。

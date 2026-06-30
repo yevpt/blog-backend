@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,12 +42,15 @@ type fakeObjectAPI struct {
 	getBucket    string
 	getKey       string
 	getBody      []byte
+	getOutput    *s3.GetObjectOutput
 	listPrefix   string
 	listKeys     []string
 	putBucket    string
 	putKey       string
 	putType      string
 	putBody      []byte
+	putReader    io.Reader
+	putSize      int64
 	copyBucket   string
 	copyKey      string
 	copySource   string
@@ -77,6 +81,9 @@ func (f *fakeObjectAPI) GetObject(_ context.Context, in *s3.GetObjectInput, _ ..
 	if f.getErr != nil {
 		return nil, f.getErr
 	}
+	if f.getOutput != nil {
+		return f.getOutput, nil
+	}
 	return &s3.GetObjectOutput{Body: io.NopCloser(bytes.NewReader(f.getBody))}, nil
 }
 
@@ -98,6 +105,8 @@ func (f *fakeObjectAPI) PutObject(_ context.Context, in *s3.PutObjectInput, _ ..
 	f.putBucket = aws.ToString(in.Bucket)
 	f.putKey = aws.ToString(in.Key)
 	f.putType = aws.ToString(in.ContentType)
+	f.putReader = in.Body
+	f.putSize = aws.ToInt64(in.ContentLength)
 	body, err := io.ReadAll(in.Body)
 	if err == nil {
 		f.putBody = body
@@ -106,6 +115,27 @@ func (f *fakeObjectAPI) PutObject(_ context.Context, in *s3.PutObjectInput, _ ..
 		return nil, f.putErr
 	}
 	return &s3.PutObjectOutput{}, nil
+}
+
+type countingReader struct {
+	io.Reader
+	readBytes int
+}
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	r.readBytes += n
+	return n, err
+}
+
+type trackedReadCloser struct {
+	io.Reader
+	closeCount int
+}
+
+func (r *trackedReadCloser) Close() error {
+	r.closeCount++
+	return nil
 }
 
 func (f *fakeObjectAPI) CopyObject(_ context.Context, in *s3.CopyObjectInput, _ ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
@@ -310,6 +340,47 @@ func TestClientPutObject_UploadsBytes(t *testing.T) {
 	assert.Equal(t, "avatar/user/a.jpg", api.putKey)
 	assert.Equal(t, "image/jpeg", api.putType)
 	assert.Equal(t, []byte("image"), api.putBody)
+}
+
+func TestPutObjectStreamForwardsReaderWithoutReadAll(t *testing.T) {
+	api := &fakeObjectAPI{}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+	source := &countingReader{Reader: strings.NewReader("rules")}
+
+	err := client.PutObjectStream(context.Background(), "moderation/rules.csv", source, 5, "text/csv")
+
+	require.NoError(t, err)
+	assert.Same(t, source, api.putReader)
+	assert.Equal(t, 5, source.readBytes)
+	assert.Equal(t, int64(5), api.putSize)
+}
+
+func TestOpenObjectRejectsContentLengthAboveLimitAndClosesBody(t *testing.T) {
+	body := &trackedReadCloser{Reader: strings.NewReader("oversized")}
+	api := &fakeObjectAPI{getOutput: &s3.GetObjectOutput{Body: body, ContentLength: aws.Int64(9)}}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	reader, err := client.OpenObject(context.Background(), "x", 8)
+
+	assert.Nil(t, reader)
+	assert.ErrorIs(t, err, ErrObjectTooLarge)
+	assert.Equal(t, 1, body.closeCount)
+}
+
+func TestOpenObjectRejectsStreamingOverflowAndClosesBody(t *testing.T) {
+	body := &trackedReadCloser{Reader: strings.NewReader("oversized")}
+	api := &fakeObjectAPI{getOutput: &s3.GetObjectOutput{Body: body}}
+	client := &Client{impl: &clientImpl{bucket: "blog", objectAPI: api}}
+
+	reader, err := client.OpenObject(context.Background(), "x", 8)
+	require.NoError(t, err)
+	data, err := io.ReadAll(reader)
+
+	assert.Equal(t, "oversize", string(data))
+	assert.ErrorIs(t, err, ErrObjectTooLarge)
+	assert.Equal(t, 1, body.closeCount)
+	require.NoError(t, reader.Close())
+	assert.Equal(t, 1, body.closeCount)
 }
 
 func TestClientDeleteObject_RemovesObject(t *testing.T) {
