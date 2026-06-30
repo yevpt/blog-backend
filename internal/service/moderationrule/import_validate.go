@@ -77,22 +77,13 @@ func (m *manager) validateImport(ctx context.Context, imp repoMod.ImportRecord) 
 	}
 
 	// 写入解析错误。
+	parseErrorLines := make(map[int]struct{}, len(parseErrs))
 	for _, e := range parseErrs {
 		_ = errorWriter.Write([]string{fmt.Sprintf("%d", e.LineNumber), e.Field, e.Value, e.Code, e.Message})
 		result.errorRows++
+		parseErrorLines[e.LineNumber] = struct{}{}
 	}
-	if len(parseErrs) > 0 {
-		errorWriter.Flush()
-		errorClosed = true
-		_ = errorFile.Close()
-		result.totalRows = uint64(len(rows) + len(parseErrs))
-		err := m.uploadErrorReport(ctx, imp.ID, errorPath)
-		if err != nil {
-			return result, err
-		}
-		result.errorKey = fmt.Sprintf("moderation/imports/%d/errors.csv", imp.ID)
-		return result, nil
-	}
+	result.totalRows = uint64(len(parseErrorLines))
 
 	// 逐行校验枚举和长度，收集有效行的摘要。
 	for _, row := range rows {

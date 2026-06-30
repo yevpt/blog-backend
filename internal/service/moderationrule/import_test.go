@@ -191,6 +191,26 @@ func TestCreateImportRejectsFormatExtensionMismatch(t *testing.T) {
 	assert.ErrorIs(t, err, ErrInvalidRule)
 }
 
+func TestValidateImportReportsParseAndRuleErrorsTogether(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repoModMock.NewMockManagementRepository(ctrl)
+	content := "name,rule_type,pattern,category,effect,risk_level,priority\n坏正则,regexp,[,other,review,medium,100\n坏优先级,keyword,词,other,review,low,abc\n"
+	store := &importStoreStub{openData: content}
+	mgr := newManager(repo, store, &fakeReplacer{}, testManagerConfig(), nil)
+	repo.EXPECT().CurrentStatus(gomock.Any()).Return(repoMod.StatusRecord{CurrentRulesetID: 7}, nil)
+
+	result, err := mgr.validateImport(context.Background(), repoMod.ImportRecord{
+		ID: 12, Format: "csv", FileSize: uint64(len(content)), ObjectKey: "moderation/imports/1/file.csv",
+		DefaultCategory: "other", DefaultEffect: "review", DefaultRiskLevel: "medium", DefaultPriority: 100,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), result.errorRows)
+	require.Len(t, store.putBodies, 1)
+	assert.Contains(t, store.putBodies[0], "2,pattern")
+	assert.Contains(t, store.putBodies[0], "3,priority")
+}
+
 func TestCreateImportRejectsInvalidFormat(t *testing.T) {
 	_, mgr := newTestManager(t)
 
@@ -212,17 +232,20 @@ func TestCreateImportRejectsInvalidFormat(t *testing.T) {
 
 type importStoreStub struct {
 	putKeys     []string
+	putBodies   []string
 	deletedKeys []string
+	openData    string
 }
 
 func (s *importStoreStub) PutObjectStream(_ context.Context, key string, body io.Reader, _ int64, _ string) error {
-	_, err := io.Copy(io.Discard, body)
+	data, err := io.ReadAll(body)
 	s.putKeys = append(s.putKeys, key)
+	s.putBodies = append(s.putBodies, string(data))
 	return err
 }
 
 func (s *importStoreStub) OpenObject(context.Context, string, int64) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(nil)), nil
+	return io.NopCloser(bytes.NewReader([]byte(s.openData))), nil
 }
 
 func (s *importStoreStub) DeleteObject(_ context.Context, key string) error {
