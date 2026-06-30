@@ -206,6 +206,21 @@ func (mr *MockRepositoryMockRecorder) LoadPolicyContext(ctx, userID any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPolicyContext", reflect.TypeOf((*MockRepository)(nil).LoadPolicyContext), ctx, userID)
 }
 
+// LoadReviewHistory mocks base method.
+func (m *MockRepository) LoadReviewHistory(ctx context.Context, itemID uint64, page, pageSize int) (moderation.ReviewHistoryPage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LoadReviewHistory", ctx, itemID, page, pageSize)
+	ret0, _ := ret[0].(moderation.ReviewHistoryPage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LoadReviewHistory indicates an expected call of LoadReviewHistory.
+func (mr *MockRepositoryMockRecorder) LoadReviewHistory(ctx, itemID, page, pageSize any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadReviewHistory", reflect.TypeOf((*MockRepository)(nil).LoadReviewHistory), ctx, itemID, page, pageSize)
+}
+
 // LoadReviewNotificationContext mocks base method.
 func (m *MockRepository) LoadReviewNotificationContext(ctx context.Context, ref moderation.SubjectRef) (moderation.ReviewNotificationContext, error) {
 	m.ctrl.T.Helper()

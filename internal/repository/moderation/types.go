@@ -336,6 +336,27 @@ type ReviewPage struct {
 	Items []ReviewRecord
 }
 
+// ReviewHistoryEvent 是审核项操作日志的只读投影。
+type ReviewHistoryEvent struct {
+	ID           uint64
+	RevisionID   *uint64
+	ActorUserID  *uint64
+	Action       Event
+	Reason       *string
+	MetadataJSON *string
+	CreatedAt    time.Time
+}
+
+// ReviewHistoryPage 聚合一页修订及其图片快照和审核项操作事件。
+type ReviewHistoryPage struct {
+	Total     int64
+	Page      int
+	PageSize  int
+	Revisions []ReviewRecord
+	Images    map[uint64][]RevisionImageRecord
+	Events    []ReviewHistoryEvent
+}
+
 // AppliedTransition 返回事务提交后的稳定标识。
 type AppliedTransition struct {
 	Subject         SubjectRef

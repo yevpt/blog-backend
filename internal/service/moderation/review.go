@@ -62,9 +62,9 @@ type ReviewItem struct {
 	// EmergencyHideReason 是紧急隐藏原因，仅紧急隐藏态有值。
 	EmergencyHideReason *string
 	// EmergencyHiddenAt 是紧急隐藏发生时间，仅紧急隐藏态有值。
-	EmergencyHiddenAt   *time.Time
-	CreatedAt        time.Time
-	CanInteract      bool
+	EmergencyHiddenAt *time.Time
+	CreatedAt         time.Time
+	CanInteract       bool
 }
 
 // ReviewPage 是人工审核列表分页结果。
@@ -79,6 +79,7 @@ type ReviewPage struct {
 type ReviewService interface {
 	List(ctx context.Context, cmd ListReviewCommand) (ReviewPage, error)
 	Get(ctx context.Context, itemID uint64) (ReviewItem, error)
+	History(ctx context.Context, cmd ReviewHistoryCommand) (ReviewHistoryPage, error)
 	Approve(ctx context.Context, cmd ReviewCommand) (ReviewItem, error)
 	Correct(ctx context.Context, cmd CorrectCommand) (ReviewItem, error)
 	Reject(ctx context.Context, cmd ReviewCommand) (ReviewItem, error)
