@@ -111,7 +111,18 @@ moderation:
 
   rules:
     max_pattern_chars: 500
+    max_keyword_rules: 500000
     max_enabled_regex_rules: 200
+    max_import_rows: 200000
+    max_import_file_mb: 50
+    max_rule_matches_per_content: 128
+    max_index_memory_mb: 512
+    max_build_peak_memory_mb: 1024
+    index_build_timeout: 10m
+    candidate_cache_ttl: 10m
+    import_artifact_retention_days: 7
+    ruleset_artifact_retention_days: 7
+    import_history_retention_days: 30
     require_non_empty_in_enforce: true
 
   content:

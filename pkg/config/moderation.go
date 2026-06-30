@@ -64,9 +64,20 @@ type ModerationPolicyActionsConfig struct {
 
 // ModerationRulesConfig 定义审核规则集的安全边界。
 type ModerationRulesConfig struct {
-	MaxPatternChars          int  `mapstructure:"max_pattern_chars"`
-	MaxEnabledRegexRules     int  `mapstructure:"max_enabled_regex_rules"`
-	RequireNonEmptyInEnforce bool `mapstructure:"require_non_empty_in_enforce"`
+	MaxPatternChars              int           `mapstructure:"max_pattern_chars"`
+	MaxKeywordRules              int           `mapstructure:"max_keyword_rules"`
+	MaxEnabledRegexRules         int           `mapstructure:"max_enabled_regex_rules"`
+	MaxImportRows                int           `mapstructure:"max_import_rows"`
+	MaxImportFileMB              int           `mapstructure:"max_import_file_mb"`
+	MaxRuleMatchesPerContent     int           `mapstructure:"max_rule_matches_per_content"`
+	MaxIndexMemoryMB             int           `mapstructure:"max_index_memory_mb"`
+	MaxBuildPeakMemoryMB         int           `mapstructure:"max_build_peak_memory_mb"`
+	IndexBuildTimeout            time.Duration `mapstructure:"index_build_timeout"`
+	CandidateCacheTTL            time.Duration `mapstructure:"candidate_cache_ttl"`
+	ImportArtifactRetentionDays  int           `mapstructure:"import_artifact_retention_days"`
+	RulesetArtifactRetentionDays int           `mapstructure:"ruleset_artifact_retention_days"`
+	ImportHistoryRetentionDays   int           `mapstructure:"import_history_retention_days"`
+	RequireNonEmptyInEnforce     bool          `mapstructure:"require_non_empty_in_enforce"`
 }
 
 // ModerationContentConfig 定义各内容类型及附件数量上限。

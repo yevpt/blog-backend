@@ -1,6 +1,7 @@
 package dbschema
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -27,6 +28,8 @@ type defaultSeedData struct {
 	UserSettings           []model.UserSetting
 	EmailQuotaPolicies     []model.EmailQuotaPolicy
 	EmailRoleQuotaPolicies []model.EmailRoleQuotaPolicy
+	ModerationRuleSources  []model.ModerationRuleSource
+	ModerationRulesets     []model.ModerationRuleset
 	ModerationRules        []model.ModerationRule
 	ModerationControls     []model.ModerationControl
 }
@@ -73,6 +76,12 @@ func SeedDefaults(db *gorm.DB, opts SeedOptions) error {
 		return err
 	}
 	if err := insertSeeds(db, data.EmailRoleQuotaPolicies, "email_role_quota_policy"); err != nil {
+		return err
+	}
+	if err := insertSeeds(db, data.ModerationRuleSources, "moderation_rule_source"); err != nil {
+		return err
+	}
+	if err := insertSeeds(db, data.ModerationRulesets, "moderation_ruleset"); err != nil {
 		return err
 	}
 	if err := insertSeeds(db, data.ModerationRules, "moderation_rule"); err != nil {
@@ -140,26 +149,31 @@ func buildDefaultSeedData(adminPasswordHash string, opts SeedOptions) defaultSee
 			{Role: "vip", ScopeType: "recipient", DailyLimit: 20, MaxPerHour: 0, Enabled: true},
 			{Role: "admin", ScopeType: "recipient", DailyLimit: 50, MaxPerHour: 0, Enabled: true},
 		},
+		ModerationRuleSources: []model.ModerationRuleSource{
+			{ID: 1, Name: "system"},
+		},
+		ModerationRulesets: []model.ModerationRuleset{
+			{
+				ID:                 1,
+				Status:             "published",
+				RuleCount:          1,
+				KeywordCount:       1,
+				IndexFormatVersion: 1,
+			},
+		},
 		ModerationRules: []model.ModerationRule{
 			{
-				ID:             1,
-				Name:           "礼貌用语基线",
-				RuleType:       model.ModerationRuleKeyword,
-				Pattern:        "谢谢",
-				RiskLevel:      model.ModerationRiskLow,
-				Priority:       1000,
-				Enabled:        true,
-				RulesetVersion: 1,
-			},
-			{
-				ID:             2,
-				Name:           "停用规则示例",
-				RuleType:       model.ModerationRuleKeyword,
-				Pattern:        "示例停用词",
-				RiskLevel:      model.ModerationRiskMedium,
-				Priority:       1000,
-				Enabled:        false,
-				RulesetVersion: 1,
+				ID:                 1,
+				Name:               seedString("礼貌用语基线"),
+				RuleType:           model.ModerationRuleKeyword,
+				Pattern:            "谢谢",
+				DedupeHash:         moderationRuleDedupeHash("review", model.ModerationRuleKeyword, "谢谢"),
+				Category:           "other",
+				Effect:             "review",
+				RiskLevel:          model.ModerationRiskLow,
+				Priority:           1000,
+				SourceID:           1,
+				ActivatedRulesetID: 1,
 			},
 		},
 		ModerationControls: []model.ModerationControl{
@@ -171,6 +185,15 @@ func buildDefaultSeedData(adminPasswordHash string, opts SeedOptions) defaultSee
 			},
 		},
 	}
+}
+
+func moderationRuleDedupeHash(effect, ruleType, pattern string) []byte {
+	hash := sha256.Sum256([]byte(effect + "\x00" + ruleType + "\x00" + pattern))
+	return hash[:]
+}
+
+func seedString(value string) *string {
+	return &value
 }
 
 func insertRoleSeeds(db *gorm.DB, seeds []roleSeed) error {

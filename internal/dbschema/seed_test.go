@@ -1,6 +1,7 @@
 package dbschema
 
 import (
+	"crypto/sha256"
 	"reflect"
 	"testing"
 
@@ -47,7 +48,11 @@ func TestModerationModelsRegisterInDependencyOrder(t *testing.T) {
 		reflect.TypeOf(&model.ModerationRevisionImage{}),
 		reflect.TypeOf(&model.ModerationImage{}),
 		reflect.TypeOf(&model.ModerationAttempt{}),
+		reflect.TypeOf(&model.ModerationRuleSource{}),
+		reflect.TypeOf(&model.ModerationRuleset{}),
 		reflect.TypeOf(&model.ModerationRule{}),
+		reflect.TypeOf(&model.ModerationRulesetRemoval{}),
+		reflect.TypeOf(&model.ModerationRuleImport{}),
 		reflect.TypeOf(&model.ModerationActionLog{}),
 		reflect.TypeOf(&model.ModerationVisibleImage{}),
 		reflect.TypeOf(&model.UserModerationProfile{}),
@@ -64,14 +69,23 @@ func TestModerationModelsRegisterInDependencyOrder(t *testing.T) {
 func TestBuildDefaultSeedData_IncludesModerationDefaults(t *testing.T) {
 	data := buildDefaultSeedData("$2a$12$hash", SeedOptions{})
 
-	require.Len(t, data.ModerationRules, 2)
-	assert.Equal(t, model.ModerationRiskLow, data.ModerationRules[0].RiskLevel)
-	assert.True(t, data.ModerationRules[0].Enabled)
-	assert.False(t, data.ModerationRules[1].Enabled)
-	for _, rule := range data.ModerationRules {
-		assert.NotEmpty(t, rule.Name)
-		assert.NotZero(t, rule.RulesetVersion)
-	}
+	require.Len(t, data.ModerationRuleSources, 1)
+	assert.Equal(t, uint64(1), data.ModerationRuleSources[0].ID)
+	assert.Equal(t, "system", data.ModerationRuleSources[0].Name)
+
+	require.Len(t, data.ModerationRulesets, 1)
+	assert.Equal(t, uint64(1), data.ModerationRulesets[0].ID)
+	assert.Equal(t, "published", data.ModerationRulesets[0].Status)
+	assert.Equal(t, uint64(1), data.ModerationRulesets[0].RuleCount)
+
+	require.Len(t, data.ModerationRules, 1)
+	rule := data.ModerationRules[0]
+	assert.Equal(t, model.ModerationRiskLow, rule.RiskLevel)
+	assert.Equal(t, uint64(1), rule.SourceID)
+	assert.Equal(t, uint64(1), rule.ActivatedRulesetID)
+	assert.Nil(t, rule.DeactivatedRulesetID)
+	expectedHash := sha256.Sum256([]byte("review\x00keyword\x00谢谢"))
+	assert.Equal(t, expectedHash[:], rule.DedupeHash)
 
 	require.Len(t, data.ModerationControls, 1)
 	control := data.ModerationControls[0]

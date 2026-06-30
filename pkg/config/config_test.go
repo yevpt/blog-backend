@@ -34,7 +34,18 @@ moderation:
     restricted: {clean_low: pre_review, unapproved_image: pre_review, external_link_or_ad: pre_review, medium: pre_review, high: block}
   rules:
     max_pattern_chars: 500
+    max_keyword_rules: 500000
     max_enabled_regex_rules: 200
+    max_import_rows: 200000
+    max_import_file_mb: 50
+    max_rule_matches_per_content: 128
+    max_index_memory_mb: 512
+    max_build_peak_memory_mb: 1024
+    index_build_timeout: 10m
+    candidate_cache_ttl: 10m
+    import_artifact_retention_days: 7
+    ruleset_artifact_retention_days: 7
+    import_history_retention_days: 30
     require_non_empty_in_enforce: true
   content:
     moment_max_chars: 800
@@ -103,6 +114,9 @@ moderation:
 	assert.Equal(t, config.ModerationModeEnforce, cfg.Moderation.Mode)
 	assert.Equal(t, config.ModerationActionAutoApprove, cfg.Moderation.Policy.Trusted.CleanLow)
 	assert.Equal(t, 500, cfg.Moderation.Rules.MaxPatternChars)
+	assert.Equal(t, 500000, cfg.Moderation.Rules.MaxKeywordRules)
+	assert.Equal(t, 128, cfg.Moderation.Rules.MaxRuleMatchesPerContent)
+	assert.Equal(t, 10*time.Minute, cfg.Moderation.Rules.IndexBuildTimeout)
 	assert.Equal(t, 800, cfg.Moderation.Content.MomentMaxChars)
 	assert.Equal(t, int64(1_048_576), cfg.Moderation.Image.MaxUploadBytes)
 	assert.Equal(t, 20, cfg.Moderation.Review.QueueDefaultPageSize)
@@ -257,6 +271,40 @@ func TestValidateModeration(t *testing.T) {
 	}
 }
 
+func TestModerationRulesConfigRejectsUnsafeBounds(t *testing.T) {
+	positiveBounds := []struct {
+		name   string
+		mutate func(*config.ModerationRulesConfig)
+	}{
+		{name: "max keyword rules", mutate: func(c *config.ModerationRulesConfig) { c.MaxKeywordRules = 0 }},
+		{name: "max import rows", mutate: func(c *config.ModerationRulesConfig) { c.MaxImportRows = 0 }},
+		{name: "max import file mb", mutate: func(c *config.ModerationRulesConfig) { c.MaxImportFileMB = 0 }},
+		{name: "max matches", mutate: func(c *config.ModerationRulesConfig) { c.MaxRuleMatchesPerContent = 0 }},
+		{name: "max index memory", mutate: func(c *config.ModerationRulesConfig) { c.MaxIndexMemoryMB = 0 }},
+		{name: "max build memory", mutate: func(c *config.ModerationRulesConfig) { c.MaxBuildPeakMemoryMB = 0 }},
+		{name: "build timeout", mutate: func(c *config.ModerationRulesConfig) { c.IndexBuildTimeout = 0 }},
+		{name: "candidate ttl", mutate: func(c *config.ModerationRulesConfig) { c.CandidateCacheTTL = 0 }},
+		{name: "import retention", mutate: func(c *config.ModerationRulesConfig) { c.ImportArtifactRetentionDays = 0 }},
+		{name: "ruleset retention", mutate: func(c *config.ModerationRulesConfig) { c.RulesetArtifactRetentionDays = 0 }},
+		{name: "history retention", mutate: func(c *config.ModerationRulesConfig) { c.ImportHistoryRetentionDays = 0 }},
+	}
+	for _, tt := range positiveBounds {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validModerationConfig()
+			tt.mutate(&cfg.Rules)
+			assert.ErrorContains(t, cfg.Validate("test"), "must be positive")
+		})
+	}
+
+	cfg := validModerationConfig()
+	cfg.Rules.MaxEnabledRegexRules = 501
+	assert.ErrorContains(t, cfg.Validate("test"), "must not exceed 500")
+
+	cfg = validModerationConfig()
+	cfg.Rules.MaxBuildPeakMemoryMB = cfg.Rules.MaxIndexMemoryMB
+	assert.ErrorContains(t, cfg.Validate("test"), "must exceed")
+}
+
 func validModerationConfig() config.ModerationConfig {
 	return config.ModerationConfig{
 		Enabled: true,
@@ -267,7 +315,14 @@ func validModerationConfig() config.ModerationConfig {
 			Trusted:    config.ModerationPolicyActionsConfig{CleanLow: "auto_approve", UnapprovedImage: "post_review", ExternalLinkOrAd: "pre_review", Medium: "pre_review", High: "block"},
 			Restricted: config.ModerationPolicyActionsConfig{CleanLow: "pre_review", UnapprovedImage: "pre_review", ExternalLinkOrAd: "pre_review", Medium: "pre_review", High: "block"},
 		},
-		Rules: config.ModerationRulesConfig{MaxPatternChars: 500, MaxEnabledRegexRules: 200, RequireNonEmptyInEnforce: true},
+		Rules: config.ModerationRulesConfig{
+			MaxPatternChars: 500, MaxKeywordRules: 500000, MaxEnabledRegexRules: 200,
+			MaxImportRows: 200000, MaxImportFileMB: 50, MaxRuleMatchesPerContent: 128,
+			MaxIndexMemoryMB: 512, MaxBuildPeakMemoryMB: 1024,
+			IndexBuildTimeout: 10 * time.Minute, CandidateCacheTTL: 10 * time.Minute,
+			ImportArtifactRetentionDays: 7, RulesetArtifactRetentionDays: 7, ImportHistoryRetentionDays: 30,
+			RequireNonEmptyInEnforce: true,
+		},
 		Content: config.ModerationContentConfig{
 			MomentMaxChars: 800, CommentMaxChars: 2000, GuestbookMaxChars: 2000, ReplyMaxChars: 2000,
 			MaxImagesPerContent: 9, MaxLinksPerContent: 10,

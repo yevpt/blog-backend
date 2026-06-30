@@ -70,7 +70,18 @@ func validateModerationBounds(c ModerationConfig) error {
 		value int64
 	}{
 		{path: "moderation.rules.max_pattern_chars", value: int64(c.Rules.MaxPatternChars)},
+		{path: "moderation.rules.max_keyword_rules", value: int64(c.Rules.MaxKeywordRules)},
 		{path: "moderation.rules.max_enabled_regex_rules", value: int64(c.Rules.MaxEnabledRegexRules)},
+		{path: "moderation.rules.max_import_rows", value: int64(c.Rules.MaxImportRows)},
+		{path: "moderation.rules.max_import_file_mb", value: int64(c.Rules.MaxImportFileMB)},
+		{path: "moderation.rules.max_rule_matches_per_content", value: int64(c.Rules.MaxRuleMatchesPerContent)},
+		{path: "moderation.rules.max_index_memory_mb", value: int64(c.Rules.MaxIndexMemoryMB)},
+		{path: "moderation.rules.max_build_peak_memory_mb", value: int64(c.Rules.MaxBuildPeakMemoryMB)},
+		{path: "moderation.rules.index_build_timeout", value: int64(c.Rules.IndexBuildTimeout)},
+		{path: "moderation.rules.candidate_cache_ttl", value: int64(c.Rules.CandidateCacheTTL)},
+		{path: "moderation.rules.import_artifact_retention_days", value: int64(c.Rules.ImportArtifactRetentionDays)},
+		{path: "moderation.rules.ruleset_artifact_retention_days", value: int64(c.Rules.RulesetArtifactRetentionDays)},
+		{path: "moderation.rules.import_history_retention_days", value: int64(c.Rules.ImportHistoryRetentionDays)},
 		{path: "moderation.content.moment_max_chars", value: int64(c.Content.MomentMaxChars)},
 		{path: "moderation.content.comment_max_chars", value: int64(c.Content.CommentMaxChars)},
 		{path: "moderation.content.guestbook_max_chars", value: int64(c.Content.GuestbookMaxChars)},
@@ -121,6 +132,12 @@ func validateModerationBounds(c ModerationConfig) error {
 	}
 	if c.Review.QueueDefaultPageSize > c.Review.QueueMaxPageSize {
 		return fmt.Errorf("moderation.review.queue_default_page_size: must not exceed queue_max_page_size")
+	}
+	if c.Rules.MaxEnabledRegexRules > 500 {
+		return fmt.Errorf("moderation.rules.max_enabled_regex_rules: must not exceed 500")
+	}
+	if c.Rules.MaxBuildPeakMemoryMB <= c.Rules.MaxIndexMemoryMB {
+		return fmt.Errorf("moderation.rules.max_build_peak_memory_mb: must exceed max_index_memory_mb")
 	}
 	if c.Review.QueueMaxPageSize > 500 {
 		return fmt.Errorf("moderation.review.queue_max_page_size: must not exceed 500")

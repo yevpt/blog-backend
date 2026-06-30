@@ -4,6 +4,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,10 @@ func TestModerationTableNames(t *testing.T) {
 		{name: "revision image", got: model.ModerationRevisionImage{}.TableName(), want: "moderation_revision_image"},
 		{name: "image", got: model.ModerationImage{}.TableName(), want: "moderation_image"},
 		{name: "attempt", got: model.ModerationAttempt{}.TableName(), want: "moderation_attempt"},
+		{name: "rule source", got: model.ModerationRuleSource{}.TableName(), want: "moderation_rule_source"},
+		{name: "ruleset", got: model.ModerationRuleset{}.TableName(), want: "moderation_ruleset"},
+		{name: "ruleset removal", got: model.ModerationRulesetRemoval{}.TableName(), want: "moderation_ruleset_removal"},
+		{name: "rule import", got: model.ModerationRuleImport{}.TableName(), want: "moderation_rule_import"},
 		{name: "rule", got: model.ModerationRule{}.TableName(), want: "moderation_rule"},
 		{name: "action log", got: model.ModerationActionLog{}.TableName(), want: "moderation_action_log"},
 		{name: "visible image", got: model.ModerationVisibleImage{}.TableName(), want: "moderation_visible_image"},
@@ -102,6 +107,66 @@ func TestModerationAttemptDoesNotPersistBlockedContentOrDigest(t *testing.T) {
 		_, ok := typ.FieldByName(forbidden)
 		assert.Falsef(t, ok, "ModerationAttempt must not contain %s", forbidden)
 	}
+}
+
+func TestModerationRuleUsesVersionIntervalsWithoutRedundantState(t *testing.T) {
+	typ := reflect.TypeOf(model.ModerationRule{})
+	for _, forbidden := range []string{"Enabled", "RulesetVersion", "NormalizedPattern", "RootRuleID", "CreatedBy"} {
+		_, ok := typ.FieldByName(forbidden)
+		assert.Falsef(t, ok, "%s must not exist", forbidden)
+	}
+	for _, required := range []string{"DedupeHash", "SourceID", "ActivatedRulesetID", "DeactivatedRulesetID", "ReplacesRuleID"} {
+		_, ok := typ.FieldByName(required)
+		assert.Truef(t, ok, "%s is required", required)
+	}
+}
+
+func TestModerationAuditModelsPersistMatchTruncation(t *testing.T) {
+	for _, typ := range []reflect.Type{
+		reflect.TypeOf(model.ModerationRevision{}),
+		reflect.TypeOf(model.ModerationAttempt{}),
+	} {
+		field, ok := typ.FieldByName("RuleMatchesTruncated")
+		require.Truef(t, ok, "%s.RuleMatchesTruncated is required", typ.Name())
+		assert.Equal(t, reflect.TypeOf(false), field.Type)
+		assert.Contains(t, field.Tag.Get("gorm"), "default:0")
+	}
+}
+
+func TestModerationRuleManagementMigrationIsOrderedAndStrict(t *testing.T) {
+	migration, err := os.ReadFile("../../migrations/20260630_moderation_rule_management.sql")
+	require.NoError(t, err)
+	sql := string(migration)
+
+	steps := []string{
+		"CREATE TABLE `moderation_rule_source`",
+		"CREATE TABLE `moderation_ruleset`",
+		"CREATE TABLE `moderation_ruleset_removal`",
+		"CREATE TABLE `moderation_rule_import`",
+		"INSERT INTO `moderation_rule_source`",
+		"INSERT INTO `moderation_ruleset`",
+		"UPDATE `moderation_rule`",
+		"MODIFY COLUMN `dedupe_hash` binary(32) NOT NULL",
+		"ADD COLUMN `rule_matches_truncated` tinyint(1) NOT NULL DEFAULT 0",
+		"DROP COLUMN `enabled`",
+		"DROP COLUMN `ruleset_version`",
+	}
+	position := -1
+	for _, step := range steps {
+		next := strings.Index(sql, step)
+		require.Greaterf(t, next, position, "%s must exist in dependency order", step)
+		position = next
+	}
+
+	assert.NotContains(t, sql, "IF EXISTS")
+	assert.NotContains(t, sql, "IF NOT EXISTS")
+	assert.Contains(t, sql, "DROP INDEX `idx_moderation_rule_snapshot`")
+	assert.Contains(t, sql, "CONSTRAINT `fk_moderation_rule_source`")
+	assert.Contains(t, sql, "CONSTRAINT `fk_moderation_rule_activation`")
+	assert.Contains(t, sql, "CONSTRAINT `fk_moderation_rule_deactivation`")
+	assert.Contains(t, sql, "CONSTRAINT `chk_moderation_rule_effect`")
+	assert.Contains(t, sql, "CONSTRAINT `chk_moderation_rule_category`")
+	assert.Contains(t, sql, "CONSTRAINT `chk_moderation_rule_import_category`")
 }
 
 func TestModerationRevisionPersistsMomentOptions(t *testing.T) {
