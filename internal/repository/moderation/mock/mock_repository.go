@@ -339,6 +339,20 @@ func (mr *MockRepositoryMockRecorder) ReleaseSanction(ctx, cmd any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReleaseSanction", reflect.TypeOf((*MockRepository)(nil).ReleaseSanction), ctx, cmd)
 }
 
+// RevertPublicProjection mocks base method.
+func (m *MockRepository) RevertPublicProjection(ctx context.Context, itemID, momentID uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RevertPublicProjection", ctx, itemID, momentID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RevertPublicProjection indicates an expected call of RevertPublicProjection.
+func (mr *MockRepositoryMockRecorder) RevertPublicProjection(ctx, itemID, momentID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevertPublicProjection", reflect.TypeOf((*MockRepository)(nil).RevertPublicProjection), ctx, itemID, momentID)
+}
+
 // SetAutomaticTrust mocks base method.
 func (m *MockRepository) SetAutomaticTrust(ctx context.Context, cmd moderation.AutomaticTrustCommand) (bool, error) {
 	m.ctrl.T.Helper()

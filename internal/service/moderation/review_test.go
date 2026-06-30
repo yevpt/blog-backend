@@ -78,7 +78,7 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	repo.EXPECT().SetAutomaticTrust(gomock.Any(), moderationrepo.AutomaticTrustCommand{
 		UserID: record.AuthorID, TrustLevel: moderationrepo.TrustNormal, UpdatedAt: serviceNow,
 	}).Return(true, nil)
-	service := moderation.NewReviewService(repo, &processorStub{}, cleaner, config.ModerationConfig{
+	service := moderation.NewReviewService(repo, &processorStub{}, cleaner, nil, config.ModerationConfig{
 		Content: config.ModerationContentConfig{
 			MomentMaxChars: 800, CommentMaxChars: 2000, GuestbookMaxChars: 2000, ReplyMaxChars: 2000,
 		},
@@ -235,7 +235,7 @@ func newReviewService(repo moderationrepo.Repository, processor moderation.Conte
 	if len(cleaners) > 0 {
 		cleaner = cleaners[0]
 	}
-	return moderation.NewReviewService(repo, processor, cleaner, cfg, zap.NewNop(), func() time.Time { return serviceNow })
+	return moderation.NewReviewService(repo, processor, cleaner, nil, cfg, zap.NewNop(), func() time.Time { return serviceNow })
 }
 
 func pendingReviewRecord() moderationrepo.ReviewRecord {

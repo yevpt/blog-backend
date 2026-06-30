@@ -101,7 +101,7 @@ func newApplicationService(
 	if len(media) > 0 {
 		mediaService = media[0]
 	}
-	return moderation.NewService(repo, processor, classifier, decider, mediaService, cfg, logger, func() time.Time {
+	return moderation.NewService(repo, processor, classifier, decider, mediaService, nil, cfg, logger, func() time.Time {
 		return serviceNow
 	})
 }
@@ -531,7 +531,7 @@ func TestServiceReconcilesAutomaticRestrictionBeforePublishingPolicy(t *testing.
 			RestrictedScoreThreshold: 6, RestrictedDuration: 168 * time.Hour,
 		},
 	}
-	service := moderation.NewService(repo, &processorStub{}, &classifierStub{}, &deciderStub{}, nil, cfg, zap.NewNop(), func() time.Time { return serviceNow })
+	service := moderation.NewService(repo, &processorStub{}, &classifierStub{}, &deciderStub{}, nil, nil, cfg, zap.NewNop(), func() time.Time { return serviceNow })
 
 	_, err := service.Submit(context.Background(), cmd)
 

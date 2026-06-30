@@ -35,6 +35,7 @@ type Repository interface {
 	LoadRevisionImages(ctx context.Context, revisionID uint64) ([]RevisionImageRecord, error)
 	LoadRevisionPreviewKeys(ctx context.Context, revisionID uint64) ([]string, error)
 	ApplyPublishedImageKeys(ctx context.Context, cmd PublishedImageCommand) error
+	RevertPublicProjection(ctx context.Context, itemID, momentID uint64) error
 }
 
 type repository struct {

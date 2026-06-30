@@ -52,12 +52,14 @@ func newModerationService(ctx context.Context, db *gorm.DB, cfg config.Moderatio
 	)
 
 	var media moderationservice.MediaService
+	var publisher moderationservice.ApprovedImagePublisher
 	if readable, ok := store.(storage.ReadableObjectStore); ok {
 		media = moderationmedia.NewService(readable, repo, cfg.Image, nil)
+		publisher = moderationmedia.NewPublisher(readable, repo)
 	}
 	svc := moderationservice.NewService(
 		repo, moderationservice.NewContentProcessor(), classifier,
-		moderationservice.NewPolicyDecider(), media, cfg, logger, nil,
+		moderationservice.NewPolicyDecider(), media, publisher, cfg, logger, nil,
 	)
 
 	return moderationRuntime{
@@ -126,10 +128,12 @@ func maybeNewModerationOperationsService(
 func newModerationReviewService(db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) moderationservice.ReviewService {
 	repo := moderationrepo.NewRepository(db)
 	var cleaner moderationservice.PreviewCleaner
+	var publisher moderationservice.ApprovedImagePublisher
 	if readable, ok := store.(storage.ReadableObjectStore); ok {
 		cleaner = moderationmedia.NewService(readable, repo, cfg.Image, nil)
+		publisher = moderationmedia.NewPublisher(readable, repo)
 	}
 	return moderationservice.NewReviewService(
-		repo, moderationservice.NewContentProcessor(), cleaner, cfg, logger, nil,
+		repo, moderationservice.NewContentProcessor(), cleaner, publisher, cfg, logger, nil,
 	)
 }

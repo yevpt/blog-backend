@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"go.uber.org/zap"
 )
@@ -94,6 +95,7 @@ type reviewService struct {
 	repo      moderationrepo.Repository
 	processor ContentProcessor
 	cleaner   PreviewCleaner
+	publisher ApprovedImagePublisher
 	cfg       config.ModerationConfig
 	logger    *zap.Logger
 	now       func() time.Time
@@ -104,6 +106,7 @@ func NewReviewService(
 	repo moderationrepo.Repository,
 	processor ContentProcessor,
 	cleaner PreviewCleaner,
+	publisher ApprovedImagePublisher,
 	cfg config.ModerationConfig,
 	logger *zap.Logger,
 	now func() time.Time,
@@ -114,7 +117,7 @@ func NewReviewService(
 	if now == nil {
 		now = time.Now
 	}
-	return &reviewService{repo: repo, processor: processor, cleaner: cleaner, cfg: cfg, logger: logger, now: now}
+	return &reviewService{repo: repo, processor: processor, cleaner: cleaner, publisher: publisher, cfg: cfg, logger: logger, now: now}
 }
 
 // List 分页查询审核版本；未指定状态时默认只返回待审队列。
@@ -230,6 +233,11 @@ func (s *reviewService) applyReview(
 			return ReviewItem{}, mapReviewRepositoryError(loadErr)
 		}
 	}
+	// 事务前读取当前和旧图片，用于事务后正式化。
+	publishCurrent, publishPrevious, publishErr := s.loadMomentPublishImages(ctx, record, event)
+	if publishErr != nil {
+		return ReviewItem{}, mapReviewRepositoryError(publishErr)
+	}
 	plan, err := Transition(TransitionInput{
 		Event: event, Previous: itemSnapshot(record.State), NewRevisionID: record.RevisionID,
 		Reason: strings.TrimSpace(cmd.Reason), Now: now,
@@ -252,6 +260,9 @@ func (s *reviewService) applyReview(
 		if cleanupErr := s.cleaner.DeletePreviewObjects(ctx, previewKeys); cleanupErr != nil {
 			s.logger.Warn("删除已通过图片预览失败，等待定期清理补偿", zap.Error(cleanupErr))
 		}
+	}
+	if publishErr := s.publishMomentImages(ctx, record, publishCurrent, publishPrevious); publishErr != nil {
+		return ReviewItem{}, publishErr
 	}
 	return appliedReviewItem(record, cmd, corrected, plan, applied.LockVersion, now), nil
 }
@@ -303,4 +314,59 @@ func mapReviewRepositoryError(err error) error {
 		return ErrReviewConflict
 	}
 	return err
+}
+
+// loadMomentPublishImages 事务前读取碎语当前版本和旧物化版本图片，供事务后正式化。
+func (s *reviewService) loadMomentPublishImages(
+	ctx context.Context,
+	record moderationrepo.ReviewRecord,
+	event Event,
+) ([]moderationrepo.RevisionImageRecord, []moderationrepo.RevisionImageRecord, error) {
+	if s.publisher == nil || (event != EventApprove && event != EventCorrectAndApprove) ||
+		record.Subject.Type != moderationrepo.SubjectMoment {
+		return nil, nil, nil
+	}
+	current, err := s.repo.LoadRevisionImages(ctx, record.RevisionID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(current) == 0 {
+		return nil, nil, nil
+	}
+	var previous []moderationrepo.RevisionImageRecord
+	if record.State.Materialized.ID != 0 {
+		previous, err = s.repo.LoadRevisionImages(ctx, record.State.Materialized.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return current, previous, nil
+}
+
+// publishMomentImages 事务提交后正式化碎语图片，失败时收回公开投影并返回错误。
+func (s *reviewService) publishMomentImages(
+	ctx context.Context,
+	record moderationrepo.ReviewRecord,
+	current, previous []moderationrepo.RevisionImageRecord,
+) error {
+	if s.publisher == nil || len(current) == 0 {
+		return nil
+	}
+	_, err := s.publisher.Publish(ctx, moderationmedia.PublishCommand{
+		ItemID: record.ItemID, RevisionID: record.RevisionID,
+		UserID: record.AuthorID, MomentID: record.Subject.ID,
+		Current: current, Previous: previous,
+	})
+	if err != nil {
+		s.logger.Error("碎语图片正式化失败，收回公开投影",
+			zap.Uint64("item_id", record.ItemID),
+			zap.Uint64("moment_id", record.Subject.ID),
+			zap.Error(err),
+		)
+		if revertErr := s.repo.RevertPublicProjection(ctx, record.ItemID, record.Subject.ID); revertErr != nil {
+			s.logger.Error("收回公开投影失败", zap.Error(revertErr))
+		}
+		return err
+	}
+	return nil
 }

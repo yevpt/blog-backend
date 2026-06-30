@@ -53,6 +53,21 @@ func (r *repository) ApplyPublishedImageKeys(ctx context.Context, cmd PublishedI
 	})
 }
 
+// RevertPublicProjection 将审核项公开状态收回为占位并清空碎语媒体，补偿正式化失败。
+func (r *repository) RevertPublicProjection(ctx context.Context, itemID, momentID uint64) error {
+	if itemID == 0 || momentID == 0 {
+		return ErrInvalidCommand
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.WithContext(ctx).Model(&model.ModerationItem{}).
+			Where("id = ?", itemID).
+			Updates(map[string]any{"public_state": string(PublicPlaceholder), "updated_at": tx.NowFunc()}).Error; err != nil {
+			return err
+		}
+		return tx.WithContext(ctx).Unscoped().Where("moment_id = ?", momentID).Delete(&model.Media{}).Error
+	})
+}
+
 // revisionIsCurrent 判断版本是否仍为审核项的物化或通过版本。
 func revisionIsCurrent(item model.ModerationItem, revisionID uint64) bool {
 	if item.MaterializedRevisionID != nil && *item.MaterializedRevisionID == revisionID {

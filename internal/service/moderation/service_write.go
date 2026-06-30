@@ -174,6 +174,9 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 		value := rewriteImageKeys(*result.PendingContent, input.imageViews)
 		result.PendingContent = &value
 	}
+	if err := s.publishApprovedMomentImages(ctx, applied, input, item, action); err != nil {
+		return SubmitResult{}, err
+	}
 	return result, nil
 }
 
@@ -388,4 +391,49 @@ func (s *applicationService) resolveRace(ctx context.Context, input writeInput) 
 		return SubmitResult{}, moderationrepo.ErrIdempotencyDomainConflict
 	}
 	return s.resultFromStored(*stored, input.subject)
+}
+
+// publishApprovedMomentImages 在自动通过碎语后正式化图片，失败时收回公开投影并返回错误。
+func (s *applicationService) publishApprovedMomentImages(
+	ctx context.Context,
+	applied moderationrepo.AppliedTransition,
+	input writeInput,
+	item moderationrepo.ItemStateRecord,
+	action PolicyAction,
+) error {
+	if s.publisher == nil || action != ActionAutoApprove ||
+		applied.Subject.Type != moderationrepo.SubjectMoment || len(input.images) == 0 {
+		return nil
+	}
+	current, err := s.repo.LoadRevisionImages(ctx, applied.RevisionID)
+	if err != nil {
+		return err
+	}
+	if len(current) == 0 {
+		return nil
+	}
+	var previous []moderationrepo.RevisionImageRecord
+	if item.State.Materialized.ID != 0 {
+		previous, err = s.repo.LoadRevisionImages(ctx, item.State.Materialized.ID)
+		if err != nil {
+			return err
+		}
+	}
+	_, err = s.publisher.Publish(ctx, moderationmedia.PublishCommand{
+		ItemID: applied.ItemID, RevisionID: applied.RevisionID,
+		UserID: resolvedAuthorID(input, item), MomentID: applied.Subject.ID,
+		Current: current, Previous: previous,
+	})
+	if err != nil {
+		s.logger.Error("碎语图片正式化失败，收回公开投影",
+			zap.Uint64("item_id", applied.ItemID),
+			zap.Uint64("moment_id", applied.Subject.ID),
+			zap.Error(err),
+		)
+		if revertErr := s.repo.RevertPublicProjection(ctx, applied.ItemID, applied.Subject.ID); revertErr != nil {
+			s.logger.Error("收回公开投影失败", zap.Error(revertErr))
+		}
+		return err
+	}
+	return nil
 }

@@ -46,6 +46,11 @@ type MediaService interface {
 	Prepare(ctx context.Context, userID uint64, objectKeys []string) (moderationmedia.PreparedSet, error)
 }
 
+// ApprovedImagePublisher 将审核通过图片从暂存复制到正式路径并在失败时由调用方补偿。
+type ApprovedImagePublisher interface {
+	Publish(ctx context.Context, cmd moderationmedia.PublishCommand) (moderationmedia.PublishResult, error)
+}
+
 type defaultPolicyDecider struct{}
 
 // NewPolicyDecider 创建使用固定优先级规则的默认策略器。
@@ -121,6 +126,7 @@ type applicationService struct {
 	classifier Classifier
 	decider    PolicyDecider
 	media      MediaService
+	publisher  ApprovedImagePublisher
 	cfg        config.ModerationConfig
 	logger     *zap.Logger
 	now        func() time.Time
@@ -133,6 +139,7 @@ func NewService(
 	classifier Classifier,
 	decider PolicyDecider,
 	media MediaService,
+	publisher ApprovedImagePublisher,
 	cfg config.ModerationConfig,
 	logger *zap.Logger,
 	now func() time.Time,
@@ -151,6 +158,6 @@ func NewService(
 	}
 	return &applicationService{
 		repo: repo, processor: processor, classifier: classifier, decider: decider, media: media,
-		cfg: cfg, logger: logger, now: now,
+		publisher: publisher, cfg: cfg, logger: logger, now: now,
 	}
 }
