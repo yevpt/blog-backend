@@ -350,18 +350,18 @@ func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T)
 	fileData := testGIF(t)
 	fileKey := "moments/7/moderation/" + md5Hex(fileData) + ".gif"
 	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/old.jpg": true}}
-	moderationSvc.EXPECT().Submit(gomock.Any(), moderationservice.SubmitCommand{
-		ActorID: 7, AuthorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment},
+	moderationSvc.EXPECT().Edit(gomock.Any(), moderationservice.EditCommand{
+		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 8},
 		Content: "碎语", ImageKeys: []string{"moments/7/8/old.jpg", fileKey}, IdempotencyKey: "moment-images",
 		MomentOptions: &moderationservice.MomentOptions{Status: 1, CommentStatus: 1},
 	}).Return(moderationservice.SubmitResult{
-		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 9}, AuthorID: 7,
+		Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 8}, AuthorID: 7,
 		Images: []moderationrepo.ImageView{{Seq: 1, DisplayObjectKey: "moderation/previews/a.jpg"}},
 	}, nil)
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
 
 	resp, err := svc.Save(dto.MomentSaveReq{
-		Content: "碎语", Status: 1, CommentStatus: 1, IdempotencyKey: "moment-images",
+		ID: ptrUint(8), Content: "碎语", Status: 1, CommentStatus: 1, IdempotencyKey: "moment-images",
 		ImageURLs:  []string{"moments/7/8/old.jpg"},
 		ImageFiles: []dto.MomentImageFileReq{{Name: "cat.gif", ContentType: "image/gif", Data: fileData}},
 	}, 7, nil)
@@ -370,6 +370,36 @@ func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T)
 	assert.Contains(t, store.putKeys, fileKey)
 	require.Len(t, resp.Images, 1)
 	assert.Equal(t, "moderation/previews/a.jpg", resp.Images[0].URL)
+}
+
+func TestMomentModeratedCreateRejectsExistingMomentImage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().Submit(gomock.Any(), gomock.Any()).AnyTimes().Return(moderationservice.SubmitResult{}, nil)
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/old.jpg": true}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		Content: "碎语", Status: 1, CommentStatus: 1,
+		ImageURLs: []string{"moments/7/8/old.jpg"},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+}
+
+func TestMomentModeratedEditRejectsOtherMomentImage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().Edit(gomock.Any(), gomock.Any()).AnyTimes().Return(moderationservice.SubmitResult{}, nil)
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/old.jpg": true}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID: ptrUint(9), Content: "碎语", Status: 1, CommentStatus: 1,
+		ImageURLs: []string{"moments/7/8/old.jpg"},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
 }
 
 func TestMomentModeratedSavePreservesAdminManagedAuthor(t *testing.T) {
@@ -559,7 +589,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 	now := time.Now()
 	requestUserID := uint(99)
 	store := &fakeMomentObjectStore{
-		exists: map[string]bool{"moments/7/8/old.jpg": true},
+		exists: map[string]bool{"moments/7/9/old.jpg": true},
 	}
 	repo := &fakeMomentRepo{
 		saveResp: &momentrepo.MomentAggregate{
@@ -573,7 +603,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 		Content:       "  风  ",
 		Status:        1,
 		CommentStatus: 1,
-		ImageURLs:     []string{"https://cdn.example.com/blog/moments/7/8/old.jpg?sign=1"},
+		ImageURLs:     []string{"https://cdn.example.com/blog/moments/7/9/old.jpg?sign=1"},
 		ImageOrder:    []string{"file:0", "url:0"},
 		ImageFiles:    []dto.MomentImageFileReq{{Name: "cat.png", ContentType: "image/png", Data: smallPNG(t)}},
 	}, 7, nil)
@@ -590,7 +620,7 @@ func TestMomentService_Save_TrimsContentAndUsesCurrentUserForNormalRole(t *testi
 	uploaded := store.uploadedData[repo.saveData.Images[0].URL]
 	assert.Equal(t, "moments/7/9/"+md5Hex(uploaded)+".png", repo.saveData.Images[0].URL)
 	assert.Equal(t, uint(len(uploaded)), repo.saveData.Images[0].Size)
-	assert.Equal(t, "moments/7/8/old.jpg", repo.saveData.Images[1].URL)
+	assert.Equal(t, "moments/7/9/old.jpg", repo.saveData.Images[1].URL)
 	assert.Equal(t, uint(2), repo.saveData.Images[1].Seq)
 	assert.Equal(t, uint(9), resp.ID)
 }
@@ -612,14 +642,14 @@ func TestMomentService_Save_RejectsIncompleteImageOrder(t *testing.T) {
 }
 
 func TestMomentService_Save_RejectsMissingExistingImage(t *testing.T) {
-	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/missing.jpg": false}}
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/9/missing.jpg": false}}
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, nil)
 
 	_, err := svc.Save(dto.MomentSaveReq{
 		Content:       "风",
 		Status:        1,
 		CommentStatus: 1,
-		ImageURLs:     []string{"https://cdn.example.com/blog/moments/7/missing.jpg"},
+		ImageURLs:     []string{"https://cdn.example.com/blog/moments/7/9/missing.jpg"},
 	}, 7, nil)
 
 	require.ErrorIs(t, err, momentservice.ErrMomentImageNotFound)
@@ -639,6 +669,24 @@ func TestMomentService_Save_RejectsReusingAnotherUsersImage(t *testing.T) {
 
 	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
 	assert.Empty(t, store.putKeys)
+}
+
+func TestMomentService_Save_RejectsReusingSameUsersOtherMomentImage(t *testing.T) {
+	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/other.jpg": true}}
+	repo := &fakeMomentRepo{saveResp: &momentrepo.MomentAggregate{
+		Moment: model.Moment{Base: model.Base{ID: 9}, UserID: 7, Content: "风", Status: 1, CommentStatus: 1},
+	}}
+	svc := momentservice.NewMomentService(repo, store, nil, nil, nil, nil)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID:            ptrUint(9),
+		Content:       "风",
+		Status:        1,
+		CommentStatus: 1,
+		ImageURLs:     []string{"moments/7/8/other.jpg"},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
 }
 
 func TestMomentService_Save_DoesNotDeleteAnotherUsersImageWhenRemoving(t *testing.T) {

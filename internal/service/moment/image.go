@@ -51,7 +51,7 @@ func (s *momentService) prepareModerationMomentImages(
 			return nil, ErrMomentImageInvalid
 		}
 		key := momentImageObjectKey(req.ImageURLs[index])
-		if key == "" || !momentImageObjectOwnedByUser(key, authorID) {
+		if key == "" || !reusableModerationMomentImage(key, authorID, req.ID) {
 			return nil, ErrMomentImageInvalid
 		}
 		exists, existsErr := store.ObjectExists(ctx, key)
@@ -166,7 +166,7 @@ func (s *momentService) prepareMomentImages(ctx context.Context, moment model.Mo
 	}
 
 	for _, rawURL := range req.ImageURLs {
-		image, err := existingMomentImage(ctx, store, rawURL, moment.UserID, uint(len(images)+1))
+		image, err := existingMomentImage(ctx, store, rawURL, moment.UserID, moment.ID, uint(len(images)+1))
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +214,7 @@ func (s *momentService) prepareOrderedMomentImages(
 				return nil, ErrMomentImageInvalid
 			}
 			seenURLs[index] = struct{}{}
-			image, err := existingMomentImage(ctx, store, req.ImageURLs[index], moment.UserID, uint(len(images)+1))
+			image, err := existingMomentImage(ctx, store, req.ImageURLs[index], moment.UserID, moment.ID, uint(len(images)+1))
 			if err != nil {
 				return nil, err
 			}
@@ -275,7 +275,7 @@ func (s *momentService) momentObjectStore() (storage.ObjectStore, error) {
 	return store, nil
 }
 
-func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL string, userID, seq uint) (model.Media, error) {
+func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL string, userID, momentID, seq uint) (model.Media, error) {
 	key := momentImageObjectKey(rawURL)
 	if key == "" {
 		if strings.TrimSpace(rawURL) == "" {
@@ -283,7 +283,7 @@ func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL 
 		}
 		return model.Media{}, ErrMomentImageInvalid
 	}
-	if !momentImageObjectOwnedByUser(key, userID) {
+	if !momentImageObjectBelongsToMoment(key, userID, momentID) {
 		return model.Media{}, ErrMomentImageInvalid
 	}
 	exists, err := store.ObjectExists(ctx, key)
@@ -301,6 +301,10 @@ func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL 
 		URL:      key,
 		Seq:      seq,
 	}, nil
+}
+
+func reusableModerationMomentImage(key string, userID uint, momentID *uint) bool {
+	return momentID != nil && momentImageObjectBelongsToMoment(key, userID, *momentID)
 }
 
 func uploadMomentImage(
@@ -469,13 +473,6 @@ func uploadedMomentImageObjectName(moment model.Moment, image processedMomentIma
 func fileMD5(data []byte) string {
 	sum := md5.Sum(data)
 	return hex.EncodeToString(sum[:])
-}
-
-func momentImageObjectOwnedByUser(key string, userID uint) bool {
-	if userID == 0 || key == "" {
-		return false
-	}
-	return strings.HasPrefix(key, fmt.Sprintf("%s%d/", momentImageObjectPrefix, userID))
 }
 
 func momentImageObjectBelongsToMoment(key string, userID, momentID uint) bool {
