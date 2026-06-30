@@ -1,6 +1,8 @@
 package moderation
 
 import (
+	"context"
+
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
@@ -53,7 +55,9 @@ func (h *AdminHandler) List(c *gin.Context) {
 		cmd.PublicState = &value
 	}
 	page, err := h.svc.List(c.Request.Context(), cmd)
-	writeAdminResponse(c, moderationPageToDTO(page), err)
+	dtoPage := moderationPageToDTO(page)
+	h.populateAuthors(c.Request.Context(), &dtoPage)
+	writeAdminResponse(c, dtoPage, err)
 }
 
 // Get 查询审核项当前版本。
@@ -74,5 +78,34 @@ func (h *AdminHandler) Get(c *gin.Context) {
 		return
 	}
 	item, err := h.svc.Get(c.Request.Context(), uint64(itemID))
-	writeAdminResponse(c, moderationItemToDTO(item), err)
+	dtoItem := moderationItemToDTO(item)
+	h.populateAuthor(c.Request.Context(), &dtoItem)
+	writeAdminResponse(c, dtoItem, err)
+}
+
+func (h *AdminHandler) populateAuthors(ctx context.Context, page *dto.AdminModerationPageResp) {
+	if h.userCache == nil {
+		return
+	}
+	for i := range page.List {
+		h.populateAuthor(ctx, &page.List[i])
+	}
+}
+
+func (h *AdminHandler) populateAuthor(ctx context.Context, item *dto.AdminModerationItemResp) {
+	if h.userCache == nil || item.AuthorID == 0 {
+		return
+	}
+	profile, err := h.userCache.Get(ctx, int64(item.AuthorID))
+	if err == nil && profile != nil {
+		nickname := profile.Username
+		if profile.Nickname != nil && *profile.Nickname != "" {
+			nickname = *profile.Nickname
+		}
+		item.Author = &dto.AdminModerationAuthorResp{
+			ID:        uint(item.AuthorID),
+			Nickname:  nickname,
+			AvatarUrl: profile.AvatarUrl,
+		}
+	}
 }

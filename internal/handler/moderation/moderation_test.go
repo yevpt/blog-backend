@@ -100,7 +100,7 @@ func TestAdminApproveUsesJWTReviewerAndReturnsUpdatedReview(t *testing.T) {
 	stub := &reviewServiceStub{approveResult: moderationservice.ReviewItem{
 		ItemID: 10, RevisionID: 20, ReviewStatus: moderationservice.ReviewApproved,
 	}}
-	handler := moderationhandler.NewAdminHandler(stub)
+	handler := moderationhandler.NewAdminHandler(stub, nil)
 	recorder := serveReviewRequest(http.MethodPost, "/admin/moderation/items/10/approve",
 		`{"revision_id":20,"lock_version":3}`, handler.Approve, true)
 
@@ -114,7 +114,7 @@ func TestAdminApproveUsesJWTReviewerAndReturnsUpdatedReview(t *testing.T) {
 
 func TestAdminReviewConflictUsesStable409Code(t *testing.T) {
 	stub := &reviewServiceStub{rejectErr: moderationservice.ErrReviewConflict}
-	handler := moderationhandler.NewAdminHandler(stub)
+	handler := moderationhandler.NewAdminHandler(stub, nil)
 	recorder := serveReviewRequest(http.MethodPost, "/admin/moderation/items/10/reject",
 		`{"revision_id":20,"lock_version":3,"reason":"不通过"}`, handler.Reject, true)
 
@@ -124,7 +124,7 @@ func TestAdminReviewConflictUsesStable409Code(t *testing.T) {
 
 func TestAdminReviewRequiresJWTClaims(t *testing.T) {
 	stub := &reviewServiceStub{}
-	handler := moderationhandler.NewAdminHandler(stub)
+	handler := moderationhandler.NewAdminHandler(stub, nil)
 	recorder := serveReviewRequest(http.MethodPost, "/admin/moderation/items/10/approve",
 		`{"revision_id":20,"lock_version":3}`, handler.Approve, false)
 
@@ -134,7 +134,7 @@ func TestAdminReviewRequiresJWTClaims(t *testing.T) {
 
 func TestAdminReviewInvalidBodyReturnsBusiness400(t *testing.T) {
 	stub := &reviewServiceStub{approveErr: errors.New("must not be called")}
-	handler := moderationhandler.NewAdminHandler(stub)
+	handler := moderationhandler.NewAdminHandler(stub, nil)
 	recorder := serveReviewRequest(http.MethodPost, "/admin/moderation/items/10/approve",
 		`{"revision_id":0,"lock_version":3}`, handler.Approve, true)
 
@@ -145,7 +145,7 @@ func TestAdminReviewInvalidBodyReturnsBusiness400(t *testing.T) {
 
 func TestAdminUpdateControlUsesJWTActor(t *testing.T) {
 	ops := &operationsServiceStub{}
-	handler := moderationhandler.NewAdminHandler(&reviewServiceStub{}, ops)
+	handler := moderationhandler.NewAdminHandler(&reviewServiceStub{}, nil, ops)
 	recorder := serveReviewRequest(http.MethodPatch, "/admin/moderation/control",
 		`{"registration_mode":"closed","publishing_mode":"pre_review_all","reason":"维护","lock_version":3}`,
 		handler.UpdateControl, true)
@@ -158,7 +158,7 @@ func TestAdminUpdateControlUsesJWTActor(t *testing.T) {
 
 func TestAdminEmergencyHideRequiresReasonAndUsesJWTActor(t *testing.T) {
 	ops := &operationsServiceStub{}
-	handler := moderationhandler.NewAdminHandler(&reviewServiceStub{}, ops)
+	handler := moderationhandler.NewAdminHandler(&reviewServiceStub{}, nil, ops)
 	recorder := serveReviewRequest(http.MethodPost, "/admin/moderation/items/10/hide",
 		`{"reason":"紧急下架"}`, handler.HideItem, true)
 
@@ -190,7 +190,7 @@ func serveReviewRequest(
 
 func TestAdminListBindsPublicStateFilter(t *testing.T) {
 	stub := &reviewServiceStub{}
-	handler := moderationhandler.NewAdminHandler(stub)
+	handler := moderationhandler.NewAdminHandler(stub, nil)
 	recorder := serveReviewRequest(http.MethodGet,
 		"/admin/moderation/items?public_state=emergency_hidden&review_status=approved",
 		"", handler.List, true)
@@ -204,7 +204,7 @@ func TestAdminListBindsPublicStateFilter(t *testing.T) {
 
 func TestAdminListReviewStatusAllIncludesEveryStatus(t *testing.T) {
 	stub := &reviewServiceStub{}
-	handler := moderationhandler.NewAdminHandler(stub)
+	handler := moderationhandler.NewAdminHandler(stub, nil)
 	recorder := serveReviewRequest(http.MethodGet,
 		"/admin/moderation/items?review_status=all",
 		"", handler.List, true)

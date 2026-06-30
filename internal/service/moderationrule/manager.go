@@ -167,10 +167,6 @@ func (m *manager) Status(ctx context.Context) (Status, error) {
 	return status, nil
 }
 
-// TestText 使用当前或候选规则集执行文本试跑。
-func (m *manager) TestText(ctx context.Context, cmd TestTextCommand) (TestResult, error) {
-	return TestResult{}, ErrInvalidRule
-}
 
 func normalizeManagerConfig(cfg *ManagerConfig) {
 	if cfg.PollInterval <= 0 {
