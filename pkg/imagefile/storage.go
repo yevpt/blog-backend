@@ -2,6 +2,8 @@ package imagefile
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"image"
 	"strings"
 
@@ -13,6 +15,7 @@ type PrepareOptions struct {
 	MaxStoredBytes int // 最大字节数，0 表示不限制
 	MaxWidth       int // 最大宽度，0 表示不限制
 	MaxHeight      int // 最大高度，0 表示不限制
+	MaxPixels      int // 最大像素数（宽×高），0 使用 DefaultMaxPixels
 	WebPQuality    int // 需要压缩时的 WebP 起始质量，0 使用默认
 	MinWebPQuality int // 需要压缩时的 WebP 最低质量，0 使用默认
 }
@@ -23,10 +26,11 @@ func PrepareForStorage(name string, data []byte, opts PrepareOptions) (Result, e
 		return Result{}, ErrInvalidImage
 	}
 
-	validated, err := Validate(name, data, 0)
+	format, err := validateImageBytes(data, effectiveMaxPixels(opts.MaxPixels))
 	if err != nil {
 		return Result{}, err
 	}
+	validated := buildResult(data, format)
 	if fits, fitErr := fitsStorageLimits(validated.Data, opts); fitErr != nil {
 		return Result{}, fitErr
 	} else if fits {
@@ -62,6 +66,17 @@ func PrepareForStorage(name string, data []byte, opts PrepareOptions) (Result, e
 	}, nil
 }
 
+func buildResult(data []byte, format string) Result {
+	contentType, ext, _ := formatInfo(format)
+	sum := md5.Sum(data)
+	return Result{
+		Data:        data,
+		ContentType: contentType,
+		Ext:         ext,
+		MD5:         hex.EncodeToString(sum[:]),
+	}
+}
+
 func fitsStorageLimits(data []byte, opts PrepareOptions) (bool, error) {
 	if opts.MaxStoredBytes > 0 && len(data) > opts.MaxStoredBytes {
 		return false, nil
@@ -72,6 +87,9 @@ func fitsStorageLimits(data []byte, opts PrepareOptions) (bool, error) {
 		return false, err
 	}
 	if strings.EqualFold(format, "gif") {
+		return false, nil
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > effectiveMaxPixels(opts.MaxPixels) {
 		return false, nil
 	}
 	if opts.MaxWidth > 0 && cfg.Width > opts.MaxWidth {

@@ -1,17 +1,8 @@
 package imagefile
 
 import (
-	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
-	"image"
 	"strings"
-
-	_ "golang.org/x/image/webp"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
 )
 
 var (
@@ -33,21 +24,14 @@ func Validate(name string, data []byte, maxBytes int) (Result, error) {
 	if maxBytes > 0 && len(data) > maxBytes {
 		return Result{}, ErrImageTooLarge
 	}
-	_, format, err := image.DecodeConfig(bytes.NewReader(data))
+	format, err := validateImageBytes(data, DefaultMaxPixels)
 	if err != nil {
+		return Result{}, err
+	}
+	if _, _, ok := formatInfo(format); !ok {
 		return Result{}, ErrInvalidImage
 	}
-	contentType, ext, ok := formatInfo(format)
-	if !ok {
-		return Result{}, ErrInvalidImage
-	}
-	sum := md5.Sum(data)
-	return Result{
-		Data:        data,
-		ContentType: contentType,
-		Ext:         ext,
-		MD5:         hex.EncodeToString(sum[:]),
-	}, nil
+	return buildResult(data, format), nil
 }
 
 func formatInfo(format string) (string, string, bool) {

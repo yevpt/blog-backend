@@ -152,10 +152,14 @@ func TestServiceUploadCommentTempImageRejectsSanctionedUser(t *testing.T) {
 }
 
 func TestService_UploadTempImage_SkipsUploadWhenObjectExists(t *testing.T) {
+	file := smallPNG(t)
+	sum := md5.Sum(file)
+	expectedMD5 := hex.EncodeToString(sum[:])
+	key := "temp/articles/7/covers/" + expectedMD5 + ".png"
 	store := &fakeObjectStore{
 		exists: true,
 		objectURLByKey: map[string]string{
-			"temp/articles/7/covers/45eb8f0de73f0680e67d356d2f2eb2cc.png": "https://cdn.example.com/blog/temp/articles/7/covers/45eb8f0de73f0680e67d356d2f2eb2cc.png",
+			key: "https://cdn.example.com/blog/" + key,
 		},
 	}
 	svc := uploadservice.NewService(store)
@@ -164,7 +168,7 @@ func TestService_UploadTempImage_SkipsUploadWhenObjectExists(t *testing.T) {
 		UserID: 7,
 		Dir:    "covers",
 		Name:   "cover.png",
-		Data:   []byte{137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 144, 119, 83, 222, 0, 0, 0, 12, 73, 68, 65, 84, 8, 153, 99, 248, 255, 255, 63, 0, 5, 254, 2, 254, 167, 141, 163, 75, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130},
+		Data:   file,
 	})
 
 	require.NoError(t, err)

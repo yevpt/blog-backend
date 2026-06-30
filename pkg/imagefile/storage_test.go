@@ -16,6 +16,14 @@ import (
 	"github.com/vpt/blog-backend/pkg/imagefile"
 )
 
+func TestPrepareForStorage_RejectsTruncatedPNGBeforePassthrough(t *testing.T) {
+	_, err := imagefile.PrepareForStorage("photo.png", truncatedPNG(t), imagefile.PrepareOptions{
+		MaxStoredBytes: 500 * 1024,
+	})
+
+	require.ErrorIs(t, err, imagefile.ErrInvalidImage)
+}
+
 func TestPrepareForStorage_PassthroughWhenWithinLimit(t *testing.T) {
 	input := smallWebP(t)
 
