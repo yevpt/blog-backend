@@ -41,11 +41,19 @@ type AdminModerationMomentOptionsResp struct {
 	CommentStatus uint8 `json:"comment_status" example:"1"`
 }
 
+// AdminModerationAuthorResp 审核内容的作者信息。
+type AdminModerationAuthorResp struct {
+	ID        uint    `json:"id,omitempty" example:"12"`
+	Nickname  string  `json:"nickname" example:"张三"`
+	AvatarUrl *string `json:"avatar_url,omitempty" example:"https://cdn.example.com/avatar.png"`
+}
+
 // AdminModerationItemResp 是管理端单个审核版本响应。
 type AdminModerationItemResp struct {
 	ItemID           uint64                            `json:"item_id" example:"10"`
 	Subject          AdminModerationSubjectResp        `json:"subject"`
 	AuthorID         uint64                            `json:"author_id" example:"42"`
+	Author           *AdminModerationAuthorResp        `json:"author,omitempty"`
 	LockVersion      uint64                            `json:"lock_version" example:"3"`
 	LifecycleState   string                            `json:"lifecycle_state" example:"active"`
 	PublicState      string                            `json:"public_state" example:"visible"`
