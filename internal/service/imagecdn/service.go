@@ -93,8 +93,8 @@ func (s *Service) serveTransformed(ctx context.Context, objectKey string, width,
 
 		result, err := imageutil.Process(bytes.NewReader(data), imageutil.Options{
 			MaxWidth:    width,
-			JPEGQuality: quality,
-			Format:      imageutil.FormatJPEG,
+			WebPQuality: quality,
+			Format:      imageutil.FormatWebP,
 		})
 		if err != nil {
 			return servePayload{}, err
@@ -137,7 +137,7 @@ func writeImageResponse(w http.ResponseWriter, payload servePayload, cacheContro
 func detectContentType(data []byte) string {
 	contentType := http.DetectContentType(data)
 	if contentType == "application/octet-stream" {
-		return "image/jpeg"
+		return "image/webp"
 	}
 	return contentType
 }

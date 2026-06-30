@@ -10,6 +10,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -644,7 +645,7 @@ func TestMomentService_Save_RejectsMoreThanNineImages(t *testing.T) {
 	assert.Empty(t, store.putKeys)
 }
 
-func TestMomentService_Save_RejectsImageLargerThanOneMB(t *testing.T) {
+func TestMomentService_Save_RejectsImageLargerThanThreeMB(t *testing.T) {
 	store := &fakeMomentObjectStore{exists: map[string]bool{}}
 	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, nil)
 
@@ -655,7 +656,7 @@ func TestMomentService_Save_RejectsImageLargerThanOneMB(t *testing.T) {
 		ImageFiles: []dto.MomentImageFileReq{{
 			Name:        "big.jpg",
 			ContentType: "image/jpeg",
-			Data:        bytes.Repeat([]byte{1}, 1024*1024+1),
+			Data:        bytes.Repeat([]byte{1}, 3*1024*1024+1),
 		}},
 	}, 7, nil)
 
@@ -719,16 +720,20 @@ func TestMomentService_Save_CompressesLargeImageToFiveHundredKB(t *testing.T) {
 		ImageFiles: []dto.MomentImageFileReq{{
 			Name:        "large.png",
 			ContentType: "image/png",
-			Data:        noisyPNG(t, 900, 900),
+			Data:        largeNoisyPNG(t, 420, 420),
 		}},
 	}, 7, nil)
 
 	require.NoError(t, err)
 	require.Len(t, repo.saveData.Images, 1)
-	uploaded := store.uploadedData[repo.saveData.Images[0].URL]
+	image := repo.saveData.Images[0]
+	uploaded := store.uploadedData[image.URL]
 	require.NotEmpty(t, uploaded)
 	assert.LessOrEqual(t, len(uploaded), 500*1024)
-	assert.Equal(t, uint(len(uploaded)), repo.saveData.Images[0].Size)
+	assert.Equal(t, uint(len(uploaded)), image.Size)
+	assert.Equal(t, "webp", image.FileType)
+	assert.Contains(t, image.URL, ".webp")
+	assert.Equal(t, "image/webp", store.uploadedType[image.URL])
 }
 
 func TestMomentService_Save_KeepsSmallGifOriginal(t *testing.T) {
@@ -786,11 +791,12 @@ func TestMomentService_Save_AcceptsWebP(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, repo.saveData.Images, 1)
 	image := repo.saveData.Images[0]
-	assert.Equal(t, "jpg", image.FileType)
+	webpData := smallWebP(t)
+	assert.Equal(t, "webp", image.FileType)
 	assert.Contains(t, image.URL, "moments/7/9/")
-	assert.Contains(t, image.URL, ".jpg")
-	assert.Equal(t, "image/jpeg", store.uploadedType[image.URL])
-	assert.NotEmpty(t, store.uploadedData[image.URL])
+	assert.Contains(t, image.URL, ".webp")
+	assert.Equal(t, "image/webp", store.uploadedType[image.URL])
+	assert.Equal(t, webpData, store.uploadedData[image.URL])
 }
 
 func TestMomentService_Save_DeletesRemovedOldImagesAfterSuccessfulSave(t *testing.T) {
@@ -910,6 +916,26 @@ func md5Hex(data []byte) string {
 func smallPNG(t *testing.T) []byte {
 	t.Helper()
 	return noisyPNG(t, 8, 8)
+}
+
+func largeNoisyPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	rng := rand.New(rand.NewSource(1))
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{
+				R: uint8(rng.Intn(256)),
+				G: uint8(rng.Intn(256)),
+				B: uint8(rng.Intn(256)),
+				A: 255,
+			})
+		}
+	}
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+	require.Greater(t, buf.Len(), 500*1024)
+	return buf.Bytes()
 }
 
 func noisyPNG(t *testing.T, width, height int) []byte {

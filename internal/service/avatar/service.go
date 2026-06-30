@@ -23,7 +23,7 @@ var (
 	// ErrAvatarInvalid 表示上传头像不是可接受的图片。
 	ErrAvatarInvalid = errors.New("头像格式不支持，请上传 JPG、PNG 或 WebP")
 	// ErrAvatarTooLarge 表示上传头像原始文件过大。
-	ErrAvatarTooLarge = errors.New("头像不能超过 2MB")
+	ErrAvatarTooLarge = errors.New("头像不能超过 256KB")
 	// ErrAvatarGIFNotAllowed 表示不接受 GIF 头像。
 	ErrAvatarGIFNotAllowed = errors.New("不支持 GIF 头像")
 	// ErrAvatarCompressedTooLarge 表示头像压缩后仍超过限制。
@@ -31,12 +31,12 @@ var (
 )
 
 const (
-	MaxRawAvatarBytes        = 2 * 1024 * 1024
+	MaxRawAvatarBytes        = 256 * 1024
 	defaultTimeout           = 2 * time.Second
 	defaultDownloadMaxBytes  = MaxRawAvatarBytes
 	defaultAvatarMaxBytes    = 20 * 1024
 	defaultAvatarMaxSize     = 120
-	defaultAvatarJPEGQuality = 85
+	defaultAvatarWebPQuality = 85
 	defaultAvatarMinQuality  = 35
 	avatarObjectPrefix       = "avatar/user"
 )
@@ -87,7 +87,7 @@ func (s *Service) SaveRemoteAvatar(ctx context.Context, avatarURL string) (strin
 		return "", err
 	}
 
-	result, err := s.compressAndStore(ctx, body, false)
+	result, err := s.compressAndStore(ctx, "remote-avatar", body, false)
 	if err != nil {
 		return "", err
 	}
@@ -107,55 +107,66 @@ func (s *Service) SaveUploadedAvatar(ctx context.Context, name string, data []by
 	if err != nil {
 		return SaveResult{}, err
 	}
-	return s.compressAndStore(ctx, validated.Data, false)
+	return s.compressAndStore(ctx, name, validated.Data, false)
 }
 
-func (s *Service) compressAndStore(ctx context.Context, data []byte, forcePut bool) (SaveResult, error) {
-	result, err := imageutil.Process(bytes.NewReader(data), s.opts.ImageOptions)
+func (s *Service) compressAndStore(ctx context.Context, name string, data []byte, forcePut bool) (SaveResult, error) {
+	stored, err := imagefile.PrepareForStorage(name, data, avatarPrepareOptions(s.opts))
 	if err != nil {
 		return SaveResult{}, mapProcessErr(err)
 	}
-	if len(result.Bytes) > s.opts.ImageOptions.MaxBytes {
+	if s.opts.ImageOptions.MaxBytes > 0 && len(stored.Data) > s.opts.ImageOptions.MaxBytes {
 		return SaveResult{}, ErrAvatarCompressedTooLarge
 	}
 
-	objectName := strings.Trim(s.opts.ObjectKeyPrefix, "/") + "/" + result.MD5 + result.Ext
+	objectName := strings.Trim(s.opts.ObjectKeyPrefix, "/") + "/" + stored.MD5 + stored.Ext
 	if !forcePut {
 		exists, err := s.store.ObjectExists(ctx, objectName)
 		if err == nil && exists {
 			return SaveResult{ObjectKey: objectName, Created: false}, nil
 		}
 	}
-	if err := s.store.PutObject(ctx, objectName, result.Bytes, result.ContentType); err != nil {
+	if err := s.store.PutObject(ctx, objectName, stored.Data, stored.ContentType); err != nil {
 		return SaveResult{}, err
 	}
 	return SaveResult{ObjectKey: objectName, Created: true}, nil
 }
 
-func (s *Service) compressAndStoreAt(ctx context.Context, data []byte, targetKey string) (SaveResult, error) {
-	result, err := imageutil.Process(bytes.NewReader(data), s.opts.ImageOptions)
+func (s *Service) compressAndStoreAt(ctx context.Context, name string, data []byte, targetKey string) (SaveResult, error) {
+	stored, err := imagefile.PrepareForStorage(name, data, avatarPrepareOptions(s.opts))
 	if err != nil {
 		return SaveResult{}, mapProcessErr(err)
 	}
-	if len(result.Bytes) > s.opts.ImageOptions.MaxBytes {
+	if s.opts.ImageOptions.MaxBytes > 0 && len(stored.Data) > s.opts.ImageOptions.MaxBytes {
 		return SaveResult{}, ErrAvatarCompressedTooLarge
 	}
 
-	objectName := outputKeyForNormalize(targetKey, result, s.opts.ObjectKeyPrefix)
-	if err := s.store.PutObject(ctx, objectName, result.Bytes, result.ContentType); err != nil {
+	objectName := outputKeyForNormalize(targetKey, stored)
+	if err := s.store.PutObject(ctx, objectName, stored.Data, stored.ContentType); err != nil {
 		return SaveResult{}, err
 	}
 	return SaveResult{ObjectKey: objectName, Created: true}, nil
 }
 
-func outputKeyForNormalize(targetKey string, result *imageutil.Result, prefix string) string {
+func avatarPrepareOptions(opts Options) imagefile.PrepareOptions {
+	return imagefile.PrepareOptions{
+		MaxStoredBytes: opts.ImageOptions.MaxBytes,
+		MaxWidth:       opts.ImageOptions.MaxWidth,
+		MaxHeight:      opts.ImageOptions.MaxHeight,
+		WebPQuality:    opts.ImageOptions.WebPQuality,
+		MinWebPQuality: opts.ImageOptions.MinWebPQuality,
+	}
+}
+
+func outputKeyForNormalize(targetKey string, stored imagefile.Result) string {
 	targetKey = strings.TrimLeft(strings.TrimSpace(targetKey), "/")
+	prefix := avatarObjectPrefix
 	if targetKey == "" || !IsManagedAvatarKey(targetKey) {
-		return strings.Trim(prefix, "/") + "/" + result.MD5 + result.Ext
+		return strings.Trim(prefix, "/") + "/" + stored.MD5 + stored.Ext
 	}
 	currentExt := filepath.Ext(targetKey)
-	if currentExt != "" && !strings.EqualFold(currentExt, result.Ext) {
-		return strings.TrimSuffix(targetKey, currentExt) + result.Ext
+	if currentExt != "" && !strings.EqualFold(currentExt, stored.Ext) {
+		return strings.TrimSuffix(targetKey, currentExt) + stored.Ext
 	}
 	return targetKey
 }
@@ -257,7 +268,7 @@ func normalizeOptions(opts Options) Options {
 		opts.ObjectKeyPrefix = avatarObjectPrefix
 	}
 	if opts.ImageOptions.Format == "" {
-		opts.ImageOptions.Format = imageutil.FormatJPEG
+		opts.ImageOptions.Format = imageutil.FormatWebP
 	}
 	if opts.ImageOptions.MaxWidth == 0 {
 		opts.ImageOptions.MaxWidth = defaultAvatarMaxSize
@@ -268,11 +279,11 @@ func normalizeOptions(opts Options) Options {
 	if opts.ImageOptions.MaxBytes == 0 {
 		opts.ImageOptions.MaxBytes = defaultAvatarMaxBytes
 	}
-	if opts.ImageOptions.JPEGQuality == 0 {
-		opts.ImageOptions.JPEGQuality = defaultAvatarJPEGQuality
+	if opts.ImageOptions.WebPQuality == 0 {
+		opts.ImageOptions.WebPQuality = defaultAvatarWebPQuality
 	}
-	if opts.ImageOptions.MinJPEGQuality == 0 {
-		opts.ImageOptions.MinJPEGQuality = defaultAvatarMinQuality
+	if opts.ImageOptions.MinWebPQuality == 0 {
+		opts.ImageOptions.MinWebPQuality = defaultAvatarMinQuality
 	}
 	return opts
 }

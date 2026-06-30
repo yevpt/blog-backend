@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	maxMomentImageUploadBytes = 1024 * 1024
+	maxMomentImageUploadBytes = 3 * 1024 * 1024
 	maxMomentGifUploadBytes   = 300 * 1024
 )
 
@@ -104,7 +104,7 @@ func readMomentImageFiles(c *gin.Context) ([]dto.MomentImageFileReq, error) {
 			return nil, errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
 		}
 		if len(data) > maxMomentImageUploadBytes {
-			return nil, errors.New("图片不能超过 1MB")
+			return nil, errors.New("图片不能超过 3MB")
 		}
 		files = append(files, dto.MomentImageFileReq{
 			Name:        header.Filename,

@@ -185,12 +185,30 @@ func TestService_UploadTempImage_CommentSceneCompressesAndStoresCommentKey(t *te
 	})
 
 	require.NoError(t, err)
-	assert.Regexp(t, `^temp/comments/7/images/[a-f0-9]{32}\.jpg$`, resp.Key)
+	assert.Regexp(t, `^temp/comments/7/images/[a-f0-9]{32}\.webp$`, resp.Key)
 	assert.Equal(t, "https://cdn.example.com/blog/"+resp.Key, resp.URL)
 	require.Len(t, store.puts, 1)
 	assert.Equal(t, resp.Key, store.puts[0].key)
-	assert.Equal(t, "image/jpeg", store.puts[0].contentType)
+	assert.Equal(t, "image/webp", store.puts[0].contentType)
 	assert.LessOrEqual(t, len(store.puts[0].data), 500*1024)
+}
+
+func TestService_UploadTempImage_ArticleSceneCompressesOversizedToWebP(t *testing.T) {
+	store := &fakeObjectStore{}
+	svc := uploadservice.NewService(store)
+
+	resp, err := svc.UploadTempImage(context.Background(), uploadservice.TempImageInput{
+		UserID: 7,
+		Dir:    "images",
+		Name:   "big.png",
+		Data:   noisyPNG(t, 1100, 1100),
+	})
+
+	require.NoError(t, err)
+	assert.Regexp(t, `^temp/articles/7/images/[a-f0-9]{32}\.webp$`, resp.Key)
+	require.Len(t, store.puts, 1)
+	assert.Equal(t, "image/webp", store.puts[0].contentType)
+	assert.LessOrEqual(t, len(store.puts[0].data), 3*1024*1024)
 }
 
 func TestService_UploadTempImage_ReturnsUnavailableWhenStoreFails(t *testing.T) {

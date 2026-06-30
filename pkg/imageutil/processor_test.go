@@ -14,33 +14,42 @@ import (
 	"github.com/vpt/blog-backend/pkg/imageutil"
 )
 
-func TestProcess_CompressesToJPEGWithinBounds(t *testing.T) {
+func TestProcess_CompressesToWebPWithinBounds(t *testing.T) {
 	input := noisyPNG(t, 300, 220)
 
 	result, err := imageutil.Process(bytes.NewReader(input), imageutil.Options{
 		MaxWidth:       120,
 		MaxHeight:      120,
 		MaxBytes:       10 * 1024,
-		Format:         imageutil.FormatJPEG,
-		JPEGQuality:    85,
-		MinJPEGQuality: 35,
+		WebPQuality:    95,
+		MinWebPQuality: 50,
 	})
 
 	require.NoError(t, err)
 	assert.LessOrEqual(t, result.Width, 120)
 	assert.LessOrEqual(t, result.Height, 120)
 	assert.LessOrEqual(t, len(result.Bytes), 10*1024)
-	assert.Equal(t, imageutil.FormatJPEG, result.Format)
-	assert.Equal(t, "image/jpeg", result.ContentType)
-	assert.Equal(t, ".jpg", result.Ext)
+	assert.Equal(t, imageutil.FormatWebP, result.Format)
+	assert.Equal(t, "image/webp", result.ContentType)
+	assert.Equal(t, ".webp", result.Ext)
 	assert.Len(t, result.MD5, 32)
+}
+
+func TestProcess_DefaultsToWebP(t *testing.T) {
+	input := noisyPNG(t, 40, 40)
+
+	result, err := imageutil.Process(bytes.NewReader(input), imageutil.Options{})
+
+	require.NoError(t, err)
+	assert.Equal(t, imageutil.FormatWebP, result.Format)
+	assert.Equal(t, "image/webp", result.ContentType)
+	assert.Equal(t, ".webp", result.Ext)
 }
 
 func TestProcess_RejectsNonImage(t *testing.T) {
 	_, err := imageutil.Process(bytes.NewReader([]byte("not image")), imageutil.Options{
 		MaxWidth:  120,
 		MaxHeight: 120,
-		Format:    imageutil.FormatJPEG,
 	})
 
 	assert.ErrorIs(t, err, imageutil.ErrInvalidImage)
@@ -67,14 +76,35 @@ func TestProcess_DecodesWebP(t *testing.T) {
 	input := smallWebP(t)
 
 	result, err := imageutil.Process(bytes.NewReader(input), imageutil.Options{
-		Format: imageutil.FormatJPEG,
+		Format: imageutil.FormatWebP,
 	})
 
 	require.NoError(t, err)
-	assert.Equal(t, imageutil.FormatJPEG, result.Format)
-	assert.Equal(t, "image/jpeg", result.ContentType)
-	assert.Equal(t, ".jpg", result.Ext)
+	assert.Equal(t, imageutil.FormatWebP, result.Format)
+	assert.Equal(t, "image/webp", result.ContentType)
+	assert.Equal(t, ".webp", result.Ext)
 	assert.NotEmpty(t, result.Bytes)
+}
+
+func TestProcess_CompressesDecodedWebPWithinBounds(t *testing.T) {
+	input := noisyPNG(t, 300, 220)
+
+	result, err := imageutil.Process(bytes.NewReader(input), imageutil.Options{
+		MaxWidth:       120,
+		MaxHeight:      120,
+		MaxBytes:       10 * 1024,
+		Format:         imageutil.FormatWebP,
+		WebPQuality:    95,
+		MinWebPQuality: 50,
+	})
+
+	require.NoError(t, err)
+	assert.LessOrEqual(t, result.Width, 120)
+	assert.LessOrEqual(t, result.Height, 120)
+	assert.LessOrEqual(t, len(result.Bytes), 10*1024)
+	assert.Equal(t, imageutil.FormatWebP, result.Format)
+	assert.Equal(t, "image/webp", result.ContentType)
+	assert.Equal(t, ".webp", result.Ext)
 }
 
 func noisyPNG(t *testing.T, width, height int) []byte {

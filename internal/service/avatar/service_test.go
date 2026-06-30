@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chai2010/webp"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -91,10 +93,10 @@ func TestService_SaveRemoteAvatar_CompressesAndUploads(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, objectName)
 	assert.Contains(t, objectName, "avatar/user/")
-	assert.Contains(t, objectName, ".jpg")
+	assert.Contains(t, objectName, ".webp")
 	assert.True(t, store.putCalled)
 	assert.Equal(t, objectName, store.objectName)
-	assert.Equal(t, "image/jpeg", store.contentTyp)
+	assert.Equal(t, "image/webp", store.contentTyp)
 	assert.LessOrEqual(t, len(store.content), 20*1024)
 }
 
@@ -160,6 +162,20 @@ func TestService_SaveRemoteAvatar_RespectsTimeout(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestService_SaveUploadedAvatar_PassthroughCompliantWebP(t *testing.T) {
+	store := &fakeObjectStore{}
+	svc := avatarservice.NewService(store, avatarservice.Options{})
+	input := testWebPAvatar(t, 80, 80)
+
+	result, err := svc.SaveUploadedAvatar(context.Background(), "avatar.webp", input)
+
+	require.NoError(t, err)
+	assert.True(t, result.Created)
+	assert.Contains(t, result.ObjectKey, ".webp")
+	assert.Equal(t, input, store.content)
+	assert.Equal(t, "image/webp", store.contentTyp)
+}
+
 func TestService_SaveUploadedAvatar_CompressesAndUploads(t *testing.T) {
 	store := &fakeObjectStore{}
 	svc := avatarservice.NewService(store, avatarservice.Options{})
@@ -170,7 +186,7 @@ func TestService_SaveUploadedAvatar_CompressesAndUploads(t *testing.T) {
 	assert.NotEmpty(t, objectName.ObjectKey)
 	assert.Contains(t, objectName.ObjectKey, "avatar/user/")
 	assert.True(t, objectName.Created)
-	assert.Equal(t, "image/jpeg", store.contentTyp)
+	assert.Equal(t, "image/webp", store.contentTyp)
 	assert.LessOrEqual(t, len(store.content), 20*1024)
 }
 
@@ -204,5 +220,19 @@ func testPNG(t *testing.T, width, height int) []byte {
 	}
 	var buf bytes.Buffer
 	require.NoError(t, png.Encode(&buf, img))
+	return buf.Bytes()
+}
+
+func testWebPAvatar(t *testing.T, width, height int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x % 255), G: uint8(y % 255), B: uint8((x + y) % 255), A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	require.NoError(t, webp.Encode(&buf, img, &webp.Options{Lossless: false, Quality: 80}))
+	require.LessOrEqual(t, buf.Len(), 20*1024)
 	return buf.Bytes()
 }

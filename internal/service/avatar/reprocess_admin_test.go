@@ -17,9 +17,9 @@ func TestNormalizeFailureReason_MapsUploadMessage(t *testing.T) {
 	assert.Equal(t, "无法解码为有效图片", avatarservice.NormalizeFailureReason(avatarservice.ErrAvatarInvalid))
 }
 
-func TestInspectStoredAvatar_ReprocessablePNG(t *testing.T) {
+func TestInspectStoredAvatar_AcceptsCompliantPNG(t *testing.T) {
 	compliant, blocked := avatarservice.InspectStoredAvatar(testPNGBytes(t, 80, 80))
-	assert.False(t, compliant)
+	assert.True(t, compliant)
 	assert.Empty(t, blocked)
 }
 

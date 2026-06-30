@@ -46,7 +46,7 @@ func TestService_ServeObject_TransformSetsCacheControl(t *testing.T) {
 	require.NoError(t, svc.ServeObject(rr, req, "a.jpg", 32, 75, true))
 
 	assert.Contains(t, rr.Header().Get("Cache-Control"), "max-age=123")
-	assert.Equal(t, "image/jpeg", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "image/webp", rr.Header().Get("Content-Type"))
 	assert.NotEmpty(t, rr.Body.Bytes())
 }
 

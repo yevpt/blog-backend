@@ -6,10 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"image"
-	"image/jpeg"
 	"image/png"
 	"io"
 
+	"github.com/chai2010/webp"
 	xdraw "golang.org/x/image/draw"
 
 	_ "golang.org/x/image/webp"
@@ -31,10 +31,15 @@ var (
 type Format string
 
 const (
-	// FormatJPEG 输出 JPEG，适合头像和多数照片类图片。
-	FormatJPEG Format = "jpeg"
 	// FormatPNG 输出 PNG，适合需要无损或透明背景的图片。
 	FormatPNG Format = "png"
+	// FormatWebP 输出 WebP，适合在体积限制下尽量保持画质。
+	FormatWebP Format = "webp"
+
+	// DefaultWebPQuality 是 WebP 有损编码的默认起始质量。
+	DefaultWebPQuality = 95
+	// DefaultMinWebPQuality 是 WebP 有损编码允许的最低质量。
+	DefaultMinWebPQuality = 50
 )
 
 // Options 控制图片处理行为，供头像、前端上传等场景复用。
@@ -42,9 +47,9 @@ type Options struct {
 	MaxWidth       int    // 最大宽度，0 表示不限制
 	MaxHeight      int    // 最大高度，0 表示不限制
 	MaxBytes       int    // 最大输出体积，0 表示不限制
-	Format         Format // 输出格式，空值默认 JPEG
-	JPEGQuality    int    // JPEG 初始质量，0 使用默认 85
-	MinJPEGQuality int    // JPEG 最低质量，0 使用默认 40
+	Format         Format // 输出格式，空值默认 WebP
+	WebPQuality    int    // WebP 初始质量，0 使用 DefaultWebPQuality
+	MinWebPQuality int    // WebP 最低质量，0 使用 DefaultMinWebPQuality
 }
 
 // Result 是图片处理后的结果。
@@ -88,13 +93,13 @@ func Process(r io.Reader, opts Options) (*Result, error) {
 
 func normalizeOptions(opts Options) Options {
 	if opts.Format == "" {
-		opts.Format = FormatJPEG
+		opts.Format = FormatWebP
 	}
-	if opts.JPEGQuality <= 0 || opts.JPEGQuality > 100 {
-		opts.JPEGQuality = 85
+	if opts.WebPQuality <= 0 || opts.WebPQuality > 100 {
+		opts.WebPQuality = DefaultWebPQuality
 	}
-	if opts.MinJPEGQuality <= 0 || opts.MinJPEGQuality > opts.JPEGQuality {
-		opts.MinJPEGQuality = 40
+	if opts.MinWebPQuality <= 0 || opts.MinWebPQuality > opts.WebPQuality {
+		opts.MinWebPQuality = DefaultMinWebPQuality
 	}
 	return opts
 }
@@ -130,21 +135,24 @@ func resizeToFit(src image.Image, maxWidth, maxHeight int) image.Image {
 
 func encodeWithinLimit(img image.Image, opts Options) ([]byte, error) {
 	switch opts.Format {
-	case FormatJPEG:
-		return encodeJPEGWithinLimit(img, opts)
 	case FormatPNG:
 		return encodePNGWithinLimit(img, opts)
+	case FormatWebP:
+		return encodeWebPWithinLimit(img, opts)
 	default:
 		return nil, ErrUnsupportedFormat
 	}
 }
 
-func encodeJPEGWithinLimit(img image.Image, opts Options) ([]byte, error) {
+func encodeWebPWithinLimit(img image.Image, opts Options) ([]byte, error) {
 	current := img
 	for {
-		for quality := opts.JPEGQuality; quality >= opts.MinJPEGQuality; quality -= 5 {
+		for quality := opts.WebPQuality; quality >= opts.MinWebPQuality; quality -= 5 {
 			var buf bytes.Buffer
-			if err := jpeg.Encode(&buf, current, &jpeg.Options{Quality: quality}); err != nil {
+			if err := webp.Encode(&buf, current, &webp.Options{
+				Lossless: false,
+				Quality:  float32(quality),
+			}); err != nil {
 				return nil, err
 			}
 			if opts.MaxBytes <= 0 || buf.Len() <= opts.MaxBytes {
@@ -182,7 +190,7 @@ func contentType(format Format) string {
 	case FormatPNG:
 		return "image/png"
 	default:
-		return "image/jpeg"
+		return "image/webp"
 	}
 }
 
@@ -191,6 +199,6 @@ func extension(format Format) string {
 	case FormatPNG:
 		return ".png"
 	default:
-		return ".jpg"
+		return ".webp"
 	}
 }

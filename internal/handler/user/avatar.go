@@ -13,7 +13,7 @@ import (
 
 // UploadAvatar 上传并更换当前用户头像。
 // @Summary 更换当前用户头像
-// @Description 登录用户上传头像图片，服务端校验后压缩到 120px 内、20KB 内 JPEG 并更新 avatar_url；不支持 GIF，原始文件最大 2MB。
+// @Description 登录用户上传头像图片，服务端校验后压缩到 120px 内、20KB 内 WebP 并更新 avatar_url；不支持 GIF，原始文件最大 256KB。
 // @Tags 用户
 // @Accept multipart/form-data
 // @Produce json

@@ -1,7 +1,6 @@
 package friendlink
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math"
@@ -24,7 +23,7 @@ const (
 	friendLinkDefaultPage              = 1
 	friendLinkDefaultPageSize          = 10
 	friendLinkMaxPageSize              = 50
-	MaxFriendLinkLogoBytes             = 2 * 1024 * 1024
+	MaxFriendLinkLogoBytes             = 256 * 1024
 	maxFriendLinkLogoStoredBytes       = 20 * 1024
 	maxFriendLinkLogoSize              = 120
 	friendLinkLogoObjectPrefix         = "avatar/link"
@@ -38,7 +37,7 @@ var (
 	ErrFriendLinkStatusInvalid = errors.New("友情链接状态无效")
 	ErrFriendLinkLogoRequired  = errors.New("缺少友链 Logo")
 	ErrFriendLinkLogoInvalid   = errors.New("友链 Logo 格式不支持，请上传 JPG、PNG 或 WebP")
-	ErrFriendLinkLogoTooLarge  = errors.New("友链 Logo 不能超过 2MB")
+	ErrFriendLinkLogoTooLarge  = errors.New("友链 Logo 不能超过 256KB")
 	ErrFriendLinkLogoGIF       = errors.New("不支持 GIF 友链 Logo")
 	ErrFriendLinkLogoStoredBig = errors.New("友链 Logo 过大，请换一张更小的图片")
 	ErrFriendLinkLogoStore     = errors.New("对象存储不可用")
@@ -322,36 +321,33 @@ func (s *friendLinkService) saveFriendLinkLogo(ctx context.Context, file *dto.Up
 	if exists {
 		return savedFriendLinkLogo{ObjectKey: objectName}, nil
 	}
-	if err := s.store.PutObject(ctx, objectName, processed.Bytes, processed.ContentType); err != nil {
+	if err := s.store.PutObject(ctx, objectName, processed.Data, processed.ContentType); err != nil {
 		return savedFriendLinkLogo{}, ErrFriendLinkLogoStore
 	}
 	return savedFriendLinkLogo{ObjectKey: objectName, Created: true}, nil
 }
 
-func processFriendLinkLogo(file *dto.UploadedImageFile) (*imageutil.Result, error) {
+func processFriendLinkLogo(file *dto.UploadedImageFile) (imagefile.Result, error) {
 	validated, err := imagefile.Validate(file.Name, file.Data, MaxFriendLinkLogoBytes)
 	if err != nil {
-		return nil, mapFriendLinkLogoValidateErr(err)
+		return imagefile.Result{}, mapFriendLinkLogoValidateErr(err)
 	}
 	if validated.ContentType == "image/gif" {
-		return nil, ErrFriendLinkLogoGIF
+		return imagefile.Result{}, ErrFriendLinkLogoGIF
 	}
 
-	result, err := imageutil.Process(bytes.NewReader(validated.Data), imageutil.Options{
-		Format:         imageutil.FormatJPEG,
+	stored, err := imagefile.PrepareForStorage(file.Name, file.Data, imagefile.PrepareOptions{
+		MaxStoredBytes: maxFriendLinkLogoStoredBytes,
 		MaxWidth:       maxFriendLinkLogoSize,
 		MaxHeight:      maxFriendLinkLogoSize,
-		MaxBytes:       maxFriendLinkLogoStoredBytes,
-		JPEGQuality:    85,
-		MinJPEGQuality: 35,
 	})
 	if err != nil {
-		return nil, mapFriendLinkLogoProcessErr(err)
+		return imagefile.Result{}, mapFriendLinkLogoProcessErr(err)
 	}
-	if len(result.Bytes) > maxFriendLinkLogoStoredBytes {
-		return nil, ErrFriendLinkLogoStoredBig
+	if len(stored.Data) > maxFriendLinkLogoStoredBytes {
+		return imagefile.Result{}, ErrFriendLinkLogoStoredBig
 	}
-	return result, nil
+	return stored, nil
 }
 
 func mapFriendLinkLogoValidateErr(err error) error {

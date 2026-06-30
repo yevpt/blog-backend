@@ -20,13 +20,13 @@ func NewHandler(svc uploadservice.Service) *Handler {
 
 // TempImage 上传临时图片。
 // @Summary 上传临时图片
-// @Description 登录用户上传临时图片。默认 scene=article，仅支持 images/covers/mobile-covers；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 1MB 并压缩到 500KB 内，GIF 最大 300KB。
+// @Description 登录用户上传临时图片。默认 scene=article，仅支持 images/covers/mobile-covers，上传最大 10MB、入库最大 3MB；scene=comment 用于留言、评论、回复图片，仅支持 images，普通图片最大 3MB 并压缩到 500KB 内，GIF 最大 300KB。
 // @Tags 上传
 // @Accept multipart/form-data
 // @Produce json
 // @Param scene formData string false "上传场景：article 或 comment；默认 article"
 // @Param dir formData string true "临时目录：images、covers 或 mobile-covers"
-// @Param file formData file true "图片文件；article 最大 10MB，comment 普通图片最大 1MB、GIF 最大 300KB"
+// @Param file formData file true "图片文件；article 最大 10MB、入库 3MB，comment 普通图片最大 3MB、GIF 最大 300KB"
 // @Success 200 {object} response.Response{data=dto.TempUploadResp} "统一响应；code=0 表示上传成功，code=400 表示参数错误或业务错误"
 // @Failure 401 {object} response.Response "未登录或 token 已过期"
 // @Failure 429 {object} response.Response "请求过于频繁"
@@ -76,7 +76,9 @@ func (h *Handler) TempImage(c *gin.Context) {
 		case errors.Is(err, uploadservice.ErrUploadTooLarge),
 			errors.Is(err, uploadservice.ErrUploadCommentTooLarge),
 			errors.Is(err, uploadservice.ErrUploadCommentGIFLarge),
-			errors.Is(err, uploadservice.ErrUploadCompressedLarge):
+			errors.Is(err, uploadservice.ErrUploadArticleGIFLarge),
+			errors.Is(err, uploadservice.ErrUploadCompressedLarge),
+			errors.Is(err, uploadservice.ErrUploadArticleStoredLarge):
 			response.Fail(c, response.CodeBadRequest, err.Error())
 		case errors.Is(err, uploadservice.ErrUploadDirInvalid),
 			errors.Is(err, uploadservice.ErrUploadSceneInvalid),

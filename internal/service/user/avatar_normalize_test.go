@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chai2010/webp"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -425,7 +427,7 @@ func TestAdminService_NormalizeAvatars_InPlaceOverwriteSameKey(t *testing.T) {
 func TestAdminService_NormalizeAvatars_SkipsCompliantAvatar(t *testing.T) {
 	old := "avatar/user/ok.jpg"
 	userID := uint(3)
-	data := testSmallJPEG(t)
+	data := testSmallWebP(t)
 	ok, err := avatarservice.IsCompliantAvatarData(data)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -444,6 +446,19 @@ func TestAdminService_NormalizeAvatars_SkipsCompliantAvatar(t *testing.T) {
 	assert.Equal(t, 1, resp.OK)
 	assert.Equal(t, 0, resp.Updated)
 	assert.False(t, normalizer.reprocess)
+}
+
+func testSmallWebP(t *testing.T) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 80, 80))
+	for y := 0; y < 80; y++ {
+		for x := 0; x < 80; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: 100, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	require.NoError(t, webp.Encode(&buf, img, &webp.Options{Lossless: false, Quality: 80}))
+	return buf.Bytes()
 }
 
 func testSmallJPEG(t *testing.T) []byte {

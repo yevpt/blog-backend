@@ -314,6 +314,12 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 		if row.MaterializedRevisionID != nil {
 			view.VisibleImages = imagesByRevision[*row.MaterializedRevisionID]
 		}
+		// 已物化且与最后通过版本一致时，公开侧应展示原图而非待审预览（即使 moderation_image 状态滞后）。
+		if row.MaterializedRevisionID != nil && row.ApprovedRevisionID != nil &&
+			*row.MaterializedRevisionID == *row.ApprovedRevisionID &&
+			row.PublicState == string(PublicVisible) {
+			view.VisibleImages = AuthorOriginalImageViews(view.VisibleImages)
+		}
 		canReadPending := viewer.Role == ViewerAdmin || (viewer.Role == ViewerAuthor && viewer.UserID == row.AuthorID)
 		if canReadPending && row.PendingRevisionID != nil {
 			view.PendingImages = AuthorOriginalImageViews(imagesByRevision[*row.PendingRevisionID])
@@ -325,6 +331,10 @@ func (r *repository) LoadModerationView(ctx context.Context, refs []SubjectRef, 
 		}
 		if canReadPending && row.PublicState == string(PublicPlaceholder) && row.MaterializedRevisionID == nil && row.PendingRevisionID != nil {
 			view.VisibleImages = view.PendingImages
+		}
+		// 访客在中风险首次发布占位态下展示模糊预览图（保留原图比例，不含原图 URL）。
+		if !canReadPending && row.PublicState == string(PublicPlaceholder) && row.MaterializedRevisionID == nil && row.PendingRevisionID != nil {
+			view.VisibleImages = imagesByRevision[*row.PendingRevisionID]
 		}
 		result[key] = view
 	}

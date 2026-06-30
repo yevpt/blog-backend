@@ -2,6 +2,7 @@ package imageupload
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -31,7 +32,7 @@ func ReadSingleImageFile(c *gin.Context, field string, maxBytes int, rejectGIF b
 		return "", nil, err
 	}
 	if len(data) > maxBytes {
-		return "", nil, errors.New("头像不能超过 2MB")
+		return "", nil, fmt.Errorf("上传图片不能超过 %dKB", maxBytes/1024)
 	}
 	if rejectGIF && isGIFUpload(header.Header.Get("Content-Type"), header.Filename) {
 		return "", nil, errors.New("不支持 GIF 头像")

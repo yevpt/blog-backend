@@ -1692,7 +1692,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.jpg 并写入 avatar_url。",
+                "description": "管理员新增友情链接；必须随表单上传 logo 文件，服务端保存为 avatar/link/{md5}.webp 并写入 avatar_url。",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -1805,7 +1805,7 @@ const docTemplate = `{
         },
         "/admin/friend-links/{id}": {
             "put": {
-                "description": "管理员修改友情链接；logo 可选，上传时保存为 avatar/link/{md5}.jpg 并替换 avatar_url，未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。",
+                "description": "管理员修改友情链接；logo 可选，上传时保存为 avatar/link/{md5}.webp 并替换 avatar_url，未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。",
                 "consumes": [
                     "multipart/form-data"
                 ],

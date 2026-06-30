@@ -14,12 +14,12 @@ func (s *service) preparePreview(ctx context.Context, image PreparedImage, data 
 	}
 	result, err := imageutil.Process(bytes.NewReader(data), imageutil.Options{
 		MaxWidth: s.cfg.PreviewMaxEdge, MaxHeight: s.cfg.PreviewMaxEdge,
-		Format: imageutil.FormatJPEG, JPEGQuality: 60, MinJPEGQuality: 40,
+		Format: imageutil.FormatWebP, WebPQuality: 60, MinWebPQuality: 40,
 	})
 	if err != nil {
 		return s.cfg.StaticPlaceholderKey, false, nil
 	}
-	key := fmt.Sprintf("moderation/previews/%s/%s.jpg", image.SHA256[:2], image.SHA256)
+	key := fmt.Sprintf("moderation/previews/%s/%s.webp", image.SHA256[:2], image.SHA256)
 	exists, err := s.store.ObjectExists(ctx, key)
 	if err != nil {
 		return "", false, fmt.Errorf("%w: %v", ErrImageUnavailable, err)

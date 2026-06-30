@@ -42,6 +42,9 @@ func TestModerationViewPublicProjectionNeverLeaksPendingBody(t *testing.T) {
 	assert.Empty(t, medium.VisibleContent)
 	assert.Equal(t, moderation.DisplayNone, medium.DisplayVersion)
 	assert.Nil(t, medium.PendingContent)
+	require.Len(t, medium.VisibleImages, 1)
+	assert.Equal(t, "system/moderation/gif-review.jpg", medium.VisibleImages[0].DisplayObjectKey)
+	assert.False(t, medium.VisibleImages[0].Approved)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -106,6 +109,30 @@ func TestModerationViewAuthorSeesPlaceholderPendingBodyAndImages(t *testing.T) {
 	require.Len(t, view.PendingImages, 1)
 	assert.Equal(t, "moments/new.jpg", view.PendingImages[0].DisplayObjectKey)
 	assert.True(t, view.PendingImages[0].Approved)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestModerationViewPublicSeesOriginalImagesWhenMaterializedMatchesApproved(t *testing.T) {
+	repository, mock := newRepository(t)
+	ref := moderation.SubjectRef{Type: moderation.SubjectMoment, ID: 52, RootID: 1}
+	mock.ExpectQuery("SELECT .* FROM `moderation_item`.*LEFT JOIN moderation_revision AS materialized.*LEFT JOIN moderation_revision AS pending").
+		WillReturnRows(moderationViewRows().
+			AddRow("moment", 52, 1, "active", "visible", 20, 20, nil, "啊哈哈，草拟马", nil, nil, nil, nil, nil, nil))
+	mock.ExpectQuery("SELECT .* FROM moderation_revision_image AS revision_image LEFT JOIN moderation_image AS image_record").
+		WillReturnRows(moderationViewImageRows().
+			AddRow(401, 20, 1, "moments/d759f0e4.jpg", "moderation/previews/d759f0e4.jpg", "pending", false))
+
+	got, err := repository.LoadModerationView(context.Background(), []moderation.SubjectRef{ref}, moderation.Viewer{
+		Role: moderation.ViewerPublic,
+	})
+
+	require.NoError(t, err)
+	view := got[ref.Key()]
+	assert.Equal(t, moderation.DisplayLastApproved, view.DisplayVersion)
+	assert.False(t, view.HasPendingRevision)
+	require.Len(t, view.VisibleImages, 1)
+	assert.Equal(t, "moments/d759f0e4.jpg", view.VisibleImages[0].DisplayObjectKey)
+	assert.True(t, view.VisibleImages[0].Approved)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

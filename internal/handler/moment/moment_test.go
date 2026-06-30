@@ -247,7 +247,7 @@ func TestMomentHandler_Save_UsesClaimsUserAndRoles(t *testing.T) {
 	assert.Equal(t, []byte("cat image"), stub.saveReq.ImageFiles[0].Data)
 }
 
-func TestMomentHandler_Save_RejectsImageOverOneMBBeforeService(t *testing.T) {
+func TestMomentHandler_Save_RejectsImageOverThreeMBBeforeService(t *testing.T) {
 	stub := &stubMomentService{saveResp: &dto.MomentItemResp{ID: 9}}
 	r := newMomentRouter(stub)
 	body := &bytes.Buffer{}
@@ -257,7 +257,7 @@ func TestMomentHandler_Save_RejectsImageOverOneMBBeforeService(t *testing.T) {
 	require.NoError(t, writer.WriteField("comment_status", "1"))
 	file, err := writer.CreateFormFile("images", "big.jpg")
 	require.NoError(t, err)
-	_, err = file.Write(bytes.Repeat([]byte{1}, 1024*1024+1))
+	_, err = file.Write(bytes.Repeat([]byte{1}, 3*1024*1024+1))
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 

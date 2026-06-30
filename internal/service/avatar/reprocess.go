@@ -23,7 +23,7 @@ func InspectStoredAvatar(data []byte) (compliant bool, blockedReason string) {
 	if err != nil {
 		return false, "无法解码为有效图片"
 	}
-	if !strings.EqualFold(format, "jpeg") {
+	if strings.EqualFold(format, "gif") {
 		return false, ""
 	}
 	if cfg.Width > defaultAvatarMaxSize || cfg.Height > defaultAvatarMaxSize {
@@ -61,7 +61,7 @@ func NormalizeFailureReason(err error) string {
 	case errors.Is(err, ErrAvatarCompressedTooLarge):
 		return "压缩后仍超过 20KB"
 	case errors.Is(err, ErrAvatarTooLarge):
-		return "原始文件超过 2MB"
+		return "原始文件超过 256KB"
 	default:
 		return err.Error()
 	}
@@ -117,7 +117,7 @@ func (s *Service) ReprocessData(ctx context.Context, data []byte) (SaveResult, e
 	if err := rejectGIFBytes(data); err != nil {
 		return SaveResult{}, err
 	}
-	return s.compressAndStore(ctx, data, false)
+	return s.compressAndStore(ctx, "avatar", data, false)
 }
 
 // ReprocessDataForNormalize 将原始头像字节压缩并写入对象存储（归一化专用，强制覆盖）。
@@ -133,5 +133,5 @@ func (s *Service) ReprocessStoredAvatar(ctx context.Context, data []byte, target
 	if len(data) == 0 {
 		return SaveResult{}, ErrAvatarInvalid
 	}
-	return s.compressAndStoreAt(ctx, data, targetKey)
+	return s.compressAndStoreAt(ctx, "avatar", data, targetKey)
 }

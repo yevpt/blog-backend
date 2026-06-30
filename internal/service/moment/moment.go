@@ -30,7 +30,7 @@ var (
 	// ErrMomentImageNotFound 表示传入的已有图片对象不存在。
 	ErrMomentImageNotFound = errors.New("碎语图片不存在")
 	// ErrMomentImageTooLarge 表示上传的原始图片超过允许大小。
-	ErrMomentImageTooLarge = errors.New("碎语图片不能超过 1MB")
+	ErrMomentImageTooLarge = errors.New("碎语图片不能超过 3MB")
 )
 
 // MomentService 碎语业务接口，负责查询、发布、删除、置顶、点赞和阅读计数。

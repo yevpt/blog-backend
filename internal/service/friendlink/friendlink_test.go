@@ -208,11 +208,11 @@ func TestFriendLinkService_Create_DefaultsStatusAndTrimsFields(t *testing.T) {
 	assert.Equal(t, "友站", repo.createGot.Name)
 	assert.Equal(t, "https://friend.example.com", repo.createGot.Site)
 	require.NotNil(t, repo.createGot.AvatarUrl)
-	assert.Regexp(t, `^avatar/link/[a-f0-9]{32}\.jpg$`, *repo.createGot.AvatarUrl)
+	assert.Regexp(t, `^avatar/link/[a-f0-9]{32}\.webp$`, *repo.createGot.AvatarUrl)
 	assert.Equal(t, uint8(1), repo.createGot.Status)
 	require.Len(t, store.puts, 1)
 	assert.Equal(t, *repo.createGot.AvatarUrl, store.puts[0].key)
-	assert.Equal(t, "image/jpeg", store.puts[0].contentType)
+	assert.Equal(t, "image/webp", store.puts[0].contentType)
 }
 
 func TestFriendLinkService_Update_AllowsClearingOptionalFields(t *testing.T) {
@@ -249,8 +249,10 @@ func TestFriendLinkService_Update_AllowsClearingOptionalFields(t *testing.T) {
 	assert.Equal(t, "新友站", *repo.updateData.Name)
 	assert.True(t, repo.updateData.UpdateAvatarUrl)
 	require.NotNil(t, repo.updateData.AvatarUrl)
-	assert.Regexp(t, `^avatar/link/[a-f0-9]{32}\.jpg$`, *repo.updateData.AvatarUrl)
+	assert.Regexp(t, `^avatar/link/[a-f0-9]{32}\.png$`, *repo.updateData.AvatarUrl)
 	assert.Equal(t, []string{oldAvatar}, store.deletes)
+	require.Len(t, store.puts, 1)
+	assert.Equal(t, "image/png", store.puts[0].contentType)
 }
 
 func TestFriendLinkService_Update_RejectsInvalidStatus(t *testing.T) {

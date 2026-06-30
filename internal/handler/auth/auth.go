@@ -105,7 +105,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 
 // Register 邮箱注册，验证码一次性消费，注册成功后签发 token 并返回登录态。
 // @Summary 邮箱注册
-// @Description 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 2MB，不支持 GIF）。注册成功返回与登录相同的双 token 与用户信息。
+// @Description 使用邮箱、密码和验证码创建用户；可选上传头像（JPG、PNG、WebP，原始最大 256KB，不支持 GIF）。注册成功返回与登录相同的双 token 与用户信息。
 // @Tags 认证
 // @Accept multipart/form-data
 // @Produce json

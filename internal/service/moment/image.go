@@ -1,7 +1,6 @@
 package moment
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
+	"github.com/vpt/blog-backend/pkg/imagefile"
 	"github.com/vpt/blog-backend/pkg/imageutil"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -24,7 +24,7 @@ const (
 	momentImageObjectPrefix   = "moments/"
 	momentModerationDir       = "moderation"
 	maxMomentImageCount       = 9
-	maxMomentImageOriginal    = 1024 * 1024
+	maxMomentImageOriginal    = 3 * 1024 * 1024
 	maxMomentGifOriginal      = 300 * 1024
 	maxMomentImageStoredBytes = 500 * 1024
 )
@@ -400,15 +400,14 @@ func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, 
 		return processedMomentImage{}, ErrMomentImageTooLarge
 	}
 
-	format := imageFormatFromFile(file)
-	opts := imageutil.Options{Format: format}
-	if len(file.Data) > maxMomentImageStoredBytes {
-		opts.Format = imageutil.FormatJPEG
-		opts.MaxBytes = maxMomentImageStoredBytes
-		opts.JPEGQuality = 85
-		opts.MinJPEGQuality = 35
+	stored, err := imagefile.PrepareForStorage(file.Name, file.Data, imagefile.PrepareOptions{
+		MaxStoredBytes: maxMomentImageStoredBytes,
+	})
+	if errors.Is(err, imagefile.ErrInvalidImage) {
+		return processedMomentImage{}, newMomentImageInvalidError(
+			"图片无法读取，请确认文件未损坏，并尝试换一张 " + momentImageReadableFormatsText,
+		)
 	}
-	result, err := imageutil.Process(bytes.NewReader(file.Data), opts)
 	if errors.Is(err, imageutil.ErrInvalidImage) {
 		return processedMomentImage{}, newMomentImageInvalidError(
 			"图片无法读取，请确认文件未损坏，并尝试换一张 " + momentImageReadableFormatsText,
@@ -427,24 +426,8 @@ func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, 
 	if err != nil {
 		return processedMomentImage{}, err
 	}
-	if len(result.Bytes) > maxMomentImageStoredBytes {
-		result, err = imageutil.Process(bytes.NewReader(file.Data), imageutil.Options{
-			Format:         imageutil.FormatJPEG,
-			MaxBytes:       maxMomentImageStoredBytes,
-			JPEGQuality:    85,
-			MinJPEGQuality: 35,
-		})
-		if errors.Is(err, imageutil.ErrImageTooLarge) {
-			return processedMomentImage{}, newMomentImageInvalidError(
-				"图片过大，压缩后仍超过 500KB，请换一张更小的图片",
-			)
-		}
-		if err != nil {
-			return processedMomentImage{}, err
-		}
-	}
 
-	return processedMomentImage{Data: result.Bytes, ContentType: result.ContentType, Ext: result.Ext}, nil
+	return processedMomentImage{Data: stored.Data, ContentType: stored.ContentType, Ext: stored.Ext}, nil
 }
 
 type momentImageInvalidError struct {
@@ -513,14 +496,6 @@ func fileExt(file dto.MomentImageFileReq) string {
 		return exts[0]
 	}
 	return ".img"
-}
-
-func imageFormatFromFile(file dto.MomentImageFileReq) imageutil.Format {
-	ext := strings.ToLower(strings.TrimPrefix(fileExt(file), "."))
-	if ext == "png" {
-		return imageutil.FormatPNG
-	}
-	return imageutil.FormatJPEG
 }
 
 func isMomentGifFile(file dto.MomentImageFileReq) bool {

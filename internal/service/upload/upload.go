@@ -1,10 +1,7 @@
 package upload
 
 import (
-	"bytes"
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -18,17 +15,20 @@ import (
 const MaxTempImageBytes = 10 * 1024 * 1024
 
 const (
-	MaxCommentTempImageBytes       = 1024 * 1024
-	MaxCommentTempGIFBytes         = 300 * 1024
-	MaxCommentTempImageStoredBytes = 500 * 1024
+	MaxCommentTempImageBytes        = 3 * 1024 * 1024
+	MaxCommentTempGIFBytes          = 300 * 1024
+	MaxCommentTempImageStoredBytes  = 500 * 1024
+	MaxArticleTempImageStoredBytes  = 3 * 1024 * 1024
 )
 
 var (
 	ErrUploadInvalid         = errors.New("上传图片无效")
 	ErrUploadTooLarge        = errors.New("图片不能超过 10MB")
-	ErrUploadCommentTooLarge = errors.New("图片不能超过 1MB")
-	ErrUploadCommentGIFLarge = errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
-	ErrUploadCompressedLarge = errors.New("图片过大，压缩后仍超过 500KB，请换一张更小的图片")
+	ErrUploadCommentTooLarge  = errors.New("图片不能超过 3MB")
+	ErrUploadCommentGIFLarge  = errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
+	ErrUploadCompressedLarge  = errors.New("图片过大，压缩后仍超过 500KB，请换一张更小的图片")
+	ErrUploadArticleGIFLarge  = errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
+	ErrUploadArticleStoredLarge = errors.New("图片过大，压缩后仍超过 3MB，请换一张更小的图片")
 	ErrUploadDirInvalid      = errors.New("上传目录无效")
 	ErrUploadSceneInvalid    = errors.New("上传场景无效")
 	ErrUploadUnavailable     = errors.New("对象存储不可用")
@@ -133,8 +133,20 @@ func (s *service) prepareArticleTempImage(input TempImageInput) (string, []byte,
 	if err != nil {
 		return "", nil, "", mapArticleValidateErr(err)
 	}
-	key := fmt.Sprintf("temp/articles/%d/%s/%s%s", input.UserID, dir, result.MD5, result.Ext)
-	return key, result.Data, result.ContentType, nil
+	if result.ContentType == "image/gif" {
+		if len(result.Data) > MaxCommentTempGIFBytes {
+			return "", nil, "", ErrUploadArticleGIFLarge
+		}
+		key := fmt.Sprintf("temp/articles/%d/%s/%s%s", input.UserID, dir, result.MD5, result.Ext)
+		return key, result.Data, result.ContentType, nil
+	}
+
+	processed, err := processArticleImage(input.Name, result.Data)
+	if err != nil {
+		return "", nil, "", err
+	}
+	key := fmt.Sprintf("temp/articles/%d/%s/%s%s", input.UserID, dir, processed.md5, processed.ext)
+	return key, processed.data, processed.contentType, nil
 }
 
 func (s *service) prepareCommentTempImage(input TempImageInput) (string, []byte, string, error) {
@@ -155,7 +167,7 @@ func (s *service) prepareCommentTempImage(input TempImageInput) (string, []byte,
 		return key, result.Data, result.ContentType, nil
 	}
 
-	processed, err := processCommentImage(input.Data, result.Ext)
+	processed, err := processCommentImage(input.Name, result.Data)
 	if err != nil {
 		return "", nil, "", err
 	}
@@ -170,43 +182,34 @@ type processedCommentImage struct {
 	md5         string
 }
 
-func processCommentImage(data []byte, ext string) (processedCommentImage, error) {
-	opts := imageutil.Options{Format: imageFormatFromExt(ext)}
-	if len(data) > MaxCommentTempImageStoredBytes {
-		opts.Format = imageutil.FormatJPEG
-		opts.MaxBytes = MaxCommentTempImageStoredBytes
-		opts.JPEGQuality = 85
-		opts.MinJPEGQuality = 35
-	}
-	result, err := imageutil.Process(bytes.NewReader(data), opts)
+func processCommentImage(name string, data []byte) (processedCommentImage, error) {
+	stored, err := imagefile.PrepareForStorage(name, data, imagefile.PrepareOptions{
+		MaxStoredBytes: MaxCommentTempImageStoredBytes,
+	})
 	if err != nil {
-		return processedCommentImage{}, mapImageProcessErr(err)
+		return processedCommentImage{}, mapCommentImageProcessErr(err)
 	}
-	if len(result.Bytes) > MaxCommentTempImageStoredBytes {
-		result, err = imageutil.Process(bytes.NewReader(data), imageutil.Options{
-			Format:         imageutil.FormatJPEG,
-			MaxBytes:       MaxCommentTempImageStoredBytes,
-			JPEGQuality:    85,
-			MinJPEGQuality: 35,
-		})
-		if err != nil {
-			return processedCommentImage{}, mapImageProcessErr(err)
-		}
-	}
-	sum := md5.Sum(result.Bytes)
 	return processedCommentImage{
-		data:        result.Bytes,
-		contentType: result.ContentType,
-		ext:         result.Ext,
-		md5:         hex.EncodeToString(sum[:]),
+		data:        stored.Data,
+		contentType: stored.ContentType,
+		ext:         stored.Ext,
+		md5:         stored.MD5,
 	}, nil
 }
 
-func imageFormatFromExt(ext string) imageutil.Format {
-	if strings.EqualFold(ext, ".png") {
-		return imageutil.FormatPNG
+func processArticleImage(name string, data []byte) (processedCommentImage, error) {
+	stored, err := imagefile.PrepareForStorage(name, data, imagefile.PrepareOptions{
+		MaxStoredBytes: MaxArticleTempImageStoredBytes,
+	})
+	if err != nil {
+		return processedCommentImage{}, mapArticleImageProcessErr(err)
 	}
-	return imageutil.FormatJPEG
+	return processedCommentImage{
+		data:        stored.Data,
+		contentType: stored.ContentType,
+		ext:         stored.Ext,
+		md5:         stored.MD5,
+	}, nil
 }
 
 func normalizeTempScene(value string) (string, error) {
@@ -278,12 +281,27 @@ func mapCommentValidateErr(err error) error {
 	}
 }
 
-func mapImageProcessErr(err error) error {
+func mapCommentImageProcessErr(err error) error {
 	switch {
-	case errors.Is(err, imageutil.ErrInvalidImage), errors.Is(err, imageutil.ErrUnsupportedFormat):
+	case errors.Is(err, imagefile.ErrInvalidImage),
+		errors.Is(err, imageutil.ErrInvalidImage),
+		errors.Is(err, imageutil.ErrUnsupportedFormat):
 		return ErrUploadInvalid
 	case errors.Is(err, imageutil.ErrImageTooLarge):
 		return ErrUploadCompressedLarge
+	default:
+		return err
+	}
+}
+
+func mapArticleImageProcessErr(err error) error {
+	switch {
+	case errors.Is(err, imagefile.ErrInvalidImage),
+		errors.Is(err, imageutil.ErrInvalidImage),
+		errors.Is(err, imageutil.ErrUnsupportedFormat):
+		return ErrUploadInvalid
+	case errors.Is(err, imageutil.ErrImageTooLarge):
+		return ErrUploadArticleStoredLarge
 	default:
 		return err
 	}
