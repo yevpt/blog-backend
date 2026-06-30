@@ -36,7 +36,7 @@ func TestIsCompliantAvatarData_AcceptsSmallWebP(t *testing.T) {
 }
 
 func TestIsCompliantAvatarData_RejectsOversizedDimensions(t *testing.T) {
-	data := testWebPBytes(t, 200, 120, 80)
+	data := testWebPBytes(t, 300, 200, 80)
 
 	ok, err := avatarservice.IsCompliantAvatarData(data)
 
@@ -74,7 +74,7 @@ func TestService_ReprocessData_CompressesToWebP(t *testing.T) {
 	store := &fakeObjectStore{}
 	svc := avatarservice.NewService(store, avatarservice.Options{Timeout: 2 * time.Second})
 
-	result, err := svc.ReprocessData(context.Background(), testPNGBytes(t, 240, 200))
+	result, err := svc.ReprocessData(context.Background(), testPNGBytes(t, 400, 300))
 
 	require.NoError(t, err)
 	assert.Contains(t, result.ObjectKey, "avatar/user/")
@@ -89,7 +89,7 @@ func TestService_ReprocessStoredAvatar_OverwritesTargetKey(t *testing.T) {
 	svc := avatarservice.NewService(store, avatarservice.Options{Timeout: 2 * time.Second})
 
 	target := "avatar/user/legacy.png"
-	result, err := svc.ReprocessStoredAvatar(context.Background(), testPNGBytes(t, 240, 200), target)
+	result, err := svc.ReprocessStoredAvatar(context.Background(), testPNGBytes(t, 400, 300), target)
 
 	require.NoError(t, err)
 	assert.Equal(t, "avatar/user/legacy.webp", result.ObjectKey)
@@ -116,12 +116,12 @@ func TestService_ReprocessDataForNormalize_AlwaysUploads(t *testing.T) {
 	store := &fakeObjectStore{exists: true}
 	svc := avatarservice.NewService(store, avatarservice.Options{Timeout: 2 * time.Second})
 
-	_, err := svc.ReprocessData(context.Background(), testPNGBytes(t, 240, 200))
+	_, err := svc.ReprocessData(context.Background(), testPNGBytes(t, 400, 300))
 	require.NoError(t, err)
 	assert.False(t, store.putCalled, "普通重处理应复用已存在对象")
 
 	store.putCalled = false
-	result, err := svc.ReprocessDataForNormalize(context.Background(), testPNGBytes(t, 240, 200))
+	result, err := svc.ReprocessDataForNormalize(context.Background(), testPNGBytes(t, 400, 300))
 	require.NoError(t, err)
 	assert.True(t, store.putCalled, "归一化应始终上传")
 	assert.Contains(t, result.ObjectKey, "avatar/user/")

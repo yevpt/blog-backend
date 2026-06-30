@@ -88,7 +88,7 @@ func (h *UserAdminHandler) RevokeVip(c *gin.Context) {
 
 // NormalizeAvatars 检查并重压缩不符合规范的老用户头像。
 // @Summary 归一化老用户头像
-// @Description 管理员检查本站托管头像是否超出 120px / 20KB 规范；已合规的 JPG/PNG/WebP 原样保留，超出则压缩为 WebP 替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true 时无法处理的头像会被清空。
+// @Description 管理员检查本站托管头像是否超出 240px / 20KB 规范；已合规的 JPG/PNG/WebP 原样保留，超出则压缩为 WebP 替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true 时无法处理的头像会被清空。
 // @Tags 用户管理
 // @Accept json
 // @Produce json

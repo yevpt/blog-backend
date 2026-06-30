@@ -14,7 +14,7 @@ import (
 
 // UploadAvatar 上传并更换当前用户头像。
 // @Summary 更换当前用户头像
-// @Description 登录用户上传头像图片，服务端校验后入库：最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP 并更新 avatar_url；不支持 GIF，原始文件最大 256KB。
+// @Description 登录用户上传头像图片，服务端校验后入库：最长边 ≤240px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP 并更新 avatar_url；不支持 GIF，原始文件最大 256KB。
 // @Tags 用户
 // @Accept multipart/form-data
 // @Produce json

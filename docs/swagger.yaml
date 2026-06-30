@@ -5025,7 +5025,7 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: 管理员新增友情链接；必须随表单上传 logo 文件，服务端校验后入库（最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP
+      description: 管理员新增友情链接；必须随表单上传 logo 文件，服务端校验后入库（最长边 ≤240px、体积 ≤20KB；已合规的 JPG/PNG/WebP
         原样保留，超出时压缩为 WebP）并写入 avatar_url，对象 key 为 avatar/link/{md5}.{ext}。
       parameters:
       - description: 网站名称
@@ -5138,7 +5138,7 @@ paths:
     put:
       consumes:
       - multipart/form-data
-      description: 管理员修改友情链接；logo 可选，上传时按入库规范处理（最长边 ≤120px、体积 ≤20KB；已合规原样保留，超出压缩为
+      description: 管理员修改友情链接；logo 可选，上传时按入库规范处理（最长边 ≤240px、体积 ≤20KB；已合规原样保留，超出压缩为
         WebP）并替换 avatar_url，对象 key 为 avatar/link/{md5}.{ext}；未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。
       parameters:
       - description: 友情链接 ID
@@ -7855,7 +7855,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: 管理员检查本站托管头像是否超出 120px / 20KB 规范；已合规的 JPG/PNG/WebP 原样保留，超出则压缩为 WebP
+      description: 管理员检查本站托管头像是否超出 240px / 20KB 规范；已合规的 JPG/PNG/WebP 原样保留，超出则压缩为 WebP
         替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true
         时无法处理的头像会被清空。
       parameters:
@@ -11252,7 +11252,7 @@ paths:
     post:
       consumes:
       - multipart/form-data
-      description: 登录用户上传头像图片，服务端校验后入库：最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为
+      description: 登录用户上传头像图片，服务端校验后入库：最长边 ≤240px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为
         WebP 并更新 avatar_url；不支持 GIF，原始文件最大 256KB。
       parameters:
       - description: 头像图片（JPG、PNG、WebP）

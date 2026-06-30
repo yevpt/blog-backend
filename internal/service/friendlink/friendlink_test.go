@@ -201,7 +201,7 @@ func TestFriendLinkService_Create_DefaultsStatusAndTrimsFields(t *testing.T) {
 		Name: "  友站  ",
 		Site: " https://friend.example.com ",
 		Seq:  &seq,
-		Logo: &dto.UploadedImageFile{Name: "logo.png", Data: friendLinkPNG(t, 240, 200)},
+		Logo: &dto.UploadedImageFile{Name: "logo.png", Data: friendLinkPNG(t, 400, 300)},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, uint(9), resp.ID)

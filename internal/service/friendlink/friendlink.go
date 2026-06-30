@@ -25,7 +25,7 @@ const (
 	friendLinkMaxPageSize              = 50
 	MaxFriendLinkLogoBytes             = 256 * 1024
 	maxFriendLinkLogoStoredBytes       = 20 * 1024
-	maxFriendLinkLogoSize              = 120
+	maxFriendLinkLogoSize              = 240
 	friendLinkLogoObjectPrefix         = "avatar/link"
 )
 

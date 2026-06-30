@@ -35,7 +35,7 @@ const (
 	defaultTimeout           = 2 * time.Second
 	defaultDownloadMaxBytes  = MaxRawAvatarBytes
 	defaultAvatarMaxBytes    = 20 * 1024
-	defaultAvatarMaxSize     = 120
+	defaultAvatarMaxSize     = 240
 	defaultAvatarWebPQuality = 85
 	defaultAvatarMinQuality  = 35
 	avatarObjectPrefix       = "avatar/user"

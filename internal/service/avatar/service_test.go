@@ -78,7 +78,7 @@ func (s *fakeObjectStore) DeleteObject(ctx context.Context, objectName string) e
 func TestService_SaveRemoteAvatar_CompressesAndUploads(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
-		_, _ = w.Write(testPNG(t, 240, 200))
+		_, _ = w.Write(testPNG(t, 400, 300))
 	}))
 	t.Cleanup(server.Close)
 
@@ -180,7 +180,7 @@ func TestService_SaveUploadedAvatar_CompressesAndUploads(t *testing.T) {
 	store := &fakeObjectStore{}
 	svc := avatarservice.NewService(store, avatarservice.Options{})
 
-	objectName, err := svc.SaveUploadedAvatar(context.Background(), "avatar.png", testPNG(t, 240, 200))
+	objectName, err := svc.SaveUploadedAvatar(context.Background(), "avatar.png", testPNG(t, 400, 300))
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, objectName.ObjectKey)

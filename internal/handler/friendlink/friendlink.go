@@ -85,7 +85,7 @@ func (h *FriendLinkHandler) ListAdmin(c *gin.Context) {
 
 // Create 新增友情链接。
 // @Summary 新增友情链接
-// @Description 管理员新增友情链接；必须随表单上传 logo 文件，服务端校验后入库（最长边 ≤120px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP）并写入 avatar_url，对象 key 为 avatar/link/{md5}.{ext}。
+// @Description 管理员新增友情链接；必须随表单上传 logo 文件，服务端校验后入库（最长边 ≤240px、体积 ≤20KB；已合规的 JPG/PNG/WebP 原样保留，超出时压缩为 WebP）并写入 avatar_url，对象 key 为 avatar/link/{md5}.{ext}。
 // @Tags 友情链接
 // @Accept multipart/form-data
 // @Produce json
@@ -114,7 +114,7 @@ func (h *FriendLinkHandler) Create(c *gin.Context) {
 
 // Update 修改友情链接。
 // @Summary 修改友情链接
-// @Description 管理员修改友情链接；logo 可选，上传时按入库规范处理（最长边 ≤120px、体积 ≤20KB；已合规原样保留，超出压缩为 WebP）并替换 avatar_url，对象 key 为 avatar/link/{md5}.{ext}；未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。
+// @Description 管理员修改友情链接；logo 可选，上传时按入库规范处理（最长边 ≤240px、体积 ≤20KB；已合规原样保留，超出压缩为 WebP）并替换 avatar_url，对象 key 为 avatar/link/{md5}.{ext}；未传 logo 时保留原头像；未传文本字段保持原值，可选字符串传空字符串表示清空。
 // @Tags 友情链接
 // @Accept multipart/form-data
 // @Produce json
