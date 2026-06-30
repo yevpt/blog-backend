@@ -42,6 +42,20 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
+// ApplyPublishedImageKeys mocks base method.
+func (m *MockRepository) ApplyPublishedImageKeys(ctx context.Context, cmd moderation.PublishedImageCommand) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ApplyPublishedImageKeys", ctx, cmd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ApplyPublishedImageKeys indicates an expected call of ApplyPublishedImageKeys.
+func (mr *MockRepositoryMockRecorder) ApplyPublishedImageKeys(ctx, cmd any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyPublishedImageKeys", reflect.TypeOf((*MockRepository)(nil).ApplyPublishedImageKeys), ctx, cmd)
+}
+
 // ApplyTransition mocks base method.
 func (m *MockRepository) ApplyTransition(ctx context.Context, cmd moderation.ApplyTransitionCommand) (moderation.AppliedTransition, error) {
 	m.ctrl.T.Helper()

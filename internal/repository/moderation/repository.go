@@ -34,6 +34,7 @@ type Repository interface {
 	UpsertPendingImage(ctx context.Context, image PendingImage) error
 	LoadRevisionImages(ctx context.Context, revisionID uint64) ([]RevisionImageRecord, error)
 	LoadRevisionPreviewKeys(ctx context.Context, revisionID uint64) ([]string, error)
+	ApplyPublishedImageKeys(ctx context.Context, cmd PublishedImageCommand) error
 }
 
 type repository struct {

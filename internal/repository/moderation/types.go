@@ -627,3 +627,25 @@ const (
 	DisplayLastApproved DisplayVersion = "last_approved"
 	DisplayNone         DisplayVersion = "none"
 )
+
+// PublishedImageKey 是正式化后单张图片的新对象 key。
+type PublishedImageKey struct {
+	Seq       uint
+	ObjectKey string
+}
+
+// AuditImageMove 是被删除公开图片转存私有审计路径的 key 变更。
+type AuditImageMove struct {
+	OldObjectKey string
+	NewObjectKey string
+}
+
+// PublishedImageCommand 描述一次审核通过图片正式化的数据库原子更新。
+type PublishedImageCommand struct {
+	ItemID     uint64
+	RevisionID uint64
+	MomentID   uint64
+	AuthorID   uint64
+	ImageKeys  []PublishedImageKey
+	AuditMoves []AuditImageMove
+}
