@@ -7,6 +7,7 @@ import (
 	"github.com/vpt/blog-backend/internal/repository/moderationrule"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
+	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
 	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -14,31 +15,70 @@ import (
 	"gorm.io/gorm"
 )
 
-// maybeNewModerationService 在审核开启时加载规则并构造运行时；关闭时返回 nil。
-func maybeNewModerationService(ctx context.Context, db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) (moderationservice.Service, error) {
+// moderationRuntime 收集审核开启时由路由层构造的共享实例。
+type moderationRuntime struct {
+	service    moderationservice.Service
+	ruleSvc    rulemod.Service
+	ruleWorker rulemod.Worker
+}
+
+// maybeNewModerationService 在审核开启时加载规则并构造运行时；关闭时返回空值。
+func maybeNewModerationService(ctx context.Context, db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) (moderationRuntime, error) {
 	if !cfg.Enabled {
 		logger.Warn("content moderation is disabled; UGC writes use legacy business paths")
-		return nil, nil
+		return moderationRuntime{}, nil
 	}
 	return newModerationService(ctx, db, cfg, logger, store)
 }
 
 // newModerationService 在任何普通内容写服务构造前完成规则加载，初始化失败时由启动层终止服务。
-func newModerationService(ctx context.Context, db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) (moderationservice.Service, error) {
+// 关键约束：分类器实例同时注入核心审核服务和规则管理服务，保证发布时原子替换同一快照。
+func newModerationService(ctx context.Context, db *gorm.DB, cfg config.ModerationConfig, logger *zap.Logger, store storage.ObjectStore) (moderationRuntime, error) {
 	repo := moderationrepo.NewRepository(db)
-	snapshotRepo := moderationrule.NewRepository(db)
-	classifier, err := moderationservice.NewClassifierFromRepository(ctx, snapshotRepo, moderationRuleIndexLimits(cfg.Rules), logger)
+	ruleRepo := moderationrule.NewRepository(db)
+	classifier, err := moderationservice.NewClassifierFromRepository(ctx, ruleRepo, moderationRuleIndexLimits(cfg.Rules), logger)
 	if err != nil {
-		return nil, err
+		return moderationRuntime{}, err
 	}
+
+	// 构造规则管理服务，与核心审核共享同一分类器。
+	streamStore, _ := store.(storage.ObjectStreamStore)
+	ruleSvc := rulemod.NewManager(
+		ruleRepo,
+		streamStore,
+		classifier,
+		ruleManagerConfig(cfg.Rules),
+		logger,
+	)
+
 	var media moderationservice.MediaService
 	if readable, ok := store.(storage.ReadableObjectStore); ok {
 		media = moderationmedia.NewService(readable, repo, cfg.Image, nil)
 	}
-	return moderationservice.NewService(
+	svc := moderationservice.NewService(
 		repo, moderationservice.NewContentProcessor(), classifier,
 		moderationservice.NewPolicyDecider(), media, cfg, logger, nil,
-	), nil
+	)
+
+	return moderationRuntime{
+		service:    svc,
+		ruleSvc:    ruleSvc,
+		ruleWorker: rulemod.NewWorker(ruleSvc),
+	}, nil
+}
+
+func ruleManagerConfig(cfg config.ModerationRulesConfig) rulemod.ManagerConfig {
+	return rulemod.ManagerConfig{
+		MaxPatternChars:      cfg.MaxPatternChars,
+		MaxKeywordRules:      cfg.MaxKeywordRules,
+		MaxEnabledRegexRules: cfg.MaxEnabledRegexRules,
+		MaxImportRows:        cfg.MaxImportRows,
+		MaxRuleMatches:       cfg.MaxRuleMatchesPerContent,
+		MaxIndexMemoryMB:     cfg.MaxIndexMemoryMB,
+		MaxBuildPeakMemoryMB: cfg.MaxBuildPeakMemoryMB,
+		IndexBuildTimeout:    cfg.IndexBuildTimeout,
+		CandidateCacheTTL:    cfg.CandidateCacheTTL,
+	}
 }
 
 func moderationRuleIndexLimits(cfg config.ModerationRulesConfig) ruleindex.Limits {

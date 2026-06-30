@@ -57,6 +57,7 @@ import (
 	musicservice "github.com/vpt/blog-backend/internal/service/music"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	oauthservice "github.com/vpt/blog-backend/internal/service/oauth"
+	moderationruleworker "github.com/vpt/blog-backend/internal/service/moderationrule"
 	tagservice "github.com/vpt/blog-backend/internal/service/tag"
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
@@ -97,9 +98,11 @@ type routeHandlers struct {
 	analyticsAdmin      *analyticshandler.AdminHandler
 	analyticsPublic     *analyticshandler.PublicHandler
 	analyticsRuntime    AnalyticsRuntime
+	moderationRuleWorker moderationruleworker.Worker
 	dashboard           *dashboardhandler.Handler
 	userCache           userservice.UserCacheService
 	moderationRateLimit config.ModerationRateLimitConfig
+	runtime             Runtime
 }
 
 // AnalyticsRuntime 暴露统计上报链路中需要被 worker 复用的实例。
@@ -111,8 +114,14 @@ type AnalyticsRuntime struct {
 	TZ       *time.Location
 }
 
+// Runtime 是 router.Setup 返回的复合运行时，供 main 启动后台 worker。
+type Runtime struct {
+	Analytics       AnalyticsRuntime
+	ModerationRules moderationruleworker.Worker
+}
+
 // Setup 注册所有路由，是整个项目路由的唯一入口。
-// 返回 AnalyticsRuntime，供 main 启动唯一的聚合/落库 worker。
+// 返回 Runtime，供 main 启动统计聚合 worker 和规则构建 worker。
 func Setup(
 	r *gin.Engine,
 	log *zap.Logger,
@@ -122,7 +131,7 @@ func Setup(
 	mailer email.MailSender,
 	objectStore storage.ObjectStore,
 	cfg *config.Config,
-) AnalyticsRuntime {
+) Runtime {
 	// 配置信任代理，确保反向代理链路下能拿到真实客户端 IP。
 	configureTrustedProxies(r)
 
@@ -143,7 +152,7 @@ func Setup(
 	registerVIPRoutes(r, handlers, jwtManager)
 	registerAdminRoutes(r, handlers, jwtManager, redisClient)
 
-	return handlers.analyticsRuntime
+	return handlers.runtime
 }
 
 func configureTrustedProxies(r *gin.Engine) {
@@ -264,10 +273,11 @@ func newRouteHandlers(
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	friendLinkSvc := friendlinkservice.NewFriendLinkService(friendLinkRepo, objectStore)
 
-	moderationSvc, moderationErr := maybeNewModerationService(context.Background(), db, cfg.Moderation, log, objectStore)
+	moderationRuntime, moderationErr := maybeNewModerationService(context.Background(), db, cfg.Moderation, log, objectStore)
 	if moderationErr != nil {
 		panic(moderationErr)
 	}
+	moderationSvc := moderationRuntime.service
 	moderationReviewSvc := maybeNewModerationReviewService(db, cfg.Moderation, log, objectStore)
 	moderationOperationsSvc := maybeNewModerationOperationsService(db, cfg.Moderation, moderationGovernanceSvc)
 	commentRepo := commentrepo.NewCommentRepository(db)
@@ -300,7 +310,7 @@ func newRouteHandlers(
 		comment:             commenthandler.NewCommentHandler(commentSvc, cfg.Moderation.Enabled),
 		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc, cfg.Moderation.Enabled),
 		moment:              momenthandler.NewMomentHandler(momentSvc, cfg.Moderation.Enabled),
-		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, moderationOperationsSvc),
+		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, moderationRuntime.ruleSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
@@ -317,6 +327,10 @@ func newRouteHandlers(
 		dashboard:           dashboardHandler,
 		userCache:           userCacheSvc,
 		moderationRateLimit: cfg.Moderation.RateLimit,
+		runtime: Runtime{
+			Analytics:       analyticsRuntime,
+			ModerationRules: moderationRuntime.ruleWorker,
+		},
 	}
 }
 
@@ -600,6 +614,23 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 			admin.POST("/moderation/items/:id/restore", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.RestoreItem)
 			admin.POST("/moderation/users/:id/hide-content", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.HideUserContent)
 			admin.POST("/moderation/users/:id/restore-content", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.RestoreUserContent)
+		}
+		if handlers.moderationAdmin.RulesEnabled() {
+			admin.GET("/moderation/rules", handlers.moderationAdmin.ListRules)
+			admin.POST("/moderation/rules", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.CreateRule)
+			admin.PATCH("/moderation/rules/:id", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.ReplaceRule)
+			admin.POST("/moderation/rules/batch-status", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.BatchStatus)
+			admin.POST("/moderation/rules/test", handlers.moderationAdmin.TestRuleText)
+			admin.GET("/moderation/rules/export", handlers.moderationAdmin.ExportRules)
+			admin.GET("/moderation/rules/status", handlers.moderationAdmin.GetRuleStatus)
+			admin.GET("/moderation/rules/metadata", handlers.moderationAdmin.GetRuleMetadata)
+			admin.GET("/moderation/rule-imports/template", handlers.moderationAdmin.DownloadTemplate)
+			admin.POST("/moderation/rule-imports", middleware.RateLimitTempUpload(redisClient), handlers.moderationAdmin.CreateImport)
+			admin.GET("/moderation/rule-imports", handlers.moderationAdmin.ListImports)
+			admin.GET("/moderation/rule-imports/:id", handlers.moderationAdmin.GetImport)
+			admin.GET("/moderation/rule-imports/:id/errors", handlers.moderationAdmin.DownloadImportErrors)
+			admin.POST("/moderation/rule-imports/:id/publish", middleware.RateLimitNormal(redisClient), handlers.moderationAdmin.PublishImport)
+			admin.DELETE("/moderation/rule-imports/:id", handlers.moderationAdmin.CancelImport)
 		}
 	}
 	admin.POST("/users/:id/roles/vip", handlers.userAdmin.GrantVip)

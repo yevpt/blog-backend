@@ -41,8 +41,8 @@ func main() {
 	r := bootstrap.InitGin(cfg)
 
 	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
-	// 返回统计运行时（含唯一 ingestor），供 worker 复用以保证生产/消费同一实例。
-	analyticsRuntime := router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg)
+	// 返回复合运行时（含统计 ingestor 和规则构建 worker），供 main 启动后台任务。
+	runtime := router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg)
 
 	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
 	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, zapLogger)
@@ -52,8 +52,14 @@ func main() {
 
 	// 启动统计后台 worker：唯一事件落库消费 + 日聚合/清理调度，与 collect handler 共享同一 ingestor。
 	bootstrap.StartAnalyticsWorker(context.Background(), redisClient, zapLogger,
-		analyticsRuntime.Ingestor, analyticsRuntime.Repo, analyticsRuntime.TZ,
+		runtime.Analytics.Ingestor, runtime.Analytics.Repo, runtime.Analytics.TZ,
 		cfg.Analytics.RetentionDays, cfg.Analytics.OnlineWindow)
+
+	// 启动规则构建 worker：串行处理候选索引构建和导入校验，与核心审核共享同一分类器。
+	if runtime.ModerationRules != nil {
+		go runtime.ModerationRules.Run(context.Background())
+		zapLogger.Info("审核规则构建 worker 启动")
+	}
 
 	// 启动服务：监听配置端口，启动失败时终止进程。
 	bootstrap.MustRunHTTP(r, cfg, zapLogger)

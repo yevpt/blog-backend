@@ -259,7 +259,7 @@ func TestRegisterAdminRoutesRegistersModerationReviewRoutes(t *testing.T) {
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
 	registerAdminRoutes(r, routeHandlers{
-		moderationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}, moderationOperationsStub{}),
+		moderationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}, nil, moderationOperationsStub{}),
 	}, jwtManager, nil)
 
 	want := map[string]string{
