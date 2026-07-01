@@ -3,6 +3,7 @@ package moderationemail
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	moderationemailrepo "github.com/vpt/blog-backend/internal/repository/moderationemail"
@@ -24,8 +25,9 @@ type Directory interface {
 
 // Config 定义审核邮件规划的接收人和最小发送间隔。
 type Config struct {
-	RecipientUserID uint
-	MinInterval     time.Duration
+	RecipientUserID        uint
+	MinInterval            time.Duration
+	RecipientRetryInterval time.Duration
 }
 
 // Planner 按聚合窗口与冷却间隔创建审核邮件批次。
@@ -34,6 +36,8 @@ type Planner struct {
 	directory Directory
 	cfg       Config
 	now       func() time.Time
+	mu        sync.Mutex
+	retryAt   time.Time
 }
 
 // NewPlanner 创建使用注入时钟的审核邮件规划器。

@@ -29,6 +29,7 @@ func TestRenderEscapesSubmittedHTMLAndKeepsUnicodeExcerptValid(t *testing.T) {
 	assert.Contains(t, rendered.HTML, "共 2 条待审核内容")
 	assert.Contains(t, rendered.HTML, "碎语")
 	assert.Contains(t, rendered.HTML, "文章评论")
+	assert.Contains(t, rendered.HTML, "作者 #301")
 	assert.Contains(t, rendered.HTML, "https://blog.example.com/base/admin/moderation")
 	assert.NotContains(t, rendered.HTML, `<img src=x`)
 	assert.NotContains(t, rendered.HTML, "<script>")

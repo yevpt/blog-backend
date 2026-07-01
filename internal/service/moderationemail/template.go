@@ -21,7 +21,7 @@ const (
 <p>共 {{.TotalCount}} 条待审核内容。</p>
 {{if .AdminURL}}<p><a href="{{.AdminURL}}">打开审核后台</a></p>{{else}}<p>请登录后台进入审核列表处理。</p>{{end}}
 <table>
-{{range .Rows}}<tr><td>{{.TypeLabel}}</td><td>#{{.ItemID}}</td><td>{{.Excerpt}}</td><td>{{.CreatedAt}}</td></tr>
+{{range .Rows}}<tr><td>{{.TypeLabel}}</td><td>#{{.ItemID}}</td><td>作者 #{{.AuthorID}}</td><td>{{.Excerpt}}</td><td>{{.CreatedAt}}</td></tr>
 {{end}}</table>
 {{if gt .OverflowCount 0}}<p>另有 {{.OverflowCount}} 条未展示，请进入审核后台查看全部。</p>{{end}}
 </body>
@@ -46,6 +46,7 @@ type reviewEmailData struct {
 type reviewEmailRow struct {
 	TypeLabel string
 	ItemID    uint64
+	AuthorID  uint64
 	Excerpt   string
 	CreatedAt string
 }
@@ -84,6 +85,7 @@ func renderRows(tasks []moderationemailrepo.PendingTask) []reviewEmailRow {
 		rows = append(rows, reviewEmailRow{
 			TypeLabel: typeLabel(task.ContentType),
 			ItemID:    task.ItemID,
+			AuthorID:  task.AuthorID,
 			Excerpt:   excerpt(task.SubmittedContent, maxExcerptRunes),
 			CreatedAt: formatTime(task.CreatedAt),
 		})

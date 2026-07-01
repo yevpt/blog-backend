@@ -9,6 +9,9 @@ import (
 // workerID 预留给统一 worker 接口；并发正确性由 CreateBatch 的事务锁与状态复查保证。
 func (p *Planner) PlanOnce(ctx context.Context, workerID string, limit int) (int, error) {
 	now := p.now()
+	if p.recipientRetryWaiting(now) {
+		return 0, nil
+	}
 
 	// 先清理已不再待审的任务，避免陈旧任务参与后续规划。
 	if err := p.repo.SkipStaleTasks(ctx, limit, now); err != nil {
@@ -39,11 +42,34 @@ func (p *Planner) PlanOnce(ctx context.Context, workerID string, limit int) (int
 	// 创建批次前加载最新的合格管理员邮箱快照。
 	recipient, err := p.directory.LoadAdminRecipient(ctx, p.cfg.RecipientUserID)
 	if err != nil {
+		p.deferRecipientRetry(now)
 		return 0, err
 	}
 
 	// 仓储事务会重新锁定并复查当前待审任务，预检查仅用于减少无效事务。
 	return p.repo.CreateBatch(ctx, recipient, limit, now)
+}
+
+func (p *Planner) recipientRetryWaiting(now time.Time) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return now.Before(p.retryAt)
+}
+
+func (p *Planner) deferRecipientRetry(now time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.retryAt = now.Add(p.recipientRetryInterval())
+}
+
+func (p *Planner) recipientRetryInterval() time.Duration {
+	if p.cfg.RecipientRetryInterval > 0 {
+		return p.cfg.RecipientRetryInterval
+	}
+	if p.cfg.MinInterval > 0 {
+		return p.cfg.MinInterval
+	}
+	return 30 * time.Minute
 }
 
 func nextDue(availableAt time.Time, lastSent *time.Time, minInterval time.Duration) time.Time {

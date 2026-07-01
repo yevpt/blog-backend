@@ -176,8 +176,8 @@ func TestMarkBatchSentUpdatesBatchAndTasksAtomically(t *testing.T) {
 func TestLoadBatchTasksIsBoundedAndOrdered(t *testing.T) {
 	repo, mock := newRepository(t)
 	createdAt := time.Date(2026, 7, 1, 9, 0, 0, 0, time.UTC)
-	mock.ExpectQuery("SELECT task.id,task.revision_id,task.item_id,item.content_type,item.author_id,revision.submitted_content,task.available_at,task.created_at FROM moderation_review_email_task AS task .* WHERE task.batch_id = \\? AND task.status = \\? ORDER BY task.created_at,task.id LIMIT \\?").
-		WithArgs(uint64(9), "batched", 50).
+	mock.ExpectQuery("SELECT task.id,task.revision_id,task.item_id,item.content_type,item.author_id,revision.submitted_content,task.available_at,task.created_at FROM moderation_review_email_task AS task .* WHERE \\(task.batch_id = \\? AND task.status = \\?\\) AND \\(revision.review_status = \\? AND item.pending_revision_id = task.revision_id\\) ORDER BY task.created_at,task.id LIMIT \\?").
+		WithArgs(uint64(9), "batched", "pending", 50).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "revision_id", "item_id", "content_type", "author_id", "submitted_content", "available_at", "created_at"}).
 			AddRow(3, 4, 5, "moment", 6, "正文", createdAt, createdAt))
 
@@ -186,6 +186,24 @@ func TestLoadBatchTasksIsBoundedAndOrdered(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, tasks, 1)
 	assert.Equal(t, uint64(3), tasks[0].ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMarkBatchSkippedClosesBatchWithoutSentTimestamp(t *testing.T) {
+	repo, mock := newRepository(t)
+	now := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE `moderation_review_email_batch` SET .* WHERE id = \\? AND status = \\?").
+		WithArgs("no current pending review email tasks", nil, nil, "message-9", "failed", now, uint64(9), "sending").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE `moderation_review_email_task` SET .* WHERE batch_id = \\? AND status = \\?").
+		WithArgs("skipped", now, uint64(9), "batched").
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+
+	err := repo.MarkBatchSkipped(context.Background(), 9, "message-9", "no current pending review email tasks", now)
+
+	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

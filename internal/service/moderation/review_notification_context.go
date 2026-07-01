@@ -10,10 +10,11 @@ import (
 func (s *reviewService) loadReviewNotificationContext(
 	ctx context.Context,
 	record moderationrepo.ReviewRecord,
-) moderationrepo.ReviewNotificationContext {
+	requiredInteraction bool,
+) (moderationrepo.ReviewNotificationContext, error) {
 	fallback := moderationrepo.ReviewNotificationContext{ContentType: record.Subject.Type}
 	if s.repo == nil {
-		return fallback
+		return fallback, nil
 	}
 	subject, err := s.repo.LoadSubject(ctx, record.Subject)
 	if err != nil {
@@ -22,7 +23,10 @@ func (s *reviewService) loadReviewNotificationContext(
 			zap.Uint64("content_id", record.Subject.ID),
 			zap.Error(err),
 		)
-		return fallback
+		if requiredInteraction {
+			return moderationrepo.ReviewNotificationContext{}, err
+		}
+		return fallback, nil
 	}
 	notifCtx, err := s.repo.LoadReviewNotificationContext(ctx, subject.Ref)
 	if err != nil {
@@ -31,12 +35,15 @@ func (s *reviewService) loadReviewNotificationContext(
 			zap.Uint64("content_id", subject.Ref.ID),
 			zap.Error(err),
 		)
-		return moderationrepo.ReviewNotificationContext{ContentType: subject.Ref.Type}
+		if requiredInteraction {
+			return moderationrepo.ReviewNotificationContext{}, err
+		}
+		return moderationrepo.ReviewNotificationContext{ContentType: subject.Ref.Type}, nil
 	}
 	if notifCtx.ContentType == "" {
 		notifCtx.ContentType = subject.Ref.Type
 	}
-	return notifCtx
+	return notifCtx, nil
 }
 
 func interactionNotification(

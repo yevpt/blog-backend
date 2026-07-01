@@ -43,6 +43,7 @@ type Repository interface {
 	LoadBatchTasks(ctx context.Context, batchID uint64, limit int) ([]PendingTask, error)
 	PersistBatchMessageID(ctx context.Context, batchID uint64, messageID string, now time.Time) error
 	MarkBatchSent(ctx context.Context, batchID uint64, messageID string, now time.Time) error
+	MarkBatchSkipped(ctx context.Context, batchID uint64, messageID string, lastErr string, now time.Time) error
 	MarkBatchRetry(ctx context.Context, batchID uint64, messageID string, nextAttemptAt time.Time, lastErr string, now time.Time) error
 }
 

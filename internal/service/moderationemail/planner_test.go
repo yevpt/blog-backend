@@ -179,7 +179,7 @@ func TestPlannerOpenBatchBlocksPlanning(t *testing.T) {
 	assert.Zero(t, created)
 }
 
-func TestPlannerInvalidRecipientDoesNotCreateBatch(t *testing.T) {
+func TestPlannerInvalidRecipientBacksOffWithoutCreatingBatch(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := moderationemailmock.NewMockRepository(ctrl)
 	directory := moderationemailmock.NewMockDirectory(ctrl)
@@ -191,10 +191,16 @@ func TestPlannerInvalidRecipientDoesNotCreateBatch(t *testing.T) {
 		repo.EXPECT().LastSuccessfulSend(gomock.Any()).Return(nil, nil),
 		directory.EXPECT().LoadAdminRecipient(gomock.Any(), uint(1)).Return(moderationemailrepo.AdminRecipient{}, errRecipientUnavailable),
 	)
+	planner := newPlanner(now, repo, directory)
 
-	created, err := newPlanner(now, repo, directory).PlanOnce(context.Background(), "worker-1", 20)
+	created, err := planner.PlanOnce(context.Background(), "worker-1", 20)
 
 	assert.ErrorIs(t, err, errRecipientUnavailable)
+	assert.Zero(t, created)
+
+	created, err = planner.PlanOnce(context.Background(), "worker-1", 20)
+
+	require.NoError(t, err)
 	assert.Zero(t, created)
 }
 

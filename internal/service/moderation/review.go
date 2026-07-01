@@ -245,7 +245,11 @@ func (s *reviewService) applyReview(
 	if err != nil {
 		return ReviewItem{}, err
 	}
-	persisted := buildReviewTransition(record, cmd, event, corrected, plan, now, s.cfg, s.loadReviewNotificationContext(ctx, record))
+	notifCtx, loadErr := s.loadReviewNotificationContext(ctx, record, requiresFirstPublicationInteraction(event, record))
+	if loadErr != nil {
+		return ReviewItem{}, mapReviewRepositoryError(loadErr)
+	}
+	persisted := buildReviewTransition(record, cmd, event, corrected, plan, now, s.cfg, notifCtx)
 	applied, err := s.repo.ApplyTransition(ctx, persisted)
 	if err != nil {
 		return ReviewItem{}, mapReviewRepositoryError(err)

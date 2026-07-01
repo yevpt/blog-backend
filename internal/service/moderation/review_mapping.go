@@ -53,13 +53,30 @@ func firstPublicationNotification(
 	record moderationrepo.ReviewRecord,
 	notifCtx moderationrepo.ReviewNotificationContext,
 ) *moderationrepo.InteractionNotificationIntent {
-	if event != EventApprove && event != EventCorrectAndApprove {
-		return nil
-	}
-	if record.State.Approved.ID != 0 || record.State.Approved.IsNew {
+	if !requiresFirstPublicationInteraction(event, record) {
 		return nil
 	}
 	return interactionNotification(record.Subject, record.AuthorID, record.PublishedContent, notifCtx)
+}
+
+func requiresFirstPublicationInteraction(event Event, record moderationrepo.ReviewRecord) bool {
+	if event != EventApprove && event != EventCorrectAndApprove {
+		return false
+	}
+	if record.State.Approved.ID != 0 || record.State.Approved.IsNew {
+		return false
+	}
+	switch record.Subject.Type {
+	case moderationrepo.SubjectArticleComment,
+		moderationrepo.SubjectMomentComment,
+		moderationrepo.SubjectGuestbook,
+		moderationrepo.SubjectArticleCommentReply,
+		moderationrepo.SubjectMomentCommentReply,
+		moderationrepo.SubjectGuestbookReply:
+		return true
+	default:
+		return false
+	}
 }
 
 func reviewProfileChange(event Event, authorID uint64, now time.Time, cfg config.ModerationConfig) *moderationrepo.ProfileChange {

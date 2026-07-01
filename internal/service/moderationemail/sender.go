@@ -21,6 +21,7 @@ type SenderRepository interface {
 	LoadBatchTasks(ctx context.Context, batchID uint64, limit int) ([]moderationemailrepo.PendingTask, error)
 	PersistBatchMessageID(ctx context.Context, batchID uint64, messageID string, now time.Time) error
 	MarkBatchSent(ctx context.Context, batchID uint64, messageID string, now time.Time) error
+	MarkBatchSkipped(ctx context.Context, batchID uint64, messageID string, lastErr string, now time.Time) error
 	MarkBatchRetry(ctx context.Context, batchID uint64, messageID string, nextAttemptAt time.Time, lastErr string, now time.Time) error
 }
 
@@ -92,7 +93,14 @@ func (s *Sender) sendBatch(ctx context.Context, batch model.ModerationReviewEmai
 	if err != nil {
 		return false, s.retryBatch(ctx, batch, messageID, err, now)
 	}
-	rendered, err := Render(batch, tasks, s.siteURL)
+	if len(tasks) == 0 {
+		return false, s.repo.MarkBatchSkipped(ctx, batch.ID, messageID, "no current pending review email tasks", now)
+	}
+	renderBatch := batch
+	if len(tasks) < maxRenderedRows && renderBatch.ItemCount != len(tasks) {
+		renderBatch.ItemCount = len(tasks)
+	}
+	rendered, err := Render(renderBatch, tasks, s.siteURL)
 	if err != nil {
 		return false, s.retryBatch(ctx, batch, messageID, err, now)
 	}

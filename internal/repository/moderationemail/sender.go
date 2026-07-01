@@ -42,6 +42,7 @@ func (r *repository) LoadBatchTasks(ctx context.Context, batchID uint64, limit i
 		Joins("JOIN moderation_revision AS revision ON revision.id = task.revision_id").
 		Joins("JOIN moderation_item AS item ON item.id = task.item_id").
 		Where("task.batch_id = ? AND task.status = ?", batchID, model.ModerationReviewEmailTaskBatched).
+		Where("revision.review_status = ? AND item.pending_revision_id = task.revision_id", "pending").
 		Order("task.created_at,task.id").
 		Limit(boundedLimit(limit)).
 		Find(&tasks).Error
@@ -87,6 +88,32 @@ func (r *repository) MarkBatchSent(ctx context.Context, batchID uint64, messageI
 		return tx.Model(&model.ModerationReviewEmailTask{}).
 			Where("batch_id = ? AND status = ?", batchID, model.ModerationReviewEmailTaskBatched).
 			Updates(map[string]any{"status": model.ModerationReviewEmailTaskSent}).Error
+	})
+}
+
+// MarkBatchSkipped 关闭已无当前待审内容的批次，不写 sent_at，避免推进发送冷却。
+func (r *repository) MarkBatchSkipped(ctx context.Context, batchID uint64, messageID string, lastErr string, now time.Time) error {
+	lastErr = truncateRunes(lastErr, maxLastErrorRunes)
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		batch := tx.Model(&model.ModerationReviewEmailBatch{}).
+			Where("id = ? AND status = ?", batchID, model.ModerationReviewEmailBatchSending).
+			Updates(map[string]any{
+				"status":      model.ModerationReviewEmailBatchFailed,
+				"message_id":  messageID,
+				"last_error":  lastErr,
+				"lease_until": nil,
+				"locked_by":   nil,
+				"updated_at":  now,
+			})
+		if batch.Error != nil {
+			return batch.Error
+		}
+		if batch.RowsAffected != 1 {
+			return fmt.Errorf("mark moderation email batch skipped: updated %d rows", batch.RowsAffected)
+		}
+		return tx.Model(&model.ModerationReviewEmailTask{}).
+			Where("batch_id = ? AND status = ?", batchID, model.ModerationReviewEmailTaskBatched).
+			Updates(map[string]any{"status": model.ModerationReviewEmailTaskSkipped, "updated_at": now}).Error
 	})
 }
 

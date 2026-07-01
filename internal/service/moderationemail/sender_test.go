@@ -94,11 +94,38 @@ func TestSenderMarkSentFailureReleasesLeaseForRetryWithoutSecondSMTPAttempt(t *t
 	assert.Equal(t, "db unavailable", repo.retries[0].lastErr)
 }
 
+func TestSenderSkipsBatchWhenNoCurrentPendingTasksRemain(t *testing.T) {
+	now := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
+	repo := &senderRepoStub{
+		batches: []model.ModerationReviewEmailBatch{{
+			ID: 9, ToEmail: "owner@example.com", ItemCount: 2,
+		}},
+		tasks: map[uint64][]moderationemailrepo.PendingTask{9: {}},
+	}
+	mailer := &reviewMailerStub{}
+	sender := moderationemailservice.NewSender(repo, mailer, "", func() time.Time { return now })
+
+	sent, err := sender.SendOnce(context.Background(), "worker-1", 10)
+
+	require.NoError(t, err)
+	assert.Zero(t, sent)
+	assert.Empty(t, mailer.calls)
+	assert.Empty(t, repo.sent)
+	assert.Empty(t, repo.retries)
+	require.Len(t, repo.skipped, 1)
+	assert.Equal(t, retryCall{
+		batchID:   9,
+		messageID: "moderation-review-batch-9",
+		lastErr:   "no current pending review email tasks",
+	}, repo.skipped[0].withoutTime())
+}
+
 type senderRepoStub struct {
 	batches     []model.ModerationReviewEmailBatch
 	tasks       map[uint64][]moderationemailrepo.PendingTask
 	persisted   []sentCall
 	sent        []sentCall
+	skipped     []retryCall
 	retries     []retryCall
 	leaseArgs   leaseCall
 	markSentErr error
@@ -151,6 +178,16 @@ func (s *senderRepoStub) MarkBatchSent(_ context.Context, batchID uint64, messag
 		return s.markSentErr
 	}
 	s.sent = append(s.sent, sentCall{batchID: batchID, messageID: messageID, at: now})
+	return nil
+}
+
+func (s *senderRepoStub) MarkBatchSkipped(_ context.Context, batchID uint64, messageID string, lastErr string, now time.Time) error {
+	s.skipped = append(s.skipped, retryCall{
+		batchID:   batchID,
+		messageID: messageID,
+		lastErr:   lastErr,
+		at:        now,
+	})
 	return nil
 }
 

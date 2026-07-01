@@ -2,6 +2,7 @@ package moderation_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -117,6 +118,32 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	assert.Equal(t, moderation.ReviewApproved, got.ReviewStatus)
 	assert.Equal(t, uint64(4), got.LockVersion)
 	assert.Equal(t, []string{"moderation/previews/a.jpg"}, cleaner.keys)
+}
+
+func TestReviewServiceApproveAbortsWhenRequiredInteractionContextFails(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	record := pendingReviewRecord()
+	record.Subject = moderationrepo.SubjectRef{
+		Type: moderationrepo.SubjectArticleComment,
+		ID:   7, RootID: 3,
+	}
+	wantErr := errors.New("context unavailable")
+	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
+	repo.EXPECT().LoadSubject(gomock.Any(), record.Subject).Return(
+		moderationrepo.SubjectSnapshot{Ref: record.Subject, AuthorID: record.AuthorID, Content: "待审正文"}, nil,
+	)
+	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), record.Subject).Return(
+		moderationrepo.ReviewNotificationContext{}, wantErr,
+	)
+	service := newReviewService(repo, &processorStub{})
+
+	_, err := service.Approve(context.Background(), moderation.ReviewCommand{
+		ItemID: record.ItemID, RevisionID: record.RevisionID,
+		ExpectedLockVersion: record.LockVersion, ReviewerID: 1,
+	})
+
+	require.ErrorIs(t, err, wantErr)
 }
 
 func TestReviewServiceCorrectSanitizesContentAndRecordsViolation(t *testing.T) {
