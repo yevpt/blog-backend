@@ -4,7 +4,29 @@
 
 ## 上线顺序
 
-1. 部署当前后端，但保持生产配置：
+1. 备份生产 MySQL，并确认备份可恢复。
+
+2. 对现有生产库只执行一次版本化迁移：
+
+   ```bash
+   mysql < migrations/20260701_moderation_review_email.sql
+   ```
+
+   `make dbsetup` 只足够用于新库或开发库初始化；现有生产库必须显式应用上述 migration。后端服务启动不会执行 `AutoMigrate`，不能依赖启动自动补表。
+
+3. 校验审核邮件表、索引、外键和待审数据回填。以下 SQL 用于确认待发送任务、进行中批次和回填缺口；migration 完成后最后一条查询应返回 `0`：
+
+   ```sql
+   SELECT COUNT(*) FROM moderation_review_email_task WHERE status = 'pending';
+   SELECT COUNT(*) FROM moderation_review_email_batch WHERE status IN ('pending','sending');
+   SELECT COUNT(*)
+   FROM moderation_revision r
+   JOIN moderation_item i ON i.pending_revision_id = r.id
+   LEFT JOIN moderation_review_email_task t ON t.revision_id = r.id
+   WHERE r.review_status = 'pending' AND t.id IS NULL;
+   ```
+
+4. 部署当前后端，但保持生产配置：
 
    ```yaml
    moderation:
@@ -14,13 +36,9 @@
 
    此时评论、留言、回复、碎语和临时互动图片仍走原业务路径；审核管理路由和清理 worker 不启动。
 
-2. 执行 schema 更新并确认审核表、外键和种子存在：
+5. 检查后端启动日志，确认审核邮件 worker 读取配置并正常启动；如发现表、索引、外键或回填异常，先修复数据库再继续。
 
-   ```bash
-   make dbsetup
-   ```
-
-3. 在停止旧版 UGC 写入后执行历史迁移。命令按配置的 `moderation.migration.batch_size` 分事务处理，逐批输出下一游标：
+6. 在停止旧版 UGC 写入后执行历史迁移。命令按配置的 `moderation.migration.batch_size` 分事务处理，逐批输出下一游标：
 
    ```bash
    go run ./cmd/moderation-migrate
@@ -32,17 +50,19 @@
    go run ./cmd/moderation-migrate --after-type article_comment --after-id 1234
    ```
 
-4. 发布已支持 `Idempotency-Key`、审核状态和图片 `display_mode` 的前端。所有发布和编辑请求都必须生成稳定且非空的幂等键。
+7. 发布已支持 `Idempotency-Key`、审核状态和图片 `display_mode` 的前端。所有发布和编辑请求都必须生成稳定且非空的幂等键。
 
-5. 执行只读校验，结果必须全部为零：
+8. 执行只读校验，结果必须全部为零：
 
    ```bash
    go run ./cmd/moderation-migrate --verify-only
    ```
 
-6. 将生产 `moderation.enabled` 改为 `true`、保持 `mode: enforce`，然后只部署当前新版后端。启动失败、规则集为空或配置非法时不要绕过校验。
+9. 将生产 `moderation.enabled` 改为 `true`、保持 `mode: enforce`，然后只部署当前新版后端。启动失败、规则集为空或配置非法时不要绕过校验。
 
-7. 冒烟验证低/中/高风险发布、低/中风险编辑、通过/修正/驳回、图片预览/GIF 占位、删除终止态、紧急隐藏/恢复、禁言和全站发布开关。
+10. 再次检查后端日志，确认审核邮件 worker 启动且没有 lease、批次或邮件配置错误。
+
+11. 冒烟验证低/中/高风险发布、低/中风险编辑、通过/修正/驳回、图片预览/GIF 占位、删除终止态、紧急隐藏/恢复、禁言和全站发布开关。
 
 ## 回滚
 
@@ -54,6 +74,8 @@
 4. 修复后重新执行 `--verify-only`，再按上线步骤启用。
 
 关闭审核后，待审版本不会继续流转；首次先审后发业务行只保留空正文或隐藏状态，不会把待审正文回退暴露。恢复审核后可继续人工处理。
+
+审核邮件 migration 是加法式变更。紧急回滚时可以直接回滚应用镜像，旧代码会忽略新增的审核邮件表；不要为了回滚删除 `moderation_review_email_task` 或 `moderation_review_email_batch`。恢复并重新部署新版后端后，worker 会基于已持久化的任务、批次和 lease 继续处理。
 
 ## 日常维护
 
