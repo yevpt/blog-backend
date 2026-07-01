@@ -33,11 +33,13 @@
 **Files:**
 - Create: `internal/dbschema/comments_test.go`
 - Create: `internal/dbschema/comments.go`
+- Modify: `internal/dbschema/schema.go`
 
 **Interfaces:**
 - Produces: `func SchemaComments() SchemaCommentSet`
 - Produces: `type SchemaCommentSet struct { Tables map[string]TableComment }`
 - Produces: `type TableComment struct { Comment string; Columns map[string]string }`
+- Produces: `func coreModels() []any`
 
 - [ ] **Step 1: 写失败测试**
 
@@ -129,7 +131,24 @@ func quoteSQLComment(comment string) string {
 
 Then add `import "strings"` and an empty package-level `schemaComments` map so the compile failure becomes an assertion failure.
 
-- [ ] **Step 4: 跑测试确认失败点变为缺注释**
+- [ ] **Step 4: 拆出 coreModels**
+
+Modify `internal/dbschema/schema.go` so the existing non-moderation model list moves into:
+
+```go
+func coreModels() []any {
+	return []any{
+		&model.Role{},
+		&model.User{},
+		// keep every existing non-moderation model here in the same order
+		&model.AnalyticsFriendLinkDaily{},
+	}
+}
+```
+
+Then change the first `AutoMigrate` call to `db.AutoMigrate(coreModels()...)`. Keep the existing `moderationModels()` function unchanged.
+
+- [ ] **Step 5: 跑测试确认失败点变为缺注释**
 
 Run:
 
@@ -144,16 +163,14 @@ Expected: FAIL with `missing table comment`.
 ### Task 2: 拆出模型注册列表并补全注释 catalog
 
 **Files:**
-- Modify: `internal/dbschema/schema.go`
 - Modify: `internal/dbschema/comments.go`
 
 **Interfaces:**
-- Produces: `func coreModels() []any`
 - Produces: complete `schemaComments` for all tables in `coreModels()` and `moderationModels()`
 
-- [ ] **Step 1: 把 AutoMigrate 的主模型列表拆成 coreModels**
+- [ ] **Step 1: 接入 ApplySchemaComments 调用点占位**
 
-Modify `internal/dbschema/schema.go` so `AutoMigrate` calls:
+Modify `internal/dbschema/schema.go` so `AutoMigrate` keeps the two migration phases and can later end with:
 
 ```go
 if err := db.AutoMigrate(coreModels()...); err != nil {
@@ -165,7 +182,15 @@ if err := db.AutoMigrate(moderationModels()...); err != nil {
 return ApplySchemaComments(db)
 ```
 
-Add `coreModels() []any` containing the same non-moderation model list currently passed inline to `AutoMigrate`.
+If `ApplySchemaComments` is not implemented yet, add a temporary no-op stub in `internal/dbschema/comments.go`:
+
+```go
+func ApplySchemaComments(_ *gorm.DB) error {
+	return nil
+}
+```
+
+and import `gorm.io/gorm`.
 
 - [ ] **Step 2: 补完整中文注释 map**
 
@@ -202,6 +227,7 @@ Expected: PASS.
 **Interfaces:**
 - Produces: `func ApplySchemaComments(db *gorm.DB) error`
 - Produces: `func BuildSchemaCommentSQL(tableDefinitions map[string]map[string]string) ([]string, error)`
+- Produces: `func buildSchemaCommentSQL(comments SchemaCommentSet, tableDefinitions map[string]map[string]string) ([]string, error)`
 
 - [ ] **Step 1: 写 SQL 生成测试**
 
@@ -209,13 +235,19 @@ Append tests to `internal/dbschema/comments_test.go`:
 
 ```go
 func TestBuildSchemaCommentSQL(t *testing.T) {
+	comments := SchemaCommentSet{Tables: map[string]TableComment{
+		"moderation_review_email_task": {
+			Comment: "审核邮件任务表",
+			Columns: map[string]string{"id": "主键ID"},
+		},
+	}}
 	defs := map[string]map[string]string{
 		"moderation_review_email_task": {
 			"id": "`id` bigint unsigned NOT NULL AUTO_INCREMENT",
 		},
 	}
 
-	sql, err := BuildSchemaCommentSQL(defs)
+	sql, err := buildSchemaCommentSQL(comments, defs)
 
 	require.NoError(t, err)
 	assert.Contains(t, sql, "ALTER TABLE `moderation_review_email_task` COMMENT = '审核邮件任务表'")
@@ -229,7 +261,10 @@ In `internal/dbschema/comments.go`, add:
 
 ```go
 func BuildSchemaCommentSQL(tableDefinitions map[string]map[string]string) ([]string, error) {
-	comments := SchemaComments()
+	return buildSchemaCommentSQL(SchemaComments(), tableDefinitions)
+}
+
+func buildSchemaCommentSQL(comments SchemaCommentSet, tableDefinitions map[string]map[string]string) ([]string, error) {
 	statements := make([]string, 0)
 
 	for _, table := range sortedTableNames(comments.Tables) {
@@ -389,4 +424,3 @@ SHOW CREATE TABLE moderation_image;
 ```
 
 Expected: `chk_moderation_image_status` still exists and still uses `CHECK`.
-
