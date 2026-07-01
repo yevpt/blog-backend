@@ -52,11 +52,11 @@ func (h *AdminHandler) moderationHistoryToDTO(ctx context.Context, page moderati
 
 func (h *AdminHandler) resolveHistoryImageURL(ctx context.Context, objectKey string) string {
 	if h.resolver == nil || strings.TrimSpace(objectKey) == "" {
-		return objectKey
+		return ""
 	}
 	accessURL, err := h.resolver.ObjectURL(ctx, objectKey)
 	if err != nil {
-		return objectKey
+		return ""
 	}
 	return accessURL
 }
