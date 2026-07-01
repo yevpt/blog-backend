@@ -14,6 +14,7 @@ func (s *applicationService) transitionCommand(
 	classification Classification,
 	action PolicyAction,
 	plan TransitionPlan,
+	interactionIntent *moderationrepo.InteractionNotificationIntent,
 ) moderationrepo.ApplyTransitionCommand {
 	now := plan.AppendLog.CreatedAt
 	authorID := input.actorID
@@ -60,6 +61,7 @@ func (s *applicationService) transitionCommand(
 			SubjectUserID: &authorID, Action: moderationrepo.Event(plan.AppendLog.Event),
 			Reason: plan.AppendLog.Reason, CreatedAt: plan.AppendLog.CreatedAt,
 		},
+		InteractionNotification: interactionIntent,
 	}
 	return command
 }

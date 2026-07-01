@@ -154,7 +154,19 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 	if err != nil {
 		return SubmitResult{}, err
 	}
-	command := s.transitionCommand(input, item, processed, classification, action, plan)
+	var interactionIntent *moderationrepo.InteractionNotificationIntent
+	firstPublication := action == ActionAutoApprove && input.subject.Type != SubjectMoment &&
+		item.State.Approved.ID == 0 && !item.State.Approved.IsNew
+	if firstPublication {
+		notifCtx, loadErr := s.repo.LoadReviewNotificationContext(ctx, input.subject)
+		if loadErr != nil {
+			return SubmitResult{}, loadErr
+		}
+		interactionIntent = interactionNotification(
+			input.subject, resolvedAuthorID(input, item), processed.Published, notifCtx,
+		)
+	}
+	command := s.transitionCommand(input, item, processed, classification, action, plan, interactionIntent)
 	applied, err := s.repo.ApplyTransition(ctx, command)
 	if err != nil {
 		if errors.Is(err, moderationrepo.ErrIdempotencyDomainConflict) {

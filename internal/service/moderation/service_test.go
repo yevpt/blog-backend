@@ -138,6 +138,7 @@ func TestServiceSubmitLowPostReview(t *testing.T) {
 		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
 				assert.True(t, persisted.CreateSubject)
+				assert.Nil(t, persisted.InteractionNotification)
 				require.NotNil(t, persisted.Revision)
 				assert.Equal(t, moderationrepo.RiskLow, persisted.Revision.RiskLevel)
 				assert.Equal(t, moderationrepo.ActionPostReview, persisted.Revision.PolicyAction)
@@ -381,6 +382,9 @@ func TestServiceAdminSubmitAutoApproves(t *testing.T) {
 	gomock.InOrder(
 		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
 		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(
+			moderationrepo.ReviewNotificationContext{}, nil,
+		),
 		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
 				require.NotNil(t, persisted.Revision)
@@ -402,6 +406,168 @@ func TestServiceAdminSubmitAutoApproves(t *testing.T) {
 	assert.Equal(t, moderation.ActionAutoApprove, got.Action)
 	assert.False(t, got.HasPendingRevision)
 	assert.True(t, got.CanInteract)
+}
+
+func TestServiceAutoApproveFirstPublicationCreatesInteractionNotification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := submitCommand()
+	notifCtx := moderationrepo.ReviewNotificationContext{
+		ContentType: moderationrepo.SubjectArticleComment, InteractionRecipientUserID: 91,
+		RootSnapshot: &moderationrepo.NotificationSnapshot{Type: "article", ID: cmd.Subject.RootID},
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(notifCtx, nil),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				require.NotNil(t, persisted.InteractionNotification)
+				intent := persisted.InteractionNotification
+				assert.Equal(t, "comment_created", intent.Type)
+				assert.Equal(t, cmd.ActorID, intent.ActorUserID)
+				assert.Equal(t, uint64(91), intent.RecipientUserID)
+				assert.Equal(t, "<p>safe</p>", intent.ContentExcerpt)
+				assert.Same(t, notifCtx.RootSnapshot, intent.RootSnapshot)
+				return moderationrepo.AppliedTransition{
+					Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 41, RootID: 11},
+					ItemID:  51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,
+				}, nil
+			},
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionAutoApprove}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
+}
+
+func TestServiceAutoApprovePendingWithoutApprovedCreatesInteractionNotification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := moderation.EditCommand{
+		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 41},
+		Content: "approved edit", IdempotencyKey: "approve-pending",
+	}
+	canonicalRef := moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 41, RootID: 11}
+	item := moderationrepo.ItemStateRecord{
+		ItemID: 20, AuthorID: 7, LockVersion: 4,
+		State: moderationrepo.ItemState{
+			LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicPlaceholder,
+			Pending: moderationrepo.ExistingRevision(10),
+		},
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(item, nil),
+		repo.EXPECT().LoadSubject(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(
+			moderationrepo.SubjectSnapshot{Ref: canonicalRef, AuthorID: 7}, nil,
+		),
+		repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), canonicalRef).Return(
+			moderationrepo.ReviewNotificationContext{InteractionRecipientUserID: 91}, nil,
+		),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				require.NotNil(t, persisted.InteractionNotification)
+				assert.Equal(t, uint64(91), persisted.InteractionNotification.RecipientUserID)
+				return moderationrepo.AppliedTransition{
+					Subject: canonicalRef, ItemID: 20, RevisionID: 30, RevisionVersion: 2, LockVersion: 5,
+				}, nil
+			},
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionAutoApprove}, zap.NewNop(),
+	).Edit(context.Background(), cmd)
+
+	require.NoError(t, err)
+}
+
+func TestServiceAutoApproveVisibleEditDoesNotCreateInteractionNotification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := moderation.EditCommand{
+		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectArticleComment, ID: 41},
+		Content: "visible edit", IdempotencyKey: "edit-visible-approved",
+	}
+	canonicalRef := moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 41, RootID: 11}
+	item := moderationrepo.ItemStateRecord{
+		ItemID: 20, AuthorID: 7, LockVersion: 4,
+		State: moderationrepo.ItemState{
+			LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicVisible,
+			Materialized: moderationrepo.ExistingRevision(10), Approved: moderationrepo.ExistingRevision(10),
+		},
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(item, nil),
+		repo.EXPECT().LoadSubject(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(
+			moderationrepo.SubjectSnapshot{Ref: canonicalRef, AuthorID: 7, Content: "old"}, nil,
+		),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				assert.Nil(t, persisted.InteractionNotification)
+				return moderationrepo.AppliedTransition{
+					Subject: canonicalRef, ItemID: 20, RevisionID: 30, RevisionVersion: 2, LockVersion: 5,
+				}, nil
+			},
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionAutoApprove}, zap.NewNop(),
+	).Edit(context.Background(), cmd)
+
+	require.NoError(t, err)
+}
+
+func TestServiceAutoApproveNotificationContextFailureAbortsPublication(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := submitCommand()
+	wantErr := errors.New("notification context unavailable")
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(
+			moderationrepo.ReviewNotificationContext{}, wantErr,
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionAutoApprove}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.ErrorIs(t, err, wantErr)
+}
+
+func TestServiceAutoApproveNotificationIdempotencyReplayDoesNotWrite(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := submitCommand()
+	repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(&moderationrepo.StoredResult{
+		Kind:     moderationrepo.ResultRevision,
+		Subject:  moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 41, RootID: 11},
+		AuthorID: 7, ItemID: 51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,
+		RiskLevel: moderationrepo.RiskLow, PolicyAction: moderationrepo.ActionAutoApprove,
+		ReviewStatus: moderationrepo.ReviewApproved, PublicState: moderationrepo.PublicVisible,
+		Content: "<p>safe</p>", VisibleContent: "<p>safe</p>",
+	}, nil)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{}, &deciderStub{}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
 }
 
 func TestServiceEditLowAndMediumBuildExpectedTransitions(t *testing.T) {
