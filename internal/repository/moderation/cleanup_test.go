@@ -52,7 +52,7 @@ func TestCleanupAuditDeletesOnlyExpiredUnreferencedRowsWithinBatch(t *testing.T)
 func TestReferencedObjectKeysIncludesBusinessMedia(t *testing.T) {
 	repository, mock := newCleanupRepository(t)
 	keys := []string{"moments/7/9/current.jpg", "moments/7/9/orphan.jpg"}
-	mock.ExpectQuery("SELECT preview_object_key AS object_key.*UNION.*moderation_revision_image.*UNION.*moment_media").
+	mock.ExpectQuery("SELECT preview_object_key COLLATE utf8mb4_unicode_ci AS object_key.*FROM moderation_image.*UNION.*SELECT object_key COLLATE utf8mb4_unicode_ci FROM moderation_revision_image.*UNION.*SELECT url COLLATE utf8mb4_unicode_ci AS object_key FROM moment_media").
 		WithArgs(keys[0], keys[1], keys[0], keys[1], keys[0], keys[1]).
 		WillReturnRows(sqlmock.NewRows([]string{"object_key"}).AddRow("moments/7/9/current.jpg"))
 
