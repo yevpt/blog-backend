@@ -51,16 +51,17 @@ func interactionNotification(
 		return nil
 	}
 	return &moderationrepo.InteractionNotificationIntent{
-		Type:            eventType,
-		ActorUserID:     actorUserID,
-		RecipientUserID: notifCtx.InteractionRecipientUserID,
-		SourceType:      sourceType,
-		RootType:        rootType,
-		RootID:          rootID,
-		ContentExcerpt:  content,
-		CommentID:       notifCtx.CommentID,
-		RootSnapshot:    notifCtx.RootSnapshot,
-		QuoteSnapshot:   notifCtx.QuoteSnapshot,
+		Type:              eventType,
+		ActorUserID:       actorUserID,
+		RecipientUserID:   notifCtx.InteractionRecipientUserID,
+		SourceType:        sourceType,
+		RootType:          rootType,
+		RootID:            rootID,
+		RootIDFromSubject: deferredGuestbookRoot,
+		ContentExcerpt:    content,
+		CommentID:         notifCtx.CommentID,
+		RootSnapshot:      notifCtx.RootSnapshot,
+		QuoteSnapshot:     notifCtx.QuoteSnapshot,
 	}
 }
 

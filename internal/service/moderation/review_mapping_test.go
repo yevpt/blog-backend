@@ -181,6 +181,7 @@ func TestBuildReviewTransitionFirstPublicationInteraction(t *testing.T) {
 					assert.Zero(t, intent.SourceID)
 					assert.Equal(t, tt.rootType, intent.RootType)
 					assert.Equal(t, tt.rootID, intent.RootID)
+					assert.False(t, intent.RootIDFromSubject)
 					assert.Equal(t, tt.commentID, intent.CommentID)
 					assert.Same(t, tt.context.RootSnapshot, intent.RootSnapshot)
 					assert.Same(t, tt.context.QuoteSnapshot, intent.QuoteSnapshot)

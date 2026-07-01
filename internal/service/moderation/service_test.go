@@ -467,6 +467,7 @@ func TestServiceAutoApproveNewGuestbookCreatesInteractionNotificationWithDeferre
 				assert.Zero(t, intent.SourceID)
 				assert.Equal(t, "guestbook", intent.RootType)
 				assert.Zero(t, intent.RootID)
+				assert.True(t, intent.RootIDFromSubject)
 				return moderationrepo.AppliedTransition{
 					Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectGuestbook, ID: 41, RootID: 91},
 					ItemID:  51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,

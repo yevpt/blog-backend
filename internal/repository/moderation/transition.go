@@ -629,7 +629,7 @@ func appendInteractionNotification(
 		sourceID = materializedSubjectID
 	}
 	rootID := intent.RootID
-	if rootID == 0 {
+	if intent.RootIDFromSubject {
 		rootID = materializedSubjectID
 	}
 	actorUserID := uint(intent.ActorUserID)

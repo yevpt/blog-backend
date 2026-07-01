@@ -278,13 +278,15 @@ type InteractionNotificationIntent struct {
 	RecipientUserID uint64
 	SourceType      string
 	// SourceID 为零时，ApplyTransition 使用本次新物化的业务内容 ID。
-	SourceID       uint64
-	RootType       string
-	RootID         uint64
-	ContentExcerpt string
-	CommentID      *uint64
-	RootSnapshot   *NotificationSnapshot
-	QuoteSnapshot  *NotificationSnapshot
+	SourceID uint64
+	RootType string
+	RootID   uint64
+	// RootIDFromSubject 表示 RootID 应使用本次新物化的业务内容 ID。
+	RootIDFromSubject bool
+	ContentExcerpt    string
+	CommentID         *uint64
+	RootSnapshot      *NotificationSnapshot
+	QuoteSnapshot     *NotificationSnapshot
 }
 
 // ApplyTransitionCommand 是一次完整审核事务的数据命令。
