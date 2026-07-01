@@ -18,10 +18,16 @@ func (r *repository) LoadReviewNotificationContext(ctx context.Context, ref Subj
 		return result, nil
 	}
 	db := r.db.WithContext(ctx)
-	var err error
+	recipientID, err := loadInteractionRecipient(db, ref)
+	if err != nil {
+		return result, err
+	}
+	result.InteractionRecipientUserID = recipientID
 	switch ref.Type {
-	case SubjectMoment, SubjectGuestbook:
+	case SubjectMoment:
 		return result, nil
+	case SubjectGuestbook:
+		result.RootSnapshot, err = loadGuestbookSnapshot(db, ref.ID)
 	case SubjectArticleComment:
 		result.RootSnapshot, err = loadArticleSnapshot(db, ref.RootID)
 	case SubjectMomentComment:
@@ -42,6 +48,89 @@ func (r *repository) LoadReviewNotificationContext(ctx context.Context, ref Subj
 		return result, err
 	}
 	return result, nil
+}
+
+func loadInteractionRecipient(db *gorm.DB, ref SubjectRef) (uint64, error) {
+	if ref.Type == SubjectGuestbook {
+		return ref.RootID, nil
+	}
+	var row struct {
+		UserID     uint
+		FromUserID uint
+		ToUserID   uint
+	}
+	var query *gorm.DB
+	switch ref.Type {
+	case SubjectMoment:
+		return 0, nil
+	case SubjectArticleComment:
+		query = db.Model(&model.Article{}).Select("user_id").Where("id = ?", ref.RootID).Take(&row)
+	case SubjectMomentComment:
+		query = db.Model(&model.Moment{}).Select("user_id").Where("id = ?", ref.RootID).Take(&row)
+	case SubjectArticleCommentReply, SubjectMomentCommentReply, SubjectGuestbookReply:
+		return loadReplyRecipient(db, ref)
+	default:
+		return 0, nil
+	}
+	if query.Error != nil {
+		return 0, subjectError(query.Error)
+	}
+	return uint64(row.UserID), nil
+}
+
+func loadReplyRecipient(db *gorm.DB, ref SubjectRef) (uint64, error) {
+	var row struct {
+		UserID     uint
+		FromUserID uint
+		ToUserID   uint
+	}
+	var query *gorm.DB
+	if ref.ID != 0 {
+		switch ref.Type {
+		case SubjectArticleCommentReply:
+			query = db.Model(&model.ArticleCommentReply{}).Select("to_user_id").Where("id = ?", ref.ID).Take(&row)
+		case SubjectMomentCommentReply:
+			query = db.Model(&model.MomentCommentReply{}).Select("to_user_id").Where("id = ?", ref.ID).Take(&row)
+		case SubjectGuestbookReply:
+			query = db.Model(&model.GuestbookReply{}).Select("to_user_id").Where("id = ?", ref.ID).Take(&row)
+		}
+		if query.Error != nil {
+			return 0, subjectError(query.Error)
+		}
+		return uint64(row.ToUserID), nil
+	}
+	if ref.ParentID == nil {
+		return 0, ErrInvalidCommand
+	}
+	if *ref.ParentID == 0 {
+		switch ref.Type {
+		case SubjectArticleCommentReply:
+			query = db.Model(&model.ArticleComment{}).Select("user_id").Where("id = ?", ref.RootID).Take(&row)
+		case SubjectMomentCommentReply:
+			query = db.Model(&model.MomentComment{}).Select("user_id").Where("id = ?", ref.RootID).Take(&row)
+		case SubjectGuestbookReply:
+			query = db.Model(&model.Guestbook{}).Select("from_user_id").Where("id = ?", ref.RootID).Take(&row)
+		}
+		if query.Error != nil {
+			return 0, subjectError(query.Error)
+		}
+		if ref.Type == SubjectGuestbookReply {
+			return uint64(row.FromUserID), nil
+		}
+		return uint64(row.UserID), nil
+	}
+	switch ref.Type {
+	case SubjectArticleCommentReply:
+		query = db.Model(&model.ArticleCommentReply{}).Select("from_user_id").Where("id = ? AND comment_id = ?", *ref.ParentID, ref.RootID).Take(&row)
+	case SubjectMomentCommentReply:
+		query = db.Model(&model.MomentCommentReply{}).Select("from_user_id").Where("id = ? AND comment_id = ?", *ref.ParentID, ref.RootID).Take(&row)
+	case SubjectGuestbookReply:
+		query = db.Model(&model.GuestbookReply{}).Select("from_user_id").Where("id = ? AND comment_id = ?", *ref.ParentID, ref.RootID).Take(&row)
+	}
+	if query.Error != nil {
+		return 0, subjectError(query.Error)
+	}
+	return uint64(row.FromUserID), nil
 }
 
 func loadArticleSnapshot(db *gorm.DB, articleID uint64) (*NotificationSnapshot, error) {
@@ -120,10 +209,7 @@ func loadGuestbookReplyContext(db *gorm.DB, ref SubjectRef) (*NotificationSnapsh
 type replyContentLoader func(db *gorm.DB, replyID uint64) (string, error)
 
 func loadReplyQuote(db *gorm.DB, ref SubjectRef, commentContent string, loadReply replyContentLoader) (*NotificationSnapshot, error) {
-	if ref.ParentID == nil {
-		return notificationSnapshot("comment", ref.RootID, "", commentContent), nil
-	}
-	if *ref.ParentID == 0 {
+	if ref.ParentID == nil || *ref.ParentID == 0 {
 		return notificationSnapshot("comment", ref.RootID, "", commentContent), nil
 	}
 	content, err := loadReply(db, *ref.ParentID)
