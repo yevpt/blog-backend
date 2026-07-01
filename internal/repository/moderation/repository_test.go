@@ -271,6 +271,100 @@ func TestApplyTransitionCreatesPreReviewMomentHiddenInBusinessTable(t *testing.T
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestApplyTransitionCreatesReviewEmailTaskForPendingRevision(t *testing.T) {
+	availableAt := fixedTime.Add(90 * time.Second)
+	for _, action := range []moderation.PolicyAction{moderation.ActionPreReview, moderation.ActionPostReview} {
+		t.Run(string(action), func(t *testing.T) {
+			repository, mock := newRepository(t)
+			command := transitionCommand()
+			command.Revision.PolicyAction = action
+			command.Revision.ReviewStatus = moderation.ReviewPending
+			command.Next.Pending = moderation.NewRevision()
+			command.Next.Approved = moderation.RevisionRef{}
+			command.ReviewEmailTask = &moderation.ReviewEmailTaskIntent{AvailableAt: availableAt}
+			if action == moderation.ActionPreReview {
+				command.Next.PublicState = moderation.PublicPlaceholder
+				command.Next.Materialized = moderation.RevisionRef{}
+				command.Materialize = moderation.RevisionRef{}
+			}
+
+			mock.ExpectBegin()
+			expectNoIdempotencyResult(mock, 42, "request-1")
+			expectLockedItem(mock, 4, nil)
+			expectLockedArticleSubject(mock, "旧正文")
+			mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\)").
+				WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
+			mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
+			mock.ExpectExec("INSERT INTO `moderation_review_email_task`").
+				WithArgs(uint64(101), uint64(10), "pending", availableAt, availableAt, nil, fixedTime, fixedTime).
+				WillReturnResult(sqlmock.NewResult(201, 1))
+			mock.ExpectExec("UPDATE `moderation_item` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
+			if action == moderation.ActionPostReview {
+				mock.ExpectExec("UPDATE `article_comment` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
+			}
+			mock.ExpectExec("INSERT INTO `moderation_action_log`").WillReturnResult(sqlmock.NewResult(501, 1))
+			mock.ExpectCommit()
+
+			_, err := repository.ApplyTransition(context.Background(), command)
+
+			require.NoError(t, err)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestApplyTransitionReviewEmailTaskFailureRollsBack(t *testing.T) {
+	repository, mock := newRepository(t)
+	command := transitionCommand()
+	command.Revision.PolicyAction = moderation.ActionPostReview
+	command.Revision.ReviewStatus = moderation.ReviewPending
+	command.Next.Pending = moderation.NewRevision()
+	command.Next.Approved = moderation.RevisionRef{}
+	command.ReviewEmailTask = &moderation.ReviewEmailTaskIntent{AvailableAt: fixedTime.Add(time.Minute)}
+
+	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
+	expectLockedItem(mock, 4, nil)
+	expectLockedArticleSubject(mock, "旧正文")
+	mock.ExpectQuery("SELECT COALESCE\\(MAX\\(version\\), 0\\)").
+		WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(2))
+	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
+	mock.ExpectExec("INSERT INTO `moderation_review_email_task`").WillReturnError(errors.New("queue unavailable"))
+	mock.ExpectRollback()
+
+	_, err := repository.ApplyTransition(context.Background(), command)
+
+	require.ErrorContains(t, err, "queue unavailable")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestApplyTransitionReviewEmailTaskReplayDoesNotInsertAgain(t *testing.T) {
+	repository, mock := newRepository(t)
+	command := transitionCommand()
+	command.ReviewEmailTask = &moderation.ReviewEmailTaskIntent{AvailableAt: fixedTime.Add(time.Minute)}
+
+	mock.ExpectBegin()
+	expectIdempotencyProfileLock(mock, 42)
+	mock.ExpectQuery("SELECT .*moderation_revision.*UNION ALL.*moderation_attempt").
+		WithArgs(uint64(42), "request-1", uint64(42), "request-1").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"domain", "record_id", "item_id", "author_id", "content_type", "content_id", "review_status",
+			"public_state", "created_at", "revision_version", "lock_version", "risk_level", "policy_action",
+			"content", "visible_content",
+		}).AddRow(
+			"revision", 101, 10, 42, "article_comment", 7, "pending", "visible", fixedTime,
+			3, 5, "low", "post_review", "安全正文", "安全正文",
+		))
+	mock.ExpectCommit()
+
+	got, err := repository.ApplyTransition(context.Background(), command)
+
+	require.NoError(t, err)
+	require.NotNil(t, got.Replay)
+	assert.Equal(t, uint64(101), got.RevisionID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestApplyTransitionSupersedesExpectedPendingRevision(t *testing.T) {
 	repository, mock := newRepository(t)
 	oldPending := uint64(90)

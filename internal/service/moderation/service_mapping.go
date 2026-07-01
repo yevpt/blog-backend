@@ -63,6 +63,11 @@ func (s *applicationService) transitionCommand(
 		},
 		InteractionNotification: interactionIntent,
 	}
+	if plan.Item.PendingRevisionID != nil && *plan.Item.PendingRevisionID == newRevisionSentinel {
+		command.ReviewEmailTask = &moderationrepo.ReviewEmailTaskIntent{
+			AvailableAt: now.Add(time.Duration(s.cfg.ReviewEmail.AggregationWindowSeconds) * time.Second),
+		}
+	}
 	return command
 }
 

@@ -62,6 +62,16 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 			if err := createRevisionImages(ctx, tx, newRevision.ID, cmd.Revision.Images); err != nil {
 				return err
 			}
+			if cmd.ReviewEmailTask != nil {
+				task := model.ModerationReviewEmailTask{
+					RevisionID: newRevision.ID, ItemID: item.ID,
+					Status:      model.ModerationReviewEmailTaskPending,
+					AvailableAt: cmd.ReviewEmailTask.AvailableAt, NextAttemptAt: cmd.ReviewEmailTask.AvailableAt,
+				}
+				if err := tx.WithContext(ctx).Create(&task).Error; err != nil {
+					return err
+				}
+			}
 		}
 		if err := supersedeRevision(ctx, tx, item.ID, cmd.SupersedeRevisionID); err != nil {
 			return err

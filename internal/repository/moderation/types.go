@@ -289,6 +289,11 @@ type InteractionNotificationIntent struct {
 	QuoteSnapshot     *NotificationSnapshot
 }
 
+// ReviewEmailTaskIntent 是待审核邮件任务的事务内创建意图。
+type ReviewEmailTaskIntent struct {
+	AvailableAt time.Time
+}
+
 // ApplyTransitionCommand 是一次完整审核事务的数据命令。
 type ApplyTransitionCommand struct {
 	Subject                 SubjectRef
@@ -306,6 +311,7 @@ type ApplyTransitionCommand struct {
 	ProfileChange           *ProfileChange
 	Notification            *NotificationIntent
 	InteractionNotification *InteractionNotificationIntent
+	ReviewEmailTask         *ReviewEmailTaskIntent
 	// MomentOptions 仅用于碎语业务表物化；其他内容类型必须为空。
 	MomentOptions *MomentOptions
 	// CreateSubject 显式声明首次提交需要在事务内创建业务行。

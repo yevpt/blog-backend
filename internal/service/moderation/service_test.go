@@ -168,6 +168,73 @@ func TestServiceSubmitLowPostReview(t *testing.T) {
 	assert.Equal(t, uint64(41), got.Subject.ID)
 }
 
+func TestServiceReviewEmailTaskIntentFollowsPendingRevision(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		action moderation.PolicyAction
+		want   bool
+	}{
+		{name: "post review", action: moderation.ActionPostReview, want: true},
+		{name: "pre review", action: moderation.ActionPreReview, want: true},
+		{name: "auto approve", action: moderation.ActionAutoApprove},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			repo := repositorymock.NewMockRepository(ctrl)
+			cmd := submitCommand()
+			repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil)
+			repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil)
+			if tt.action == moderation.ActionAutoApprove {
+				repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).
+					Return(moderationrepo.ReviewNotificationContext{}, nil)
+			}
+			repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+					if tt.want {
+						require.NotNil(t, persisted.ReviewEmailTask)
+						assert.Equal(t, serviceNow.Add(75*time.Second), persisted.ReviewEmailTask.AvailableAt)
+					} else {
+						assert.Nil(t, persisted.ReviewEmailTask)
+					}
+					return moderationrepo.AppliedTransition{
+						Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleComment, ID: 41, RootID: 11},
+						ItemID:  51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,
+					}, nil
+				},
+			)
+			cfg := config.ModerationConfig{
+				Enabled:     true,
+				Content:     config.ModerationContentConfig{CommentMaxChars: 2000, MaxLinksPerContent: 10},
+				ReviewEmail: config.ModerationReviewEmailConfig{Enabled: false, AggregationWindowSeconds: 75},
+			}
+			service := moderation.NewService(
+				repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+				&deciderStub{action: tt.action}, nil, nil, cfg, zap.NewNop(), func() time.Time { return serviceNow },
+			)
+
+			_, err := service.Submit(context.Background(), cmd)
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestServiceReviewEmailTaskIntentAbsentForBlockedRevision(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := submitCommand()
+	repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil)
+	repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil)
+	repo.EXPECT().RecordBlockedAttempt(gomock.Any(), gomock.Any()).Return(moderationrepo.StoredResult{}, nil)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskHigh}},
+		&deciderStub{action: moderation.ActionBlock}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.ErrorIs(t, err, moderation.ErrContentRiskRejected)
+}
+
 func TestServiceSubmitMomentCarriesBusinessOptionsToTransaction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
