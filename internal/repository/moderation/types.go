@@ -250,10 +250,11 @@ type NotificationSnapshot struct {
 
 // ReviewNotificationContext 供审核结果系统通知展示内容归属。
 type ReviewNotificationContext struct {
-	ContentType   SubjectType
-	CommentID     *uint64
-	RootSnapshot  *NotificationSnapshot
-	QuoteSnapshot *NotificationSnapshot
+	ContentType                SubjectType
+	InteractionRecipientUserID uint64
+	CommentID                  *uint64
+	RootSnapshot               *NotificationSnapshot
+	QuoteSnapshot              *NotificationSnapshot
 }
 
 // NotificationIntent 是审核事务内创建站内系统通知所需的最小数据。
@@ -270,22 +271,39 @@ type NotificationIntent struct {
 	QuoteSnapshot   *NotificationSnapshot
 }
 
+// InteractionNotificationIntent 是内容首次公开时创建互动通知所需的数据。
+type InteractionNotificationIntent struct {
+	Type            string
+	ActorUserID     uint64
+	RecipientUserID uint64
+	SourceType      string
+	// SourceID 为零时，ApplyTransition 使用本次新物化的业务内容 ID。
+	SourceID       uint64
+	RootType       string
+	RootID         uint64
+	ContentExcerpt string
+	CommentID      *uint64
+	RootSnapshot   *NotificationSnapshot
+	QuoteSnapshot  *NotificationSnapshot
+}
+
 // ApplyTransitionCommand 是一次完整审核事务的数据命令。
 type ApplyTransitionCommand struct {
-	Subject             SubjectRef
-	AuthorID            uint64
-	ExpectedLockVersion uint64
-	ExpectedPendingID   *uint64
-	Next                ItemState
-	Revision            *RevisionDraft
-	SupersedeRevisionID *uint64
-	Review              *RevisionReview
-	Materialize         RevisionRef
-	DeleteSubject       bool
-	SyncImages          bool
-	Log                 *ActionLog
-	ProfileChange       *ProfileChange
-	Notification        *NotificationIntent
+	Subject                 SubjectRef
+	AuthorID                uint64
+	ExpectedLockVersion     uint64
+	ExpectedPendingID       *uint64
+	Next                    ItemState
+	Revision                *RevisionDraft
+	SupersedeRevisionID     *uint64
+	Review                  *RevisionReview
+	Materialize             RevisionRef
+	DeleteSubject           bool
+	SyncImages              bool
+	Log                     *ActionLog
+	ProfileChange           *ProfileChange
+	Notification            *NotificationIntent
+	InteractionNotification *InteractionNotificationIntent
 	// MomentOptions 仅用于碎语业务表物化；其他内容类型必须为空。
 	MomentOptions *MomentOptions
 	// CreateSubject 显式声明首次提交需要在事务内创建业务行。

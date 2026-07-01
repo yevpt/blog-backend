@@ -36,3 +36,33 @@ func TestReviewNotificationApprovedUsesContentExcerpt(t *testing.T) {
 	assert.Equal(t, "写得真好", intent.ContentExcerpt)
 	assert.Equal(t, "approved", intent.Decision)
 }
+
+func TestInteractionNotificationRepositoryContract(t *testing.T) {
+	commentID := uint64(7)
+	rootSnapshot := &moderationrepo.NotificationSnapshot{Type: "article", ID: 5}
+	quoteSnapshot := &moderationrepo.NotificationSnapshot{Type: "comment", ID: commentID}
+	intent := &moderationrepo.InteractionNotificationIntent{
+		Type: "comment_created", ActorUserID: 42, RecipientUserID: 99,
+		SourceType: "article_comment", SourceID: 0, RootType: "article", RootID: 5,
+		ContentExcerpt: "首次公开评论", CommentID: &commentID,
+		RootSnapshot: rootSnapshot, QuoteSnapshot: quoteSnapshot,
+	}
+	context := moderationrepo.ReviewNotificationContext{
+		ContentType: moderationrepo.SubjectArticleComment, InteractionRecipientUserID: 99,
+	}
+	command := moderationrepo.ApplyTransitionCommand{InteractionNotification: intent}
+
+	assert.Equal(t, uint64(99), context.InteractionRecipientUserID)
+	require.Same(t, intent, command.InteractionNotification)
+	assert.Equal(t, "comment_created", command.InteractionNotification.Type)
+	assert.Equal(t, uint64(42), command.InteractionNotification.ActorUserID)
+	assert.Equal(t, uint64(99), command.InteractionNotification.RecipientUserID)
+	assert.Equal(t, "article_comment", command.InteractionNotification.SourceType)
+	assert.Zero(t, command.InteractionNotification.SourceID)
+	assert.Equal(t, "article", command.InteractionNotification.RootType)
+	assert.Equal(t, uint64(5), command.InteractionNotification.RootID)
+	assert.Equal(t, "首次公开评论", command.InteractionNotification.ContentExcerpt)
+	assert.Same(t, &commentID, command.InteractionNotification.CommentID)
+	assert.Same(t, rootSnapshot, command.InteractionNotification.RootSnapshot)
+	assert.Same(t, quoteSnapshot, command.InteractionNotification.QuoteSnapshot)
+}
