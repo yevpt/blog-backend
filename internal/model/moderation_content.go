@@ -80,8 +80,8 @@ type ModerationRevision struct {
 	RiskLevel            string          `gorm:"size:16;not null;check:chk_moderation_revision_risk,risk_level IN ('low','medium','high')"`
 	PolicyAction         string          `gorm:"size:24;not null;check:chk_moderation_revision_policy,policy_action IN ('auto_approve','post_review','pre_review','block')"`
 	ReviewStatus         string          `gorm:"size:16;not null;index:idx_moderation_revision_item_status,priority:2;index:idx_moderation_revision_queue,priority:1;check:chk_moderation_revision_status,review_status IN ('pending','approved','rejected','superseded')"`
-	MomentStatus         *uint8          `gorm:"type:tinyint;comment:碎语提交时公开开关"`
-	MomentCommentStatus  *uint8          `gorm:"type:tinyint;comment:碎语提交时评论开关"`
+	MomentStatus         *uint8          `gorm:"type:tinyint"`
+	MomentCommentStatus  *uint8          `gorm:"type:tinyint"`
 	RulesetVersion       uint64          `gorm:"not null"`
 	RuleMatchIDs         string          `gorm:"type:json;not null"`
 	RuleMatchesTruncated bool            `gorm:"type:tinyint(1);not null;default:0"`
