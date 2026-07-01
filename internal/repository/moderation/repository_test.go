@@ -157,6 +157,45 @@ func TestApplyTransitionCreatesFirstSubjectItemAndRevisionAtomically(t *testing.
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestApplyTransitionNewGuestbookNotificationUsesAssignedIDForSourceAndRoot(t *testing.T) {
+	repository, mock := newRepository(t)
+	command := transitionCommand()
+	command.Subject = moderation.SubjectRef{Type: moderation.SubjectGuestbook, RootID: 99}
+	command.ExpectedLockVersion = 0
+	command.CreateSubject = true
+	command.InteractionNotification = &moderation.InteractionNotificationIntent{
+		Type: "guestbook_created", ActorUserID: 42, RecipientUserID: 99,
+		SourceType: "guestbook", RootType: "guestbook",
+		ContentExcerpt: "安全正文",
+	}
+
+	mock.ExpectBegin()
+	expectNoIdempotencyResult(mock, 42, "request-1")
+	mock.ExpectQuery("SELECT `id` FROM `user` WHERE .*id = \\?.*status = \\?.*LIMIT \\?").
+		WithArgs(uint64(99), uint8(1), 1).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(99))
+	mock.ExpectExec("INSERT INTO `guestbook`").WillReturnResult(sqlmock.NewResult(7, 1))
+	mock.ExpectExec("INSERT INTO `moderation_item`").WillReturnResult(sqlmock.NewResult(10, 1))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(MAX(version), 0) FROM `moderation_revision` WHERE item_id = ?")).
+		WithArgs(uint64(10)).WillReturnRows(sqlmock.NewRows([]string{"version"}).AddRow(0))
+	mock.ExpectExec("INSERT INTO `moderation_revision`").WillReturnResult(sqlmock.NewResult(101, 1))
+	mock.ExpectExec("UPDATE `moderation_item` SET ").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO `moderation_action_log`").WillReturnResult(sqlmock.NewResult(501, 1))
+	metadata := jsonArgument{expected: map[string]any{"recipient_user_ids": []any{float64(99)}}}
+	mock.ExpectExec("INSERT INTO `notification_event`").WithArgs(
+		fixedTime, fixedTime, nil, "guestbook_created", uint(42), "guestbook", uint(7),
+		"guestbook", uint(7), "", "安全正文", metadata, "pending", 0, fixedTime,
+		nil, nil, nil,
+	).WillReturnResult(sqlmock.NewResult(601, 1))
+	mock.ExpectCommit()
+
+	got, err := repository.ApplyTransition(context.Background(), command)
+
+	require.NoError(t, err)
+	assert.Equal(t, uint64(7), got.Subject.ID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestApplyTransitionCreatesPreReviewMomentHiddenInBusinessTable(t *testing.T) {
 	repository, mock := newRepository(t)
 	command := transitionCommand()

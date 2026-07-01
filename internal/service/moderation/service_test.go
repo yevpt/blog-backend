@@ -445,6 +445,73 @@ func TestServiceAutoApproveFirstPublicationCreatesInteractionNotification(t *tes
 	require.NoError(t, err)
 }
 
+func TestServiceAutoApproveNewGuestbookCreatesInteractionNotificationWithDeferredRootID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := moderation.SubmitCommand{
+		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectGuestbook, RootID: 91},
+		Content: "guestbook message", IdempotencyKey: "guestbook-auto-approve",
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), moderationrepo.SubjectRef(cmd.Subject)).Return(
+			moderationrepo.ReviewNotificationContext{InteractionRecipientUserID: 91}, nil,
+		),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				require.NotNil(t, persisted.InteractionNotification)
+				intent := persisted.InteractionNotification
+				assert.Equal(t, "guestbook_created", intent.Type)
+				assert.Equal(t, "guestbook", intent.SourceType)
+				assert.Zero(t, intent.SourceID)
+				assert.Equal(t, "guestbook", intent.RootType)
+				assert.Zero(t, intent.RootID)
+				return moderationrepo.AppliedTransition{
+					Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectGuestbook, ID: 41, RootID: 91},
+					ItemID:  51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,
+				}, nil
+			},
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionAutoApprove}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
+}
+
+func TestServiceAutoApproveNewMomentDoesNotCreateInteractionNotification(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	cmd := moderation.SubmitCommand{
+		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectMoment},
+		Content: "moment", IdempotencyKey: "moment-auto-approve",
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, persisted moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
+				assert.Nil(t, persisted.InteractionNotification)
+				return moderationrepo.AppliedTransition{
+					Subject: moderationrepo.SubjectRef{Type: moderationrepo.SubjectMoment, ID: 41},
+					ItemID:  51, RevisionID: 61, RevisionVersion: 1, LockVersion: 2,
+				}, nil
+			},
+		),
+	)
+
+	_, err := newApplicationService(
+		repo, &processorStub{}, &classifierStub{out: moderation.Classification{Risk: moderation.RiskLow}},
+		&deciderStub{action: moderation.ActionAutoApprove}, zap.NewNop(),
+	).Submit(context.Background(), cmd)
+
+	require.NoError(t, err)
+}
+
 func TestServiceAutoApprovePendingWithoutApprovedCreatesInteractionNotification(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)

@@ -46,7 +46,8 @@ func interactionNotification(
 	notifCtx moderationrepo.ReviewNotificationContext,
 ) *moderationrepo.InteractionNotificationIntent {
 	eventType, sourceType, rootType, rootID := interactionNotificationTarget(subject, notifCtx)
-	if eventType == "" || notifCtx.InteractionRecipientUserID == 0 || rootID == 0 {
+	deferredGuestbookRoot := subject.Type == moderationrepo.SubjectGuestbook && subject.ID == 0
+	if eventType == "" || notifCtx.InteractionRecipientUserID == 0 || (rootID == 0 && !deferredGuestbookRoot) {
 		return nil
 	}
 	return &moderationrepo.InteractionNotificationIntent{

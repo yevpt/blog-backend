@@ -628,12 +628,16 @@ func appendInteractionNotification(
 	if sourceID == 0 {
 		sourceID = materializedSubjectID
 	}
+	rootID := intent.RootID
+	if rootID == 0 {
+		rootID = materializedSubjectID
+	}
 	actorUserID := uint(intent.ActorUserID)
 	now := tx.NowFunc()
 	event := model.NotificationEvent{
 		Type: intent.Type, ActorUserID: &actorUserID,
 		SourceType: intent.SourceType, SourceID: uint(sourceID),
-		RootType: intent.RootType, RootID: uint(intent.RootID),
+		RootType: intent.RootType, RootID: uint(rootID),
 		ContentExcerpt: truncateNotificationRunes(intent.ContentExcerpt, 500),
 		MetadataJSON:   &value, DispatchStatus: "pending", NextProcessAt: now,
 	}
