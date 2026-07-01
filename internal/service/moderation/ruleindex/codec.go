@@ -60,8 +60,8 @@ func (s *Snapshot) EncodedSize() int64 {
 	return int64(size)
 }
 
-// WriteTo 将快照按固定小端格式流式写出，并在尾部追加 SHA-256。
-func (s *Snapshot) WriteTo(w io.Writer) (string, error) {
+// WriteEncodedTo 将快照按固定小端格式流式写出，并在尾部追加 SHA-256。
+func (s *Snapshot) WriteEncodedTo(w io.Writer) (string, error) {
 	if s == nil || w == nil {
 		return "", errors.New("规则索引写入参数无效")
 	}

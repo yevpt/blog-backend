@@ -144,7 +144,7 @@ func (m *manager) uploadSnapshot(ctx context.Context, objectKey string, snapshot
 		_ = os.Remove(tempPath)
 	}()
 
-	checksum, err := snapshot.WriteTo(tempFile)
+	checksum, err := snapshot.WriteEncodedTo(tempFile)
 	if err != nil {
 		return fmt.Errorf("写入临时索引文件: %w", err)
 	}

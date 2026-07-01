@@ -20,7 +20,7 @@ func TestCodecRoundTripPreservesMatchResult(t *testing.T) {
 	}, defaultLimits())
 	var encoded bytes.Buffer
 
-	checksum, err := before.WriteTo(&encoded)
+	checksum, err := before.WriteEncodedTo(&encoded)
 	require.NoError(t, err)
 	after, loadedChecksum, err := ruleindex.ReadFrom(bytes.NewReader(encoded.Bytes()), defaultLimits())
 	require.NoError(t, err)
@@ -36,9 +36,9 @@ func TestCodecWritesDeterministicBytes(t *testing.T) {
 	var first bytes.Buffer
 	var second bytes.Buffer
 
-	firstHash, err := snapshot.WriteTo(&first)
+	firstHash, err := snapshot.WriteEncodedTo(&first)
 	require.NoError(t, err)
-	secondHash, err := snapshot.WriteTo(&second)
+	secondHash, err := snapshot.WriteEncodedTo(&second)
 	require.NoError(t, err)
 
 	assert.Equal(t, firstHash, secondHash)
@@ -58,7 +58,7 @@ func TestReadRejectsChecksumMismatch(t *testing.T) {
 		{ID: 1, Type: "keyword", Pattern: "风险", Risk: "medium", Effect: "review"},
 	}, defaultLimits())
 	var encoded bytes.Buffer
-	_, err := snapshot.WriteTo(&encoded)
+	_, err := snapshot.WriteEncodedTo(&encoded)
 	require.NoError(t, err)
 	raw := encoded.Bytes()
 	raw[len(raw)-1] ^= 0xff
@@ -73,7 +73,7 @@ func TestReadRejectsDeclaredMemoryBeforeAllocating(t *testing.T) {
 		{ID: 1, Type: "keyword", Pattern: "风险", Risk: "medium", Effect: "review"},
 	}, defaultLimits())
 	var encoded bytes.Buffer
-	_, err := snapshot.WriteTo(&encoded)
+	_, err := snapshot.WriteEncodedTo(&encoded)
 	require.NoError(t, err)
 	limits := defaultLimits()
 	limits.MaxIndexMemoryBytes = 1
