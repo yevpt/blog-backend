@@ -1,6 +1,7 @@
 package dbschema
 
 import (
+	"os"
 	"regexp"
 	"testing"
 
@@ -133,6 +134,19 @@ func TestLoadColumnDefinitions(t *testing.T) {
 	assert.Equal(t, "`published_at` datetime(3) NULL DEFAULT NULL", definitions["article"]["published_at"])
 	assert.Equal(t, "`slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci GENERATED ALWAYS AS (lower(`title`)) STORED", definitions["article"]["slug"])
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestSchemaCommentsMigrationCoversCatalog(t *testing.T) {
+	sqlBytes, err := os.ReadFile("../../migrations/20260702_schema_comments.sql")
+	require.NoError(t, err)
+	sql := string(sqlBytes)
+
+	for table, tc := range SchemaComments().Tables {
+		assert.Contains(t, sql, "ALTER TABLE `"+table+"` COMMENT")
+		for column := range tc.Columns {
+			assert.Contains(t, sql, "ALTER TABLE `"+table+"` MODIFY COLUMN `"+column+"`")
+		}
+	}
 }
 
 func newCommentTestDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, func()) {
