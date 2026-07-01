@@ -98,7 +98,7 @@ func cleanupConfig() config.ModerationConfig {
 	return config.ModerationConfig{
 		Enabled: true,
 		Image: config.ModerationImageConfig{
-			ApprovalRetentionDays: 180, TempRetention: 24 * time.Hour,
+			ApprovalRetentionDays: 90, TempRetention: 24 * time.Hour,
 			OrphanMinAge: 24 * time.Hour, CleanupInterval: 24 * time.Hour,
 			CleanupBatchSize: 20, StaticPlaceholderKey: "system/moderation/image-review.jpg",
 			GIFPlaceholderKey: "system/moderation/gif-review.jpg",
@@ -110,25 +110,31 @@ func cleanupConfig() config.ModerationConfig {
 	}
 }
 
-// TestCleanupStagingAndHistoryPrefixes 验证新追加的两个清理目标：
-// - moderation/staging/ 使用 OrphanMinAge 超龄即删，不做引用检查
-// - moderation/history/ 使用 ApprovalRetentionDays 保留窗口，不做引用检查
-func TestCleanupStagingAndHistoryPrefixes(t *testing.T) {
+// TestCleanupImagePrefixesProtectsReferencesAndRemovesOrphans 验证暂存、审计和正式目录都先检查引用。
+func TestCleanupImagePrefixesProtectsReferencesAndRemovesOrphans(t *testing.T) {
 	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
 	repo := &cleanupRepositoryStub{
-		referenced: map[string]struct{}{},
+		referenced: map[string]struct{}{
+			"moderation/staging/referenced.jpg": {},
+			"moderation/history/referenced.jpg": {},
+			"moments/7/9/current.jpg":           {},
+		},
 	}
 	store := &cleanupStoreStub{
 		pages: map[string]storage.ObjectPage{
-			// staging：48h > OrphanMinAge(24h)，应被删除
 			"moderation/staging/": {Objects: []storage.ObjectMetadata{
-				{Key: "moderation/staging/old.jpg", LastModified: now.Add(-48 * time.Hour)},
+				{Key: "moderation/staging/referenced.jpg", LastModified: now.Add(-48 * time.Hour)},
+				{Key: "moderation/staging/orphan.jpg", LastModified: now.Add(-48 * time.Hour)},
 				{Key: "moderation/staging/fresh.jpg", LastModified: now.Add(-time.Hour)},
 			}},
-			// history：180d + 1h 超出 ApprovalRetentionDays(180d)，应被删除；newer 不删
 			"moderation/history/": {Objects: []storage.ObjectMetadata{
-				{Key: "moderation/history/old.jpg", LastModified: now.Add(-(180*24*time.Hour + time.Hour))},
+				{Key: "moderation/history/referenced.jpg", LastModified: now.Add(-(90*24*time.Hour + time.Hour))},
+				{Key: "moderation/history/orphan.jpg", LastModified: now.Add(-(90*24*time.Hour + time.Hour))},
 				{Key: "moderation/history/newer.jpg", LastModified: now.Add(-72 * time.Hour)},
+			}},
+			"moments/": {Objects: []storage.ObjectMetadata{
+				{Key: "moments/7/9/current.jpg", LastModified: now.Add(-48 * time.Hour)},
+				{Key: "moments/7/9/orphan.jpg", LastModified: now.Add(-48 * time.Hour)},
 			}},
 		},
 	}
@@ -139,8 +145,7 @@ func TestCleanupStagingAndHistoryPrefixes(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.ElementsMatch(t,
-		[]string{"moderation/staging/old.jpg", "moderation/history/old.jpg"},
+		[]string{"moderation/staging/orphan.jpg", "moderation/history/orphan.jpg", "moments/7/9/orphan.jpg"},
 		store.deleted,
 	)
 }
-

@@ -66,7 +66,7 @@ func (r *repository) CleanupAudit(ctx context.Context, cmd AuditCleanupCommand) 
 		var revisionIDs []uint64
 		if err := tx.WithContext(ctx).Raw(`SELECT id FROM moderation_revision
 WHERE created_at < ?
-  AND review_status IN ('rejected','superseded')
+  AND review_status IN ('rejected','superseded','approved')
   AND NOT EXISTS (
     SELECT 1 FROM moderation_item
     WHERE materialized_revision_id = moderation_revision.id
@@ -128,10 +128,12 @@ func (r *repository) ReferencedObjectKeys(ctx context.Context, keys []string) (m
 		return result, nil
 	}
 	var rows []string
-	err := r.db.WithContext(ctx).Raw(`SELECT preview_object_key AS object_key
+	err := r.db.WithContext(ctx).Raw(`SELECT preview_object_key COLLATE utf8mb4_unicode_ci AS object_key
 FROM moderation_image WHERE preview_object_key IN ?
 UNION
-SELECT object_key FROM moderation_revision_image WHERE object_key IN ?`, keys, keys).Scan(&rows).Error
+SELECT object_key COLLATE utf8mb4_unicode_ci FROM moderation_revision_image WHERE object_key IN ?
+UNION
+SELECT url COLLATE utf8mb4_unicode_ci AS object_key FROM moment_media WHERE url IN ?`, keys, keys, keys).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}

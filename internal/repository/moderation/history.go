@@ -52,7 +52,7 @@ func (r *repository) LoadReviewHistory(ctx context.Context, itemID uint64, page,
 	if err != nil {
 		return ReviewHistoryPage{}, err
 	}
-	events, err := r.loadReviewHistoryEvents(ctx, itemID)
+	events, err := r.loadReviewHistoryEvents(ctx, itemID, revisions, page == 1)
 	if err != nil {
 		return ReviewHistoryPage{}, err
 	}
@@ -118,11 +118,29 @@ func (r *repository) loadReviewHistoryImages(ctx context.Context, revisions []Re
 	return images, nil
 }
 
-func (r *repository) loadReviewHistoryEvents(ctx context.Context, itemID uint64) ([]ReviewHistoryEvent, error) {
+func (r *repository) loadReviewHistoryEvents(
+	ctx context.Context,
+	itemID uint64,
+	revisions []ReviewRecord,
+	includeItemEvents bool,
+) ([]ReviewHistoryEvent, error) {
+	if len(revisions) == 0 {
+		return []ReviewHistoryEvent{}, nil
+	}
+	revisionIDs := make([]uint64, 0, len(revisions))
+	for _, revision := range revisions {
+		revisionIDs = append(revisionIDs, revision.RevisionID)
+	}
 	var rows []reviewHistoryEventRow
-	err := r.db.WithContext(ctx).Table("moderation_action_log").
+	query := r.db.WithContext(ctx).Table("moderation_action_log").
 		Select("id,revision_id,actor_user_id,action,reason,metadata_json,created_at").
-		Where("item_id = ?", itemID).Order("created_at ASC,id ASC").Scan(&rows).Error
+		Where("item_id = ?", itemID)
+	if includeItemEvents {
+		query = query.Where("(revision_id IN ? OR revision_id IS NULL)", revisionIDs)
+	} else {
+		query = query.Where("revision_id IN ?", revisionIDs)
+	}
+	err := query.Order("created_at ASC,id ASC").Limit(1000).Scan(&rows).Error
 	if err != nil {
 		return nil, err
 	}

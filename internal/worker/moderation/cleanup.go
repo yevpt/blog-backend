@@ -3,7 +3,6 @@ package moderation
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
@@ -132,9 +131,9 @@ func (w *Worker) cleanupObjectPrefixes(ctx context.Context, now time.Time) int {
 		{prefix: "moderation/previews/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true},
 		{prefix: "temp/", maxAge: w.cfg.Image.TempRetention},
 		{prefix: "comments/moderation/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true},
-		{prefix: "moments/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true, moderationOnly: true},
-		{prefix: "moderation/staging/", maxAge: w.cfg.Image.OrphanMinAge},
-		{prefix: "moderation/history/", maxAge: time.Duration(w.cfg.Image.ApprovalRetentionDays) * 24 * time.Hour},
+		{prefix: "moments/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true},
+		{prefix: "moderation/staging/", maxAge: w.cfg.Image.OrphanMinAge, checkReference: true},
+		{prefix: "moderation/history/", maxAge: time.Duration(w.cfg.Image.ApprovalRetentionDays) * 24 * time.Hour, checkReference: true},
 	}
 	deleted := 0
 	for _, target := range targets {
@@ -147,7 +146,6 @@ type objectCleanupTarget struct {
 	prefix         string
 	maxAge         time.Duration
 	checkReference bool
-	moderationOnly bool
 }
 
 func (w *Worker) cleanupObjectTarget(ctx context.Context, target objectCleanupTarget, now time.Time) int {
@@ -193,9 +191,6 @@ func oldObjectKeys(objects []storage.ObjectMetadata, target objectCleanupTarget,
 	keys := make([]string, 0, len(objects))
 	for _, object := range objects {
 		if object.Key == "" || object.LastModified.IsZero() || object.LastModified.After(cutoff) {
-			continue
-		}
-		if target.moderationOnly && !strings.Contains(object.Key, "/moderation/") {
 			continue
 		}
 		keys = append(keys, object.Key)

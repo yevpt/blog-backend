@@ -25,8 +25,8 @@ func TestLoadReviewHistoryReturnsPagedRevisionsImagesAndEvents(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "revision_id", "seq", "object_key", "sha256", "md5", "size", "media_type", "is_gif"}).
 			AddRow(101, 30, 0, "moderation/history/moments/10/v2.jpg", "sha-v2", "md5-v2", 20, "image/jpeg", false).
 			AddRow(102, 31, 0, "moments/42/7/v3.jpg", "sha-v3", "md5-v3", 30, "image/jpeg", false))
-	mock.ExpectQuery("SELECT .* FROM `moderation_action_log` WHERE item_id = \\? ORDER BY created_at ASC,id ASC").
-		WithArgs(uint64(10)).
+	mock.ExpectQuery("SELECT .* FROM `moderation_action_log` WHERE item_id = \\? AND \\(\\(revision_id IN \\(\\?,\\?\\) OR revision_id IS NULL\\)\\) ORDER BY created_at ASC,id ASC LIMIT \\?").
+		WithArgs(uint64(10), uint64(31), uint64(30), 1000).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "revision_id", "actor_user_id", "action", "reason", "metadata_json", "created_at"}).
 			AddRow(201, 30, 42, "resubmit", nil, nil, fixedTime).
 			AddRow(202, 31, 1, "approve", "通过", `{\"source\":\"admin\"}`, fixedTime))

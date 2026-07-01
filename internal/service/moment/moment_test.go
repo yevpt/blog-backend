@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -182,6 +183,7 @@ type fakeMomentObjectStore struct {
 	putErrOnCall int
 	deleteKeys   []string
 	deleteErr    error
+	copyKeys     [][2]string
 	uploadedData map[string][]byte
 	uploadedType map[string]string
 }
@@ -221,7 +223,12 @@ func (s *fakeMomentObjectStore) MoveObject(context.Context, string, string) erro
 	return nil
 }
 
-func (s *fakeMomentObjectStore) CopyObject(context.Context, string, string) error {
+func (s *fakeMomentObjectStore) CopyObject(_ context.Context, source, target string) error {
+	s.copyKeys = append(s.copyKeys, [2]string{source, target})
+	if s.exists == nil {
+		s.exists = map[string]bool{}
+	}
+	s.exists[target] = true
 	return nil
 }
 
@@ -348,7 +355,8 @@ func TestMomentModeratedSaveUploadsFilesAndPassesOrderedObjectKeys(t *testing.T)
 	ctrl := gomock.NewController(t)
 	moderationSvc := moderationmock.NewMockService(ctrl)
 	fileData := testGIF(t)
-	fileKey := "moments/7/moderation/" + md5Hex(fileData) + ".gif"
+	batchHash := sha256.Sum256([]byte("moment-images"))
+	fileKey := "moderation/staging/moments/7/" + hex.EncodeToString(batchHash[:8]) + "/" + md5Hex(fileData) + ".gif"
 	store := &fakeMomentObjectStore{exists: map[string]bool{"moments/7/8/old.jpg": true}}
 	moderationSvc.EXPECT().Edit(gomock.Any(), moderationservice.EditCommand{
 		ActorID: 7, Subject: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 8},
@@ -397,6 +405,46 @@ func TestMomentModeratedEditRejectsOtherMomentImage(t *testing.T) {
 	_, err := svc.Save(dto.MomentSaveReq{
 		ID: ptrUint(9), Content: "碎语", Status: 1, CommentStatus: 1,
 		ImageURLs: []string{"moments/7/8/old.jpg"},
+	}, 7, nil)
+
+	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)
+}
+
+func TestMomentModeratedEditReusesOwnPendingStagingImage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	stagingKey := "moderation/staging/moments/7/old-request/pending.jpg"
+	batchHash := sha256.Sum256([]byte("repeat-edit"))
+	reusedKey := "moderation/staging/moments/7/" + hex.EncodeToString(batchHash[:8]) + "/pending.jpg"
+	moderationSvc.EXPECT().Edit(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, cmd moderationservice.EditCommand) (moderationservice.SubmitResult, error) {
+			require.Equal(t, []string{reusedKey}, cmd.ImageKeys)
+			return moderationservice.SubmitResult{Subject: cmd.Subject, AuthorID: 7}, nil
+		},
+	)
+	store := &fakeMomentObjectStore{exists: map[string]bool{stagingKey: true}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID: ptrUint(9), Content: "再次编辑", Status: 1, CommentStatus: 1,
+		IdempotencyKey: "repeat-edit", ImageURLs: []string{stagingKey},
+	}, 7, nil)
+
+	require.NoError(t, err)
+	require.Equal(t, [][2]string{{stagingKey, reusedKey}}, store.copyKeys)
+}
+
+func TestMomentModeratedEditRejectsOtherUsersPendingStagingImage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	moderationSvc := moderationmock.NewMockService(ctrl)
+	moderationSvc.EXPECT().Edit(gomock.Any(), gomock.Any()).AnyTimes().Return(moderationservice.SubmitResult{}, nil)
+	stagingKey := "moderation/staging/moments/8/request/pending.jpg"
+	store := &fakeMomentObjectStore{exists: map[string]bool{stagingKey: true}}
+	svc := momentservice.NewMomentService(&fakeMomentRepo{}, store, nil, nil, nil, moderationSvc)
+
+	_, err := svc.Save(dto.MomentSaveReq{
+		ID: ptrUint(9), Content: "越权图片", Status: 1, CommentStatus: 1,
+		IdempotencyKey: "cross-user", ImageURLs: []string{stagingKey},
 	}, 7, nil)
 
 	require.ErrorIs(t, err, momentservice.ErrMomentImageInvalid)

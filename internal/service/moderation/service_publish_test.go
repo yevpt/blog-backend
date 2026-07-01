@@ -66,7 +66,11 @@ func TestAutoApproveMomentWithImagesCallsPublisher(t *testing.T) {
 		Fingerprint: moderationmedia.Fingerprint{SHA256: "sha", MD5: "md5", Size: 10},
 		ObjectKey:   "moderation/staging/moments/7/u1/sha.jpg", MediaType: "image/jpeg",
 	}}}}
-	publisher := &publisherStub{}
+	publisher := &publisherStub{result: moderationmedia.PublishResult{Images: []moderationmedia.PublishedImage{{
+		SourceKey: "moderation/staging/moments/7/u1/sha.jpg",
+		PublicKey: "moments/7/88/sha.jpg",
+		Seq:       1,
+	}}}}
 	cmd := moderation.SubmitCommand{
 		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectMoment},
 		Content: "碎语带图", IdempotencyKey: "moment-auto-1",
@@ -85,7 +89,7 @@ func TestAutoApproveMomentWithImagesCallsPublisher(t *testing.T) {
 		}}, nil),
 	)
 
-	_, err := newServiceWithPublisher(repo, media, publisher).Submit(context.Background(), cmd)
+	result, err := newServiceWithPublisher(repo, media, publisher).Submit(context.Background(), cmd)
 
 	require.NoError(t, err)
 	require.True(t, publisher.called)
@@ -95,6 +99,50 @@ func TestAutoApproveMomentWithImagesCallsPublisher(t *testing.T) {
 	assert.Equal(t, uint64(88), publisher.command.MomentID)
 	require.Len(t, publisher.command.Current, 1)
 	assert.Equal(t, "moderation/staging/moments/7/u1/sha.jpg", publisher.command.Current[0].ObjectKey)
+	require.Len(t, result.Images, 1)
+	assert.Equal(t, "moments/7/88/sha.jpg", result.Images[0].SourceObjectKey)
+	assert.Equal(t, "moments/7/88/sha.jpg", result.Images[0].DisplayObjectKey)
+	assert.True(t, result.Images[0].Approved)
+}
+
+func TestAutoApproveMomentRemovingAllImagesStillArchivesPreviousImages(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	publisher := &publisherStub{}
+	cmd := moderation.EditCommand{
+		ActorID: 7, Subject: moderation.SubjectRef{Type: moderation.SubjectMoment, ID: 88},
+		Content: "删除全部图片", IdempotencyKey: "moment-remove-images",
+	}
+	ref := moderationrepo.SubjectRef{Type: moderationrepo.SubjectMoment, ID: 88}
+	item := moderationrepo.ItemStateRecord{
+		ItemID: 10, AuthorID: 7, LockVersion: 2,
+		State: moderationrepo.ItemState{
+			LifecycleState: moderationrepo.LifecycleActive, PublicState: moderationrepo.PublicVisible,
+			Materialized: moderationrepo.ExistingRevision(19), Approved: moderationrepo.ExistingRevision(19),
+		},
+	}
+	gomock.InOrder(
+		repo.EXPECT().FindResultByIdempotencyKey(gomock.Any(), cmd.ActorID, cmd.IdempotencyKey).Return(nil, nil),
+		repo.EXPECT().LoadPolicyContext(gomock.Any(), cmd.ActorID).Return(normalPolicyContext(), nil),
+		repo.EXPECT().LoadItemState(gomock.Any(), moderationrepo.SubjectRef{Type: moderationrepo.SubjectMoment, ID: 88}).Return(item, nil),
+		repo.EXPECT().LoadSubject(gomock.Any(), ref).Return(
+			moderationrepo.SubjectSnapshot{Ref: ref, AuthorID: 7, Content: "旧正文"}, nil),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).Return(moderationrepo.AppliedTransition{
+			Subject: ref, ItemID: 10, RevisionID: 20, RevisionVersion: 2, LockVersion: 3,
+		}, nil),
+		repo.EXPECT().LoadRevisionImages(gomock.Any(), uint64(20)).Return(nil, nil),
+		repo.EXPECT().LoadRevisionImages(gomock.Any(), uint64(19)).Return([]moderationrepo.RevisionImageRecord{{
+			ImageFingerprint: moderationrepo.ImageFingerprint{SHA256: "oldsha", MD5: "oldmd5", Size: 10},
+			Seq:              1, ObjectKey: "moments/7/88/oldsha.jpg", MediaType: "image/jpeg",
+		}}, nil),
+	)
+
+	_, err := newServiceWithPublisher(repo, nil, publisher).Edit(context.Background(), cmd)
+
+	require.NoError(t, err)
+	require.True(t, publisher.called)
+	assert.Empty(t, publisher.command.Current)
+	require.Len(t, publisher.command.Previous, 1)
 }
 
 func TestAutoApprovePublisherFailureRevertsProjectionAndReturnsError(t *testing.T) {
@@ -171,6 +219,41 @@ func TestReviewApproveMomentWithImagesCallsPublisher(t *testing.T) {
 	require.Len(t, publisher.command.Current, 1)
 	require.Len(t, publisher.command.Previous, 1)
 	assert.Equal(t, "moments/42/8/oldsha.jpg", publisher.command.Previous[0].ObjectKey)
+}
+
+func TestReviewApproveRemovingAllImagesStillArchivesPreviousImages(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := repositorymock.NewMockRepository(ctrl)
+	publisher := &publisherStub{}
+	record := pendingMomentReviewRecord()
+	record.ReviewStatus = moderationrepo.ReviewPending
+	gomock.InOrder(
+		repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil),
+		repo.EXPECT().LoadRevisionImages(gomock.Any(), record.RevisionID).Return(nil, nil),
+		repo.EXPECT().LoadRevisionImages(gomock.Any(), record.State.Materialized.ID).Return([]moderationrepo.RevisionImageRecord{{
+			ImageFingerprint: moderationrepo.ImageFingerprint{SHA256: "oldsha", MD5: "oldmd5", Size: 10},
+			Seq:              1, ObjectKey: "moments/42/8/oldsha.jpg", MediaType: "image/jpeg",
+		}}, nil),
+		repo.EXPECT().LoadSubject(gomock.Any(), record.Subject).Return(
+			moderationrepo.SubjectSnapshot{Ref: record.Subject, AuthorID: record.AuthorID, Content: record.PublishedContent}, nil,
+		),
+		repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
+			moderationrepo.ReviewNotificationContext{ContentType: moderationrepo.SubjectMoment}, nil,
+		),
+		repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).Return(moderationrepo.AppliedTransition{
+			Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4,
+		}, nil),
+	)
+
+	_, err := newReviewServiceWithPublisher(repo, publisher).Approve(context.Background(), moderation.ReviewCommand{
+		ItemID: record.ItemID, RevisionID: record.RevisionID,
+		ExpectedLockVersion: record.LockVersion, ReviewerID: 1,
+	})
+
+	require.NoError(t, err)
+	require.True(t, publisher.called)
+	assert.Empty(t, publisher.command.Current)
+	require.Len(t, publisher.command.Previous, 1)
 }
 
 func TestReviewCorrectMomentWithImagesCallsPublisher(t *testing.T) {

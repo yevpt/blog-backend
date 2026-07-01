@@ -30,6 +30,10 @@ func (r *repository) ApplyPublishedImageKeys(ctx context.Context, cmd PublishedI
 		if !revisionIsCurrent(item, cmd.RevisionID) {
 			return ErrRevisionStateConflict
 		}
+		if item.ContentType != string(SubjectMoment) || item.ContentID != cmd.MomentID ||
+			item.AuthorID != cmd.AuthorID || item.LifecycleState != string(LifecycleActive) {
+			return ErrRevisionStateConflict
+		}
 		// 更新当前版本图片引用为正式 key。
 		now := tx.NowFunc()
 		for _, key := range cmd.ImageKeys {
@@ -39,14 +43,30 @@ func (r *repository) ApplyPublishedImageKeys(ctx context.Context, cmd PublishedI
 			if result.Error != nil {
 				return result.Error
 			}
+			if result.RowsAffected != 1 {
+				return ErrRevisionStateConflict
+			}
 		}
 		// 将旧公开图片引用改为审计 key。
 		for _, move := range cmd.AuditMoves {
+			itemRevisions := tx.WithContext(ctx).Model(&model.ModerationRevision{}).
+				Select("id").Where("item_id = ?", cmd.ItemID)
 			result := tx.WithContext(ctx).Model(&model.ModerationRevisionImage{}).
-				Where("object_key = ?", move.OldObjectKey).
+				Where("object_key = ? AND revision_id IN (?)", move.OldObjectKey, itemRevisions).
 				Updates(map[string]any{"object_key": move.NewObjectKey, "updated_at": now})
 			if result.Error != nil {
 				return result.Error
+			}
+		}
+		if item.PublicState == string(PublicPlaceholder) {
+			result := tx.WithContext(ctx).Model(&model.ModerationItem{}).
+				Where("id = ? AND public_state = ?", cmd.ItemID, string(PublicPlaceholder)).
+				Updates(map[string]any{"public_state": string(PublicVisible), "updated_at": now})
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected != 1 {
+				return ErrRevisionStateConflict
 			}
 		}
 		return rebuildMomentMedia(ctx, tx, cmd.MomentID, cmd.AuthorID, cmd.RevisionID)
@@ -59,10 +79,28 @@ func (r *repository) RevertPublicProjection(ctx context.Context, itemID, momentI
 		return ErrInvalidCommand
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.WithContext(ctx).Model(&model.ModerationItem{}).
-			Where("id = ?", itemID).
-			Updates(map[string]any{"public_state": string(PublicPlaceholder), "updated_at": tx.NowFunc()}).Error; err != nil {
+		var item model.ModerationItem
+		if err := tx.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", itemID).Take(&item).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrItemNotFound
+			}
 			return err
+		}
+		if item.ContentType != string(SubjectMoment) || item.ContentID != momentID {
+			return ErrRevisionStateConflict
+		}
+		if item.PublicState != string(PublicVisible) && item.PublicState != string(PublicPlaceholder) {
+			return nil
+		}
+		result := tx.WithContext(ctx).Model(&model.ModerationItem{}).
+			Where("id = ? AND public_state IN ?", itemID, []string{string(PublicVisible), string(PublicPlaceholder)}).
+			Updates(map[string]any{"public_state": string(PublicPlaceholder), "updated_at": tx.NowFunc()})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrRevisionStateConflict
 		}
 		return tx.WithContext(ctx).Unscoped().Where("moment_id = ?", momentID).Delete(&model.Media{}).Error
 	})

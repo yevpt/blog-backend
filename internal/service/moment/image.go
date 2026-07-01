@@ -3,6 +3,7 @@ package moment
 import (
 	"context"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -22,7 +23,7 @@ import (
 
 const (
 	momentImageObjectPrefix   = "moments/"
-	momentModerationDir       = "moderation"
+	momentStagingObjectPrefix = "moderation/staging/moments/"
 	maxMomentImageCount       = 9
 	maxMomentImageOriginal    = 3 * 1024 * 1024
 	maxMomentGifOriginal      = 300 * 1024
@@ -61,6 +62,22 @@ func (s *momentService) prepareModerationMomentImages(
 		if !exists {
 			return nil, ErrMomentImageNotFound
 		}
+		if momentStagingImageBelongsToUser(key, authorID) {
+			target := fmt.Sprintf("%s%d/%s/%s", momentStagingObjectPrefix, authorID, momentUploadBatchID(req.IdempotencyKey), filepath.Base(key))
+			if target != key {
+				targetExists, targetErr := store.ObjectExists(ctx, target)
+				if targetErr != nil {
+					return nil, targetErr
+				}
+				if !targetExists {
+					if copyErr := store.CopyObject(ctx, key, target); copyErr != nil {
+						return nil, copyErr
+					}
+					*uploaded = append(*uploaded, target)
+				}
+				key = target
+			}
+		}
 		return append(result, key), nil
 	}
 	appendFile := func(result []string, index int) ([]string, error) {
@@ -71,7 +88,7 @@ func (s *momentService) prepareModerationMomentImages(
 		if processErr != nil {
 			return nil, processErr
 		}
-		key := fmt.Sprintf("%s%d/%s/%s%s", momentImageObjectPrefix, authorID, momentModerationDir, fileMD5(processed.Data), processed.Ext)
+		key := fmt.Sprintf("%s%d/%s/%s%s", momentStagingObjectPrefix, authorID, momentUploadBatchID(req.IdempotencyKey), fileMD5(processed.Data), processed.Ext)
 		exists, existsErr := store.ObjectExists(ctx, key)
 		if existsErr != nil {
 			return nil, existsErr
@@ -137,6 +154,12 @@ func (s *momentService) prepareModerationMomentImages(
 		return nil, ErrMomentImageInvalid
 	}
 	return result, nil
+}
+
+// momentUploadBatchID 为同一幂等请求生成稳定目录，避免重试产生不同暂存对象。
+func momentUploadBatchID(idempotencyKey string) string {
+	sum := sha256.Sum256([]byte(idempotencyKey))
+	return hex.EncodeToString(sum[:8])
 }
 
 const (
@@ -304,7 +327,14 @@ func existingMomentImage(ctx context.Context, store storage.ObjectStore, rawURL 
 }
 
 func reusableModerationMomentImage(key string, userID uint, momentID *uint) bool {
-	return momentID != nil && momentImageObjectBelongsToMoment(key, userID, *momentID)
+	return momentID != nil && (momentImageObjectBelongsToMoment(key, userID, *momentID) ||
+		momentStagingImageBelongsToUser(key, userID))
+}
+
+func momentStagingImageBelongsToUser(key string, userID uint) bool {
+	prefix := fmt.Sprintf("%s%d/", momentStagingObjectPrefix, userID)
+	remainder := strings.TrimPrefix(key, prefix)
+	return remainder != key && remainder != "" && !strings.Contains(remainder, "..") && filepath.Base(remainder) != "."
 }
 
 func uploadMomentImage(
@@ -398,6 +428,9 @@ type processedMomentImage struct {
 func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, error) {
 	if isMomentGifFile(file) {
 		validated, err := imagefile.Validate(file.Name, file.Data, maxMomentGifOriginal)
+		if errors.Is(err, imagefile.ErrImageTooManyPixels) {
+			return processedMomentImage{}, newMomentImageInvalidError(imagefile.ErrImageTooManyPixels.Error())
+		}
 		if errors.Is(err, imagefile.ErrImageTooLarge) {
 			return processedMomentImage{}, newMomentImageInvalidError(momentGifTooLargeMessage)
 		}
@@ -416,6 +449,9 @@ func processMomentImageFile(file dto.MomentImageFileReq) (processedMomentImage, 
 	stored, err := imagefile.PrepareForStorage(file.Name, file.Data, imagefile.PrepareOptions{
 		MaxStoredBytes: maxMomentImageStoredBytes,
 	})
+	if errors.Is(err, imagefile.ErrImageTooManyPixels) {
+		return processedMomentImage{}, newMomentImageInvalidError(imagefile.ErrImageTooManyPixels.Error())
+	}
 	if errors.Is(err, imagefile.ErrInvalidImage) {
 		return processedMomentImage{}, newMomentImageInvalidError(
 			"图片无法读取，请确认文件未损坏，并尝试换一张 " + momentImageReadableFormatsText,
@@ -500,11 +536,12 @@ func momentImageObjectKey(value string) string {
 	rawPath, _, _ = strings.Cut(rawPath, "#")
 
 	key := strings.TrimLeft(strings.TrimSpace(rawPath), "/")
-	index := strings.Index(key, momentImageObjectPrefix)
-	if index < 0 {
-		return ""
+	for _, prefix := range []string{momentStagingObjectPrefix, momentImageObjectPrefix} {
+		if index := strings.Index(key, prefix); index >= 0 {
+			return key[index:]
+		}
 	}
-	return key[index:]
+	return ""
 }
 
 func fileExt(file dto.MomentImageFileReq) string {

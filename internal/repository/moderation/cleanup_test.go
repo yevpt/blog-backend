@@ -30,7 +30,7 @@ func TestCleanupAuditDeletesOnlyExpiredUnreferencedRowsWithinBatch(t *testing.T)
 		WithArgs(cutoff, 50).WillReturnResult(sqlmock.NewResult(0, 4))
 	mock.ExpectExec("DELETE FROM moderation_action_log WHERE created_at < \\? ORDER BY id LIMIT \\?").
 		WithArgs(cutoff, 50).WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectQuery("SELECT id FROM moderation_revision.*NOT EXISTS.*materialized_revision_id.*approved_revision_id.*pending_revision_id.*LIMIT \\?.*FOR UPDATE").
+	mock.ExpectQuery("SELECT id FROM moderation_revision.*review_status IN \\('rejected','superseded','approved'\\).*NOT EXISTS.*materialized_revision_id.*approved_revision_id.*pending_revision_id.*LIMIT \\?.*FOR UPDATE").
 		WithArgs(cutoff, 50).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(5).AddRow(6))
 	mock.ExpectExec("DELETE FROM `moderation_revision_image` WHERE revision_id IN ").
 		WillReturnResult(sqlmock.NewResult(0, 3))
@@ -46,6 +46,20 @@ func TestCleanupAuditDeletesOnlyExpiredUnreferencedRowsWithinBatch(t *testing.T)
 	assert.Equal(t, int64(4), got.Attempts)
 	assert.Equal(t, int64(3), got.ActionLogs)
 	assert.Equal(t, int64(2), got.Revisions)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestReferencedObjectKeysIncludesBusinessMedia(t *testing.T) {
+	repository, mock := newCleanupRepository(t)
+	keys := []string{"moments/7/9/current.jpg", "moments/7/9/orphan.jpg"}
+	mock.ExpectQuery("SELECT preview_object_key AS object_key.*UNION.*moderation_revision_image.*UNION.*moment_media").
+		WithArgs(keys[0], keys[1], keys[0], keys[1], keys[0], keys[1]).
+		WillReturnRows(sqlmock.NewRows([]string{"object_key"}).AddRow("moments/7/9/current.jpg"))
+
+	got, err := repository.ReferencedObjectKeys(context.Background(), keys)
+
+	require.NoError(t, err)
+	assert.Contains(t, got, "moments/7/9/current.jpg")
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 

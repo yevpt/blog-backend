@@ -174,9 +174,11 @@ func (s *applicationService) write(ctx context.Context, input writeInput) (Submi
 		value := rewriteImageKeys(*result.PendingContent, input.imageViews)
 		result.PendingContent = &value
 	}
-	if err := s.publishApprovedMomentImages(ctx, applied, input, item, action); err != nil {
+	published, err := s.publishApprovedMomentImages(ctx, applied, input, item, action)
+	if err != nil {
 		return SubmitResult{}, err
 	}
+	applyPublishedMomentImages(&result, published)
 	return result, nil
 }
 
@@ -400,26 +402,26 @@ func (s *applicationService) publishApprovedMomentImages(
 	input writeInput,
 	item moderationrepo.ItemStateRecord,
 	action PolicyAction,
-) error {
+) (moderationmedia.PublishResult, error) {
 	if s.publisher == nil || action != ActionAutoApprove ||
-		applied.Subject.Type != moderationrepo.SubjectMoment || len(input.images) == 0 {
-		return nil
+		applied.Subject.Type != moderationrepo.SubjectMoment {
+		return moderationmedia.PublishResult{}, nil
 	}
 	current, err := s.repo.LoadRevisionImages(ctx, applied.RevisionID)
 	if err != nil {
-		return err
-	}
-	if len(current) == 0 {
-		return nil
+		return moderationmedia.PublishResult{}, err
 	}
 	var previous []moderationrepo.RevisionImageRecord
 	if item.State.Materialized.ID != 0 {
 		previous, err = s.repo.LoadRevisionImages(ctx, item.State.Materialized.ID)
 		if err != nil {
-			return err
+			return moderationmedia.PublishResult{}, err
 		}
 	}
-	_, err = s.publisher.Publish(ctx, moderationmedia.PublishCommand{
+	if len(current) == 0 && len(previous) == 0 {
+		return moderationmedia.PublishResult{}, nil
+	}
+	result, err := s.publisher.Publish(ctx, moderationmedia.PublishCommand{
 		ItemID: applied.ItemID, RevisionID: applied.RevisionID,
 		UserID: resolvedAuthorID(input, item), MomentID: applied.Subject.ID,
 		Current: current, Previous: previous,
@@ -433,7 +435,33 @@ func (s *applicationService) publishApprovedMomentImages(
 		if revertErr := s.repo.RevertPublicProjection(ctx, applied.ItemID, applied.Subject.ID); revertErr != nil {
 			s.logger.Error("收回公开投影失败", zap.Error(revertErr))
 		}
-		return err
+		return moderationmedia.PublishResult{}, err
 	}
-	return nil
+	return result, nil
+}
+
+func applyPublishedMomentImages(result *SubmitResult, published moderationmedia.PublishResult) {
+	if result == nil || len(published.Images) == 0 {
+		return
+	}
+	replacements := make(map[string]string, len(published.Images))
+	bySeq := make(map[uint]string, len(published.Images))
+	for _, image := range published.Images {
+		replacements[image.SourceKey] = image.PublicKey
+		bySeq[image.Seq] = image.PublicKey
+	}
+	result.Content = applyImageReplacements(result.Content, replacements)
+	if result.PendingContent != nil {
+		value := applyImageReplacements(*result.PendingContent, replacements)
+		result.PendingContent = &value
+	}
+	for index := range result.Images {
+		key, ok := bySeq[result.Images[index].Seq]
+		if !ok {
+			continue
+		}
+		result.Images[index].SourceObjectKey = key
+		result.Images[index].DisplayObjectKey = key
+		result.Images[index].Approved = true
+	}
 }

@@ -330,9 +330,6 @@ func (s *reviewService) loadMomentPublishImages(
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(current) == 0 {
-		return nil, nil, nil
-	}
 	var previous []moderationrepo.RevisionImageRecord
 	if record.State.Materialized.ID != 0 {
 		previous, err = s.repo.LoadRevisionImages(ctx, record.State.Materialized.ID)
@@ -349,7 +346,7 @@ func (s *reviewService) publishMomentImages(
 	record moderationrepo.ReviewRecord,
 	current, previous []moderationrepo.RevisionImageRecord,
 ) error {
-	if s.publisher == nil || len(current) == 0 {
+	if s.publisher == nil || (len(current) == 0 && len(previous) == 0) {
 		return nil
 	}
 	_, err := s.publisher.Publish(ctx, moderationmedia.PublishCommand{

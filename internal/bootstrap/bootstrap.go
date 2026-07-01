@@ -13,6 +13,7 @@ import (
 	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
+	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	analyticsworker "github.com/vpt/blog-backend/internal/worker/analytics"
 	moderationworker "github.com/vpt/blog-backend/internal/worker/moderation"
@@ -141,6 +142,14 @@ func StartModerationCleanupWorker(
 ) {
 	if cfg == nil || !cfg.Moderation.Enabled {
 		return
+	}
+	if readable, readableOK := store.(storage.ReadableObjectStore); readableOK {
+		recoveryRepo := moderationrepo.NewPublishRecoveryRepository(db)
+		recovery := moderationworker.NewPublishRecoveryWorker(
+			recoveryRepo, moderationmedia.NewPublisher(readable, moderationrepo.NewRepository(db)), zapLogger,
+		)
+		zapLogger.Info("碎语图片正式化补偿 worker 启动")
+		go recovery.Run(ctx)
 	}
 	cleanupStore, ok := store.(moderationworker.ObjectStore)
 	if !ok {
