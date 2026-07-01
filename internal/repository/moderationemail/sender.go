@@ -11,7 +11,7 @@ import (
 
 // LeaseBatches 领取到期批次，并恢复租约已过期的 sending 批次。
 func (r *repository) LeaseBatches(ctx context.Context, workerID string, leaseDuration time.Duration, limit int, now time.Time) ([]model.ModerationReviewEmailBatch, error) {
-	leaseUntil := now.Add(leaseDuration)
+	leaseUntil := mysqlDateTime3(now.Add(leaseDuration))
 	claim := r.db.WithContext(ctx).Model(&model.ModerationReviewEmailBatch{}).
 		Where("next_attempt_at <= ?", now).
 		Where("status = ? OR (status = ? AND lease_until < ?)", model.ModerationReviewEmailBatchPending, model.ModerationReviewEmailBatchSending, now).
@@ -74,6 +74,7 @@ func (r *repository) MarkBatchSent(ctx context.Context, batchID uint64, messageI
 
 // MarkBatchRetry 保存稳定 Message-ID、错误摘要和下次重试时间，并释放租约。
 func (r *repository) MarkBatchRetry(ctx context.Context, batchID uint64, messageID string, nextAttemptAt time.Time, lastErr string, now time.Time) error {
+	lastErr = truncateRunes(lastErr, maxLastErrorRunes)
 	result := r.db.WithContext(ctx).Model(&model.ModerationReviewEmailBatch{}).
 		Where("id = ? AND status = ?", batchID, model.ModerationReviewEmailBatchSending).
 		Updates(map[string]any{

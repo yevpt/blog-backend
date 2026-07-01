@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,6 +137,24 @@ func TestLeaseBatchesRecoversExpiredSendingLease(t *testing.T) {
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestLeaseBatchesNormalizesLeaseTimestampToMySQLMilliseconds(t *testing.T) {
+	repo, mock := newRepository(t)
+	now := time.Date(2026, 7, 1, 10, 0, 0, 987654321, time.UTC)
+	leaseUntil := now.Add(time.Minute).Truncate(time.Millisecond)
+	mock.ExpectExec("UPDATE `moderation_review_email_batch` SET .* WHERE next_attempt_at <= \\? AND .* LIMIT \\?").
+		WithArgs(leaseUntil, "worker-ms", "sending", sqlmock.AnyArg(), now, "pending", "sending", now, 1).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT .* FROM `moderation_review_email_batch` WHERE locked_by = \\? AND lease_until = \\? AND status = \\? ORDER BY created_at,id LIMIT \\?").
+		WithArgs("worker-ms", leaseUntil, "sending", 1).
+		WillReturnRows(sqlmock.NewRows(batchColumns()).AddRow(batchValues(8, leaseUntil)...))
+
+	batches, err := repo.LeaseBatches(context.Background(), "worker-ms", time.Minute, 1, now)
+
+	require.NoError(t, err)
+	require.Len(t, batches, 1)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestMarkBatchSentUpdatesBatchAndTasksAtomically(t *testing.T) {
 	repo, mock := newRepository(t)
 	now := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
@@ -179,6 +198,22 @@ func TestMarkBatchRetryPersistsStableMessageIDAndReleasesLease(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	err := repo.MarkBatchRetry(context.Background(), 9, "message-9", next, "smtp unavailable", now)
+
+	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMarkBatchRetryTruncatesUnicodeErrorToColumnLimit(t *testing.T) {
+	repo, mock := newRepository(t)
+	now := time.Date(2026, 7, 1, 10, 0, 0, 0, time.UTC)
+	next := now.Add(time.Minute)
+	oversized := strings.Repeat("错", 999) + "🙂尾"
+	want := strings.Repeat("错", 999) + "🙂"
+	mock.ExpectExec("UPDATE `moderation_review_email_batch` SET .* WHERE id = \\? AND status = \\?").
+		WithArgs(want, nil, nil, "message-9", next, "pending", now, uint64(9), "sending").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	err := repo.MarkBatchRetry(context.Background(), 9, "message-9", next, oversized, now)
 
 	require.NoError(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())

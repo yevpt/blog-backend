@@ -54,6 +54,8 @@ type repository struct {
 	db *gorm.DB
 }
 
+const maxLastErrorRunes = 1000
+
 // NewRepository 创建审核邮件仓储。
 func NewRepository(db *gorm.DB) Repository {
 	return &repository{db: db}
@@ -72,4 +74,16 @@ func boundedLimit(limit int) int {
 		return 100
 	}
 	return limit
+}
+
+func mysqlDateTime3(value time.Time) time.Time {
+	return value.Truncate(time.Millisecond)
+}
+
+func truncateRunes(value string, limit int) string {
+	runes := []rune(value)
+	if len(runes) <= limit {
+		return value
+	}
+	return string(runes[:limit])
 }
