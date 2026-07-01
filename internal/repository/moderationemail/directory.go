@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/vpt/blog-backend/pkg/roles"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +20,7 @@ func (r *repository) LoadAdminRecipient(ctx context.Context, userID uint) (Admin
 		Where("user.status = ?", 1).
 		Where("user.email IS NOT NULL AND user.email <> ''").
 		Where("user.email_verified_at IS NOT NULL").
-		Where("role.name = ?", "admin").
+		Where("role.name = ?", roles.AdminRole).
 		Order("user.id").
 		Limit(1).
 		Take(&recipient).Error

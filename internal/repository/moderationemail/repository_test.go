@@ -240,7 +240,7 @@ func TestMarkBatchRetryTruncatesUnicodeErrorToColumnLimit(t *testing.T) {
 func TestLoadAdminRecipientRequiresActiveVerifiedAdmin(t *testing.T) {
 	repo, mock := newRepository(t)
 	mock.ExpectQuery("SELECT user.id AS user_id,user.email FROM `user` JOIN user_role ON user_role.user_id = user.id JOIN role ON role.id = user_role.role_id WHERE user.id = \\? AND user.status = \\? AND \\(user.email IS NOT NULL AND user.email <> ''\\) AND user.email_verified_at IS NOT NULL AND role.name = \\? ORDER BY user.id LIMIT \\?").
-		WithArgs(uint(1), 1, "admin", 1).
+		WithArgs(uint(1), 1, "ROLE_ADMIN", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "email"}))
 
 	_, err := repo.LoadAdminRecipient(context.Background(), 1)
@@ -252,7 +252,7 @@ func TestLoadAdminRecipientRequiresActiveVerifiedAdmin(t *testing.T) {
 func TestLoadAdminRecipientReturnsConfiguredAdminOnly(t *testing.T) {
 	repo, mock := newRepository(t)
 	mock.ExpectQuery("SELECT user.id AS user_id,user.email FROM `user` JOIN user_role ON user_role.user_id = user.id JOIN role ON role.id = user_role.role_id WHERE user.id = \\? AND user.status = \\? AND \\(user.email IS NOT NULL AND user.email <> ''\\) AND user.email_verified_at IS NOT NULL AND role.name = \\? ORDER BY user.id LIMIT \\?").
-		WithArgs(uint(12), 1, "admin", 1).
+		WithArgs(uint(12), 1, "ROLE_ADMIN", 1).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email"}).AddRow(12, "admin@example.com"))
 
 	recipient, err := repo.LoadAdminRecipient(context.Background(), 12)
