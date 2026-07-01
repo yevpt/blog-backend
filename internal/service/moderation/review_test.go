@@ -28,19 +28,20 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
 	record := pendingReviewRecord()
-	record.Subject = moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleCommentReply, ID: 7, RootID: 17}
+	parentID := uint64(16)
+	record.Subject = moderationrepo.SubjectRef{
+		Type: moderationrepo.SubjectArticleCommentReply, ID: 7, RootID: 17, ParentID: &parentID,
+	}
 	commentID := uint64(17)
 	cleaner := &previewCleanerStub{}
 	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
 	repo.EXPECT().LoadSubject(gomock.Any(), record.Subject).Return(
 		moderationrepo.SubjectSnapshot{
-			Ref: moderationrepo.SubjectRef{
-				Type: moderationrepo.SubjectArticleComment, ID: 7, RootID: 3,
-			},
+			Ref:      record.Subject,
 			AuthorID: record.AuthorID, Content: "待审正文",
 		}, nil,
 	)
-	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
+	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), record.Subject).Return(
 		moderationrepo.ReviewNotificationContext{
 			ContentType: moderationrepo.SubjectArticleCommentReply, InteractionRecipientUserID: 99,
 			CommentID: &commentID,
