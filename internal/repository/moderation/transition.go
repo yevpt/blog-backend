@@ -99,7 +99,10 @@ func (r *repository) ApplyTransition(ctx context.Context, cmd ApplyTransitionCom
 		if err := applyProfileChange(ctx, tx, cmd.ProfileChange); err != nil {
 			return err
 		}
-		return appendReviewNotification(ctx, tx, item.ID, cmd.Notification)
+		if err := appendReviewNotification(ctx, tx, item.ID, cmd.Notification); err != nil {
+			return err
+		}
+		return appendInteractionNotification(ctx, tx, cmd.Subject.ID, cmd.InteractionNotification)
 	})
 	return applied, err
 }
@@ -588,6 +591,49 @@ func appendReviewNotification(ctx context.Context, tx *gorm.DB, itemID uint64, i
 	event := model.NotificationEvent{
 		Type: "system_notice", SourceType: "system", RootType: "system",
 		Title:          truncateNotificationRunes(intent.Title, 120),
+		ContentExcerpt: truncateNotificationRunes(intent.ContentExcerpt, 500),
+		MetadataJSON:   &value, DispatchStatus: "pending", NextProcessAt: now,
+	}
+	return tx.WithContext(ctx).Create(&event).Error
+}
+
+type interactionNotificationMetadata struct {
+	RecipientUserIDs []uint64              `json:"recipient_user_ids"`
+	CommentID        *uint64               `json:"comment_id,omitempty"`
+	RootSnapshot     *NotificationSnapshot `json:"root_snapshot,omitempty"`
+	QuoteSnapshot    *NotificationSnapshot `json:"quote_snapshot,omitempty"`
+}
+
+func appendInteractionNotification(
+	ctx context.Context,
+	tx *gorm.DB,
+	materializedSubjectID uint64,
+	intent *InteractionNotificationIntent,
+) error {
+	if intent == nil {
+		return nil
+	}
+	metadata := interactionNotificationMetadata{
+		RecipientUserIDs: []uint64{intent.RecipientUserID},
+		CommentID:        intent.CommentID,
+		RootSnapshot:     intent.RootSnapshot,
+		QuoteSnapshot:    intent.QuoteSnapshot,
+	}
+	encoded, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	value := string(encoded)
+	sourceID := intent.SourceID
+	if sourceID == 0 {
+		sourceID = materializedSubjectID
+	}
+	actorUserID := uint(intent.ActorUserID)
+	now := tx.NowFunc()
+	event := model.NotificationEvent{
+		Type: intent.Type, ActorUserID: &actorUserID,
+		SourceType: intent.SourceType, SourceID: uint(sourceID),
+		RootType: intent.RootType, RootID: uint(intent.RootID),
 		ContentExcerpt: truncateNotificationRunes(intent.ContentExcerpt, 500),
 		MetadataJSON:   &value, DispatchStatus: "pending", NextProcessAt: now,
 	}
