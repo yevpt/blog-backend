@@ -38,6 +38,7 @@ var (
 	ErrFriendLinkLogoRequired  = errors.New("缺少友链 Logo")
 	ErrFriendLinkLogoInvalid   = errors.New("友链 Logo 格式不支持，请上传 JPG、PNG 或 WebP")
 	ErrFriendLinkLogoTooLarge  = errors.New("友链 Logo 不能超过 256KB")
+	ErrFriendLinkLogoTooManyPixels = imagefile.ErrImageTooManyPixels
 	ErrFriendLinkLogoGIF       = errors.New("不支持 GIF 友链 Logo")
 	ErrFriendLinkLogoStoredBig = errors.New("友链 Logo 过大，请换一张更小的图片")
 	ErrFriendLinkLogoStore     = errors.New("对象存储不可用")
@@ -357,6 +358,8 @@ func mapFriendLinkLogoValidateErr(err error) error {
 	switch {
 	case errors.Is(err, imagefile.ErrImageTooLarge):
 		return ErrFriendLinkLogoTooLarge
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrFriendLinkLogoTooManyPixels
 	case errors.Is(err, imagefile.ErrInvalidImage):
 		return ErrFriendLinkLogoInvalid
 	default:
@@ -368,6 +371,8 @@ func mapFriendLinkLogoProcessErr(err error) error {
 	switch {
 	case errors.Is(err, imageutil.ErrInvalidImage), errors.Is(err, imageutil.ErrUnsupportedFormat):
 		return ErrFriendLinkLogoInvalid
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrFriendLinkLogoTooManyPixels
 	case errors.Is(err, imageutil.ErrImageTooLarge):
 		return ErrFriendLinkLogoStoredBig
 	default:

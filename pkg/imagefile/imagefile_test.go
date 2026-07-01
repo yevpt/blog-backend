@@ -42,16 +42,16 @@ func TestValidate_RejectsTooLarge(t *testing.T) {
 	require.ErrorIs(t, err, imagefile.ErrImageTooLarge)
 }
 
+func TestValidate_RejectsDeclaredDimensionsAbovePixelLimit(t *testing.T) {
+	_, err := imagefile.Validate("bomb.png", pngWithDeclaredDimensions(t, 5000, 5000), 10*1024*1024)
+
+	require.ErrorIs(t, err, imagefile.ErrImageTooManyPixels)
+}
+
 func TestValidate_RejectsTruncatedPNG(t *testing.T) {
 	_, err := imagefile.Validate("cat.png", truncatedPNG(t), 10*1024*1024)
 
 	require.ErrorIs(t, err, imagefile.ErrInvalidImage)
-}
-
-func TestValidate_RejectsDeclaredDimensionsAbovePixelLimit(t *testing.T) {
-	_, err := imagefile.Validate("bomb.png", pngWithDeclaredDimensions(t, 5000, 5000), 10*1024*1024)
-
-	require.ErrorIs(t, err, imagefile.ErrImageTooLarge)
 }
 
 func truncatedPNG(t *testing.T) []byte {

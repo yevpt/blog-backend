@@ -24,6 +24,8 @@ var (
 	ErrAvatarInvalid = errors.New("头像格式不支持，请上传 JPG、PNG 或 WebP")
 	// ErrAvatarTooLarge 表示上传头像原始文件过大。
 	ErrAvatarTooLarge = errors.New("头像不能超过 256KB")
+	// ErrAvatarTooManyPixels 表示上传头像分辨率超过像素上限。
+	ErrAvatarTooManyPixels = imagefile.ErrImageTooManyPixels
 	// ErrAvatarGIFNotAllowed 表示不接受 GIF 头像。
 	ErrAvatarGIFNotAllowed = errors.New("不支持 GIF 头像")
 	// ErrAvatarCompressedTooLarge 表示头像压缩后仍超过限制。
@@ -201,6 +203,8 @@ func mapValidateErr(err error) error {
 	switch {
 	case errors.Is(err, imagefile.ErrImageTooLarge):
 		return ErrAvatarTooLarge
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrAvatarTooManyPixels
 	case errors.Is(err, imagefile.ErrInvalidImage):
 		return ErrAvatarInvalid
 	default:
@@ -212,6 +216,8 @@ func mapProcessErr(err error) error {
 	switch {
 	case errors.Is(err, imageutil.ErrInvalidImage), errors.Is(err, imageutil.ErrUnsupportedFormat):
 		return ErrAvatarInvalid
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrAvatarTooManyPixels
 	case errors.Is(err, imageutil.ErrImageTooLarge):
 		return ErrAvatarCompressedTooLarge
 	default:

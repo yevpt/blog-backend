@@ -6,8 +6,9 @@ import (
 )
 
 var (
-	ErrInvalidImage  = errors.New("图片格式不支持，请上传 JPG、PNG、WebP 或 GIF")
-	ErrImageTooLarge = errors.New("图片不能超过限制大小")
+	ErrInvalidImage      = errors.New("图片格式不支持，请上传 JPG、PNG、WebP 或 GIF")
+	ErrImageTooLarge     = errors.New("图片不能超过限制大小")
+	ErrImageTooManyPixels = errors.New("图片分辨率过高，宽×高不能超过 1200 万像素")
 )
 
 type Result struct {

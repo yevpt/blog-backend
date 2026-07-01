@@ -86,6 +86,7 @@ func (h *Handler) TempImage(c *gin.Context) {
 		switch {
 		case errors.Is(err, uploadservice.ErrUploadTooLarge),
 			errors.Is(err, uploadservice.ErrUploadCommentTooLarge),
+			errors.Is(err, uploadservice.ErrUploadImageTooManyPixels),
 			errors.Is(err, uploadservice.ErrUploadCommentGIFLarge),
 			errors.Is(err, uploadservice.ErrUploadArticleGIFLarge),
 			errors.Is(err, uploadservice.ErrUploadCompressedLarge),

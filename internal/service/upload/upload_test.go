@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vpt/blog-backend/pkg/imagefile"
 	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
 )
 
@@ -215,6 +218,21 @@ func TestService_UploadTempImage_ArticleSceneCompressesOversizedToWebP(t *testin
 	assert.LessOrEqual(t, len(store.puts[0].data), 3*1024*1024)
 }
 
+func TestService_UploadTempImage_CommentSceneRejectsTooManyPixels(t *testing.T) {
+	svc := uploadservice.NewService(&fakeObjectStore{})
+
+	_, err := svc.UploadTempImage(context.Background(), uploadservice.TempImageInput{
+		UserID: 7,
+		Scene:  "comment",
+		Dir:    "images",
+		Name:   "huge.png",
+		Data:   pngWithDeclaredDimensions(t, 4032, 3024),
+	})
+
+	require.ErrorIs(t, err, uploadservice.ErrUploadImageTooManyPixels)
+	assert.Equal(t, imagefile.ErrImageTooManyPixels.Error(), err.Error())
+}
+
 func TestService_UploadTempImage_ReturnsUnavailableWhenStoreFails(t *testing.T) {
 	store := &fakeObjectStore{putErr: errors.New("s3 down")}
 	svc := uploadservice.NewService(store)
@@ -257,4 +275,33 @@ func noisyPNG(t *testing.T, width int, height int) []byte {
 	}
 	require.NoError(t, png.Encode(&buf, img))
 	return buf.Bytes()
+}
+
+func pngWithDeclaredDimensions(t *testing.T, width, height int) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	buf.Write([]byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A})
+	ihdr := make([]byte, 13)
+	putUint32BE(ihdr[0:4], uint32(width))
+	putUint32BE(ihdr[4:8], uint32(height))
+	ihdr[8] = 8
+	ihdr[9] = 2
+	writePNGChunk(&buf, "IHDR", ihdr)
+	writePNGChunk(&buf, "IEND", nil)
+	return buf.Bytes()
+}
+
+func putUint32BE(dst []byte, value uint32) {
+	dst[0] = byte(value >> 24)
+	dst[1] = byte(value >> 16)
+	dst[2] = byte(value >> 8)
+	dst[3] = byte(value)
+}
+
+func writePNGChunk(buf *bytes.Buffer, chunkType string, data []byte) {
+	_ = binary.Write(buf, binary.BigEndian, uint32(len(data)))
+	buf.WriteString(chunkType)
+	buf.Write(data)
+	crc := crc32.ChecksumIEEE(append([]byte(chunkType), data...))
+	_ = binary.Write(buf, binary.BigEndian, crc)
 }

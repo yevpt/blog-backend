@@ -277,6 +277,7 @@ func isFriendLinkBadRequest(err error) bool {
 		errors.Is(err, friendlinkservice.ErrFriendLinkLogoRequired) ||
 		errors.Is(err, friendlinkservice.ErrFriendLinkLogoInvalid) ||
 		errors.Is(err, friendlinkservice.ErrFriendLinkLogoTooLarge) ||
+		errors.Is(err, friendlinkservice.ErrFriendLinkLogoTooManyPixels) ||
 		errors.Is(err, friendlinkservice.ErrFriendLinkLogoGIF) ||
 		errors.Is(err, friendlinkservice.ErrFriendLinkLogoStoredBig)
 }

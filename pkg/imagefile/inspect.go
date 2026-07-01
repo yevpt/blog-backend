@@ -32,7 +32,7 @@ func inspectImage(data []byte, maxPixels int64) (format string, err error) {
 		return "", ErrInvalidImage
 	}
 	if int64(cfg.Width)*int64(cfg.Height) > maxPixels {
-		return "", ErrImageTooLarge
+		return "", ErrImageTooManyPixels
 	}
 	if _, _, err := image.Decode(bytes.NewReader(data)); err != nil {
 		return "", ErrInvalidImage

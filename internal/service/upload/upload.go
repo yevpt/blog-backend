@@ -25,6 +25,7 @@ var (
 	ErrUploadInvalid         = errors.New("上传图片无效")
 	ErrUploadTooLarge        = errors.New("图片不能超过 10MB")
 	ErrUploadCommentTooLarge  = errors.New("图片不能超过 3MB")
+	ErrUploadImageTooManyPixels = imagefile.ErrImageTooManyPixels
 	ErrUploadCommentGIFLarge  = errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
 	ErrUploadCompressedLarge  = errors.New("图片过大，压缩后仍超过 500KB，请换一张更小的图片")
 	ErrUploadArticleGIFLarge  = errors.New("GIF 图片过大，暂不支持压缩该格式，请上传 300KB 以内的 GIF。")
@@ -263,6 +264,8 @@ func mapArticleValidateErr(err error) error {
 	switch {
 	case errors.Is(err, imagefile.ErrImageTooLarge):
 		return ErrUploadTooLarge
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrUploadImageTooManyPixels
 	case errors.Is(err, imagefile.ErrInvalidImage):
 		return ErrUploadInvalid
 	default:
@@ -274,6 +277,8 @@ func mapCommentValidateErr(err error) error {
 	switch {
 	case errors.Is(err, imagefile.ErrImageTooLarge):
 		return ErrUploadCommentTooLarge
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrUploadImageTooManyPixels
 	case errors.Is(err, imagefile.ErrInvalidImage):
 		return ErrUploadInvalid
 	default:
@@ -287,6 +292,8 @@ func mapCommentImageProcessErr(err error) error {
 		errors.Is(err, imageutil.ErrInvalidImage),
 		errors.Is(err, imageutil.ErrUnsupportedFormat):
 		return ErrUploadInvalid
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrUploadImageTooManyPixels
 	case errors.Is(err, imageutil.ErrImageTooLarge):
 		return ErrUploadCompressedLarge
 	default:
@@ -300,6 +307,8 @@ func mapArticleImageProcessErr(err error) error {
 		errors.Is(err, imageutil.ErrInvalidImage),
 		errors.Is(err, imageutil.ErrUnsupportedFormat):
 		return ErrUploadInvalid
+	case errors.Is(err, imagefile.ErrImageTooManyPixels):
+		return ErrUploadImageTooManyPixels
 	case errors.Is(err, imageutil.ErrImageTooLarge):
 		return ErrUploadArticleStoredLarge
 	default:

@@ -58,6 +58,7 @@ func (h *UserHandler) UploadAvatar(c *gin.Context) {
 func writeAvatarError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, avatarservice.ErrAvatarTooLarge),
+		errors.Is(err, avatarservice.ErrAvatarTooManyPixels),
 		errors.Is(err, avatarservice.ErrAvatarInvalid),
 		errors.Is(err, avatarservice.ErrAvatarGIFNotAllowed),
 		errors.Is(err, avatarservice.ErrAvatarCompressedTooLarge):
