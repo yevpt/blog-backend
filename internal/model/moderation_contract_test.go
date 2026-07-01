@@ -71,6 +71,21 @@ func TestModerationReviewEmailMigrationDeclaresQueueContracts(t *testing.T) {
 	assert.Contains(t, sql, "WHERE r.`review_status` = 'pending'")
 }
 
+func TestModerationReviewEmailModelMatchesMigrationIntColumns(t *testing.T) {
+	typ := reflect.TypeOf(model.ModerationReviewEmailBatch{})
+	for _, fieldName := range []string{"ItemCount", "Attempts"} {
+		field, ok := typ.FieldByName(fieldName)
+		require.Truef(t, ok, "%s.%s is missing", typ.Name(), fieldName)
+		assert.Equal(t, reflect.TypeOf(int(0)), field.Type)
+		assert.Contains(t, field.Tag.Get("gorm"), "type:int")
+	}
+
+	migration, err := os.ReadFile("../../migrations/20260701_moderation_review_email.sql")
+	require.NoError(t, err)
+	assert.Contains(t, string(migration), "`item_count` int NOT NULL")
+	assert.Contains(t, string(migration), "`attempts` int NOT NULL")
+}
+
 func TestModerationItemUsesExplicitDeletedAt(t *testing.T) {
 	typ := reflect.TypeOf(model.ModerationItem{})
 	field, ok := typ.FieldByName("DeletedAt")

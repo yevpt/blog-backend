@@ -45,10 +45,10 @@ type ModerationReviewEmailBatch struct {
 	ToEmail         string     `gorm:"size:155;not null"`
 	Subject         string     `gorm:"size:180;not null"`
 	Status          string     `gorm:"size:16;not null;index:idx_moderation_review_email_batch_pick,priority:1"`
-	ItemCount       int        `gorm:"not null;default:0"`
+	ItemCount       int        `gorm:"type:int;not null;default:0"`
 	ScheduledAt     time.Time  `gorm:"type:datetime(3);not null"`
 	SentAt          *time.Time `gorm:"type:datetime(3)"`
-	Attempts        int        `gorm:"not null;default:0"`
+	Attempts        int        `gorm:"type:int;not null;default:0"`
 	NextAttemptAt   time.Time  `gorm:"type:datetime(3);not null;index:idx_moderation_review_email_batch_pick,priority:2"`
 	LeaseUntil      *time.Time `gorm:"type:datetime(3);index:idx_moderation_review_email_batch_pick,priority:3"`
 	LockedBy        *string    `gorm:"size:80"`
