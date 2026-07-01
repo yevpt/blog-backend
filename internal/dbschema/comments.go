@@ -848,6 +848,11 @@ func isGeneratedDefault(extra string) bool {
 func isUnquotedDefault(value string, columnType string) bool {
 	upperValue := strings.ToUpper(value)
 	baseType := strings.ToLower(columnType)
+	// COLUMN_TYPE 可能带有 " unsigned"/" zerofill" 后缀（如 "bigint unsigned"、
+	// "int(10) unsigned zerofill"），需先取空格分隔的第一段，再剥离括号中的精度/长度。
+	if index := strings.IndexByte(baseType, ' '); index >= 0 {
+		baseType = baseType[:index]
+	}
 	if index := strings.Index(baseType, "("); index >= 0 {
 		baseType = baseType[:index]
 	}

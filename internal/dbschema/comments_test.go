@@ -123,7 +123,8 @@ func TestLoadColumnDefinitions(t *testing.T) {
 		AddRow("article", "id", "bigint unsigned", "NO", nil, "auto_increment", "", nil, nil).
 		AddRow("article", "title", "varchar(255)", "NO", "管理员's article", "", "", "utf8mb4", "utf8mb4_0900_ai_ci").
 		AddRow("article", "published_at", "datetime(3)", "YES", nil, "", "", nil, nil).
-		AddRow("article", "slug", "varchar(255)", "YES", nil, "STORED GENERATED", "lower(`title`)", "utf8mb4", "utf8mb4_0900_ai_ci")
+		AddRow("article", "slug", "varchar(255)", "YES", nil, "STORED GENERATED", "lower(`title`)", "utf8mb4", "utf8mb4_0900_ai_ci").
+		AddRow("article", "read_count", "int unsigned", "NO", "0", "", "", nil, nil)
 	mock.ExpectQuery(regexp.QuoteMeta(columnDefinitionsQuery)).WillReturnRows(rows)
 
 	definitions, err := loadColumnDefinitions(db)
@@ -133,9 +134,12 @@ func TestLoadColumnDefinitions(t *testing.T) {
 	assert.Equal(t, "`title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '管理员''s article'", definitions["article"]["title"])
 	assert.Equal(t, "`published_at` datetime(3) NULL DEFAULT NULL", definitions["article"]["published_at"])
 	assert.Equal(t, "`slug` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci GENERATED ALWAYS AS (lower(`title`)) STORED", definitions["article"]["slug"])
+	// unsigned 数值类型的默认值必须是不加引号的 DEFAULT 0，而非字符串 DEFAULT '0'
+	assert.Equal(t, "`read_count` int unsigned NOT NULL DEFAULT 0", definitions["article"]["read_count"])
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+// 仅校验每个目录表/列在迁移文件中存在对应语句，不校验语句（如 DEFAULT 子句）本身是否正确。
 func TestSchemaCommentsMigrationCoversCatalog(t *testing.T) {
 	sqlBytes, err := os.ReadFile("../../migrations/20260702_schema_comments.sql")
 	require.NoError(t, err)
