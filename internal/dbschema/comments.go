@@ -1,6 +1,9 @@
 package dbschema
 
 import (
+	"database/sql"
+	"fmt"
+	"sort"
 	"strings"
 
 	"gorm.io/gorm"
@@ -677,8 +680,29 @@ func SchemaComments() SchemaCommentSet {
 	return SchemaCommentSet{Tables: schemaComments}
 }
 
-// ApplySchemaComments 暂不修改数据库，仅保留 AutoMigrate 末尾注释应用入口。
-func ApplySchemaComments(_ *gorm.DB) error {
+// BuildSchemaCommentSQL 根据当前注释 catalog 与现有列定义生成注释 SQL。
+func BuildSchemaCommentSQL(tableDefinitions map[string]map[string]string) ([]string, error) {
+	return buildSchemaCommentSQL(SchemaComments(), tableDefinitions)
+}
+
+// ApplySchemaComments 在 AutoMigrate 后补齐表与列的中文注释。
+func ApplySchemaComments(db *gorm.DB) error {
+	definitions, err := loadColumnDefinitions(db)
+	if err != nil {
+		return err
+	}
+
+	statements, err := BuildSchemaCommentSQL(definitions)
+	if err != nil {
+		return err
+	}
+
+	for _, statement := range statements {
+		if err := db.Exec(statement).Error; err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -699,6 +723,210 @@ func RegisteredTableNames() []string {
 func quoteSQLComment(comment string) string {
 	escaped := strings.ReplaceAll(comment, "'", "''")
 	return "'" + escaped + "'"
+}
+
+const columnDefinitionsQuery = `
+SELECT
+	TABLE_NAME,
+	COLUMN_NAME,
+	COLUMN_TYPE,
+	IS_NULLABLE,
+	COLUMN_DEFAULT,
+	EXTRA,
+	GENERATION_EXPRESSION,
+	CHARACTER_SET_NAME,
+	COLLATION_NAME
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE()
+ORDER BY TABLE_NAME, ORDINAL_POSITION`
+
+type columnDefinitionRow struct {
+	TableName            string         `gorm:"column:TABLE_NAME"`
+	ColumnName           string         `gorm:"column:COLUMN_NAME"`
+	ColumnType           string         `gorm:"column:COLUMN_TYPE"`
+	IsNullable           string         `gorm:"column:IS_NULLABLE"`
+	ColumnDefault        sql.NullString `gorm:"column:COLUMN_DEFAULT"`
+	Extra                string         `gorm:"column:EXTRA"`
+	GenerationExpression sql.NullString `gorm:"column:GENERATION_EXPRESSION"`
+	CharacterSetName     sql.NullString `gorm:"column:CHARACTER_SET_NAME"`
+	CollationName        sql.NullString `gorm:"column:COLLATION_NAME"`
+}
+
+func buildSchemaCommentSQL(comments SchemaCommentSet, tableDefinitions map[string]map[string]string) ([]string, error) {
+	statements := make([]string, 0)
+
+	for _, table := range sortedTableNames(comments.Tables) {
+		tc := comments.Tables[table]
+		statements = append(statements, "ALTER TABLE "+quoteIdentifier(table)+" COMMENT = "+quoteSQLComment(tc.Comment))
+		for _, column := range sortedColumnNames(tc.Columns) {
+			definition, ok := tableDefinitions[table][column]
+			if !ok {
+				return nil, fmt.Errorf("missing column definition for %s.%s", table, column)
+			}
+			statements = append(statements, "ALTER TABLE "+quoteIdentifier(table)+" MODIFY COLUMN "+definition+" COMMENT "+quoteSQLComment(tc.Columns[column]))
+		}
+	}
+
+	return statements, nil
+}
+
+func loadColumnDefinitions(db *gorm.DB) (map[string]map[string]string, error) {
+	var rows []columnDefinitionRow
+	if err := db.Raw(columnDefinitionsQuery).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	definitions := make(map[string]map[string]string)
+	for _, row := range rows {
+		if definitions[row.TableName] == nil {
+			definitions[row.TableName] = make(map[string]string)
+		}
+		definitions[row.TableName][row.ColumnName] = buildColumnDefinition(row)
+	}
+
+	return definitions, nil
+}
+
+func buildColumnDefinition(row columnDefinitionRow) string {
+	parts := []string{quoteIdentifier(row.ColumnName), row.ColumnType}
+	parts = appendCharacterDefinition(parts, row)
+
+	if row.GenerationExpression.Valid && row.GenerationExpression.String != "" {
+		parts = append(parts, "GENERATED ALWAYS AS ("+row.GenerationExpression.String+")")
+		parts = append(parts, generatedStorage(row.Extra))
+		return strings.Join(parts, " ")
+	}
+
+	parts = append(parts, nullableDefinition(row.IsNullable))
+	parts = appendDefaultDefinition(parts, row)
+	parts = appendExtraDefinition(parts, row.Extra)
+
+	return strings.Join(parts, " ")
+}
+
+func appendCharacterDefinition(parts []string, row columnDefinitionRow) []string {
+	if row.CharacterSetName.Valid && row.CharacterSetName.String != "" {
+		parts = append(parts, "CHARACTER SET "+quoteIdentifierPart(row.CharacterSetName.String))
+	}
+	if row.CollationName.Valid && row.CollationName.String != "" {
+		parts = append(parts, "COLLATE "+quoteIdentifierPart(row.CollationName.String))
+	}
+	return parts
+}
+
+func appendDefaultDefinition(parts []string, row columnDefinitionRow) []string {
+	if row.ColumnDefault.Valid {
+		return append(parts, "DEFAULT "+formatDefaultValue(row.ColumnDefault.String, row))
+	}
+	if strings.EqualFold(row.IsNullable, "YES") {
+		return append(parts, "DEFAULT NULL")
+	}
+	return parts
+}
+
+func appendExtraDefinition(parts []string, extra string) []string {
+	for _, token := range normalizedExtraTokens(extra) {
+		parts = append(parts, token)
+	}
+	return parts
+}
+
+func formatDefaultValue(value string, row columnDefinitionRow) string {
+	if value == "NULL" {
+		return "NULL"
+	}
+	if isGeneratedDefault(row.Extra) || isUnquotedDefault(value, row.ColumnType) {
+		return value
+	}
+	return quoteSQLComment(value)
+}
+
+func isGeneratedDefault(extra string) bool {
+	return strings.Contains(strings.ToLower(extra), "default_generated")
+}
+
+func isUnquotedDefault(value string, columnType string) bool {
+	upperValue := strings.ToUpper(value)
+	baseType := strings.ToLower(columnType)
+	if index := strings.Index(baseType, "("); index >= 0 {
+		baseType = baseType[:index]
+	}
+	if isTemporalType(baseType) && (upperValue == "CURRENT_TIMESTAMP" || strings.HasPrefix(upperValue, "CURRENT_TIMESTAMP(")) {
+		return true
+	}
+	switch baseType {
+	case "bit", "bool", "boolean", "tinyint", "smallint", "mediumint", "int", "integer", "bigint",
+		"decimal", "dec", "numeric", "float", "double", "real", "year":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTemporalType(baseType string) bool {
+	switch baseType {
+	case "timestamp", "datetime", "date", "time":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizedExtraTokens(extra string) []string {
+	lower := strings.ToLower(extra)
+	tokens := make([]string, 0, 2)
+	if strings.Contains(lower, "auto_increment") {
+		tokens = append(tokens, "AUTO_INCREMENT")
+	}
+	if strings.Contains(lower, "on update current_timestamp") {
+		start := strings.Index(lower, "on update")
+		tokens = append(tokens, "ON UPDATE "+extra[start+len("on update "):])
+	}
+	if strings.Contains(lower, "invisible") {
+		tokens = append(tokens, "INVISIBLE")
+	}
+	return tokens
+}
+
+func generatedStorage(extra string) string {
+	lower := strings.ToLower(extra)
+	if strings.Contains(lower, "stored generated") {
+		return "STORED"
+	}
+	return "VIRTUAL"
+}
+
+func nullableDefinition(isNullable string) string {
+	if strings.EqualFold(isNullable, "YES") {
+		return "NULL"
+	}
+	return "NOT NULL"
+}
+
+func sortedTableNames(tables map[string]TableComment) []string {
+	names := make([]string, 0, len(tables))
+	for name := range tables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func sortedColumnNames(columns map[string]string) []string {
+	names := make([]string, 0, len(columns))
+	for name := range columns {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func quoteIdentifier(identifier string) string {
+	return "`" + strings.ReplaceAll(identifier, "`", "``") + "`"
+}
+
+func quoteIdentifierPart(identifier string) string {
+	return strings.ReplaceAll(identifier, "`", "``")
 }
 
 type columns map[string]string
