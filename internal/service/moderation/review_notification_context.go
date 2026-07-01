@@ -38,3 +38,56 @@ func (s *reviewService) loadReviewNotificationContext(
 	}
 	return notifCtx
 }
+
+func interactionNotification(
+	subject moderationrepo.SubjectRef,
+	actorUserID uint64,
+	content string,
+	notifCtx moderationrepo.ReviewNotificationContext,
+) *moderationrepo.InteractionNotificationIntent {
+	eventType, sourceType, rootType, rootID := interactionNotificationTarget(subject, notifCtx)
+	if eventType == "" || notifCtx.InteractionRecipientUserID == 0 || rootID == 0 {
+		return nil
+	}
+	return &moderationrepo.InteractionNotificationIntent{
+		Type:            eventType,
+		ActorUserID:     actorUserID,
+		RecipientUserID: notifCtx.InteractionRecipientUserID,
+		SourceType:      sourceType,
+		RootType:        rootType,
+		RootID:          rootID,
+		ContentExcerpt:  content,
+		CommentID:       notifCtx.CommentID,
+		RootSnapshot:    notifCtx.RootSnapshot,
+		QuoteSnapshot:   notifCtx.QuoteSnapshot,
+	}
+}
+
+func interactionNotificationTarget(
+	subject moderationrepo.SubjectRef,
+	notifCtx moderationrepo.ReviewNotificationContext,
+) (eventType, sourceType, rootType string, rootID uint64) {
+	switch subject.Type {
+	case moderationrepo.SubjectArticleComment:
+		return "comment_created", "comment", "article", subject.RootID
+	case moderationrepo.SubjectMomentComment:
+		return "comment_created", "comment", "moment", subject.RootID
+	case moderationrepo.SubjectGuestbook:
+		return "guestbook_created", "guestbook", "guestbook", subject.ID
+	case moderationrepo.SubjectArticleCommentReply:
+		return "reply_created", "reply", "article", notificationRootID(notifCtx)
+	case moderationrepo.SubjectMomentCommentReply:
+		return "reply_created", "reply", "moment", notificationRootID(notifCtx)
+	case moderationrepo.SubjectGuestbookReply:
+		return "reply_created", "reply", "guestbook", notificationRootID(notifCtx)
+	default:
+		return "", "", "", 0
+	}
+}
+
+func notificationRootID(notifCtx moderationrepo.ReviewNotificationContext) uint64 {
+	if notifCtx.RootSnapshot == nil {
+		return 0
+	}
+	return notifCtx.RootSnapshot.ID
+}

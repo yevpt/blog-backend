@@ -40,7 +40,7 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	)
 	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
 		moderationrepo.ReviewNotificationContext{
-			ContentType: moderationrepo.SubjectArticleComment,
+			ContentType: moderationrepo.SubjectArticleComment, InteractionRecipientUserID: 99,
 			RootSnapshot: &moderationrepo.NotificationSnapshot{
 				Type: "article", ID: 3, Title: "测试文章",
 			},
@@ -68,6 +68,13 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 			assert.Equal(t, moderationrepo.SubjectArticleComment, cmd.Notification.ContentType)
 			require.NotNil(t, cmd.Notification.RootSnapshot)
 			assert.Equal(t, "测试文章", cmd.Notification.RootSnapshot.Title)
+			require.NotNil(t, cmd.InteractionNotification)
+			assert.Equal(t, "comment_created", cmd.InteractionNotification.Type)
+			assert.Equal(t, record.AuthorID, cmd.InteractionNotification.ActorUserID)
+			assert.Equal(t, uint64(99), cmd.InteractionNotification.RecipientUserID)
+			assert.Equal(t, "comment", cmd.InteractionNotification.SourceType)
+			assert.Equal(t, "article", cmd.InteractionNotification.RootType)
+			assert.Equal(t, record.Subject.RootID, cmd.InteractionNotification.RootID)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
 		})
 	repo.EXPECT().LoadModerationProfile(gomock.Any(), record.AuthorID, serviceNow).Return(moderationrepo.ModerationProfile{
@@ -110,7 +117,10 @@ func TestReviewServiceCorrectSanitizesContentAndRecordsViolation(t *testing.T) {
 		moderationrepo.SubjectSnapshot{Ref: record.Subject, AuthorID: record.AuthorID, Content: record.PublishedContent}, nil,
 	)
 	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
-		moderationrepo.ReviewNotificationContext{ContentType: record.Subject.Type}, nil,
+		moderationrepo.ReviewNotificationContext{
+			ContentType: record.Subject.Type, InteractionRecipientUserID: 99,
+			RootSnapshot: &moderationrepo.NotificationSnapshot{Type: "article", ID: record.Subject.RootID},
+		}, nil,
 	)
 	repo.EXPECT().ApplyTransition(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, cmd moderationrepo.ApplyTransitionCommand) (moderationrepo.AppliedTransition, error) {
@@ -120,6 +130,8 @@ func TestReviewServiceCorrectSanitizesContentAndRecordsViolation(t *testing.T) {
 			assert.Equal(t, int64(1), cmd.ProfileChange.CorrectedDelta)
 			assert.Equal(t, int64(1), cmd.ProfileChange.ViolationScoreDelta)
 			assert.Equal(t, "corrected", cmd.Notification.Decision)
+			require.NotNil(t, cmd.InteractionNotification)
+			assert.Equal(t, "<p>修正正文</p>", cmd.InteractionNotification.ContentExcerpt)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
 		})
 	processor := &processorStub{useOut: true, out: moderation.ProcessedContent{

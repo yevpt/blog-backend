@@ -40,7 +40,26 @@ func buildReviewTransition(
 		Notification:  reviewNotification(event, record, reason, notifCtx),
 		SyncImages:    true,
 	}
+	interactionRecord := record
+	if corrected != nil {
+		interactionRecord.PublishedContent = *corrected
+	}
+	persisted.InteractionNotification = firstPublicationNotification(event, interactionRecord, notifCtx)
 	return persisted
+}
+
+func firstPublicationNotification(
+	event Event,
+	record moderationrepo.ReviewRecord,
+	notifCtx moderationrepo.ReviewNotificationContext,
+) *moderationrepo.InteractionNotificationIntent {
+	if event != EventApprove && event != EventCorrectAndApprove {
+		return nil
+	}
+	if record.State.Approved.ID != 0 || record.State.Approved.IsNew {
+		return nil
+	}
+	return interactionNotification(record.Subject, record.AuthorID, record.PublishedContent, notifCtx)
 }
 
 func reviewProfileChange(event Event, authorID uint64, now time.Time, cfg config.ModerationConfig) *moderationrepo.ProfileChange {
