@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/pkg/roles"
@@ -104,10 +105,15 @@ func buildDefaultSeedData(adminPasswordHash string, opts SeedOptions) defaultSee
 		username = "admin"
 	}
 
-	var email *string
-	if value := strings.TrimSpace(opts.AdminEmail); value != "" {
-		email = &value
+	adminEmail := strings.TrimSpace(opts.AdminEmail)
+	if adminEmail == "" {
+		adminEmail = "admin@example.com"
 	}
+	email := &adminEmail
+	// 种子数据里的管理员邮箱视为已验证，否则依赖邮箱已验证状态的功能
+	// （如审核邮件收件人）永远查不到该用户。
+	now := time.Now()
+	emailVerifiedAt := &now
 
 	return defaultSeedData{
 		Roles: []roleSeed{
@@ -117,12 +123,13 @@ func buildDefaultSeedData(adminPasswordHash string, opts SeedOptions) defaultSee
 		},
 		Users: []model.User{
 			{
-				Base:        model.Base{ID: 1},
-				Username:    username,
-				Password:    adminPasswordHash,
-				PasswordSet: true,
-				Email:       email,
-				Status:      1,
+				Base:            model.Base{ID: 1},
+				Username:        username,
+				Password:        adminPasswordHash,
+				PasswordSet:     true,
+				Email:           email,
+				EmailVerifiedAt: emailVerifiedAt,
+				Status:          1,
 			},
 		},
 		UserRoles: []userRoleSeed{
@@ -142,12 +149,12 @@ func buildDefaultSeedData(adminPasswordHash string, opts SeedOptions) defaultSee
 			{Purpose: "admin_notice", DailyLimit: 100, ReservedMin: 0, Priority: 50, MaxPerMinute: 5, MaxPerHour: 60, Enabled: true},
 		},
 		EmailRoleQuotaPolicies: []model.EmailRoleQuotaPolicy{
-			{Role: "normal", ScopeType: "actor", DailyLimit: 30, MaxPerHour: 0, Enabled: true},
-			{Role: "vip", ScopeType: "actor", DailyLimit: 100, MaxPerHour: 0, Enabled: true},
-			{Role: "admin", ScopeType: "actor", DailyLimit: 300, MaxPerHour: 0, Enabled: true},
-			{Role: "normal", ScopeType: "recipient", DailyLimit: 5, MaxPerHour: 0, Enabled: true},
-			{Role: "vip", ScopeType: "recipient", DailyLimit: 20, MaxPerHour: 0, Enabled: true},
-			{Role: "admin", ScopeType: "recipient", DailyLimit: 50, MaxPerHour: 0, Enabled: true},
+			{Role: roles.NormalRole, ScopeType: "actor", DailyLimit: 30, MaxPerHour: 0, Enabled: true},
+			{Role: roles.VipRole, ScopeType: "actor", DailyLimit: 100, MaxPerHour: 0, Enabled: true},
+			{Role: roles.AdminRole, ScopeType: "actor", DailyLimit: 300, MaxPerHour: 0, Enabled: true},
+			{Role: roles.NormalRole, ScopeType: "recipient", DailyLimit: 5, MaxPerHour: 0, Enabled: true},
+			{Role: roles.VipRole, ScopeType: "recipient", DailyLimit: 20, MaxPerHour: 0, Enabled: true},
+			{Role: roles.AdminRole, ScopeType: "recipient", DailyLimit: 50, MaxPerHour: 0, Enabled: true},
 		},
 		ModerationRuleSources: []model.ModerationRuleSource{
 			{ID: 1, Name: "system"},
