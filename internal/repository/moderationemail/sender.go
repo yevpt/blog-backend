@@ -48,6 +48,24 @@ func (r *repository) LoadBatchTasks(ctx context.Context, batchID uint64, limit i
 	return tasks, err
 }
 
+// PersistBatchMessageID 在首次 SMTP 尝试前保存稳定 Message-ID，避免重试生成新值。
+func (r *repository) PersistBatchMessageID(ctx context.Context, batchID uint64, messageID string, now time.Time) error {
+	result := r.db.WithContext(ctx).Model(&model.ModerationReviewEmailBatch{}).
+		Where("id = ? AND status = ?", batchID, model.ModerationReviewEmailBatchSending).
+		Where("message_id IS NULL OR message_id = '' OR message_id = ?", messageID).
+		Updates(map[string]any{
+			"message_id": messageID,
+			"updated_at": now,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("persist moderation email message id: updated %d rows", result.RowsAffected)
+	}
+	return nil
+}
+
 // MarkBatchSent 在同一事务标记批次与其任务已发送。
 func (r *repository) MarkBatchSent(ctx context.Context, batchID uint64, messageID string, now time.Time) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {

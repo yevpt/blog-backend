@@ -41,6 +41,7 @@ type Repository interface {
 	CreateBatch(ctx context.Context, recipient AdminRecipient, limit int, now time.Time) (int, error)
 	LeaseBatches(ctx context.Context, workerID string, leaseDuration time.Duration, limit int, now time.Time) ([]model.ModerationReviewEmailBatch, error)
 	LoadBatchTasks(ctx context.Context, batchID uint64, limit int) ([]PendingTask, error)
+	PersistBatchMessageID(ctx context.Context, batchID uint64, messageID string, now time.Time) error
 	MarkBatchSent(ctx context.Context, batchID uint64, messageID string, now time.Time) error
 	MarkBatchRetry(ctx context.Context, batchID uint64, messageID string, nextAttemptAt time.Time, lastErr string, now time.Time) error
 }
