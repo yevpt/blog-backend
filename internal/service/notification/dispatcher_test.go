@@ -17,6 +17,7 @@ import (
 // dispatchRepo 是 dispatcher 用的内存假仓储，按唯一键去重以验证幂等。
 type dispatchRepo struct {
 	pending []model.NotificationEvent
+	tasks   []model.NotificationEmailTask
 
 	inboxKeys map[string]struct{} // recipient:event
 	taskKeys  map[string]struct{} // idempotency key
@@ -80,6 +81,7 @@ func (r *dispatchRepo) CreateEmailTask(_ context.Context, task *model.Notificati
 		return false, nil
 	}
 	r.taskKeys[task.IdempotencyKey] = struct{}{}
+	r.tasks = append(r.tasks, *task)
 	return true, nil
 }
 func (r *dispatchRepo) LeaseEmailTasks(context.Context, string, int, int) ([]model.NotificationEmailTask, error) {
@@ -210,6 +212,47 @@ func TestDispatcher_EnabledEmailCreatesTask(t *testing.T) {
 	assert.Contains(t, repo.taskKeys, "event:10:user:5")
 }
 
+// 公开后的标准互动事件进入通知邮件队列，系统通知仍只保留站内投递。
+func TestDispatcher_PublishedInteractionEventsCreatePendingNotificationTasks(t *testing.T) {
+	tests := []struct {
+		name      string
+		eventType string
+		wantTask  bool
+	}{
+		{name: "comment", eventType: notificationservice.EventTypeCommentCreated, wantTask: true},
+		{name: "reply", eventType: notificationservice.EventTypeReplyCreated, wantTask: true},
+		{name: "guestbook", eventType: notificationservice.EventTypeGuestbookCreated, wantTask: true},
+		{name: "system notice", eventType: notificationservice.EventTypeSystemNotice},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := commentEvent()
+			event.ID = uint(100 + i)
+			event.Type = tt.eventType
+			repo := newDispatchRepo(event)
+			d := notificationservice.NewDispatcher(
+				repo,
+				fixedRecipients{ids: []uint{5}},
+				bothEnabled(),
+				fixedDirectory{email: "owner@x.com", canReceive: true},
+			)
+
+			_, err := d.DispatchOnce(context.Background(), "worker-1", 10)
+
+			require.NoError(t, err)
+			if !tt.wantTask {
+				assert.Empty(t, repo.tasks)
+				return
+			}
+			require.Len(t, repo.tasks, 1)
+			assert.Equal(t, notificationservice.PurposeNotification, repo.tasks[0].Purpose)
+			assert.Equal(t, notificationrepo.EmailTaskStatusPending, repo.tasks[0].Status)
+			assert.Equal(t, tt.eventType, repo.tasks[0].EventType)
+		})
+	}
+}
+
 // 总开关 receive_mail 关闭时跳过邮件任务。
 func TestDispatcher_DisabledReceiveMailSkipsTask(t *testing.T) {
 	repo := newDispatchRepo(commentEvent())
@@ -310,4 +353,3 @@ type erroringOwnerLookup struct{}
 func (erroringOwnerLookup) OwnerOf(context.Context, string, uint) (uint, bool, error) {
 	return 0, false, errors.New("OwnerOf should not be called when metadata has explicit recipients")
 }
-

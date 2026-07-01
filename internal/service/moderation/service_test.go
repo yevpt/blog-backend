@@ -427,6 +427,10 @@ func TestServiceAutoApproveFirstPublicationCreatesInteractionNotification(t *tes
 				assert.Equal(t, "comment_created", intent.Type)
 				assert.Equal(t, cmd.ActorID, intent.ActorUserID)
 				assert.Equal(t, uint64(91), intent.RecipientUserID)
+				assert.Equal(t, "comment", intent.SourceType)
+				assert.Zero(t, intent.SourceID)
+				assert.Equal(t, "article", intent.RootType)
+				assert.Equal(t, cmd.Subject.RootID, intent.RootID)
 				assert.Equal(t, "<p>safe</p>", intent.ContentExcerpt)
 				assert.Same(t, notifCtx.RootSnapshot, intent.RootSnapshot)
 				return moderationrepo.AppliedTransition{

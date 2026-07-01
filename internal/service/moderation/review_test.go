@@ -28,6 +28,8 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := repositorymock.NewMockRepository(ctrl)
 	record := pendingReviewRecord()
+	record.Subject = moderationrepo.SubjectRef{Type: moderationrepo.SubjectArticleCommentReply, ID: 7, RootID: 17}
+	commentID := uint64(17)
 	cleaner := &previewCleanerStub{}
 	repo.EXPECT().LoadReviewRecord(gomock.Any(), record.ItemID, record.RevisionID).Return(record, nil)
 	repo.EXPECT().LoadSubject(gomock.Any(), record.Subject).Return(
@@ -40,9 +42,13 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 	)
 	repo.EXPECT().LoadReviewNotificationContext(gomock.Any(), gomock.Any()).Return(
 		moderationrepo.ReviewNotificationContext{
-			ContentType: moderationrepo.SubjectArticleComment, InteractionRecipientUserID: 99,
+			ContentType: moderationrepo.SubjectArticleCommentReply, InteractionRecipientUserID: 99,
+			CommentID: &commentID,
 			RootSnapshot: &moderationrepo.NotificationSnapshot{
 				Type: "article", ID: 3, Title: "测试文章",
+			},
+			QuoteSnapshot: &moderationrepo.NotificationSnapshot{
+				Type: "comment", ID: 17, Excerpt: "被回复的评论",
 			},
 		}, nil,
 	)
@@ -65,16 +71,20 @@ func TestReviewServiceApproveBuildsApprovedTransition(t *testing.T) {
 			assert.Equal(t, record.AuthorID, cmd.Notification.RecipientUserID)
 			assert.Equal(t, "待审正文", cmd.Notification.ContentExcerpt)
 			assert.Equal(t, "approved", cmd.Notification.Decision)
-			assert.Equal(t, moderationrepo.SubjectArticleComment, cmd.Notification.ContentType)
+			assert.Equal(t, moderationrepo.SubjectArticleCommentReply, cmd.Notification.ContentType)
 			require.NotNil(t, cmd.Notification.RootSnapshot)
 			assert.Equal(t, "测试文章", cmd.Notification.RootSnapshot.Title)
 			require.NotNil(t, cmd.InteractionNotification)
-			assert.Equal(t, "comment_created", cmd.InteractionNotification.Type)
+			assert.Equal(t, "reply_created", cmd.InteractionNotification.Type)
 			assert.Equal(t, record.AuthorID, cmd.InteractionNotification.ActorUserID)
 			assert.Equal(t, uint64(99), cmd.InteractionNotification.RecipientUserID)
-			assert.Equal(t, "comment", cmd.InteractionNotification.SourceType)
+			assert.Equal(t, "reply", cmd.InteractionNotification.SourceType)
+			assert.Zero(t, cmd.InteractionNotification.SourceID)
 			assert.Equal(t, "article", cmd.InteractionNotification.RootType)
-			assert.Equal(t, record.Subject.RootID, cmd.InteractionNotification.RootID)
+			assert.Equal(t, uint64(3), cmd.InteractionNotification.RootID)
+			require.NotNil(t, cmd.InteractionNotification.QuoteSnapshot)
+			assert.Equal(t, uint64(17), cmd.InteractionNotification.QuoteSnapshot.ID)
+			assert.Equal(t, "被回复的评论", cmd.InteractionNotification.QuoteSnapshot.Excerpt)
 			return moderationrepo.AppliedTransition{Subject: record.Subject, ItemID: record.ItemID, LockVersion: 4}, nil
 		})
 	repo.EXPECT().LoadModerationProfile(gomock.Any(), record.AuthorID, serviceNow).Return(moderationrepo.ModerationProfile{
