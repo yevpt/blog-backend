@@ -1,6 +1,8 @@
 package database
 
 import (
+	"log"
+	"os"
 	"time"
 
 	"github.com/vpt/blog-backend/pkg/config"
@@ -11,8 +13,16 @@ import (
 
 // NewMySQL 初始化 GORM MySQL 连接并配置连接池
 func NewMySQL(cfg *config.DBConfig) (*gorm.DB, error) {
-	// 固定 Error 级别：不输出慢查询日志，避免生产环境日志量过大
-	gormLogger := logger.Default.LogMode(logger.Error)
+	// 固定 Error 级别：不输出慢查询日志，避免生产环境日志量过大。
+	// IgnoreRecordNotFoundError：First/Take 查不到行是仓储层预期的正常分支
+	// （用 errors.Is(gorm.ErrRecordNotFound) 转换为 nil/zero 返回），不是真正的错误，
+	// 关闭后避免刷屏；仓储层未处理的真实错误仍会通过业务日志（如请求日志）暴露。
+	gormLogger := logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  logger.Error,
+		IgnoreRecordNotFoundError: true,
+		Colorful:                  true,
+	})
 
 	// 打开数据库连接，禁止 GORM AutoMigrate 自动创建外键（外键约束由迁移 SQL 管理）
 	db, err := gorm.Open(mysql.Open(cfg.DSN()), &gorm.Config{
