@@ -89,6 +89,9 @@ func (h *AdminHandler) ExportRules(c *gin.Context) {
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", `attachment; filename="moderation-rules-export.csv"`)
 	c.Status(http.StatusOK)
+	if err := rulemod.WriteExportHeader(c.Writer); err != nil {
+		return
+	}
 
 	// 分页拉取规则并流式写入 CSV。
 	cursor := uint64(0)
@@ -106,7 +109,7 @@ func (h *AdminHandler) ExportRules(c *gin.Context) {
 				Priority: r.Priority, SourceID: r.SourceID, Active: r.Active,
 			})
 		}
-		if err := rulemod.WriteExport(c.Writer, exportRules); err != nil {
+		if err := rulemod.WriteExportRows(c.Writer, exportRules); err != nil {
 			return
 		}
 		if !page.HasMore {

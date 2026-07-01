@@ -91,11 +91,21 @@ func TestCSVParserRejectsMissingPatternHeader(t *testing.T) {
 	assert.Equal(t, "header_missing", errs[0].Code)
 }
 
-func TestCSVParserStopsAtMaxRows(t *testing.T) {
+func TestCSVParserRejectsRowsBeyondLimit(t *testing.T) {
 	input := "pattern\n词1\n词2\n词3\n"
-	rows, _ := parseCSV(strings.NewReader(input), testDefaults(), 2)
+	rows, errs := parseCSV(strings.NewReader(input), testDefaults(), 2)
 
 	assert.Len(t, rows, 2)
+	require.Len(t, errs, 1)
+	assert.Equal(t, "row_limit_exceeded", errs[0].Code)
+}
+
+func TestTXTParserRejectsRowsBeyondLimit(t *testing.T) {
+	rows, errs := parseTXT(strings.NewReader("词1\n词2\n词3\n"), testDefaults(), 2)
+
+	assert.Len(t, rows, 2)
+	require.Len(t, errs, 1)
+	assert.Equal(t, "row_limit_exceeded", errs[0].Code)
 }
 
 func TestTXTParserSkipsCommentsAndBlankLines(t *testing.T) {

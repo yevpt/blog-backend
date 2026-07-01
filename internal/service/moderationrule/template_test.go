@@ -55,6 +55,17 @@ func TestWriteExportEscapesFormulaInjection(t *testing.T) {
 	assert.Contains(t, output, "'=cmd|test")
 }
 
+func TestPagedExportWritesHeaderOnlyOnce(t *testing.T) {
+	var buf bytes.Buffer
+	require.NoError(t, WriteExportHeader(&buf))
+	require.NoError(t, WriteExportRows(&buf, []ExportRule{{ID: 1, Pattern: "first"}}))
+	require.NoError(t, WriteExportRows(&buf, []ExportRule{{ID: 2, Pattern: "second"}}))
+
+	assert.Equal(t, 1, strings.Count(buf.String(), "id,name,rule_type"))
+	assert.Contains(t, buf.String(), "1,,,first")
+	assert.Contains(t, buf.String(), "2,,,second")
+}
+
 func TestEscapeCSVCell(t *testing.T) {
 	tests := []struct {
 		input  string

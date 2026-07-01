@@ -66,11 +66,9 @@ func parseCSV(r io.Reader, defaults ImportDefaults, maxRows int) ([]ParsedRow, [
 	var rows []ParsedRow
 	var errs []RowError
 	lineNumber := 1
+	dataRows := 0
 
 	for {
-		if maxRows > 0 && len(rows) >= maxRows {
-			break
-		}
 		record, err := reader.Read()
 		if err == io.EOF {
 			break
@@ -81,6 +79,11 @@ func parseCSV(r io.Reader, defaults ImportDefaults, maxRows int) ([]ParsedRow, [
 			continue
 		}
 		lineNumber++
+		dataRows++
+		if maxRows > 0 && dataRows > maxRows {
+			errs = append(errs, RowError{LineNumber: lineNumber, Code: "row_limit_exceeded", Message: "导入行数超过上限"})
+			break
+		}
 
 		row, rowErrs := applyCsvRow(record, colIndex, defaults, lineNumber)
 		if len(rowErrs) > 0 {
@@ -100,6 +103,7 @@ func parseTXT(r io.Reader, defaults ImportDefaults, maxRows int) ([]ParsedRow, [
 	var rows []ParsedRow
 	var errs []RowError
 	lineNumber := 0
+	dataRows := 0
 
 	for scanner.Scan() {
 		lineNumber++
@@ -107,7 +111,9 @@ func parseTXT(r io.Reader, defaults ImportDefaults, maxRows int) ([]ParsedRow, [
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if maxRows > 0 && len(rows) >= maxRows {
+		dataRows++
+		if maxRows > 0 && dataRows > maxRows {
+			errs = append(errs, RowError{LineNumber: lineNumber, Code: "row_limit_exceeded", Message: "导入行数超过上限"})
 			break
 		}
 		rows = append(rows, ParsedRow{

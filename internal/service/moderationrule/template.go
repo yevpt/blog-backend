@@ -43,6 +43,14 @@ func WriteTXTTemplate(w io.Writer) error {
 // WriteExport 将规则列表流式导出为带 UTF-8 BOM 的 CSV。
 // 对以 = + - @ 开头的单元格前置单引号，防止电子表格公式注入。
 func WriteExport(w io.Writer, rules []ExportRule) error {
+	if err := WriteExportHeader(w); err != nil {
+		return err
+	}
+	return WriteExportRows(w, rules)
+}
+
+// WriteExportHeader 写入一次导出 BOM 和表头，供分页流式导出使用。
+func WriteExportHeader(w io.Writer) error {
 	// 写入 UTF-8 BOM 供 Excel 正确识别编码。
 	if _, err := w.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
 		return fmt.Errorf("写入 BOM: %w", err)
@@ -52,7 +60,13 @@ func WriteExport(w io.Writer, rules []ExportRule) error {
 	if err := csvWriter.Write([]string{"id", "name", "rule_type", "pattern", "category", "effect", "risk_level", "priority", "source_id", "active"}); err != nil {
 		return fmt.Errorf("写入导出表头: %w", err)
 	}
+	csvWriter.Flush()
+	return csvWriter.Error()
+}
 
+// WriteExportRows 追加一批导出数据，不重复写入 BOM 和表头。
+func WriteExportRows(w io.Writer, rules []ExportRule) error {
+	csvWriter := csv.NewWriter(w)
 	for _, rule := range rules {
 		name := ""
 		if rule.Name != nil {
