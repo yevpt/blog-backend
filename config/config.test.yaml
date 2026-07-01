@@ -12,6 +12,12 @@ moderation:
   # 测试环境执行真实策略；有效规则集由审核核心数据迁移负责初始化
   enabled: true
   mode: enforce
+  review_email:
+    enabled: true
+    recipient_user_id: 1
+    aggregation_window_seconds: 60
+    min_interval_seconds: 1800
+    poll_interval_seconds: 15
   rules:
     max_pattern_chars: 500
     max_keyword_rules: 500000

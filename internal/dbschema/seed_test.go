@@ -57,6 +57,8 @@ func TestModerationModelsRegisterInDependencyOrder(t *testing.T) {
 		reflect.TypeOf(&model.ModerationVisibleImage{}),
 		reflect.TypeOf(&model.UserModerationProfile{}),
 		reflect.TypeOf(&model.ModerationControl{}),
+		reflect.TypeOf(&model.ModerationReviewEmailBatch{}),
+		reflect.TypeOf(&model.ModerationReviewEmailTask{}),
 	}
 
 	got := make([]reflect.Type, 0, len(models))

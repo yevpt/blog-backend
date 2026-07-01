@@ -13,6 +13,12 @@ moderation:
   # 本地开发可设为 false，跳过审核写入与 Idempotency-Key 要求
   enabled: false
   mode: enforce
+  review_email:
+    enabled: true
+    recipient_user_id: 1
+    aggregation_window_seconds: 60
+    min_interval_seconds: 1800
+    poll_interval_seconds: 15
 
 db:
   host: localhost

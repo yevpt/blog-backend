@@ -72,6 +72,12 @@ moderation:
     queue_default_page_size: 20
     queue_max_page_size: 100
     reason_max_chars: 1000
+  review_email:
+    enabled: true
+    recipient_user_id: 1
+    aggregation_window_seconds: 60
+    min_interval_seconds: 1800
+    poll_interval_seconds: 15
   governance:
     new_to_normal: {min_age_days: 7, clean_approvals: 3}
     normal_to_trusted: {min_age_days: 30, clean_approvals: 20}
@@ -120,6 +126,11 @@ moderation:
 	assert.Equal(t, 800, cfg.Moderation.Content.MomentMaxChars)
 	assert.Equal(t, int64(1_048_576), cfg.Moderation.Image.MaxUploadBytes)
 	assert.Equal(t, 20, cfg.Moderation.Review.QueueDefaultPageSize)
+	assert.True(t, cfg.Moderation.ReviewEmail.Enabled)
+	assert.Equal(t, uint(1), cfg.Moderation.ReviewEmail.RecipientUserID)
+	assert.Equal(t, 60, cfg.Moderation.ReviewEmail.AggregationWindowSeconds)
+	assert.Equal(t, 1800, cfg.Moderation.ReviewEmail.MinIntervalSeconds)
+	assert.Equal(t, 15, cfg.Moderation.ReviewEmail.PollIntervalSeconds)
 	assert.Equal(t, 168*time.Hour, cfg.Moderation.Governance.RestrictedDuration)
 	assert.Equal(t, 10, cfg.Moderation.RateLimit.PublishPerMinute)
 	assert.Equal(t, 365, cfg.Moderation.Audit.ActionLogRetentionDays)
@@ -252,6 +263,15 @@ func TestValidateModeration(t *testing.T) {
 		{name: "audit bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
 			c.Audit.CleanupBatchSize = 0
 		}, wantErr: "moderation.audit.cleanup_batch_size"},
+		{name: "review email requires recipient", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.ReviewEmail.RecipientUserID = 0
+		}, wantErr: "moderation.review_email.recipient_user_id"},
+		{name: "review email bounds are positive", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.ReviewEmail.PollIntervalSeconds = 0
+		}, wantErr: "moderation.review_email.poll_interval_seconds"},
+		{name: "disabled review email permits zero values", env: "test", mutate: func(c *config.ModerationConfig) {
+			c.ReviewEmail = config.ModerationReviewEmailConfig{}
+		}},
 	}
 
 	for _, tt := range tests {
@@ -351,6 +371,10 @@ func validModerationConfig() config.ModerationConfig {
 		},
 		Review: config.ModerationReviewConfig{
 			QueueDefaultPageSize: 20, QueueMaxPageSize: 100, ReasonMaxChars: 1000,
+		},
+		ReviewEmail: config.ModerationReviewEmailConfig{
+			Enabled: true, RecipientUserID: 1, AggregationWindowSeconds: 60,
+			MinIntervalSeconds: 1800, PollIntervalSeconds: 15,
 		},
 		Governance: config.ModerationGovernanceConfig{
 			NewToNormal:              config.ModerationPromotionConfig{MinAgeDays: 7, CleanApprovals: 3},

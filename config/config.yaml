@@ -82,6 +82,13 @@ moderation:
   # enforce 实际执行审核决策；observe 仅用于本地规则调试
   mode: enforce
 
+  review_email:
+    enabled: true
+    recipient_user_id: 1
+    aggregation_window_seconds: 60
+    min_interval_seconds: 1800
+    poll_interval_seconds: 15
+
   # 不同用户等级在各风险场景下的处理动作
   policy:
     new:

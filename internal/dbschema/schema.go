@@ -76,5 +76,7 @@ func moderationModels() []any {
 		&model.ModerationVisibleImage{},
 		&model.UserModerationProfile{},
 		&model.ModerationControl{},
+		&model.ModerationReviewEmailBatch{},
+		&model.ModerationReviewEmailTask{},
 	}
 }

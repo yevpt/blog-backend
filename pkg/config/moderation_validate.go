@@ -5,6 +5,29 @@ import (
 	"strings"
 )
 
+func validateModerationReviewEmail(c ModerationReviewEmailConfig) error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.RecipientUserID == 0 {
+		return fmt.Errorf("moderation.review_email.recipient_user_id: must be positive")
+	}
+	values := []struct {
+		path  string
+		value int
+	}{
+		{path: "moderation.review_email.aggregation_window_seconds", value: c.AggregationWindowSeconds},
+		{path: "moderation.review_email.min_interval_seconds", value: c.MinIntervalSeconds},
+		{path: "moderation.review_email.poll_interval_seconds", value: c.PollIntervalSeconds},
+	}
+	for _, item := range values {
+		if item.value <= 0 {
+			return fmt.Errorf("%s: must be positive", item.path)
+		}
+	}
+	return nil
+}
+
 func validateModerationPolicy(policy ModerationPolicyConfig) error {
 	levels := []struct {
 		name       string

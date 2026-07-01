@@ -12,6 +12,12 @@ moderation:
   # 审核全量上线前临时关闭；上线时改回 true 并重新部署
   enabled: false
   mode: enforce
+  review_email:
+    enabled: true
+    recipient_user_id: 1
+    aggregation_window_seconds: 60
+    min_interval_seconds: 1800
+    poll_interval_seconds: 15
   migration:
     batch_size: 200
 

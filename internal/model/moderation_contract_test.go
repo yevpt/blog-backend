@@ -33,6 +33,8 @@ func TestModerationTableNames(t *testing.T) {
 		{name: "visible image", got: model.ModerationVisibleImage{}.TableName(), want: "moderation_visible_image"},
 		{name: "user profile", got: model.UserModerationProfile{}.TableName(), want: "user_moderation_profile"},
 		{name: "control", got: model.ModerationControl{}.TableName(), want: "moderation_control"},
+		{name: "review email task", got: model.ModerationReviewEmailTask{}.TableName(), want: "moderation_review_email_task"},
+		{name: "review email batch", got: model.ModerationReviewEmailBatch{}.TableName(), want: "moderation_review_email_batch"},
 	}
 
 	for _, tt := range tests {
@@ -40,6 +42,33 @@ func TestModerationTableNames(t *testing.T) {
 			assert.Equal(t, tt.want, tt.got)
 		})
 	}
+}
+
+func TestModerationReviewEmailMigrationDeclaresQueueContracts(t *testing.T) {
+	migration, err := os.ReadFile("../../migrations/20260701_moderation_review_email.sql")
+	require.NoError(t, err)
+	sql := string(migration)
+
+	batchPosition := strings.Index(sql, "CREATE TABLE `moderation_review_email_batch`")
+	taskPosition := strings.Index(sql, "CREATE TABLE `moderation_review_email_task`")
+	require.GreaterOrEqual(t, batchPosition, 0)
+	require.Greater(t, taskPosition, batchPosition)
+	assert.NotContains(t, sql, "IF NOT EXISTS")
+	assert.Contains(t, sql, "UNIQUE KEY `uk_moderation_review_email_revision` (`revision_id`)")
+	assert.Contains(t, sql, "KEY `idx_moderation_review_email_task_pick` (`status`, `next_attempt_at`)")
+	assert.Contains(t, sql, "KEY `idx_moderation_review_email_batch_pick` (`status`, `next_attempt_at`, `lease_until`)")
+	for _, constraint := range []string{
+		"CONSTRAINT `fk_moderation_review_email_task_revision`",
+		"CONSTRAINT `fk_moderation_review_email_task_item`",
+		"CONSTRAINT `fk_moderation_review_email_task_batch`",
+		"CONSTRAINT `fk_moderation_review_email_batch_recipient`",
+		"CONSTRAINT `chk_moderation_review_email_task_status`",
+		"CONSTRAINT `chk_moderation_review_email_batch_status`",
+	} {
+		assert.Contains(t, sql, constraint)
+	}
+	assert.Contains(t, sql, "INSERT INTO `moderation_review_email_task`")
+	assert.Contains(t, sql, "WHERE r.`review_status` = 'pending'")
 }
 
 func TestModerationItemUsesExplicitDeletedAt(t *testing.T) {
