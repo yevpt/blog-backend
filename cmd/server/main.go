@@ -47,6 +47,9 @@ func main() {
 	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
 	bootstrap.StartNotificationWorker(context.Background(), cfg, db, mailer, zapLogger)
 
+	// 启动待审核摘要邮件 worker：先规划批次再发送，复用邮件 worker 总开关。
+	bootstrap.StartModerationReviewEmailWorker(context.Background(), cfg, db, mailer, zapLogger)
+
 	// 审核开启后启动有界清理：过期审计、无引用版本、图片记录和孤儿对象。
 	bootstrap.StartModerationCleanupWorker(context.Background(), cfg, db, objectURLResolver, zapLogger)
 

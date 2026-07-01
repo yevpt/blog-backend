@@ -12,11 +12,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	moderationemailrepo "github.com/vpt/blog-backend/internal/repository/moderationemail"
 	notificationrepo "github.com/vpt/blog-backend/internal/repository/notification"
+	moderationemailservice "github.com/vpt/blog-backend/internal/service/moderationemail"
 	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
 	analyticsworker "github.com/vpt/blog-backend/internal/worker/analytics"
 	moderationworker "github.com/vpt/blog-backend/internal/worker/moderation"
+	moderationemailworker "github.com/vpt/blog-backend/internal/worker/moderationemail"
 	notificationworker "github.com/vpt/blog-backend/internal/worker/notification"
 	"github.com/vpt/blog-backend/pkg/cache"
 	"github.com/vpt/blog-backend/pkg/config"
@@ -129,6 +132,41 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 	} else {
 		zapLogger.Info("站内通知 worker 启动，邮件 worker 未启用")
 	}
+	go worker.Run(ctx)
+}
+
+// StartModerationReviewEmailWorker 在审核邮件启用时启动待审核摘要邮件 worker。
+func StartModerationReviewEmailWorker(
+	ctx context.Context,
+	cfg *config.Config,
+	db *gorm.DB,
+	mailer email.MailSender,
+	zapLogger *zap.Logger,
+) {
+	if cfg == nil || !cfg.Moderation.Enabled || !cfg.Moderation.ReviewEmail.Enabled || !cfg.Email.WorkerEnabled {
+		return
+	}
+	if zapLogger == nil {
+		zapLogger = zap.NewNop()
+	}
+
+	// 组装审核邮件链路：仓储负责租约与批次，目录负责接收人快照。
+	repo := moderationemailrepo.NewRepository(db)
+	directory := moderationemailrepo.NewDirectory(db)
+	reviewEmail := cfg.Moderation.ReviewEmail
+	planner := moderationemailservice.NewPlanner(repo, directory, moderationemailservice.Config{
+		RecipientUserID: reviewEmail.RecipientUserID,
+		MinInterval:     time.Duration(reviewEmail.MinIntervalSeconds) * time.Second,
+	}, time.Now)
+	sender := moderationemailservice.NewSender(repo, mailer, cfg.Email.SiteURL, time.Now)
+
+	worker := moderationemailworker.NewWorker(moderationemailworker.Config{
+		Enabled:      true,
+		WorkerID:     notificationWorkerID(),
+		PollInterval: time.Duration(reviewEmail.PollIntervalSeconds) * time.Second,
+	}, planner.PlanOnce, sender.SendOnce, zapLogger)
+
+	zapLogger.Info("审核待处理邮件 worker 启动")
 	go worker.Run(ctx)
 }
 
