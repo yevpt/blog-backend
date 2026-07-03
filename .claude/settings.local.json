@@ -55,7 +55,8 @@
       "Bash(jq '.mcpServers[\"houtini-lm\"] = { *)",
       "Bash(xargs ls -la)",
       "Bash(go test *)",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "mcp__visualize__read_me"
     ]
   }
 }
