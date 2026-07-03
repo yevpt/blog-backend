@@ -16,7 +16,7 @@ type Purpose string
 const (
 	PurposeRegister      Purpose = "register"       // 注册
 	PurposePasswordReset Purpose = "password_reset" // 重置密码
-	PurposeEmailBind     Purpose = "email_bind"      // 绑定/更换邮箱
+	PurposeEmailBind     Purpose = "email_bind"     // 绑定/更换邮箱
 )
 
 // MailSender 邮件发送接口，便于在测试中 mock
