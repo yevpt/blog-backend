@@ -85,8 +85,9 @@ func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager, initializers ...a
 }
 
 func TestAuthService_SendCode_Success(t *testing.T) {
-	svc, _, rdb, mr, mailer, captchaConsumer := setupService(t)
+	svc, repo, rdb, mr, mailer, captchaConsumer := setupService(t)
 	defer mr.Close()
+	repo.EXPECT().ExistsByEmail("user@example.com").Return(false, nil)
 
 	err := svc.SendCode("user@example.com", "127.0.0.1", "captcha-token")
 	require.NoError(t, err)
@@ -121,6 +122,20 @@ func TestAuthService_SendCode_InvalidCaptchaToken(t *testing.T) {
 	assert.Error(t, err)
 	assert.Empty(t, mailer.sentTo)
 	exists, redisErr := rdb.Exists(context.Background(), "email:code:user@example.com").Result()
+	require.NoError(t, redisErr)
+	assert.Equal(t, int64(0), exists)
+}
+
+func TestAuthService_SendCode_EmailAlreadyRegistered(t *testing.T) {
+	svc, repo, rdb, mr, mailer, _ := setupService(t)
+	defer mr.Close()
+	repo.EXPECT().ExistsByEmail("taken@example.com").Return(true, nil)
+
+	err := svc.SendCode("taken@example.com", "127.0.0.1", "captcha-token")
+
+	require.ErrorIs(t, err, authservice.ErrEmailTaken)
+	assert.Empty(t, mailer.sentTo)
+	exists, redisErr := rdb.Exists(context.Background(), "email:code:taken@example.com").Result()
 	require.NoError(t, redisErr)
 	assert.Equal(t, int64(0), exists)
 }

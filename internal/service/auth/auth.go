@@ -133,6 +133,15 @@ func (s *authService) SendCode(to string, ip string, captchaToken string) error 
 		return err
 	}
 
+	// 邮箱已注册无需再发码，尽早拦截，避免用户走完滑块+等邮件才在提交时被拒
+	taken, err := s.repo.ExistsByEmail(to)
+	if err != nil {
+		return err
+	}
+	if taken {
+		return ErrEmailTaken
+	}
+
 	// 10分钟内发送次数检查（上限2次），首次 Incr 后立即设过期时间，避免 key 永久存在
 	key10m := fmt.Sprintf("email:10m:%s", to)
 	c10m, _ := s.rdb.Incr(ctx, key10m).Result()
