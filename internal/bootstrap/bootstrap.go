@@ -76,11 +76,13 @@ func InitJWT(cfg *config.Config) *jwt.Manager {
 // InitMailer 创建邮件发送器，用于发送注册和登录验证码。
 func InitMailer(cfg *config.Config) email.MailSender {
 	return email.NewMailer(&email.Config{
-		Host:     cfg.Email.Host,
-		Port:     cfg.Email.Port,
-		From:     cfg.Email.From,
-		Password: cfg.Email.Password,
-		FromName: cfg.Email.FromName,
+		Host:      cfg.Email.Host,
+		Port:      cfg.Email.Port,
+		From:      cfg.Email.From,
+		Password:  cfg.Email.Password,
+		FromName:  cfg.Email.FromName,
+		BrandName: cfg.Email.BrandName,
+		SiteURL:   cfg.Email.SiteURL,
 	})
 }
 
@@ -113,7 +115,7 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 		MaxPerHour:         cfg.Email.MaxPerHour,
 	})
 	planner := notificationservice.NewEmailPlanner(repo, quota, directory)
-	sender := notificationservice.NewEmailSender(repo, quota, directory, directory, mailer, cfg.Email.Provider, cfg.Email.SiteURL)
+	sender := notificationservice.NewEmailSender(repo, quota, directory, directory, mailer, cfg.Email.Provider, cfg.Email.BrandName, cfg.Email.SiteURL)
 
 	// 组装 worker 运行配置：发送间隔来自配置，分发/聚合用稳健的固定间隔。
 	worker := notificationworker.NewWorker(notificationworker.Config{
@@ -158,7 +160,7 @@ func StartModerationReviewEmailWorker(
 		RecipientUserID: reviewEmail.RecipientUserID,
 		MinInterval:     time.Duration(reviewEmail.MinIntervalSeconds) * time.Second,
 	}, time.Now)
-	sender := moderationemailservice.NewSender(repo, mailer, cfg.Email.SiteURL, time.Now)
+	sender := moderationemailservice.NewSender(repo, mailer, cfg.Email.SiteURL, cfg.Email.BrandName, reviewEmail.AdminURL, time.Now)
 
 	worker := moderationemailworker.NewWorker(moderationemailworker.Config{
 		Enabled:      true,
