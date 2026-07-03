@@ -22,7 +22,7 @@ func TestRenderEscapesSubmittedHTMLAndKeepsUnicodeExcerptValid(t *testing.T) {
 		reviewTask(2, model.ModerationContentArticleComment, long),
 	}
 
-	rendered, err := moderationemailservice.Render(batch, tasks, " https://blog.example.com/base/ ")
+	rendered, err := moderationemailservice.Render(batch, tasks, " https://blog.example.com/base/ ", "", "https://admin.example.com/moderation")
 
 	require.NoError(t, err)
 	assert.Equal(t, "待审核内容提醒（2 条）", rendered.Subject)
@@ -30,7 +30,7 @@ func TestRenderEscapesSubmittedHTMLAndKeepsUnicodeExcerptValid(t *testing.T) {
 	assert.Contains(t, rendered.HTML, "碎语")
 	assert.Contains(t, rendered.HTML, "文章评论")
 	assert.Contains(t, rendered.HTML, "作者 #301")
-	assert.Contains(t, rendered.HTML, "https://blog.example.com/base/admin/moderation")
+	assert.Contains(t, rendered.HTML, `href="https://admin.example.com/moderation"`)
 	assert.NotContains(t, rendered.HTML, `<img src=x`)
 	assert.NotContains(t, rendered.HTML, "<script>")
 	assert.Contains(t, rendered.HTML, "&lt;img src=x")
@@ -44,14 +44,24 @@ func TestRenderLimitsRowsAndShowsOverflowAgainstTotalItemCount(t *testing.T) {
 		tasks = append(tasks, reviewTask(uint64(i+1), model.ModerationContentGuestbookReply, "留言回复"))
 	}
 
-	rendered, err := moderationemailservice.Render(batch, tasks, "")
+	rendered, err := moderationemailservice.Render(batch, tasks, "", "", "")
 
 	require.NoError(t, err)
 	assert.Equal(t, "待审核内容提醒（53 条）", rendered.Subject)
 	assert.Contains(t, rendered.HTML, "共 53 条待审核内容")
-	assert.Contains(t, rendered.HTML, "另有 3 条未展示")
-	assert.NotContains(t, rendered.HTML, `<a href=`)
-	assert.Equal(t, 50, strings.Count(rendered.HTML, "<tr>"))
+	assert.Contains(t, rendered.HTML, "其余 3 条请前往后台查看")
+	assert.Equal(t, 50, strings.Count(rendered.HTML, "background:#EEEDFE"))
+}
+
+func TestRenderFallsBackToDefaultBrandAndAdminURLWhenEmpty(t *testing.T) {
+	batch := reviewBatch(9, 1)
+	tasks := []moderationemailrepo.PendingTask{reviewTask(1, model.ModerationContentMoment, "内容")}
+
+	rendered, err := moderationemailservice.Render(batch, tasks, "", "", "")
+
+	require.NoError(t, err)
+	assert.Contains(t, rendered.HTML, ">YEVPT<")
+	assert.Contains(t, rendered.HTML, `href="https://admin.yevpt.com"`)
 }
 
 func reviewBatch(id uint64, itemCount int) model.ModerationReviewEmailBatch {

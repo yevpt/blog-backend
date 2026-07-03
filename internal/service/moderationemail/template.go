@@ -9,26 +9,27 @@ import (
 
 	"github.com/vpt/blog-backend/internal/model"
 	moderationemailrepo "github.com/vpt/blog-backend/internal/repository/moderationemail"
+	"github.com/vpt/blog-backend/pkg/email/layout"
 )
 
 const (
-	maxRenderedRows  = 50
-	maxExcerptRunes  = 120
-	adminModeration  = "/admin/moderation"
-	reviewMailLayout = `<!doctype html>
-<html lang="zh-CN">
-<body>
-<p>共 {{.TotalCount}} 条待审核内容。</p>
-{{if .AdminURL}}<p><a href="{{.AdminURL}}">打开审核后台</a></p>{{else}}<p>请登录后台进入审核列表处理。</p>{{end}}
-<table>
-{{range .Rows}}<tr><td>{{.TypeLabel}}</td><td>#{{.ItemID}}</td><td>作者 #{{.AuthorID}}</td><td>{{.Excerpt}}</td><td>{{.CreatedAt}}</td></tr>
-{{end}}</table>
-{{if gt .OverflowCount 0}}<p>另有 {{.OverflowCount}} 条未展示，请进入审核后台查看全部。</p>{{end}}
-</body>
-</html>`
+	maxRenderedRows = 50
+	maxExcerptRunes = 120
+	// defaultAdminURL 是 admin_url 留空时的兜底审核后台地址，直接作为最终跳转地址使用。
+	defaultAdminURL = "https://admin.yevpt.com"
 )
 
-var reviewEmailTemplate = template.Must(template.New("review-email").Parse(reviewMailLayout))
+// reviewCardsLayout 是审核提醒邮件的正文片段（不含外层品牌壳体）：
+// 每条待审内容渲染成一张卡片，超出展示上限时在最前面提示溢出条数。
+const reviewCardsLayout = `{{if .OverflowCount}}<p style="font-size:13px;color:#6B7280;margin:0 0 16px;">以下展示前 {{len .Rows}} 条，其余 {{.OverflowCount}} 条请前往后台查看。</p>{{end}}
+{{range .Rows}}<div style="border:1px solid #EEE;border-radius:6px;padding:12px 14px;margin:0 0 10px;">
+<span style="display:inline-block;font-size:11px;font-weight:700;color:#534AB7;background:#EEEDFE;border-radius:4px;padding:2px 8px;margin-bottom:6px;">{{.TypeLabel}}</span>
+<p style="font-size:14px;color:#374151;margin:0 0 4px;line-height:1.5;">{{.Excerpt}}</p>
+<p style="font-size:12px;color:#9CA3AF;margin:0;">#{{.ItemID}} · 作者 #{{.AuthorID}} · {{.CreatedAt}}</p>
+</div>
+{{end}}`
+
+var reviewCardsTemplate = template.Must(template.New("review-cards").Parse(reviewCardsLayout))
 
 // RenderedEmail 是审核摘要邮件渲染结果。
 type RenderedEmail struct {
@@ -37,8 +38,6 @@ type RenderedEmail struct {
 }
 
 type reviewEmailData struct {
-	TotalCount    int
-	AdminURL      string
 	Rows          []reviewEmailRow
 	OverflowCount int
 }
@@ -52,7 +51,9 @@ type reviewEmailRow struct {
 }
 
 // Render 安全渲染审核摘要邮件；用户提交正文只作为模板数据输出，由 html/template 转义。
-func Render(batch model.ModerationReviewEmailBatch, tasks []moderationemailrepo.PendingTask, siteURL string) (RenderedEmail, error) {
+// brandName/siteURL 用于顶部品牌 Logo，adminURL 留空时使用 defaultAdminURL，非空时直接作为
+// 「打开审核后台」按钮的最终跳转地址，不拼接路径。
+func Render(batch model.ModerationReviewEmailBatch, tasks []moderationemailrepo.PendingTask, siteURL, brandName, adminURL string) (RenderedEmail, error) {
 	// 以批次总数为权威来源，缺失时回退到任务数量。
 	total := batch.ItemCount
 	if total <= 0 {
@@ -62,21 +63,38 @@ func Render(batch model.ModerationReviewEmailBatch, tasks []moderationemailrepo.
 	// 只展示前 50 条，剩余数量通过溢出提示表达。
 	displayed := minInt(len(tasks), maxRenderedRows)
 	data := reviewEmailData{
-		TotalCount:    total,
-		AdminURL:      adminURL(siteURL),
 		Rows:          renderRows(tasks[:displayed]),
 		OverflowCount: maxInt(total-displayed, 0),
 	}
 
 	// 执行模板渲染，避免任何手写 HTML 拼接用户正文。
 	var body bytes.Buffer
-	if err := reviewEmailTemplate.Execute(&body, data); err != nil {
+	if err := reviewCardsTemplate.Execute(&body, data); err != nil {
 		return RenderedEmail{}, err
 	}
+
+	brand := layout.ResolveBrand(brandName, siteURL)
+	htmlBody := layout.Wrap(layout.Options{
+		Brand:    brand,
+		Title:    fmt.Sprintf("共 %d 条待审核内容", total),
+		BodyHTML: template.HTML(body.String()),
+		CTAText:  "打开审核后台",
+		CTAURL:   resolveAdminURL(adminURL),
+	})
+
 	return RenderedEmail{
 		Subject: fmt.Sprintf("待审核内容提醒（%d 条）", total),
-		HTML:    body.String(),
+		HTML:    htmlBody,
 	}, nil
+}
+
+// resolveAdminURL 对审核后台地址应用兜底默认值。
+func resolveAdminURL(adminURL string) string {
+	adminURL = strings.TrimSpace(adminURL)
+	if adminURL == "" {
+		return defaultAdminURL
+	}
+	return adminURL
 }
 
 func renderRows(tasks []moderationemailrepo.PendingTask) []reviewEmailRow {
@@ -91,14 +109,6 @@ func renderRows(tasks []moderationemailrepo.PendingTask) []reviewEmailRow {
 		})
 	}
 	return rows
-}
-
-func adminURL(siteURL string) string {
-	base := strings.TrimRight(strings.TrimSpace(siteURL), "/")
-	if base == "" {
-		return ""
-	}
-	return base + adminModeration
 }
 
 func typeLabel(contentType string) string {
