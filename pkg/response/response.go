@@ -38,6 +38,7 @@ const (
 	CodeModerationRuleLimit         = "MODERATION_RULE_LIMIT"
 	CodeModerationIndexMemoryLimit  = "MODERATION_INDEX_MEMORY_LIMIT"
 	CodeModerationImportInvalid     = "MODERATION_IMPORT_INVALID"
+	CodeAuthEmailTaken              = "AUTH_EMAIL_TAKEN"
 )
 
 // 业务错误码，与 HTTP 状态码对齐，便于客户端统一处理

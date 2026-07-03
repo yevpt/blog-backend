@@ -143,6 +143,26 @@ func TestAuthHandler_SendCode_TooManyRequests(t *testing.T) {
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 }
 
+func TestAuthHandler_SendCode_EmailAlreadyRegistered(t *testing.T) {
+	r := newTestRouter(&stubAuthService{sendCodeErr: authservice.ErrEmailTaken})
+	body, _ := json.Marshal(map[string]string{
+		"email":         "taken@example.com",
+		"captcha_token": "captcha-token",
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/auth/send-code", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+	var resp response.Response
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	assert.Equal(t, http.StatusConflict, resp.Code)
+	assert.Equal(t, response.CodeAuthEmailTaken, resp.ErrorCode)
+	assert.Equal(t, "该邮箱已被注册", resp.Message)
+}
+
 func TestAuthHandler_SendPasswordResetCode_Success(t *testing.T) {
 	stub := &stubAuthService{}
 	r := newTestRouter(stub)

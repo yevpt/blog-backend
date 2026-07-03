@@ -46,6 +46,11 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 			response.TooManyRequests(c, err.Error(), 0)
 			return
 		}
+		// 邮箱已注册单独映射到 409 + error_code，供前端区分是否要展示「去登录」
+		if errors.Is(err, authservice.ErrEmailTaken) {
+			response.Conflict(c, response.CodeAuthEmailTaken, err.Error())
+			return
+		}
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}
