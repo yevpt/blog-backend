@@ -93,12 +93,13 @@ type CDNConfig struct {
 }
 
 type EmailConfig struct {
-	Host     string `mapstructure:"host"`      // SMTP 主机地址
-	Port     int    `mapstructure:"port"`      // SMTP 端口
-	From     string `mapstructure:"from"`      // 发件人邮箱
-	Password string `mapstructure:"password"`  // 邮箱授权码或密码
-	FromName string `mapstructure:"from_name"` // 发件人昵称，如 YEVPT，为空时仅显示邮箱地址
-	SiteURL  string `mapstructure:"site_url"`  // 站点公网访问前缀，用于邮件正文中的跳转链接，如 https://www.example.com
+	Host      string `mapstructure:"host"`       // SMTP 主机地址
+	Port      int    `mapstructure:"port"`       // SMTP 端口
+	From      string `mapstructure:"from"`       // 发件人邮箱
+	Password  string `mapstructure:"password"`   // 邮箱授权码或密码
+	FromName  string `mapstructure:"from_name"`  // 发件人昵称，如 YEVPT，为空时仅显示邮箱地址
+	BrandName string `mapstructure:"brand_name"` // 邮件正文品牌名，留空时默认 "YEVPT"
+	SiteURL   string `mapstructure:"site_url"`   // 站点公网访问前缀，用于邮件正文中的跳转链接，留空时默认 "https://www.yevpt.com"
 
 	Provider               string `mapstructure:"provider"`                  // 邮件供应商标识，如 aliyun_enterprise
 	ProviderDailyHardLimit int    `mapstructure:"provider_daily_hard_limit"` // 供应商标称每日上限，仅作保护参考

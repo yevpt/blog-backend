@@ -48,11 +48,12 @@ type ModerationReviewConfig struct {
 
 // ModerationReviewEmailConfig 定义待审核邮件的接收人和调度秒数。
 type ModerationReviewEmailConfig struct {
-	Enabled                  bool `mapstructure:"enabled"`
-	RecipientUserID          uint `mapstructure:"recipient_user_id"`
-	AggregationWindowSeconds int  `mapstructure:"aggregation_window_seconds"`
-	MinIntervalSeconds       int  `mapstructure:"min_interval_seconds"`
-	PollIntervalSeconds      int  `mapstructure:"poll_interval_seconds"`
+	Enabled                  bool   `mapstructure:"enabled"`
+	RecipientUserID          uint   `mapstructure:"recipient_user_id"`
+	AggregationWindowSeconds int    `mapstructure:"aggregation_window_seconds"`
+	MinIntervalSeconds       int    `mapstructure:"min_interval_seconds"`
+	PollIntervalSeconds      int    `mapstructure:"poll_interval_seconds"`
+	AdminURL                 string `mapstructure:"admin_url"` // 审核后台地址，留空时默认 "https://admin.yevpt.com"，直接作为最终跳转地址使用
 }
 
 // ModerationPolicyConfig 按用户信任等级定义审核动作。

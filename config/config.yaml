@@ -54,8 +54,9 @@ image:
 email:
   # 发件人昵称，出现在邮件 From 头，如 "YEVPT <noreply@example.com>"；为空时仅显示邮箱
   from_name: ""
-  # 站点公网访问前缀，用于通知邮件中的跳转链接，如 https://www.example.com
-  # 未配置时邮件正文不带可点击链接，且底部 Footer 退化为纯文本
+  # 邮件正文品牌名（顶部 Logo 文案、版权行），留空时默认 "YEVPT"
+  brand_name: ""
+  # 站点公网访问前缀，用于通知邮件中的跳转链接，留空时默认 "https://www.yevpt.com"
   site_url: ""
   # 邮件供应商标识，仅用于日志与发送记录归类
   provider: aliyun_enterprise
@@ -88,6 +89,8 @@ moderation:
     aggregation_window_seconds: 60
     min_interval_seconds: 1800
     poll_interval_seconds: 15
+    # 审核后台地址，留空时默认 "https://admin.yevpt.com"
+    admin_url: ""
 
   # 不同用户等级在各风险场景下的处理动作
   policy:
