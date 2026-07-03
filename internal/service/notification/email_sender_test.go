@@ -85,7 +85,7 @@ func oneBatch() model.NotificationEmailBatch {
 
 func newSender(repo *senderRepoStub, quotaStore *fakeQuotaStore, mailer *fakeMailer) *notificationservice.EmailSender {
 	quota := notificationservice.NewQuotaService(quotaStore, cfg())
-	return notificationservice.NewEmailSender(repo, quota, fakeRoles{roles: []string{"normal"}}, nil, mailer, "test", "")
+	return notificationservice.NewEmailSender(repo, quota, fakeRoles{roles: []string{"normal"}}, nil, mailer, "test", "", "")
 }
 
 // 发送前先校验额度；额度足够时成功发送并标记 sent，落成功日志。

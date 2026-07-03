@@ -40,6 +40,7 @@ type EmailSender struct {
 	roots        RootSnapshotResolver
 	mailer       email.MailSender
 	provider     string
+	brandName    string
 	siteURL      string
 	leaseSeconds int
 	retryDelay   time.Duration
@@ -48,8 +49,8 @@ type EmailSender struct {
 
 // NewEmailSender 创建邮件发送器。
 // roots 用于按事件根对象解析展示快照，可为 nil（此时退化为不展示根对象标题）。
-// siteURL 为站点前缀，用于文章跳转链接与 Footer；为空时邮件不渲染可点击链接。
-func NewEmailSender(repo senderRepo, quota *QuotaService, roles RoleResolver, roots RootSnapshotResolver, mailer email.MailSender, provider, siteURL string) *EmailSender {
+// brandName/siteURL 留空时分别使用 layout 包的默认品牌名/站点地址。
+func NewEmailSender(repo senderRepo, quota *QuotaService, roles RoleResolver, roots RootSnapshotResolver, mailer email.MailSender, provider, brandName, siteURL string) *EmailSender {
 	return &EmailSender{
 		repo:         repo,
 		quota:        quota,
@@ -57,6 +58,7 @@ func NewEmailSender(repo senderRepo, quota *QuotaService, roles RoleResolver, ro
 		roots:        roots,
 		mailer:       mailer,
 		provider:     provider,
+		brandName:    brandName,
 		siteURL:      siteURL,
 		leaseSeconds: defaultSenderLeaseSecs,
 		retryDelay:   defaultSendRetryDelay,
@@ -117,7 +119,7 @@ func (s *EmailSender) sendBatch(ctx context.Context, batch model.NotificationEma
 	if err != nil {
 		return false, err
 	}
-	htmlBody := renderDigestHTML(tasks, events, rootLabels, s.siteURL)
+	htmlBody := renderDigestHTML(tasks, events, rootLabels, s.brandName, s.siteURL)
 	messageID := batchMessageID(batch.ID)
 
 	// 调用 SMTP；失败落日志并安排重试。
