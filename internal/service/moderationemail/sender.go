@@ -35,12 +35,14 @@ type Sender struct {
 	repo          SenderRepository
 	mailer        MailSender
 	siteURL       string
+	brandName     string
+	adminURL      string
 	leaseDuration time.Duration
 	now           func() time.Time
 }
 
 // NewSender 创建审核摘要邮件发送器。
-func NewSender(repo SenderRepository, mailer MailSender, siteURL string, now func() time.Time) *Sender {
+func NewSender(repo SenderRepository, mailer MailSender, siteURL, brandName, adminURL string, now func() time.Time) *Sender {
 	if now == nil {
 		now = time.Now
 	}
@@ -48,6 +50,8 @@ func NewSender(repo SenderRepository, mailer MailSender, siteURL string, now fun
 		repo:          repo,
 		mailer:        mailer,
 		siteURL:       siteURL,
+		brandName:     brandName,
+		adminURL:      adminURL,
 		leaseDuration: defaultSenderLeaseDuration,
 		now:           now,
 	}
@@ -100,7 +104,7 @@ func (s *Sender) sendBatch(ctx context.Context, batch model.ModerationReviewEmai
 	if len(tasks) < maxRenderedRows && renderBatch.ItemCount != len(tasks) {
 		renderBatch.ItemCount = len(tasks)
 	}
-	rendered, err := Render(renderBatch, tasks, s.siteURL)
+	rendered, err := Render(renderBatch, tasks, s.siteURL, s.brandName, s.adminURL)
 	if err != nil {
 		return false, s.retryBatch(ctx, batch, messageID, err, now)
 	}

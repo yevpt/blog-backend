@@ -27,7 +27,7 @@ func TestSenderSuccessUsesStableMessageIDAndMarksSent(t *testing.T) {
 	mailer := &reviewMailerStub{beforeSend: func() {
 		assert.Equal(t, []sentCall{{batchID: 9, messageID: "moderation-review-batch-9", at: now}}, repo.persisted)
 	}}
-	sender := moderationemailservice.NewSender(repo, mailer, "https://blog.example.com", func() time.Time { return now })
+	sender := moderationemailservice.NewSender(repo, mailer, "https://blog.example.com", "", "", func() time.Time { return now })
 
 	sent, err := sender.SendOnce(context.Background(), "worker-1", 10)
 
@@ -54,7 +54,7 @@ func TestSenderSMTPFailureRetriesWithoutSentTimestampAndReusesPersistedMessageID
 		},
 	}
 	mailer := &reviewMailerStub{err: errors.New("smtp down")}
-	sender := moderationemailservice.NewSender(repo, mailer, "https://blog.example.com", func() time.Time { return now })
+	sender := moderationemailservice.NewSender(repo, mailer, "https://blog.example.com", "", "", func() time.Time { return now })
 
 	sent, err := sender.SendOnce(context.Background(), "worker-1", 10)
 
@@ -81,7 +81,7 @@ func TestSenderMarkSentFailureReleasesLeaseForRetryWithoutSecondSMTPAttempt(t *t
 		markSentErr: errors.New("db unavailable"),
 	}
 	mailer := &reviewMailerStub{}
-	sender := moderationemailservice.NewSender(repo, mailer, "", func() time.Time { return now })
+	sender := moderationemailservice.NewSender(repo, mailer, "", "", "", func() time.Time { return now })
 
 	sent, err := sender.SendOnce(context.Background(), "worker-1", 10)
 
@@ -103,7 +103,7 @@ func TestSenderSkipsBatchWhenNoCurrentPendingTasksRemain(t *testing.T) {
 		tasks: map[uint64][]moderationemailrepo.PendingTask{9: {}},
 	}
 	mailer := &reviewMailerStub{}
-	sender := moderationemailservice.NewSender(repo, mailer, "", func() time.Time { return now })
+	sender := moderationemailservice.NewSender(repo, mailer, "", "", "", func() time.Time { return now })
 
 	sent, err := sender.SendOnce(context.Background(), "worker-1", 10)
 
