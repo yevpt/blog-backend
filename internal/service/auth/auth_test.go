@@ -17,20 +17,23 @@ import (
 	"github.com/vpt/blog-backend/internal/model"
 	"github.com/vpt/blog-backend/internal/repository/user/mock"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
+	"github.com/vpt/blog-backend/pkg/email"
 	jwtpkg "github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
 // mockMailSender 测试用邮件发送 mock
 type mockMailSender struct {
-	err      error
-	sentTo   string
-	sentCode string
+	err         error
+	sentTo      string
+	sentCode    string
+	sentPurpose email.Purpose
 }
 
-func (m *mockMailSender) SendVerificationCode(to, code string) error {
+func (m *mockMailSender) SendVerificationCode(to, code string, purpose email.Purpose) error {
 	m.sentTo = to
 	m.sentCode = code
+	m.sentPurpose = purpose
 	return m.err
 }
 
@@ -99,6 +102,7 @@ func TestAuthService_SendCode_Success(t *testing.T) {
 	assert.Equal(t, "user@example.com", mailer.sentTo)
 	assert.Equal(t, "captcha-token", captchaConsumer.consumedToken)
 	assert.Equal(t, "127.0.0.1", captchaConsumer.consumedIP)
+	assert.Equal(t, email.PurposeRegister, mailer.sentPurpose)
 }
 
 func TestAuthService_SendCode_CooldownBlocks(t *testing.T) {
@@ -144,9 +148,9 @@ func TestAuthService_SendPasswordResetCode_ExistingEmailWritesScopedCode(t *test
 	svc, repo, rdb, mr, mailer, captchaConsumer := setupService(t)
 	defer mr.Close()
 
-	email := "user@example.com"
+	emailAddr := "user@example.com"
 	verifiedAt := time.Now()
-	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &email, EmailVerifiedAt: &verifiedAt}, nil)
+	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &emailAddr, EmailVerifiedAt: &verifiedAt}, nil)
 
 	err := svc.SendPasswordResetCode("user@example.com", "127.0.0.1", "captcha-token")
 
@@ -156,6 +160,7 @@ func TestAuthService_SendPasswordResetCode_ExistingEmailWritesScopedCode(t *test
 	code, redisErr := rdb.Get(context.Background(), "password:reset:code:user@example.com").Result()
 	require.NoError(t, redisErr)
 	assert.Len(t, code, 6)
+	assert.Equal(t, email.PurposePasswordReset, mailer.sentPurpose)
 }
 
 func TestAuthService_SendPasswordResetCode_UnverifiedEmailDoesNotSendCode(t *testing.T) {

@@ -17,6 +17,7 @@ import (
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/internal/repository/user/mock"
 	user "github.com/vpt/blog-backend/internal/service/user"
+	"github.com/vpt/blog-backend/pkg/email"
 )
 
 // stubUserCacheService 最小实现 UserCacheService，用于测试 UserService 委托行为。
@@ -58,13 +59,15 @@ func TestUserService_GetDetail_PropagatesNotFound(t *testing.T) {
 }
 
 type securityMailSender struct {
-	sentTo   string
-	sentCode string
+	sentTo      string
+	sentCode    string
+	sentPurpose email.Purpose
 }
 
-func (m *securityMailSender) SendVerificationCode(to, code string) error {
+func (m *securityMailSender) SendVerificationCode(to, code string, purpose email.Purpose) error {
 	m.sentTo = to
 	m.sentCode = code
+	m.sentPurpose = purpose
 	return nil
 }
 
@@ -116,6 +119,7 @@ func TestUserService_SendEmailCode_WritesScopedCodeAndSendsMail(t *testing.T) {
 	code, redisErr := rdb.Get(context.Background(), "user:email:code:7:new@example.com").Result()
 	require.NoError(t, redisErr)
 	assert.Len(t, code, 6)
+	assert.Equal(t, email.PurposeEmailBind, mailer.sentPurpose)
 }
 
 func TestUserService_UpdateEmail_MainConsumesCodeAndUpdatesUserEmail(t *testing.T) {

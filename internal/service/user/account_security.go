@@ -63,7 +63,7 @@ func (s *userService) SendEmailCode(userID uint, emailAddr, captchaToken, ip str
 
 	ctx := context.Background()
 	s.security.Redis.Set(ctx, emailCodeKey(userID, normalized), code, 5*time.Minute)
-	return s.security.Mailer.SendVerificationCode(normalized, code)
+	return s.security.Mailer.SendVerificationCode(normalized, code, email.PurposeEmailBind)
 }
 
 func (s *userService) UpdateEmail(userID uint, target, emailAddr, code string) error {

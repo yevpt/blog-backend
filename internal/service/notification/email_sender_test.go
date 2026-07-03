@@ -12,6 +12,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/model"
 	notificationservice "github.com/vpt/blog-backend/internal/service/notification"
+	"github.com/vpt/blog-backend/pkg/email"
 )
 
 // senderRepoStub 驱动 sender 并记录其状态写入与日志。
@@ -63,7 +64,7 @@ type fakeMailer struct {
 	err      error
 }
 
-func (m *fakeMailer) SendVerificationCode(string, string) error { return nil }
+func (m *fakeMailer) SendVerificationCode(string, string, email.Purpose) error { return nil }
 func (m *fakeMailer) SendHTML(_ string, _ string, body string, _ string) error {
 	m.calls++
 	m.lastBody = body

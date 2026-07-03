@@ -174,7 +174,7 @@ func (s *authService) SendCode(to string, ip string, captchaToken string) error 
 	s.rdb.Set(ctx, cdKey, 1, 60*time.Second)
 
 	// 发送验证码邮件，SMTP 失败时错误直接返回给调用方，不做重试
-	return s.mailer.SendVerificationCode(to, code)
+	return s.mailer.SendVerificationCode(to, code, email.PurposeRegister)
 }
 
 func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken string) error {
@@ -219,7 +219,7 @@ func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken s
 
 	codeKey := passwordResetCodeKey(emailAddr)
 	s.rdb.Set(ctx, codeKey, code, 5*time.Minute)
-	return s.mailer.SendVerificationCode(emailAddr, code)
+	return s.mailer.SendVerificationCode(emailAddr, code, email.PurposePasswordReset)
 }
 
 func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
