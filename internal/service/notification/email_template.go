@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/vpt/blog-backend/internal/model"
+	"github.com/vpt/blog-backend/pkg/email/layout"
 )
 
 // eventTypeLabels 把事件类型映射为中文展示词，用于兜底分支的标题前缀。
@@ -43,27 +44,63 @@ func rootLabelFor(rootType string) string {
 	}
 }
 
-// renderDigestHTML 渲染摘要邮件正文：按任务顺序列出每条通知的具体场景与内容快照，
-// 文章类根对象附上可点击跳转链接，底部提供返回站点的 Footer。
+// eventBadge 是通知卡片左上角类型徽章的展示文案与配色。
+type eventBadge struct {
+	Label   string
+	BgColor string
+	FgColor string
+}
+
+// badgeFor 返回事件类型对应的徽章样式。邮件聚合队列当前只允许评论/回复/留言三种事件类型
+// 进入邮件（见 dispatcher.go 的 emailEligibleEventTypes），其余类型统一使用中性配色兜底。
+func badgeFor(eventType string) eventBadge {
+	switch eventType {
+	case EventTypeCommentCreated:
+		return eventBadge{Label: "评论", BgColor: "#EEEDFE", FgColor: "#534AB7"}
+	case EventTypeReplyCreated:
+		return eventBadge{Label: "回复", BgColor: "#E1F5EE", FgColor: "#0F6E56"}
+	case EventTypeGuestbookCreated:
+		return eventBadge{Label: "留言", BgColor: "#FAECE7", FgColor: "#993C1D"}
+	default:
+		return eventBadge{Label: eventTypeLabel(eventType), BgColor: "#F1EFE8", FgColor: "#5F5E5A"}
+	}
+}
+
+// renderDigestHTML 渲染摘要邮件正文：按任务顺序把每条通知渲染成带类型徽章的卡片，
+// 文章类根对象附上可点击跳转链接；外层壳体（品牌 Logo、CTA 按钮、版权）由 layout.Wrap 统一渲染。
 //
 //   - rootLabels 按事件 ID 索引的根对象展示快照（文章标题/碎语摘要），缺失时回退为「ID xx」。
-//   - siteURL 站点前缀，非空时用于文章跳转链接与 Footer 链接；为空时退化为纯文本。
-func renderDigestHTML(tasks []model.NotificationEmailTask, events map[uint]model.NotificationEvent, rootLabels map[uint]string, siteURL string) string {
-	siteURL = strings.TrimRight(siteURL, "/")
+//   - brandName/siteURL 分别是邮件品牌名与站点前缀，留空时由 layout.ResolveBrand 兜底默认值。
+func renderDigestHTML(tasks []model.NotificationEmailTask, events map[uint]model.NotificationEvent, rootLabels map[uint]string, brandName, siteURL string) string {
+	brand := layout.ResolveBrand(brandName, siteURL)
 	var b strings.Builder
-	b.WriteString(`<div><h2>你有新的互动通知</h2><ul>`)
 	for _, task := range tasks {
 		event := events[task.EventID]
 		eventType := eventTypeOf(task, event)
 		summary := html.EscapeString(eventSummary(event))
-		b.WriteString("<li>")
-		b.WriteString(renderEventLine(eventType, event, rootLabels, siteURL, summary))
-		b.WriteString("</li>")
+		b.WriteString(renderEventCard(eventType, event, rootLabels, brand.SiteURL, summary))
 	}
-	b.WriteString("</ul>")
-	b.WriteString(renderFooter(siteURL))
-	b.WriteString("</div>")
-	return b.String()
+
+	return layout.Wrap(layout.Options{
+		Brand:    brand,
+		Title:    fmt.Sprintf("你有 %d 条新的互动通知", len(tasks)),
+		BodyHTML: template.HTML(b.String()),
+		CTAText:  "查看全部通知",
+		CTAURL:   brand.SiteURL,
+	})
+}
+
+// renderEventCard 渲染单条通知卡片：类型徽章 + 具体场景文案。
+func renderEventCard(eventType string, event model.NotificationEvent, rootLabels map[uint]string, siteURL, summary string) string {
+	badge := badgeFor(eventType)
+	line := renderEventLine(eventType, event, rootLabels, siteURL, summary)
+	return fmt.Sprintf(
+		`<div style="border:1px solid #EEE;border-radius:6px;padding:12px 14px;margin:0 0 10px;">`+
+			`<span style="display:inline-block;font-size:11px;font-weight:700;color:%s;background:%s;border-radius:4px;padding:2px 8px;margin-bottom:6px;">%s</span>`+
+			`<p style="font-size:14px;color:#374151;margin:0;line-height:1.5;">%s</p>`+
+			`</div>`,
+		badge.FgColor, badge.BgColor, html.EscapeString(badge.Label), line,
+	)
 }
 
 // renderEventLine 渲染单条通知正文，按事件类型与根对象类型组合具体场景文案。
@@ -131,21 +168,12 @@ func renderReplyCreatedLine(event model.NotificationEvent, rootLabel, siteURL, s
 	}
 }
 
-// articleURL 在站点前缀存在且根对象为文章时，拼出 /articles/{id} 的可跳转链接；
-// 其余情况返回空串表示不渲染跳转。
+// articleURL 在 rootID 非零时拼出 /articles/{id} 的可跳转链接（siteURL 由 layout.ResolveBrand 兜底，恒非空）。
 func articleURL(rootID uint, siteURL string) string {
-	if siteURL == "" || rootID == 0 {
+	if rootID == 0 {
 		return ""
 	}
 	return siteURL + "/articles/" + strconv.FormatUint(uint64(rootID), 10)
-}
-
-// renderFooter 渲染底部「欢迎回到 YEVPT 查看详情」；站点前缀存在时整句作可点击链接。
-func renderFooter(siteURL string) string {
-	if siteURL == "" {
-		return `<p>欢迎回到 YEVPT 查看详情。</p>`
-	}
-	return fmt.Sprintf(`<p><a href="%s">欢迎回到 YEVPT 查看详情</a></p>`, template.HTMLEscapeString(siteURL))
 }
 
 // truncateForDisplay 折叠展示快照中的换行与首尾空白，避免邮件正文中出现不可控排版。
