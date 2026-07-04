@@ -21,7 +21,7 @@ func TestUserAdminHandler_GetOperationLogs_Success(t *testing.T) {
 		Total: 1, Pages: 1, Page: 1, PageSize: 10,
 		List: []dto.AdminOperationLogItemResp{{ID: 1, OperatorID: 1, Action: "grant_vip"}},
 	}}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -36,7 +36,7 @@ func TestUserAdminHandler_GetOperationLogs_Success(t *testing.T) {
 func TestUserAdminHandler_GetOperationLogs_BadQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -52,7 +52,7 @@ func TestUserAdminHandler_GetOperationLogs_BadQuery(t *testing.T) {
 func TestUserAdminHandler_GetOperationLogs_BadPath(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -67,7 +67,7 @@ func TestUserAdminHandler_GetOperationLogs_BadPath(t *testing.T) {
 func TestUserAdminHandler_GetOperationLogs_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

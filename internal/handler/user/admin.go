@@ -9,19 +9,21 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/internal/middleware"
+	"github.com/vpt/blog-backend/internal/service/adminlog"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/response"
 )
 
 // UserAdminHandler 用户管理端 HTTP 处理器。
 type UserAdminHandler struct {
-	svc userservice.AdminService
-	log *zap.Logger
+	svc         userservice.AdminService
+	log         *zap.Logger
+	logRecorder adminlog.Recorder
 }
 
 // NewUserAdminHandler 创建用户管理端处理器。
-func NewUserAdminHandler(svc userservice.AdminService, log *zap.Logger) *UserAdminHandler {
-	return &UserAdminHandler{svc: svc, log: log}
+func NewUserAdminHandler(svc userservice.AdminService, log *zap.Logger, logRecorder adminlog.Recorder) *UserAdminHandler {
+	return &UserAdminHandler{svc: svc, log: log, logRecorder: logRecorder}
 }
 
 func writeUserAdminResponse(c *gin.Context, data any, err error) {
@@ -57,6 +59,7 @@ func (h *UserAdminHandler) GrantVip(c *gin.Context) {
 	resp, err := h.svc.GrantVip(targetUserID)
 	if err == nil {
 		h.logVipRoleChange(c, "grant", targetUserID)
+		h.recordLog(c, adminlog.ActionGrantVIP, targetUserID, nil)
 	}
 	writeUserAdminResponse(c, resp, err)
 }
@@ -82,6 +85,7 @@ func (h *UserAdminHandler) RevokeVip(c *gin.Context) {
 	resp, err := h.svc.RevokeVip(targetUserID)
 	if err == nil {
 		h.logVipRoleChange(c, "revoke", targetUserID)
+		h.recordLog(c, adminlog.ActionRevokeVIP, targetUserID, nil)
 	}
 	writeUserAdminResponse(c, resp, err)
 }
@@ -162,6 +166,7 @@ func (h *UserAdminHandler) ClearUserAvatar(c *gin.Context) {
 		response.ServerError(c)
 		return
 	}
+	h.recordLog(c, adminlog.ActionClearAvatar, targetUserID, nil)
 	response.Success(c, resp)
 }
 
@@ -198,6 +203,7 @@ func (h *UserAdminHandler) DisableAccount(c *gin.Context) {
 		}
 		return
 	}
+	h.recordLog(c, adminlog.ActionDisableAccount, targetUserID, nil)
 	response.Success(c, nil)
 }
 
@@ -217,6 +223,9 @@ func (h *UserAdminHandler) EnableAccount(c *gin.Context) {
 		return
 	}
 	err := h.svc.EnableAccount(targetUserID)
+	if err == nil {
+		h.recordLog(c, adminlog.ActionEnableAccount, targetUserID, nil)
+	}
 	writeUserAdminResponse(c, nil, err)
 }
 
@@ -291,4 +300,17 @@ func (h *UserAdminHandler) logVipRoleChange(c *gin.Context, action string, targe
 		fields = append(fields, zap.Uint("operator_user_id", operator.ID))
 	}
 	h.log.Info("调整用户 VIP 角色", fields...)
+}
+
+func (h *UserAdminHandler) recordLog(c *gin.Context, action adminlog.Action, targetUserID uint, detail map[string]any) {
+	if h.logRecorder == nil {
+		return
+	}
+	operator := middleware.GetUserDetail(c)
+	if operator == nil {
+		return
+	}
+	if err := h.logRecorder.Record(c.Request.Context(), operator.ID, targetUserID, action, detail); err != nil {
+		h.log.Warn("记录管理员操作日志失败", zap.Error(err), zap.String("action", string(action)))
+	}
 }

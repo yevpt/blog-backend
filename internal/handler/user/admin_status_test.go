@@ -22,7 +22,7 @@ import (
 func TestUserAdminHandler_DisableAccount_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -41,7 +41,7 @@ func TestUserAdminHandler_DisableAccount_Success(t *testing.T) {
 func TestUserAdminHandler_DisableAccount_Forbidden(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrLastAdminAccount}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -57,7 +57,7 @@ func TestUserAdminHandler_DisableAccount_Forbidden(t *testing.T) {
 func TestUserAdminHandler_DisableAccount_CannotDisableSelf(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrCannotDisableSelf}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -73,7 +73,7 @@ func TestUserAdminHandler_DisableAccount_CannotDisableSelf(t *testing.T) {
 func TestUserAdminHandler_DisableAccount_UserNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -88,7 +88,7 @@ func TestUserAdminHandler_DisableAccount_UserNotFound(t *testing.T) {
 func TestUserAdminHandler_DisableAccount_Unauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -103,7 +103,7 @@ func TestUserAdminHandler_DisableAccount_Unauthorized(t *testing.T) {
 func TestUserAdminHandler_DisableAccount_ServerError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: assert.AnError}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -118,7 +118,7 @@ func TestUserAdminHandler_DisableAccount_ServerError(t *testing.T) {
 func TestUserAdminHandler_EnableAccount_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -136,7 +136,7 @@ func TestUserAdminHandler_EnableAccount_Success(t *testing.T) {
 func TestUserAdminHandler_EnableAccount_UserNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

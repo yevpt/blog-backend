@@ -44,6 +44,7 @@ import (
 	socialauthrepo "github.com/vpt/blog-backend/internal/repository/socialauth"
 	tagrepo "github.com/vpt/blog-backend/internal/repository/tag"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
+	adminlogservice "github.com/vpt/blog-backend/internal/service/adminlog"
 	analyticsservice "github.com/vpt/blog-backend/internal/service/analytics"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	authservice "github.com/vpt/blog-backend/internal/service/auth"
@@ -244,6 +245,7 @@ func newRouteHandlers(
 	presenceProvider := userservice.NewPresenceProvider(userPresence, userRepo)
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
 	adminlogRepo := adminlogrepo.NewRepository(db)
+	adminlogSvc := adminlogservice.NewService(adminlogRepo)
 	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc, userservice.AdminDeps{
 		Store:      objectStore,
 		Avatar:     avatarSvc,
@@ -320,7 +322,7 @@ func newRouteHandlers(
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
-		userAdmin:           userhandler.NewUserAdminHandler(userAdminSvc, log),
+		userAdmin:           userhandler.NewUserAdminHandler(userAdminSvc, log, adminlogSvc),
 		category:            categoryhandler.NewCategoryHandler(categorySvc),
 		tag:                 taghandler.NewTagHandler(tagSvc),
 		music:               musichandler.NewMusicHandler(musicSvc),

@@ -76,7 +76,7 @@ func TestUserAdminHandler_GrantVip_Success(t *testing.T) {
 			Roles:  []string{roles.NormalRole, roles.VipRole},
 		},
 	}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -96,7 +96,7 @@ func TestUserAdminHandler_GrantVip_Success(t *testing.T) {
 func TestUserAdminHandler_GrantVip_UserNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -110,7 +110,7 @@ func TestUserAdminHandler_GrantVip_UserNotFound(t *testing.T) {
 func TestUserAdminHandler_NormalizeAvatars_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

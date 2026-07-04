@@ -18,7 +18,7 @@ import (
 func TestUserAdminHandler_ListAdmin_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{listResp: &dto.AdminUserPageResp{Total: 1, Page: 1, PageSize: 10}}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -31,7 +31,7 @@ func TestUserAdminHandler_ListAdmin_Success(t *testing.T) {
 func TestUserAdminHandler_ListAdmin_BadQuery(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -46,7 +46,7 @@ func TestUserAdminHandler_ListAdmin_BadQuery(t *testing.T) {
 func TestUserAdminHandler_GetDetail_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{detailResp: &dto.AdminUserDetailResp{ID: 9, Username: "vpt"}}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -60,7 +60,7 @@ func TestUserAdminHandler_GetDetail_Success(t *testing.T) {
 func TestUserAdminHandler_GetDetail_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop())
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
