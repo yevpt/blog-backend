@@ -7,6 +7,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	moderationrepo "github.com/vpt/blog-backend/internal/repository/moderation"
+	"github.com/vpt/blog-backend/internal/service/adminlog"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -103,6 +104,11 @@ func (h *AdminHandler) UpdateUserProfile(c *gin.Context) {
 		UserID: userID, ActorID: actorID, TrustLevel: moderationservice.TrustLevel(req.TrustLevel),
 		ManualLocked: *req.ManualLocked, RestrictedUntil: req.RestrictedUntil,
 	})
+	if err == nil && h.logRecorder != nil {
+		_ = h.logRecorder.Record(c.Request.Context(), uint(actorID), uint(userID), adminlog.ActionUpdateTrustLevel, map[string]any{
+			"trust_level": string(req.TrustLevel),
+		})
+	}
 	writeOperationsResponse(c, nil, err)
 }
 
@@ -153,7 +159,11 @@ func (h *AdminHandler) ReleaseUser(c *gin.Context) {
 	if !ok {
 		return
 	}
-	writeOperationsResponse(c, nil, h.ops.ReleaseUserSanction(c.Request.Context(), userID, actorID))
+	err := h.ops.ReleaseUserSanction(c.Request.Context(), userID, actorID)
+	if err == nil && h.logRecorder != nil {
+		_ = h.logRecorder.Record(c.Request.Context(), uint(actorID), uint(userID), adminlog.ActionRelease, nil)
+	}
+	writeOperationsResponse(c, nil, err)
 }
 
 // HideItem 紧急隐藏单条已通过内容。
@@ -232,6 +242,17 @@ func (h *AdminHandler) setSanction(c *gin.Context, state moderationservice.Sanct
 	err := h.ops.SetUserSanction(c.Request.Context(), moderationservice.SetSanctionCommand{
 		UserID: userID, ActorID: actorID, State: state, Until: req.Until, Reason: req.Reason,
 	})
+	if err == nil && h.logRecorder != nil {
+		action := adminlog.ActionMute
+		if state == moderationservice.SanctionBanned {
+			action = adminlog.ActionBan
+		}
+		detail := map[string]any{"reason": req.Reason}
+		if req.Until != nil {
+			detail["until"] = *req.Until
+		}
+		_ = h.logRecorder.Record(c.Request.Context(), uint(actorID), uint(userID), action, detail)
+	}
 	writeOperationsResponse(c, nil, err)
 }
 

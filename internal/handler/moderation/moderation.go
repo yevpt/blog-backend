@@ -2,6 +2,7 @@
 package moderation
 
 import (
+	"github.com/vpt/blog-backend/internal/service/adminlog"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
 	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
@@ -16,12 +17,20 @@ type AdminHandler struct {
 	userCache              userservice.UserCacheService
 	ruleImportMaxFileBytes int
 	resolver               storage.ObjectURLResolver
+	logRecorder            adminlog.Recorder
 }
 
 // SetObjectURLResolver 注入历史图片的管理端访问地址解析器。
 func (h *AdminHandler) SetObjectURLResolver(resolver storage.ObjectURLResolver) {
 	if h != nil {
 		h.resolver = resolver
+	}
+}
+
+// SetOperationLogRecorder 注入管理员操作日志记录器，在路由装配时调用。
+func (h *AdminHandler) SetOperationLogRecorder(recorder adminlog.Recorder) {
+	if h != nil {
+		h.logRecorder = recorder
 	}
 }
 

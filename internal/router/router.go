@@ -318,7 +318,7 @@ func newRouteHandlers(
 		comment:             commenthandler.NewCommentHandler(commentSvc, cfg.Moderation.Enabled),
 		guestbook:           guestbookhandler.NewGuestbookHandler(guestbookSvc, cfg.Moderation.Enabled),
 		moment:              momenthandler.NewMomentHandler(momentSvc, cfg.Moderation.Enabled),
-		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, cfg.Moderation.Rules.MaxImportFileMB, objectStore, moderationRuntime.ruleSvc),
+		moderationAdmin:     newModerationAdminHandler(moderationReviewSvc, userCacheSvc, moderationOperationsSvc, cfg.Moderation.Rules.MaxImportFileMB, objectStore, adminlogSvc, moderationRuntime.ruleSvc),
 		notification:        notificationhandler.NewNotificationHandler(notificationInboxSvc),
 		notificationAdmin:   notificationhandler.NewNotificationAdminHandler(notificationAdminSvc),
 		user:                userhandler.NewUserHandler(userSvc, momentSvc, presenceProvider),
