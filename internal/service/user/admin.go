@@ -40,6 +40,7 @@ type adminService struct {
 	avatar     AvatarNormalizer
 	friendLink FriendLinkLogoRefs
 	moderation ModerationProfileReader
+	presence   OnlineChecker
 }
 
 // NewAdminService 创建管理端用户服务。
@@ -50,6 +51,7 @@ func NewAdminService(repo userrepo.UserRepository, cache UserCacheService, deps 
 		svc.avatar = deps[0].Avatar
 		svc.friendLink = deps[0].FriendLink
 		svc.moderation = deps[0].Moderation
+		svc.presence = deps[0].Presence
 	}
 	return svc
 }
@@ -181,6 +183,10 @@ func (s *adminService) ListAdmin(req *dto.AdminUserListReq) (*dto.AdminUserPageR
 			CreatedAt: u.CreatedAt,
 		})
 	}
+	enrichListPresenceBy(context.Background(), s.presence, len(list),
+		func(i int) uint { return list[i].ID },
+		func(i int, online bool) { list[i].IsOnline = online },
+	)
 
 	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
 	return &dto.AdminUserPageResp{Total: total, Pages: pages, Page: page, PageSize: pageSize, List: list}, nil
@@ -196,7 +202,7 @@ func (s *adminService) GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, er
 		return nil, ErrUserNotFound
 	}
 
-	return &dto.AdminUserDetailResp{
+	resp := &dto.AdminUserDetailResp{
 		ID: detail.User.ID, Username: detail.User.Username, Nickname: detail.User.Nickname,
 		Email: detail.User.Email, EmailVerified: detail.User.EmailVerifiedAt != nil,
 		Phone: detail.User.Phone, Site: detail.User.Site, AvatarUrl: detail.User.AvatarUrl,
@@ -204,7 +210,9 @@ func (s *adminService) GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, er
 		Roles: detail.Roles, RegisterAt: detail.User.CreatedAt,
 		LastLoginAt: detail.User.LastLoginAt, LastActiveAt: detail.User.LastActiveAt,
 		SanctionState: s.resolveSanctionState(userID),
-	}, nil
+	}
+	enrichDetailPresence(context.Background(), s.presence, userID, &resp.IsOnline)
+	return resp, nil
 }
 
 // resolveSanctionState 读取用户处罚状态；无审核依赖或查询失败/无记录时视为 active。

@@ -247,6 +247,7 @@ func newRouteHandlers(
 		Avatar:     avatarSvc,
 		FriendLink: friendLinkRepo,
 		Moderation: newModerationProfileReader(moderationGovernanceSvc),
+		Presence:   userPresence,
 	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)

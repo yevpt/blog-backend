@@ -236,8 +236,6 @@ type AdminUserDetailResp struct {
 	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
 	IsOnline      bool       `json:"is_online"`
 	SanctionState string     `json:"sanction_state"`
-	LikesCount    int64      `json:"likes_count"`
-	MomentsCount  int64      `json:"moments_count"`
 }
 
 // UserUpdateReq 更新当前用户信息请求

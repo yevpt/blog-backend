@@ -12,6 +12,7 @@ import (
 	"github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/internal/repository/user/mock"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
+	usermock "github.com/vpt/blog-backend/internal/service/user/mock"
 )
 
 type stubModerationReader struct{ state string }
@@ -34,6 +35,32 @@ func TestAdminService_ListAdmin_PassesFilter(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), resp.Total)
 	assert.Equal(t, "active", resp.List[0].SanctionState)
+}
+
+func TestAdminService_ListAdmin_FillsIsOnlineFromPresence(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := mock.NewMockUserRepository(ctrl)
+	presence := usermock.NewMockOnlineChecker(ctrl)
+
+	repo.EXPECT().
+		ListAll(user.UserListFilter{}, 0, 10).
+		Return([]model.User{
+			{Base: model.Base{ID: 1}, Username: "vpt"},
+			{Base: model.Base{ID: 2}, Username: "foo"},
+		}, int64(2), nil)
+	repo.EXPECT().FindRolesByUserIDs([]uint{1, 2}).Return(map[uint][]string{}, nil)
+	presence.EXPECT().
+		BatchIsUserOnline(gomock.Any(), []uint{1, 2}).
+		Return(map[uint]bool{1: true}, nil)
+
+	svc := userservice.NewAdminService(repo, &stubUserCacheService{}, userservice.AdminDeps{
+		Presence: presence,
+	})
+	resp, err := svc.ListAdmin(&dto.AdminUserListReq{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Len(t, resp.List, 2)
+	assert.True(t, resp.List[0].IsOnline)
+	assert.False(t, resp.List[1].IsOnline)
 }
 
 func TestAdminService_ListAdmin_NoModerationDepsDefaultsActive(t *testing.T) {
