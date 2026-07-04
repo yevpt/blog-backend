@@ -30,6 +30,7 @@ import (
 	"github.com/vpt/blog-backend/internal/middleware"
 	oauthflow "github.com/vpt/blog-backend/internal/oauth"
 	oauthproviders "github.com/vpt/blog-backend/internal/oauth/providers"
+	adminlogrepo "github.com/vpt/blog-backend/internal/repository/adminlog"
 	analyticsrepo "github.com/vpt/blog-backend/internal/repository/analytics"
 	articlerepo "github.com/vpt/blog-backend/internal/repository/article"
 	categoryrepo "github.com/vpt/blog-backend/internal/repository/category"
@@ -242,12 +243,14 @@ func newRouteHandlers(
 	})
 	presenceProvider := userservice.NewPresenceProvider(userPresence, userRepo)
 	friendLinkRepo := friendlinkrepo.NewFriendLinkRepository(db)
+	adminlogRepo := adminlogrepo.NewRepository(db)
 	userAdminSvc := userservice.NewAdminService(userRepo, userCacheSvc, userservice.AdminDeps{
 		Store:      objectStore,
 		Avatar:     avatarSvc,
 		FriendLink: friendLinkRepo,
 		Moderation: newModerationProfileReader(moderationGovernanceSvc),
 		Presence:   userPresence,
+		Logs:       adminlogRepo,
 	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
@@ -645,6 +648,7 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/users/:id/enable", handlers.userAdmin.EnableAccount)
 	admin.GET("/users", handlers.userAdmin.ListAdmin)
 	admin.GET("/users/:id", handlers.userAdmin.GetDetail)
+	admin.GET("/users/:id/operation-logs", handlers.userAdmin.GetOperationLogs)
 	admin.GET("/overview/summary", handlers.dashboard.Overview)
 	admin.GET("/analytics/overview", handlers.analyticsAdmin.Overview)
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)

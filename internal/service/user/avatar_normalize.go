@@ -6,6 +6,7 @@ import (
 
 	"github.com/vpt/blog-backend/internal/dto"
 	"github.com/vpt/blog-backend/internal/model"
+	adminlogrepo "github.com/vpt/blog-backend/internal/repository/adminlog"
 	avatarservice "github.com/vpt/blog-backend/internal/service/avatar"
 	"github.com/vpt/blog-backend/pkg/storage"
 )
@@ -38,6 +39,7 @@ type AdminDeps struct {
 	FriendLink FriendLinkLogoRefs
 	Moderation ModerationProfileReader
 	Presence   OnlineChecker
+	Logs       adminlogrepo.Repository
 }
 
 func (s *adminService) NormalizeAvatars(ctx context.Context, req *dto.NormalizeAvatarsReq) (*dto.NormalizeAvatarsResp, error) {

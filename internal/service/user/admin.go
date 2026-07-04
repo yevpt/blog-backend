@@ -2,9 +2,11 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/vpt/blog-backend/internal/dto"
+	adminlogrepo "github.com/vpt/blog-backend/internal/repository/adminlog"
 	userrepo "github.com/vpt/blog-backend/internal/repository/user"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/storage"
@@ -31,6 +33,7 @@ type AdminService interface {
 	EnableAccount(targetUserID uint) error
 	ListAdmin(req *dto.AdminUserListReq) (*dto.AdminUserPageResp, error)
 	GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, error)
+	GetOperationLogs(targetUserID uint, page, pageSize int) (*dto.AdminOperationLogPageResp, error)
 }
 
 type adminService struct {
@@ -41,6 +44,7 @@ type adminService struct {
 	friendLink FriendLinkLogoRefs
 	moderation ModerationProfileReader
 	presence   OnlineChecker
+	logs       adminlogrepo.Repository
 }
 
 // NewAdminService 创建管理端用户服务。
@@ -52,6 +56,7 @@ func NewAdminService(repo userrepo.UserRepository, cache UserCacheService, deps 
 		svc.friendLink = deps[0].FriendLink
 		svc.moderation = deps[0].Moderation
 		svc.presence = deps[0].Presence
+		svc.logs = deps[0].Logs
 	}
 	return svc
 }
@@ -213,6 +218,37 @@ func (s *adminService) GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, er
 	}
 	enrichDetailPresence(context.Background(), s.presence, userID, &resp.IsOnline)
 	return resp, nil
+}
+
+// GetOperationLogs 分页查询目标用户的管理员操作日志。
+func (s *adminService) GetOperationLogs(targetUserID uint, page, pageSize int) (*dto.AdminOperationLogPageResp, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 10
+	}
+	offset := (page - 1) * pageSize
+
+	entries, total, err := s.logs.ListByTargetUser(context.Background(), targetUserID, offset, pageSize)
+	if err != nil {
+		return nil, err
+	}
+
+	list := make([]dto.AdminOperationLogItemResp, 0, len(entries))
+	for _, e := range entries {
+		item := dto.AdminOperationLogItemResp{ID: e.ID, OperatorID: e.OperatorID, Action: e.Action, CreatedAt: e.CreatedAt}
+		if e.Detail != nil {
+			var detail map[string]any
+			if err := json.Unmarshal([]byte(*e.Detail), &detail); err == nil {
+				item.Detail = detail
+			}
+		}
+		list = append(list, item)
+	}
+
+	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	return &dto.AdminOperationLogPageResp{Total: total, Pages: pages, Page: page, PageSize: pageSize, List: list}, nil
 }
 
 // resolveSanctionState 读取用户处罚状态；无审核依赖或查询失败/无记录时视为 active。

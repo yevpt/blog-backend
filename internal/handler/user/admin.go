@@ -257,6 +257,31 @@ func (h *UserAdminHandler) GetDetail(c *gin.Context) {
 	writeUserAdminResponse(c, resp, err)
 }
 
+// GetOperationLogs 查询目标用户的管理员操作日志。
+// @Summary 查询用户操作日志
+// @Tags 用户管理
+// @Produce json
+// @Param id path int true "用户 ID"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Success 200 {object} response.Response{data=dto.AdminOperationLogPageResp}
+// @Router /admin/users/{id}/operation-logs [get]
+func (h *UserAdminHandler) GetOperationLogs(c *gin.Context) {
+	targetUserID, ok := reqbind.PathUint(c, "id", "用户 ID")
+	if !ok {
+		return
+	}
+	var req struct {
+		Page     int `form:"page" binding:"omitempty,min=1"`
+		PageSize int `form:"page_size" binding:"omitempty,min=1,max=50"`
+	}
+	if !reqbind.Query(c, &req) {
+		return
+	}
+	resp, err := h.svc.GetOperationLogs(targetUserID, req.Page, req.PageSize)
+	writeUserAdminResponse(c, resp, err)
+}
+
 func (h *UserAdminHandler) logVipRoleChange(c *gin.Context, action string, targetUserID uint) {
 	fields := []zap.Field{
 		zap.String("action", action),

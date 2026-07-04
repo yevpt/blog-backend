@@ -27,6 +27,7 @@ type stubUserAdminService struct {
 	err          error
 	listResp     *dto.AdminUserPageResp
 	detailResp   *dto.AdminUserDetailResp
+	logsResp     *dto.AdminOperationLogPageResp
 }
 
 func (s *stubUserAdminService) GrantVip(targetUserID uint) (*dto.AdminUserRolesResp, error) {
@@ -61,6 +62,10 @@ func (s *stubUserAdminService) ListAdmin(req *dto.AdminUserListReq) (*dto.AdminU
 
 func (s *stubUserAdminService) GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, error) {
 	return s.detailResp, s.err
+}
+
+func (s *stubUserAdminService) GetOperationLogs(targetUserID uint, page, pageSize int) (*dto.AdminOperationLogPageResp, error) {
+	return s.logsResp, s.err
 }
 
 func TestUserAdminHandler_GrantVip_Success(t *testing.T) {

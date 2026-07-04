@@ -238,6 +238,24 @@ type AdminUserDetailResp struct {
 	SanctionState string     `json:"sanction_state"`
 }
 
+// AdminOperationLogItemResp 单条管理员操作日志。
+type AdminOperationLogItemResp struct {
+	ID         uint64         `json:"id"`
+	OperatorID uint           `json:"operator_id"`
+	Action     string         `json:"action"`
+	Detail     map[string]any `json:"detail,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
+}
+
+// AdminOperationLogPageResp 管理员操作日志分页响应。
+type AdminOperationLogPageResp struct {
+	Total    int64                       `json:"total"`
+	Pages    int                         `json:"pages"`
+	Page     int                         `json:"page"`
+	PageSize int                         `json:"page_size"`
+	List     []AdminOperationLogItemResp `json:"list"`
+}
+
 // UserUpdateReq 更新当前用户信息请求
 type UserUpdateReq struct {
 	Nickname *string `json:"nickname,omitempty" binding:"omitempty,max=30" example:"Yevpt"`
