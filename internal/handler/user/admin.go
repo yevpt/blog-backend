@@ -165,6 +165,61 @@ func (h *UserAdminHandler) ClearUserAvatar(c *gin.Context) {
 	response.Success(c, resp)
 }
 
+// DisableAccount 禁用目标用户账号登录。
+// @Summary 禁用用户账号
+// @Description 管理员禁用目标账号登录；不能禁用自己，不能禁用系统里最后一个管理员。
+// @Tags 用户管理
+// @Produce json
+// @Param id path int true "目标用户 ID"
+// @Success 200 {object} response.Response "成功；code != 0 表示业务失败（如最后一个管理员）"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "需要管理员权限"
+// @Failure 404 {object} response.Response "目标用户不存在"
+// @Router /admin/users/{id}/disable [post]
+func (h *UserAdminHandler) DisableAccount(c *gin.Context) {
+	targetUserID, ok := reqbind.PathUint(c, "id", "用户 ID")
+	if !ok {
+		return
+	}
+	operator := middleware.GetUserDetail(c)
+	if operator == nil {
+		response.Unauthorized(c)
+		return
+	}
+	err := h.svc.DisableAccount(operator.ID, targetUserID)
+	if err != nil {
+		switch {
+		case errors.Is(err, userservice.ErrUserNotFound):
+			response.NotFound(c)
+		case errors.Is(err, userservice.ErrCannotDisableSelf), errors.Is(err, userservice.ErrLastAdminAccount):
+			response.Fail(c, response.CodeBadRequest, err.Error())
+		default:
+			response.ServerError(c)
+		}
+		return
+	}
+	response.Success(c, nil)
+}
+
+// EnableAccount 启用目标用户账号登录。
+// @Summary 启用用户账号
+// @Tags 用户管理
+// @Produce json
+// @Param id path int true "目标用户 ID"
+// @Success 200 {object} response.Response "成功"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "需要管理员权限"
+// @Failure 404 {object} response.Response "目标用户不存在"
+// @Router /admin/users/{id}/enable [post]
+func (h *UserAdminHandler) EnableAccount(c *gin.Context) {
+	targetUserID, ok := reqbind.PathUint(c, "id", "用户 ID")
+	if !ok {
+		return
+	}
+	err := h.svc.EnableAccount(targetUserID)
+	writeUserAdminResponse(c, nil, err)
+}
+
 func (h *UserAdminHandler) logVipRoleChange(c *gin.Context, action string, targetUserID uint) {
 	fields := []zap.Field{
 		zap.String("action", action),
