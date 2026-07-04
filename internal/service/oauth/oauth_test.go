@@ -143,8 +143,10 @@ func (r *fakeUserRepo) ListAllWithManagedAvatar() ([]model.User, error)  { retur
 func (r *fakeUserRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) {
 	return 0, nil
 }
-func (r *fakeUserRepo) GrantVipRole(userID uint) error  { return nil }
-func (r *fakeUserRepo) RevokeVipRole(userID uint) error { return nil }
+func (r *fakeUserRepo) GrantVipRole(userID uint) error             { return nil }
+func (r *fakeUserRepo) RevokeVipRole(userID uint) error            { return nil }
+func (r *fakeUserRepo) SetStatus(userID uint, status uint8) error  { return nil }
+func (r *fakeUserRepo) CountByRole(roleName string) (int64, error) { return 0, nil }
 func (r *fakeUserRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
 	return nil, nil
 }

@@ -45,6 +45,14 @@ func (s *stubUserAdminService) ClearUserAvatar(ctx context.Context, userID uint)
 	return &dto.ClearUserAvatarResp{UserID: userID, OldKey: "avatar/user/old.jpg"}, s.err
 }
 
+func (s *stubUserAdminService) DisableAccount(operatorID, targetUserID uint) error {
+	return s.err
+}
+
+func (s *stubUserAdminService) EnableAccount(targetUserID uint) error {
+	return s.err
+}
+
 func TestUserAdminHandler_GrantVip_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{

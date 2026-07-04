@@ -32,7 +32,7 @@ func (r *changeAvatarRepo) CountByAvatarURL(avatarURL string) (int64, error) {
 	r.countKey = avatarURL
 	return r.count, nil
 }
-func (r *changeAvatarRepo) ListAllWithManagedAvatar() ([]model.User, error) { return nil, nil }
+func (r *changeAvatarRepo) ListAllWithManagedAvatar() ([]model.User, error)       { return nil, nil }
 func (r *changeAvatarRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) { return 0, nil }
 
 func (r *changeAvatarRepo) FindByIdentifier(id string) (*model.User, error) { return nil, nil }
@@ -57,9 +57,9 @@ func (r *changeAvatarRepo) FindRolesByUserID(id uint) ([]string, error)    { ret
 func (r *changeAvatarRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
 	return nil, nil
 }
-func (r *changeAvatarRepo) TouchLoginPresence(id uint) error  { return nil }
+func (r *changeAvatarRepo) TouchLoginPresence(id uint) error { return nil }
 func (r *changeAvatarRepo) UpdateLastActiveAt(id uint) error { return nil }
-func (r *changeAvatarRepo) UpdateLastLoginAt(id uint) error { return nil }
+func (r *changeAvatarRepo) UpdateLastLoginAt(id uint) error  { return nil }
 func (r *changeAvatarRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
@@ -76,8 +76,10 @@ func (r *changeAvatarRepo) UpsertSocialLink(userID uint, platform, url string) e
 func (r *changeAvatarRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
-func (r *changeAvatarRepo) GrantVipRole(userID uint) error  { return nil }
-func (r *changeAvatarRepo) RevokeVipRole(userID uint) error { return nil }
+func (r *changeAvatarRepo) GrantVipRole(userID uint) error             { return nil }
+func (r *changeAvatarRepo) RevokeVipRole(userID uint) error            { return nil }
+func (r *changeAvatarRepo) SetStatus(userID uint, status uint8) error  { return nil }
+func (r *changeAvatarRepo) CountByRole(roleName string) (int64, error) { return 0, nil }
 func (r *changeAvatarRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
 	return nil, nil
 }

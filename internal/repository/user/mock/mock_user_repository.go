@@ -71,6 +71,21 @@ func (mr *MockUserRepositoryMockRecorder) CountByAvatarURL(avatarURL any) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByAvatarURL", reflect.TypeOf((*MockUserRepository)(nil).CountByAvatarURL), avatarURL)
 }
 
+// CountByRole mocks base method.
+func (m *MockUserRepository) CountByRole(roleName string) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountByRole", roleName)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountByRole indicates an expected call of CountByRole.
+func (mr *MockUserRepositoryMockRecorder) CountByRole(roleName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountByRole", reflect.TypeOf((*MockUserRepository)(nil).CountByRole), roleName)
+}
+
 // CountLikedContent mocks base method.
 func (m *MockUserRepository) CountLikedContent(userID uint) (int64, error) {
 	m.ctrl.T.Helper()
@@ -382,6 +397,20 @@ func (m *MockUserRepository) RevokeVipRole(userID uint) error {
 func (mr *MockUserRepositoryMockRecorder) RevokeVipRole(userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeVipRole", reflect.TypeOf((*MockUserRepository)(nil).RevokeVipRole), userID)
+}
+
+// SetStatus mocks base method.
+func (m *MockUserRepository) SetStatus(userID uint, status uint8) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetStatus", userID, status)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetStatus indicates an expected call of SetStatus.
+func (mr *MockUserRepositoryMockRecorder) SetStatus(userID, status any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStatus", reflect.TypeOf((*MockUserRepository)(nil).SetStatus), userID, status)
 }
 
 // TouchLoginPresence mocks base method.

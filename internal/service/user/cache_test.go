@@ -47,9 +47,9 @@ func (r *stubUserRepo) FindRolesByUserID(id uint) ([]string, error) { return nil
 func (r *stubUserRepo) FindRolesByUserIDs(ids []uint) (map[uint][]string, error) {
 	return nil, nil
 }
-func (r *stubUserRepo) TouchLoginPresence(id uint) error      { return nil }
-func (r *stubUserRepo) UpdateLastActiveAt(id uint) error     { return nil }
-func (r *stubUserRepo) UpdateLastLoginAt(id uint) error { return nil }
+func (r *stubUserRepo) TouchLoginPresence(id uint) error { return nil }
+func (r *stubUserRepo) UpdateLastActiveAt(id uint) error { return nil }
+func (r *stubUserRepo) UpdateLastLoginAt(id uint) error  { return nil }
 func (r *stubUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
@@ -67,11 +67,13 @@ func (r *stubUserRepo) UpsertSocialLink(userID uint, platform, url string) error
 func (r *stubUserRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
-func (r *stubUserRepo) CountByAvatarURL(avatarURL string) (int64, error) { return 0, nil }
-func (r *stubUserRepo) ListAllWithManagedAvatar() ([]model.User, error) { return nil, nil }
+func (r *stubUserRepo) CountByAvatarURL(avatarURL string) (int64, error)      { return 0, nil }
+func (r *stubUserRepo) ListAllWithManagedAvatar() ([]model.User, error)       { return nil, nil }
 func (r *stubUserRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) { return 0, nil }
-func (r *stubUserRepo) GrantVipRole(userID uint) error                   { return nil }
-func (r *stubUserRepo) RevokeVipRole(userID uint) error                  { return nil }
+func (r *stubUserRepo) GrantVipRole(userID uint) error                        { return nil }
+func (r *stubUserRepo) RevokeVipRole(userID uint) error                       { return nil }
+func (r *stubUserRepo) SetStatus(userID uint, status uint8) error             { return nil }
+func (r *stubUserRepo) CountByRole(roleName string) (int64, error)            { return 0, nil }
 func (r *stubUserRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
 	return nil, nil
 }

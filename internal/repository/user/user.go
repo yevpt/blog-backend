@@ -151,6 +151,10 @@ type UserRepository interface {
 	GrantVipRole(userID uint) error
 	// RevokeVipRole 移除目标用户的 ROLE_VIP；本就不是 VIP 时幂等成功。
 	RevokeVipRole(userID uint) error
+	// SetStatus 更新用户账号状态（1=正常，0=已禁用）。
+	SetStatus(userID uint, status uint8) error
+	// CountByRole 统计持有指定角色名称的用户数量，用于禁用前的“最后一个管理员”校验。
+	CountByRole(roleName string) (int64, error)
 	// BatchFetchActiveLogin 批量查询用户最近活跃/登录时间，供在线感知端点使用；未知 id 不在返回结果中。
 	BatchFetchActiveLogin(ids []uint) (map[uint]*ActiveLogin, error)
 }

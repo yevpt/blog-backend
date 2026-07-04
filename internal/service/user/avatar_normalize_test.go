@@ -140,8 +140,10 @@ func (r *normalizeAvatarRepo) UpsertSocialLink(userID uint, platform, url string
 func (r *normalizeAvatarRepo) UpsertUserSetting(userID uint, updates map[string]any) error {
 	return nil
 }
-func (r *normalizeAvatarRepo) GrantVipRole(userID uint) error  { return nil }
-func (r *normalizeAvatarRepo) RevokeVipRole(userID uint) error { return nil }
+func (r *normalizeAvatarRepo) GrantVipRole(userID uint) error             { return nil }
+func (r *normalizeAvatarRepo) RevokeVipRole(userID uint) error            { return nil }
+func (r *normalizeAvatarRepo) SetStatus(userID uint, status uint8) error  { return nil }
+func (r *normalizeAvatarRepo) CountByRole(roleName string) (int64, error) { return 0, nil }
 func (r *normalizeAvatarRepo) BatchFetchActiveLogin(ids []uint) (map[uint]*userrepo.ActiveLogin, error) {
 	return nil, nil
 }
