@@ -124,7 +124,7 @@ func (r *fakeUserRepo) UpdateLastLoginAt(userID uint) error  { return nil }
 func (r *fakeUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
-func (r *fakeUserRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+func (r *fakeUserRepo) ListAll(filter userrepo.UserListFilter, offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
 func (r *fakeUserRepo) Update(id uint, updates map[string]any) error        { return nil }

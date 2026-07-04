@@ -95,6 +95,13 @@ type LikedContentPageResult struct {
 	Items    []LikedContentAggregate
 }
 
+// UserListFilter 管理端用户列表的筛选条件；零值表示不过滤该维度。
+type UserListFilter struct {
+	Keyword string
+	Role    string
+	Status  *uint8
+}
+
 // UserRepository 用户数据访问接口，所有方法返回 model 而非 dto，转换由上层负责
 type UserRepository interface {
 	// FindByIdentifier 支持 username / email / phone 三合一查询；未找到时返回 nil, nil
@@ -125,8 +132,8 @@ type UserRepository interface {
 	UpdateLastActiveAt(userID uint) error
 	// ListRecent 获取最近活跃的用户列表，按 last_active_at 降序
 	ListRecent(offset, limit int) ([]model.User, int64, error)
-	// ListAll 获取所有用户列表，按角色排序后按 last_active_at 降序
-	ListAll(offset, limit int) ([]model.User, int64, error)
+	// ListAll 管理端筛选查询：关键词匹配 username/nickname/email，role/status 可选精确过滤；按角色权重+活跃时间排序
+	ListAll(filter UserListFilter, offset, limit int) ([]model.User, int64, error)
 	// Update 更新用户信息
 	Update(id uint, updates map[string]any) error
 	// ExistsByUsername 检查用户名是否已被占用（排除自身）
@@ -359,26 +366,35 @@ func (r *userRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return users, total, err
 }
 
-func (r *userRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+func (r *userRepo) ListAll(filter UserListFilter, offset, limit int) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
 
-	// 只查询 status = 1 的用户
-	query := r.db.Model(&model.User{}).Where("status = ?", 1)
+	base := r.db.Table("user").
+		Joins("LEFT JOIN user_role ON user_role.user_id = user.id").
+		Joins("LEFT JOIN role ON role.id = user_role.role_id")
 
-	if err := query.Count(&total).Error; err != nil {
+	if filter.Status != nil {
+		base = base.Where("user.status = ?", *filter.Status)
+	}
+	if filter.Keyword != "" {
+		like := "%" + filter.Keyword + "%"
+		base = base.Where("user.username LIKE ? OR user.nickname LIKE ? OR user.email LIKE ?", like, like, like)
+	}
+	if filter.Role != "" {
+		base = base.Where("role.name = ?", filter.Role)
+	}
+
+	countQuery := base.Session(&gorm.Session{})
+	if err := countQuery.Distinct("user.id").Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	// 按角色名称映射业务权重排序，避免数据库自增 id 顺序和权限权重不一致。
 	// 一个用户可能有多个角色，取最小权重代表该用户最高权限。
 	roleWeightExpr := listUserRoleWeightExpr()
-
-	err := r.db.Table("user").
+	err := base.
 		Select("DISTINCT user.*").
-		Joins("LEFT JOIN user_role ON user_role.user_id = user.id").
-		Joins("LEFT JOIN role ON role.id = user_role.role_id").
-		Where("user.status = ?", 1).
 		Group("user.id").
 		Order(roleWeightExpr + " ASC, COALESCE(user.last_active_at, user.created_at) DESC, user.id DESC").
 		Offset(offset).

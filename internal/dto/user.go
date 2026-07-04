@@ -182,6 +182,41 @@ type UserPageResp struct {
 	List     []UserListItemResp `json:"list"`
 }
 
+// AdminUserListReq 管理端用户列表查询参数。
+type AdminUserListReq struct {
+	Page     int    `form:"page" binding:"omitempty,min=1" example:"1"`
+	PageSize int    `form:"page_size" binding:"omitempty,min=1,max=50" example:"10"`
+	Keyword  string `form:"keyword" binding:"omitempty,max=100"`
+	Role     string `form:"role" binding:"omitempty,oneof=ROLE_ADMIN ROLE_VIP ROLE_NORMAL"`
+	Status   string `form:"status" binding:"omitempty,oneof=active disabled"`
+}
+
+// AdminUserListItemResp 管理端用户列表项，比公开列表多带邮箱/账号状态/处罚状态。
+type AdminUserListItemResp struct {
+	ID            uint       `json:"id" example:"1"`
+	Username      string     `json:"username" example:"vpt"`
+	Nickname      *string    `json:"nickname,omitempty" example:"Yevpt"`
+	Email         *string    `json:"email,omitempty" example:"vpt@example.com"`
+	AvatarUrl     *string    `json:"avatar_url,omitempty"`
+	Mark          *string    `json:"mark,omitempty"`
+	Roles         []string   `json:"roles"`
+	Status        uint8      `json:"status" example:"1"`
+	SanctionState string     `json:"sanction_state" example:"active"`
+	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
+	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
+	IsOnline      bool       `json:"is_online"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// AdminUserPageResp 管理端用户分页响应。
+type AdminUserPageResp struct {
+	Total    int64                   `json:"total" example:"100"`
+	Pages    int                     `json:"pages" example:"10"`
+	Page     int                     `json:"page" example:"1"`
+	PageSize int                     `json:"page_size" example:"10"`
+	List     []AdminUserListItemResp `json:"list"`
+}
+
 // UserUpdateReq 更新当前用户信息请求
 type UserUpdateReq struct {
 	Nickname *string `json:"nickname,omitempty" binding:"omitempty,max=30" example:"Yevpt"`

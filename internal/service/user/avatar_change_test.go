@@ -63,7 +63,7 @@ func (r *changeAvatarRepo) UpdateLastLoginAt(id uint) error  { return nil }
 func (r *changeAvatarRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
-func (r *changeAvatarRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+func (r *changeAvatarRepo) ListAll(filter userrepo.UserListFilter, offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
 func (r *changeAvatarRepo) DeleteSocialLink(userID uint, platform string) error { return nil }

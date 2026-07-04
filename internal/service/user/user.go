@@ -116,7 +116,10 @@ func (s *userService) ListAll(req *dto.UserListReq) (*dto.UserPageResp, error) {
 	}
 	offset := (page - 1) * pageSize
 
-	users, total, err := s.repo.ListAll(offset, pageSize)
+	// 公开路由 GET /users 历史行为只展示 status = 1（正常）的用户，
+	// 这里显式传入该筛选条件以保持向后兼容；管理端筛选走 Task 5 的新 handler。
+	activeStatus := uint8(1)
+	users, total, err := s.repo.ListAll(userrepo.UserListFilter{Status: &activeStatus}, offset, pageSize)
 	if err != nil {
 		return nil, err
 	}

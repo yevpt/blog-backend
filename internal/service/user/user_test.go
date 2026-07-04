@@ -280,6 +280,26 @@ func TestUserService_CountLikedContent_ReturnsTotal(t *testing.T) {
 	assert.Equal(t, int64(12), resp.Count)
 }
 
+func TestUserService_ListAll_PublicRouteKeepsActiveOnlyFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	repo := mock.NewMockUserRepository(ctrl)
+	svc := user.NewUserService(nil, repo, nil, nil, nil)
+
+	// GET /users 公开路由历史行为只返回 status = 1（正常）的用户，
+	// repository 改造为可筛选查询后，公开路由必须显式传入该筛选条件，
+	// 不能像管理端一样传空筛选，否则会把已禁用账号也暴露出来。
+	activeStatus := uint8(1)
+	repo.EXPECT().
+		ListAll(userrepo.UserListFilter{Status: &activeStatus}, 0, 10).
+		Return(nil, int64(0), nil)
+
+	resp, err := svc.ListAll(&dto.UserListReq{Page: 1, PageSize: 10})
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), resp.Total)
+	assert.Empty(t, resp.List)
+}
+
 func ptrString(value string) *string {
 	return &value
 }

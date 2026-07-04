@@ -358,7 +358,7 @@ func TestUserRepository_ListAll_OrdersByRoleNameWeight(t *testing.T) {
 	defer sqlDB.Close()
 	repo := user.NewUserRepository(db)
 
-	mock.ExpectQuery(`SELECT count\(\*\) FROM \x60user\x60 WHERE status = \? AND \x60user\x60\.\x60deleted_at\x60 IS NULL`).
+	mock.ExpectQuery(`SELECT COUNT\(DISTINCT\(\x60user\x60\.\x60id\x60\)\) FROM \x60user\x60 LEFT JOIN user_role`).
 		WithArgs(1).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
@@ -372,10 +372,31 @@ func TestUserRepository_ListAll_OrdersByRoleNameWeight(t *testing.T) {
 		WithArgs(1, 10).
 		WillReturnRows(rows)
 
-	users, total, err := repo.ListAll(0, 10)
+	status := uint8(1)
+	users, total, err := repo.ListAll(user.UserListFilter{Status: &status}, 0, 10)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), total)
 	require.Len(t, users, 1)
 	assert.Equal(t, uint(735), users[0].ID)
 	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserRepository_ListAll_WithKeywordRoleStatus(t *testing.T) {
+	db, mock, sqlDB := newMockDB(t)
+	defer sqlDB.Close()
+	repo := user.NewUserRepository(db)
+
+	mock.ExpectQuery("SELECT COUNT").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+	mock.ExpectQuery("SELECT DISTINCT user\\.\\*").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "created_at", "updated_at", "deleted_at",
+			"username", "password", "password_set", "nickname", "email", "phone",
+			"site", "avatar_url", "mark", "status", "last_login_at",
+		}).AddRow(1, nil, nil, nil, "vpt", "hashed", true, "Yevpt", "vpt@example.com", nil, nil, nil, "博主", 1, nil))
+
+	status := uint8(1)
+	users, total, err := repo.ListAll(user.UserListFilter{Keyword: "vpt", Role: "ROLE_ADMIN", Status: &status}, 0, 10)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), total)
+	assert.Len(t, users, 1)
 }

@@ -127,7 +127,7 @@ func (r *normalizeAvatarRepo) UpdateLastLoginAt(id uint) error  { return nil }
 func (r *normalizeAvatarRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
-func (r *normalizeAvatarRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+func (r *normalizeAvatarRepo) ListAll(filter userrepo.UserListFilter, offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
 func (r *normalizeAvatarRepo) DeleteSocialLink(userID uint, platform string) error { return nil }

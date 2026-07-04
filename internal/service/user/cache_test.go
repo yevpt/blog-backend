@@ -53,7 +53,7 @@ func (r *stubUserRepo) UpdateLastLoginAt(id uint) error  { return nil }
 func (r *stubUserRepo) ListRecent(offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
-func (r *stubUserRepo) ListAll(offset, limit int) ([]model.User, int64, error) {
+func (r *stubUserRepo) ListAll(filter userrepo.UserListFilter, offset, limit int) ([]model.User, int64, error) {
 	return nil, 0, nil
 }
 func (r *stubUserRepo) Update(id uint, updates map[string]any) error        { return nil }

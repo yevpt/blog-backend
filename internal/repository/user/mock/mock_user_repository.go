@@ -309,9 +309,9 @@ func (mr *MockUserRepositoryMockRecorder) GrantVipRole(userID any) *gomock.Call 
 }
 
 // ListAll mocks base method.
-func (m *MockUserRepository) ListAll(offset, limit int) ([]model.User, int64, error) {
+func (m *MockUserRepository) ListAll(filter user.UserListFilter, offset, limit int) ([]model.User, int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListAll", offset, limit)
+	ret := m.ctrl.Call(m, "ListAll", filter, offset, limit)
 	ret0, _ := ret[0].([]model.User)
 	ret1, _ := ret[1].(int64)
 	ret2, _ := ret[2].(error)
@@ -319,9 +319,9 @@ func (m *MockUserRepository) ListAll(offset, limit int) ([]model.User, int64, er
 }
 
 // ListAll indicates an expected call of ListAll.
-func (mr *MockUserRepositoryMockRecorder) ListAll(offset, limit any) *gomock.Call {
+func (mr *MockUserRepositoryMockRecorder) ListAll(filter, offset, limit any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockUserRepository)(nil).ListAll), offset, limit)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListAll", reflect.TypeOf((*MockUserRepository)(nil).ListAll), filter, offset, limit)
 }
 
 // ListAllWithManagedAvatar mocks base method.
