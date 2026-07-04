@@ -14,6 +14,7 @@ import (
 	"github.com/vpt/blog-backend/internal/dto"
 	userhandler "github.com/vpt/blog-backend/internal/handler/user"
 	"github.com/vpt/blog-backend/internal/middleware"
+	"github.com/vpt/blog-backend/internal/service/adminlog"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/roles"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -22,7 +23,8 @@ import (
 func TestUserAdminHandler_DisableAccount_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
+	spy := &spyLogRecorder{}
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), spy)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -36,12 +38,18 @@ func TestUserAdminHandler_DisableAccount_Success(t *testing.T) {
 	var body response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, 0, body.Code)
+
+	require.Len(t, spy.calls, 1, "成功禁用账号应恰好记一条操作日志")
+	assert.Equal(t, adminlog.ActionDisableAccount, spy.calls[0].action)
+	assert.Equal(t, uint(9), spy.calls[0].targetUserID)
+	assert.Equal(t, uint(1), spy.calls[0].operatorID)
 }
 
 func TestUserAdminHandler_DisableAccount_Forbidden(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrLastAdminAccount}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
+	spy := &spyLogRecorder{}
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), spy)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -52,12 +60,14 @@ func TestUserAdminHandler_DisableAccount_Forbidden(t *testing.T) {
 	h.DisableAccount(c)
 	require.Equal(t, http.StatusOK, w.Code) // 统一响应包在 200 里，用 code 字段区分业务失败
 	assert.Contains(t, w.Body.String(), "最后一个管理员")
+	assert.Empty(t, spy.calls, "业务拒绝（最后一个管理员）不应记录操作日志")
 }
 
 func TestUserAdminHandler_DisableAccount_CannotDisableSelf(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrCannotDisableSelf}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
+	spy := &spyLogRecorder{}
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), spy)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -68,12 +78,14 @@ func TestUserAdminHandler_DisableAccount_CannotDisableSelf(t *testing.T) {
 	h.DisableAccount(c)
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "不能禁用自己")
+	assert.Empty(t, spy.calls, "业务拒绝（不能禁用自己）不应记录操作日志")
 }
 
 func TestUserAdminHandler_DisableAccount_UserNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
+	spy := &spyLogRecorder{}
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), spy)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -83,6 +95,7 @@ func TestUserAdminHandler_DisableAccount_UserNotFound(t *testing.T) {
 
 	h.DisableAccount(c)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Empty(t, spy.calls, "404 不应记录操作日志")
 }
 
 func TestUserAdminHandler_DisableAccount_Unauthorized(t *testing.T) {
@@ -118,12 +131,14 @@ func TestUserAdminHandler_DisableAccount_ServerError(t *testing.T) {
 func TestUserAdminHandler_EnableAccount_Success(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
+	spy := &spyLogRecorder{}
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), spy)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Params = gin.Params{{Key: "id", Value: "9"}}
 	c.Request = httptest.NewRequest(http.MethodPost, "/admin/users/9/enable", nil)
+	middleware.SetUserDetail(c, &dto.UserDetailResp{ID: 1, Username: "admin", Status: 1, Roles: []string{roles.AdminRole}})
 
 	h.EnableAccount(c)
 
@@ -131,12 +146,17 @@ func TestUserAdminHandler_EnableAccount_Success(t *testing.T) {
 	var body response.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 	assert.Equal(t, 0, body.Code)
+
+	require.Len(t, spy.calls, 1, "成功启用账号应恰好记一条操作日志")
+	assert.Equal(t, adminlog.ActionEnableAccount, spy.calls[0].action)
+	assert.Equal(t, uint(9), spy.calls[0].targetUserID)
 }
 
 func TestUserAdminHandler_EnableAccount_UserNotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &stubUserAdminService{err: userservice.ErrUserNotFound}
-	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), nil)
+	spy := &spyLogRecorder{}
+	h := userhandler.NewUserAdminHandler(stub, zap.NewNop(), spy)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -145,4 +165,5 @@ func TestUserAdminHandler_EnableAccount_UserNotFound(t *testing.T) {
 
 	h.EnableAccount(c)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Empty(t, spy.calls, "失败时不应记录操作日志")
 }
