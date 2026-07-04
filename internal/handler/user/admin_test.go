@@ -25,6 +25,8 @@ type stubUserAdminService struct {
 	revokeUserID uint
 	resp         *dto.AdminUserRolesResp
 	err          error
+	listResp     *dto.AdminUserPageResp
+	detailResp   *dto.AdminUserDetailResp
 }
 
 func (s *stubUserAdminService) GrantVip(targetUserID uint) (*dto.AdminUserRolesResp, error) {
@@ -51,6 +53,14 @@ func (s *stubUserAdminService) DisableAccount(operatorID, targetUserID uint) err
 
 func (s *stubUserAdminService) EnableAccount(targetUserID uint) error {
 	return s.err
+}
+
+func (s *stubUserAdminService) ListAdmin(req *dto.AdminUserListReq) (*dto.AdminUserPageResp, error) {
+	return s.listResp, s.err
+}
+
+func (s *stubUserAdminService) GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, error) {
+	return s.detailResp, s.err
 }
 
 func TestUserAdminHandler_GrantVip_Success(t *testing.T) {

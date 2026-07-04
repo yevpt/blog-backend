@@ -217,6 +217,29 @@ type AdminUserPageResp struct {
 	List     []AdminUserListItemResp `json:"list"`
 }
 
+// AdminUserDetailResp 管理端用户详情，含真实邮箱/手机号（不脱敏）与审核画像摘要。
+type AdminUserDetailResp struct {
+	ID            uint       `json:"id"`
+	Username      string     `json:"username"`
+	Nickname      *string    `json:"nickname,omitempty"`
+	Email         *string    `json:"email,omitempty"`
+	EmailVerified bool       `json:"email_verified"`
+	Phone         *string    `json:"phone,omitempty"`
+	Site          *string    `json:"site,omitempty"`
+	AvatarUrl     *string    `json:"avatar_url,omitempty"`
+	Mark          *string    `json:"mark,omitempty"`
+	Status        uint8      `json:"status"`
+	PasswordSet   bool       `json:"password_set"`
+	Roles         []string   `json:"roles"`
+	RegisterAt    time.Time  `json:"register_at"`
+	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
+	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
+	IsOnline      bool       `json:"is_online"`
+	SanctionState string     `json:"sanction_state"`
+	LikesCount    int64      `json:"likes_count"`
+	MomentsCount  int64      `json:"moments_count"`
+}
+
 // UserUpdateReq 更新当前用户信息请求
 type UserUpdateReq struct {
 	Nickname *string `json:"nickname,omitempty" binding:"omitempty,max=30" example:"Yevpt"`

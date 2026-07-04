@@ -36,6 +36,7 @@ type AdminDeps struct {
 	Store      storage.ObjectStore
 	Avatar     AvatarNormalizer
 	FriendLink FriendLinkLogoRefs
+	Moderation ModerationProfileReader
 }
 
 func (s *adminService) NormalizeAvatars(ctx context.Context, req *dto.NormalizeAvatarsReq) (*dto.NormalizeAvatarsResp, error) {

@@ -246,6 +246,7 @@ func newRouteHandlers(
 		Store:      objectStore,
 		Avatar:     avatarSvc,
 		FriendLink: friendLinkRepo,
+		Moderation: newModerationProfileReader(moderationGovernanceSvc),
 	})
 	socialAuthRepo := socialauthrepo.NewSocialAuthRepository(db)
 	oauthManager := newOAuthManager(redisClient, cfg)
@@ -641,6 +642,8 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.POST("/users/:id/avatar/clear", handlers.userAdmin.ClearUserAvatar)
 	admin.POST("/users/:id/disable", handlers.userAdmin.DisableAccount)
 	admin.POST("/users/:id/enable", handlers.userAdmin.EnableAccount)
+	admin.GET("/users", handlers.userAdmin.ListAdmin)
+	admin.GET("/users/:id", handlers.userAdmin.GetDetail)
 	admin.GET("/overview/summary", handlers.dashboard.Overview)
 	admin.GET("/analytics/overview", handlers.analyticsAdmin.Overview)
 	admin.GET("/analytics/trend", handlers.analyticsAdmin.Trend)

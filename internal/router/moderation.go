@@ -9,6 +9,7 @@ import (
 	"github.com/vpt/blog-backend/internal/service/moderation/ruleindex"
 	"github.com/vpt/blog-backend/internal/service/moderationmedia"
 	rulemod "github.com/vpt/blog-backend/internal/service/moderationrule"
+	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/storage"
 	"go.uber.org/zap"
@@ -109,6 +110,29 @@ func maybeNewModerationGovernanceService(db *gorm.DB, cfg config.ModerationConfi
 		return nil
 	}
 	return moderationservice.NewGovernanceService(moderationrepo.NewRepository(db), cfg.Governance, nil)
+}
+
+// moderationProfileReaderAdapter 把 GovernanceService.GetProfile 适配成 userservice.ModerationProfileReader
+// 的最小只读接口，避免用户模块反向依赖完整审核服务。
+type moderationProfileReaderAdapter struct {
+	governance moderationservice.GovernanceService
+}
+
+func (a *moderationProfileReaderAdapter) GetSanctionState(userID uint) (string, error) {
+	profile, err := a.governance.GetProfile(context.Background(), uint64(userID))
+	if err != nil {
+		return "", err
+	}
+	return string(profile.SanctionState), nil
+}
+
+// newModerationProfileReader 在审核治理服务可用时返回适配器；服务未开启（nil）时返回 nil，
+// 避免把非 nil 的适配器包住 nil interface，导致用户服务里的 nil 判断失效。
+func newModerationProfileReader(governance moderationservice.GovernanceService) userservice.ModerationProfileReader {
+	if governance == nil {
+		return nil
+	}
+	return &moderationProfileReaderAdapter{governance: governance}
 }
 
 // maybeNewModerationOperationsService 在审核开启时组装全站治理和紧急处置服务。

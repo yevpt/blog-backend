@@ -220,6 +220,43 @@ func (h *UserAdminHandler) EnableAccount(c *gin.Context) {
 	writeUserAdminResponse(c, nil, err)
 }
 
+// ListAdmin 管理端分页查询用户，支持关键词/角色/状态筛选。
+// @Summary 管理端查询用户列表
+// @Tags 用户管理
+// @Produce json
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Param keyword query string false "关键词，匹配用户名/昵称/邮箱"
+// @Param role query string false "角色筛选：ROLE_ADMIN/ROLE_VIP/ROLE_NORMAL"
+// @Param status query string false "账号状态：active/disabled"
+// @Success 200 {object} response.Response{data=dto.AdminUserPageResp}
+// @Router /admin/users [get]
+func (h *UserAdminHandler) ListAdmin(c *gin.Context) {
+	var req dto.AdminUserListReq
+	if !reqbind.Query(c, &req) {
+		return
+	}
+	resp, err := h.svc.ListAdmin(&req)
+	writeUserAdminResponse(c, resp, err)
+}
+
+// GetDetail 管理端查询用户详情。
+// @Summary 管理端查询用户详情
+// @Tags 用户管理
+// @Produce json
+// @Param id path int true "用户 ID"
+// @Success 200 {object} response.Response{data=dto.AdminUserDetailResp}
+// @Failure 404 {object} response.Response "用户不存在"
+// @Router /admin/users/{id} [get]
+func (h *UserAdminHandler) GetDetail(c *gin.Context) {
+	targetUserID, ok := reqbind.PathUint(c, "id", "用户 ID")
+	if !ok {
+		return
+	}
+	resp, err := h.svc.GetAdminDetail(targetUserID)
+	writeUserAdminResponse(c, resp, err)
+}
+
 func (h *UserAdminHandler) logVipRoleChange(c *gin.Context, action string, targetUserID uint) {
 	fields := []zap.Field{
 		zap.String("action", action),
