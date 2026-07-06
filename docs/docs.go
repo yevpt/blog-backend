@@ -1183,7 +1183,7 @@ const docTemplate = `{
         },
         "/admin/categories": {
             "post": {
-                "description": "管理员新增分类；父分类字段仅预留，当前不处理父子层级。",
+                "description": "管理员新增分类；icon、description、cover_img_url 均为可选，名称和 seq 必填。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1245,9 +1245,133 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/categories/uploads/cover": {
+            "post": {
+                "description": "管理员上传封面图片（JPG/PNG/WebP/GIF），复用文章封面同等参数（10MB 读取上限、3MB 存储上限）。上传成功返回临时 key，创建/编辑分类时携带该 key 提交。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "上传分类封面位图",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "封面图片文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示上传成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryAssetUploadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/categories/uploads/icon": {
+            "post": {
+                "description": "管理员上传 SVG 格式分类图标；后端执行 XML 节点/属性白名单校验并重新编码。上传成功返回临时 key，创建/编辑分类时携带该 key 提交。",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "分类"
+                ],
+                "summary": "上传分类 SVG 图标",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "SVG 图标文件",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "统一响应；code=0 表示上传成功",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.CategoryAssetUploadResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "权限不足",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "服务器内部错误",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/categories/{id}": {
             "put": {
-                "description": "管理员修改分类名称、排序、图标、描述、封面等属性。",
+                "description": "管理员修改分类名称、排序、图标、描述、封面等属性；未传字段保持原值，传空字符串表示清空。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1322,7 +1446,7 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "管理员删除分类，并清空该分类下文章关联；文章本身不会被删除。",
+                "description": "管理员删除分类，并清空该分类下文章关联；文章本身不会被删除；分类关联素材会被尽力清理。",
                 "produces": [
                     "application/json"
                 ],
@@ -6081,6 +6205,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/users": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "管理端查询用户列表",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "关键词，匹配用户名/昵称/邮箱",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "角色筛选：ROLE_ADMIN/ROLE_VIP/ROLE_NORMAL",
+                        "name": "role",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "账号状态：active/disabled",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminUserPageResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users/avatars/normalize": {
             "post": {
                 "description": "管理员检查本站托管头像是否超出 240px / 20KB 规范；已合规的 JPG/PNG/WebP 原样保留，超出则压缩为 WebP 替换、更新 avatar_url，并清理无引用的旧对象。可指定 user_id 处理单个用户，不传则处理全部并扫描对象存储；clear_invalid=true 时无法处理的头像会被清空。",
@@ -6162,6 +6351,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/admin/users/{id}": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "管理端查询用户详情",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminUserDetailResp"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/users/{id}/avatar/clear": {
             "post": {
                 "description": "管理员清空目标用户 avatar_url，并在无其他引用时删除对象存储中的头像文件。",
@@ -6231,6 +6466,153 @@ const docTemplate = `{
                         "description": "服务器内部错误",
                         "schema": {
                             "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/disable": {
+            "post": {
+                "description": "管理员禁用目标账号登录；不能禁用自己，不能禁用系统里最后一个管理员。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "禁用用户账号",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功；code != 0 表示业务失败（如最后一个管理员）",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "目标用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/enable": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "启用用户账号",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "目标用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "成功",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "未登录或 token 已过期",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "需要管理员权限",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "目标用户不存在",
+                        "schema": {
+                            "$ref": "#/definitions/response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{id}/operation-logs": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户管理"
+                ],
+                "summary": "查询用户操作日志",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "用户 ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "页码",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "每页数量",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/dto.AdminOperationLogPageResp"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -14331,6 +14713,50 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.AdminOperationLogItemResp": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "detail": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "operator_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.AdminOperationLogPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminOperationLogItemResp"
+                    }
+                },
+                "page": {
+                    "type": "integer"
+                },
+                "page_size": {
+                    "type": "integer"
+                },
+                "pages": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.AdminQuotaListResp": {
             "type": "object",
             "properties": {
@@ -14529,6 +14955,145 @@ const docTemplate = `{
                     "maximum": 100000,
                     "minimum": 0,
                     "example": 0
+                }
+            }
+        },
+        "dto.AdminUserDetailResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_online": {
+                    "type": "boolean"
+                },
+                "last_active_at": {
+                    "type": "string"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "mark": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string"
+                },
+                "password_set": {
+                    "type": "boolean"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "register_at": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sanction_state": {
+                    "type": "string"
+                },
+                "site": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.AdminUserListItemResp": {
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "vpt@example.com"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_online": {
+                    "type": "boolean"
+                },
+                "last_active_at": {
+                    "type": "string"
+                },
+                "last_login_at": {
+                    "type": "string"
+                },
+                "mark": {
+                    "type": "string"
+                },
+                "nickname": {
+                    "type": "string",
+                    "example": "Yevpt"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sanction_state": {
+                    "type": "string",
+                    "example": "active"
+                },
+                "status": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "username": {
+                    "type": "string",
+                    "example": "vpt"
+                }
+            }
+        },
+        "dto.AdminUserPageResp": {
+            "type": "object",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AdminUserListItemResp"
+                    }
+                },
+                "page": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "page_size": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "pages": {
+                    "type": "integer",
+                    "example": 10
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 100
                 }
             }
         },
@@ -15296,30 +15861,52 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CategoryAssetUploadResp": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "description": "Key 对象 key，保存请求时传回服务端。",
+                    "type": "string",
+                    "example": "temp/categories/7/icon/abc123.svg"
+                },
+                "mime": {
+                    "description": "Mime 内容类型。",
+                    "type": "string",
+                    "example": "image/svg+xml"
+                },
+                "size": {
+                    "description": "Size 字节数。",
+                    "type": "integer",
+                    "example": 1234
+                },
+                "url": {
+                    "description": "URL 可访问 URL，仅用于前端预览。",
+                    "type": "string",
+                    "example": "https://cdn.example.com/temp/categories/7/icon/abc123.svg"
+                }
+            }
+        },
         "dto.CategoryCreateReq": {
             "type": "object",
             "required": [
-                "cover_img_url",
-                "description",
-                "icon",
                 "name",
                 "seq"
             ],
             "properties": {
                 "cover_img_url": {
-                    "description": "CoverImgUrl 封面图地址或对象 key。",
+                    "description": "CoverImgUrl 封面图对象 key（可选）。",
                     "type": "string",
-                    "example": "covers/programming.jpg"
+                    "example": "temp/categories/7/cover/abc123.webp"
                 },
                 "description": {
-                    "description": "Description 分类描述。",
+                    "description": "Description 分类描述（可选）。",
                     "type": "string",
                     "example": "编程学习与工程实践"
                 },
                 "icon": {
-                    "description": "Icon 图标地址或对象 key。",
+                    "description": "Icon 图标对象 key（可选）。",
                     "type": "string",
-                    "example": "icons/programming.svg"
+                    "example": "temp/categories/7/icon/abc123.svg"
                 },
                 "name": {
                     "description": "Name 分类名称。",

@@ -32,6 +32,12 @@ type CategoryUpdateData struct {
 	Seq               *uint
 }
 
+// CategoryCreateData 创建分类所需数据，支持 prepare callback 全局写入事务内。
+type CategoryCreateData struct {
+	Category        model.Category
+	PrepareCategory func(saved model.Category) (model.Category, error)
+}
+
 // CategoryRepository 分类数据访问接口。
 type CategoryRepository interface {
 	// ListWithArticleCount 查询所有未删除分类及其公开文章数量，
@@ -39,6 +45,8 @@ type CategoryRepository interface {
 	ListWithArticleCount() ([]CategoryWithCount, error)
 	// Create 创建分类并返回含公开文章数量的分类信息。
 	Create(category model.Category) (*CategoryWithCount, error)
+	// CreateWithPrepare 在事务内先插入分类取得 ID，再执行 prepare callback 并更新正式素材 key。
+	CreateWithPrepare(data CategoryCreateData) (*CategoryWithCount, error)
 	// Update 修改分类属性并返回含公开文章数量的分类信息。
 	Update(id uint, data CategoryUpdateData) (*CategoryWithCount, error)
 	// Delete 软删除分类，并清空该分类下的文章关联。

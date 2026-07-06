@@ -15,6 +15,41 @@ func (r *categoryRepo) Create(category model.Category) (*CategoryWithCount, erro
 	return r.findWithArticleCount(category.ID)
 }
 
+// CreateWithPrepare 在数据库事务内先插入不含正式素材引用的分类取得 ID，
+// 再调用 prepare callback 校验和复制临时素材，最后更新分类的正式 key 并提交。
+// 任一素材失败则回滚数据库事务。
+func (r *categoryRepo) CreateWithPrepare(data CategoryCreateData) (*CategoryWithCount, error) {
+	var newID uint
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		category := data.Category
+		// 先插入不含正式素材引用的分类，取得自增 ID。
+		if err := tx.Create(&category).Error; err != nil {
+			return err
+		}
+		newID = category.ID
+		if data.PrepareCategory == nil {
+			return nil
+		}
+		// 执行 prepare callback，得到含正式素材 key 的分类。
+		prepared, err := data.PrepareCategory(category)
+		if err != nil {
+			return err
+		}
+		// 更新正式素材字段。
+		fields := map[string]any{
+			"icon":          prepared.Icon,
+			"description":   prepared.Description,
+			"cover_img_url": prepared.CoverImgUrl,
+		}
+		return tx.Model(&model.Category{}).Where("id = ?", newID).Updates(fields).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+	return r.findWithArticleCount(newID)
+}
+
+
 // Update 修改分类属性并返回最新分类信息。
 func (r *categoryRepo) Update(id uint, data CategoryUpdateData) (*CategoryWithCount, error) {
 	err := r.db.Transaction(func(tx *gorm.DB) error {

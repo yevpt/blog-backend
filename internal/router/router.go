@@ -274,7 +274,7 @@ func newRouteHandlers(
 	articleSvc := articleservice.NewArticleService(articleRepo, objectStore, uvSvc, notificationPublisher, musicSvc)
 
 	categoryRepo := categoryrepo.NewCategoryRepository(db)
-	categorySvc := categoryservice.NewCategoryService(categoryRepo)
+	categorySvc := categoryservice.NewCategoryService(categoryRepo, objectStore, log)
 
 	tagRepo := tagrepo.NewTagRepository(db)
 	tagSvc := tagservice.NewTagService(tagRepo, articleSvc)
@@ -569,6 +569,8 @@ func registerAdminRoutes(r *gin.Engine, handlers routeHandlers, jwtManager *jwt.
 	admin.GET("/comments", handlers.comment.ListAdmin)
 	admin.GET("/guestbook", handlers.guestbook.ListAdmin)
 	admin.GET("/moments", handlers.moment.ListAdmin)
+	admin.POST("/categories/uploads/icon", handlers.category.UploadIcon)
+	admin.POST("/categories/uploads/cover", handlers.category.UploadCover)
 	admin.POST("/categories", handlers.category.Create)
 	admin.PUT("/categories/:id", handlers.category.Update)
 	admin.DELETE("/categories/:id", handlers.category.Delete)

@@ -8,12 +8,12 @@ type CategoryCreateReq struct {
 	Name string `json:"name" binding:"required" example:"编程"`
 	// URL 分类路由别名。
 	URL *string `json:"url,omitempty" example:"programming"`
-	// Icon 图标地址或对象 key。
-	Icon string `json:"icon" binding:"required" example:"icons/programming.svg"`
-	// Description 分类描述。
-	Description string `json:"description" binding:"required" example:"编程学习与工程实践"`
-	// CoverImgUrl 封面图地址或对象 key。
-	CoverImgUrl string `json:"cover_img_url" binding:"required" example:"covers/programming.jpg"`
+	// Icon 图标对象 key（可选）。
+	Icon *string `json:"icon,omitempty" example:"temp/categories/7/icon/abc123.svg"`
+	// Description 分类描述（可选）。
+	Description *string `json:"description,omitempty" example:"编程学习与工程实践"`
+	// CoverImgUrl 封面图对象 key（可选）。
+	CoverImgUrl *string `json:"cover_img_url,omitempty" example:"temp/categories/7/cover/abc123.webp"`
 	// Seq 排序值，越小越靠前；0 是有效值，因此用指针区分未传。
 	Seq *uint `json:"seq" binding:"required" example:"0"`
 }
@@ -98,4 +98,16 @@ type CategoryTabItem struct {
 type CategoryTabsResp struct {
 	// List 分类列表，按 seq ASC、文章数量 DESC 排序。
 	List []CategoryTabItem `json:"list"`
+}
+
+// CategoryAssetUploadResp 分类素材上传响应（SVG 图标或位图封面）。
+type CategoryAssetUploadResp struct {
+	// Key 对象 key，保存请求时传回服务端。
+	Key string `json:"key" example:"temp/categories/7/icon/abc123.svg"`
+	// URL 可访问 URL，仅用于前端预览。
+	URL string `json:"url" example:"https://cdn.example.com/temp/categories/7/icon/abc123.svg"`
+	// Size 字节数。
+	Size int64 `json:"size" example:"1234"`
+	// Mime 内容类型。
+	Mime string `json:"mime" example:"image/svg+xml"`
 }

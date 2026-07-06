@@ -71,6 +71,21 @@ func (mr *MockCategoryRepositoryMockRecorder) Create(arg0 any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockCategoryRepository)(nil).Create), arg0)
 }
 
+// CreateWithPrepare mocks base method.
+func (m *MockCategoryRepository) CreateWithPrepare(data category.CategoryCreateData) (*category.CategoryWithCount, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateWithPrepare", data)
+	ret0, _ := ret[0].(*category.CategoryWithCount)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateWithPrepare indicates an expected call of CreateWithPrepare.
+func (mr *MockCategoryRepositoryMockRecorder) CreateWithPrepare(data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateWithPrepare", reflect.TypeOf((*MockCategoryRepository)(nil).CreateWithPrepare), data)
+}
+
 // Delete mocks base method.
 func (m *MockCategoryRepository) Delete(id uint) (*model.Category, error) {
 	m.ctrl.T.Helper()

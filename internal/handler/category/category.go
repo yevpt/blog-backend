@@ -5,9 +5,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/imageupload"
+	"github.com/vpt/blog-backend/internal/handler/multipartlimit"
 	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	categoryservice "github.com/vpt/blog-backend/internal/service/category"
+	uploadservice "github.com/vpt/blog-backend/internal/service/upload"
+	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
+	"github.com/vpt/blog-backend/pkg/svgfile"
 )
 
 // CategoryHandler 分类模块 HTTP 入口。
@@ -38,7 +43,7 @@ func (h *CategoryHandler) ListTabs(c *gin.Context) {
 
 // Create 新增分类。
 // @Summary 新增分类
-// @Description 管理员新增分类；父分类字段仅预留，当前不处理父子层级。
+// @Description 管理员新增分类；icon、description、cover_img_url 均为可选，名称和 seq 必填。
 // @Tags 分类
 // @Accept json
 // @Produce json
@@ -49,17 +54,22 @@ func (h *CategoryHandler) ListTabs(c *gin.Context) {
 // @Failure 500 {object} response.Response "服务器内部错误"
 // @Router /admin/categories [post]
 func (h *CategoryHandler) Create(c *gin.Context) {
+	claims := jwt.GetClaims(c)
+	userID := uint(0)
+	if claims != nil {
+		userID = uint(claims.UserId)
+	}
 	var req dto.CategoryCreateReq
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	resp, err := h.svc.Create(req)
+	resp, err := h.svc.Create(c.Request.Context(), userID, req)
 	writeCategoryResponse(c, resp, err)
 }
 
 // Update 修改分类。
 // @Summary 修改分类
-// @Description 管理员修改分类名称、排序、图标、描述、封面等属性。
+// @Description 管理员修改分类名称、排序、图标、描述、封面等属性；未传字段保持原值，传空字符串表示清空。
 // @Tags 分类
 // @Accept json
 // @Produce json
@@ -76,17 +86,22 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 	if !ok {
 		return
 	}
+	claims := jwt.GetClaims(c)
+	userID := uint(0)
+	if claims != nil {
+		userID = uint(claims.UserId)
+	}
 	var req dto.CategoryUpdateReq
 	if !reqbind.JSON(c, &req) {
 		return
 	}
-	resp, err := h.svc.Update(id, req)
+	resp, err := h.svc.Update(c.Request.Context(), userID, id, req)
 	writeCategoryResponse(c, resp, err)
 }
 
 // Delete 删除分类。
 // @Summary 删除分类
-// @Description 管理员删除分类，并清空该分类下文章关联；文章本身不会被删除。
+// @Description 管理员删除分类，并清空该分类下文章关联；文章本身不会被删除；分类关联素材会被尽力清理。
 // @Tags 分类
 // @Produce json
 // @Param id path int true "分类 ID"
@@ -101,7 +116,7 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	resp, err := h.svc.Delete(id)
+	resp, err := h.svc.Delete(c.Request.Context(), id)
 	writeCategoryResponse(c, resp, err)
 }
 
@@ -159,6 +174,108 @@ func (h *CategoryHandler) RemoveArticles(c *gin.Context) {
 	writeCategoryResponse(c, resp, err)
 }
 
+// UploadIcon 上传分类 SVG 图标。
+// @Summary 上传分类 SVG 图标
+// @Description 管理员上传 SVG 格式分类图标；后端执行 XML 节点/属性白名单校验并重新编码。上传成功返回临时 key，创建/编辑分类时携带该 key 提交。
+// @Tags 分类
+// @Accept multipart/form-data
+// @Produce json
+// @Param file formData file true "SVG 图标文件"
+// @Success 200 {object} response.Response{data=dto.CategoryAssetUploadResp} "统一响应；code=0 表示上传成功"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "权限不足"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /admin/categories/uploads/icon [post]
+func (h *CategoryHandler) UploadIcon(c *gin.Context) {
+	claims := jwt.GetClaims(c)
+	if claims == nil {
+		response.Unauthorized(c)
+		return
+	}
+	userID := uint(claims.UserId)
+
+	// SVG 上限 256KB，multipart body guard
+	if !multipartlimit.Guard(c, multipartlimit.SingleFileMaxBody(svgfile.MaxSVGBytes)) {
+		return
+	}
+	name, data, err := imageupload.ReadSingleImageFile(c, "file", svgfile.MaxSVGBytes, false)
+	if err != nil {
+		if errors.Is(err, multipartlimit.ErrBodyTooLarge) || errors.Is(err, multipartlimit.ErrTooManyFiles) {
+			return // ReadSingleImageFile 已写响应
+		}
+		if name == "" && data == nil {
+			response.Fail(c, response.CodeBadRequest, "请上传 file 字段")
+			return
+		}
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+	if data == nil {
+		response.Fail(c, response.CodeBadRequest, "请上传 file 字段")
+		return
+	}
+
+	resp, svcErr := h.svc.UploadIcon(c.Request.Context(), userID, name, data)
+	if svcErr != nil {
+		if errors.Is(svcErr, categoryservice.ErrCategoryAssetInvalid) {
+			response.Fail(c, response.CodeBadRequest, svcErr.Error())
+			return
+		}
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
+// UploadCover 上传分类封面位图。
+// @Summary 上传分类封面位图
+// @Description 管理员上传封面图片（JPG/PNG/WebP/GIF），复用文章封面同等参数（10MB 读取上限、3MB 存储上限）。上传成功返回临时 key，创建/编辑分类时携带该 key 提交。
+// @Tags 分类
+// @Accept multipart/form-data
+// @Produce json
+// @Param file formData file true "封面图片文件"
+// @Success 200 {object} response.Response{data=dto.CategoryAssetUploadResp} "统一响应；code=0 表示上传成功"
+// @Failure 401 {object} response.Response "未登录或 token 已过期"
+// @Failure 403 {object} response.Response "权限不足"
+// @Failure 500 {object} response.Response "服务器内部错误"
+// @Router /admin/categories/uploads/cover [post]
+func (h *CategoryHandler) UploadCover(c *gin.Context) {
+	claims := jwt.GetClaims(c)
+	if claims == nil {
+		response.Unauthorized(c)
+		return
+	}
+	userID := uint(claims.UserId)
+
+	name, data, err := imageupload.ReadSingleImageFile(c, "file", uploadservice.MaxTempImageBytes, false)
+	if err != nil {
+		if errors.Is(err, multipartlimit.ErrBodyTooLarge) || errors.Is(err, multipartlimit.ErrTooManyFiles) {
+			return
+		}
+		if name == "" && data == nil {
+			response.Fail(c, response.CodeBadRequest, "请上传 file 字段")
+			return
+		}
+		response.Fail(c, response.CodeBadRequest, err.Error())
+		return
+	}
+	if data == nil {
+		response.Fail(c, response.CodeBadRequest, "请上传 file 字段")
+		return
+	}
+
+	resp, svcErr := h.svc.UploadCover(c.Request.Context(), userID, name, data)
+	if svcErr != nil {
+		if errors.Is(svcErr, categoryservice.ErrCategoryAssetInvalid) {
+			response.Fail(c, response.CodeBadRequest, svcErr.Error())
+			return
+		}
+		response.ServerError(c)
+		return
+	}
+	response.Success(c, resp)
+}
+
 func bindCategoryID(c *gin.Context) (uint, bool) {
 	return reqbind.PathUint(c, "id", "分类 ID")
 }
@@ -182,8 +299,8 @@ func writeCategoryResponse(c *gin.Context, data any, err error) {
 func isCategoryBadRequest(err error) bool {
 	return errors.Is(err, categoryservice.ErrCategoryNameRequired) ||
 		errors.Is(err, categoryservice.ErrCategorySeqRequired) ||
-		errors.Is(err, categoryservice.ErrCategoryIconRequired) ||
-		errors.Is(err, categoryservice.ErrCategoryDescRequired) ||
-		errors.Is(err, categoryservice.ErrCategoryCoverRequired) ||
-		errors.Is(err, categoryservice.ErrCategoryArticleRequired)
+		errors.Is(err, categoryservice.ErrCategoryArticleRequired) ||
+		errors.Is(err, categoryservice.ErrCategoryAssetInvalid) ||
+		errors.Is(err, categoryservice.ErrCategoryAssetForbidden) ||
+		errors.Is(err, categoryservice.ErrCategoryAssetNotFound)
 }
