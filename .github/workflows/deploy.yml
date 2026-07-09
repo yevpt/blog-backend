@@ -14,10 +14,11 @@ on:
 permissions:
   contents: read
 
+# 容器仓库配置从 GitHub Repository Variables / Secrets 注入，
+# 避免把云厂商地址、账号和镜像路径写死在 workflow 中。
 env:
-  REGISTRY: krccr.ccs.tencentyun.com
-  REGISTRY_USERNAME: "462703445"
-  IMAGE_NAME: krccr.ccs.tencentyun.com/yevpt/blog-backend
+  REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+  IMAGE_NAME: ${{ vars.CONTAINER_IMAGE }}
 
 jobs:
   test:
@@ -30,6 +31,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # 复用 Dockerfile 的 test stage，保证测试环境与最终镜像构建环境一致。
       - name: Run tests in builder image
         uses: docker/build-push-action@v6
         with:
@@ -55,13 +57,31 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to Tencent Registry
+      # 发布镜像前先检查必需配置，缺失时给出明确错误，避免 Docker 登录阶段才暴露空值。
+      - name: Check image publish config
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$REGISTRY" ] || [ -z "$IMAGE_NAME" ]; then
+            echo "缺少 GitHub Variables：CONTAINER_REGISTRY 或 CONTAINER_IMAGE。"
+            exit 1
+          fi
+          if [ -z "$REGISTRY_USERNAME" ] || [ -z "$REGISTRY_PASSWORD" ]; then
+            echo "缺少 GitHub Secrets：REGISTRY_USERNAME 或 REGISTRY_PASSWORD。"
+            exit 1
+          fi
+
+      # 登录目标镜像仓库；账号和密码仅从 Secrets 读取，不落入仓库文件。
+      - name: Login to Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ env.REGISTRY_USERNAME }}
-          password: ${{ secrets.TENCENT_REGISTRY_PASSWORD }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
 
+      # 同时推送 latest 和 commit SHA；部署阶段固定使用 SHA，避免漂移。
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -95,6 +115,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 写入临时 SSH key 并预置 known_hosts，后续 scp/ssh 全部复用该连接配置。
       - name: Prepare SSH
         run: |
           set -euo pipefail
@@ -105,6 +126,7 @@ jobs:
           REMOTE_PORT="${REMOTE_PORT:-22}"
           ssh-keyscan -p "$REMOTE_PORT" "$REMOTE_HOST" >> ~/.ssh/known_hosts
 
+      # 同步 compose 文件和公开配置；私密环境变量仍保留在服务器 .env 中。
       - name: Sync compose and public config
         run: |
           set -euo pipefail
@@ -117,6 +139,7 @@ jobs:
           scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" "config/config.yaml" "config/$CONFIG_OVERLAY" \
             "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/config/"
 
+      # 远程服务器只负责拉取指定 SHA 镜像并重启服务，避免在服务器上构建。
       - name: Deploy with Docker Compose
         run: |
           set -euo pipefail
@@ -129,8 +152,8 @@ jobs:
              CONTAINER_NAME='$CONTAINER_NAME' \
              DEPLOY_TARGET='$DEPLOY_TARGET' \
              REGISTRY='${{ env.REGISTRY }}' \
-             REGISTRY_USERNAME='${{ env.REGISTRY_USERNAME }}' \
-             REGISTRY_PASSWORD='${{ secrets.TENCENT_REGISTRY_PASSWORD }}' \
+             REGISTRY_USERNAME='${{ secrets.REGISTRY_USERNAME }}' \
+             REGISTRY_PASSWORD='${{ secrets.REGISTRY_PASSWORD }}' \
              bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_DIR"
