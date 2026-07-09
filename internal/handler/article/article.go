@@ -228,7 +228,7 @@ func (h *ArticleHandler) Save(c *gin.Context) {
 	}
 
 	var req dto.ArticleSaveReq
-	if !reqbind.JSON(c, &req) {
+	if !reqbind.JSONWithLimit(c, &req, reqbind.ArticleJSONMaxBytes) {
 		return
 	}
 

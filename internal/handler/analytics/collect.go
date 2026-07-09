@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	dto "github.com/vpt/blog-backend/internal/dto/analytics"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/internal/middleware"
 	svc "github.com/vpt/blog-backend/internal/service/analytics"
 	"github.com/vpt/blog-backend/pkg/jwt"
@@ -36,7 +37,7 @@ func NewCollectHandler(s svc.CollectService, allowedOrigins []string) *CollectHa
 // @Router   /collect [post]
 func (h *CollectHandler) Collect(c *gin.Context) {
 	var req dto.CollectRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if !reqbind.SilentJSON(c, &req) {
 		c.Status(http.StatusNoContent) // 上报失败不回错，避免暴露细节/影响前台
 		return
 	}

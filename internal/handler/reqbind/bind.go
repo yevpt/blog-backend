@@ -1,6 +1,8 @@
 package reqbind
 
 import (
+	"errors"
+	"net/http"
 	"strconv"
 	"strings"
 	"unicode"
@@ -12,16 +14,63 @@ import (
 
 const maxIdempotencyKeyChars = 128
 
+const (
+	// DefaultJSONMaxBytes 是普通 JSON 接口的统一请求体上限。
+	DefaultJSONMaxBytes int64 = 1 << 20
+	// ArticleJSONMaxBytes 是文章保存等长正文接口的请求体上限。
+	ArticleJSONMaxBytes int64 = 4 << 20
+)
+
 // JSON 绑定并校验 JSON 请求体；失败时直接返回可读错误响应。
 func JSON(c *gin.Context, req any) bool {
+	return JSONWithLimit(c, req, DefaultJSONMaxBytes)
+}
+
+// JSONWithLimit 绑定并校验 JSON 请求体，并在解析前限制请求体总大小。
+func JSONWithLimit(c *gin.Context, req any, maxBytes int64) bool {
 	ensureValidatorLabels()
+	if !guardJSONBody(c, maxBytes, true) {
+		return false
+	}
 
 	if err := c.ShouldBindJSON(req); err != nil {
+		if isBodyTooLarge(err) {
+			response.Fail(c, response.CodeBadRequest, "请求体过大")
+			return false
+		}
 		response.Fail(c, response.CodeBadRequest, translateBindingError(err))
 		return false
 	}
 
 	return true
+}
+
+// SilentJSON 绑定 JSON 请求体，失败时不写响应，适用于统计上报等静默接口。
+func SilentJSON(c *gin.Context, req any) bool {
+	ensureValidatorLabels()
+	if !guardJSONBody(c, DefaultJSONMaxBytes, false) {
+		return false
+	}
+	return c.ShouldBindJSON(req) == nil
+}
+
+func guardJSONBody(c *gin.Context, maxBytes int64, writeError bool) bool {
+	if maxBytes <= 0 || c.Request == nil || c.Request.Body == nil {
+		return true
+	}
+	if c.Request.ContentLength > maxBytes {
+		if writeError {
+			response.Fail(c, response.CodeBadRequest, "请求体过大")
+		}
+		return false
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+	return true
+}
+
+func isBodyTooLarge(err error) bool {
+	var maxBytesErr *http.MaxBytesError
+	return errors.As(err, &maxBytesErr)
 }
 
 // Query 绑定并校验 Query/Form 参数；失败时直接返回可读错误响应。

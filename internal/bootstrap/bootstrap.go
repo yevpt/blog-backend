@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -255,13 +254,4 @@ func notificationWorkerID() string {
 func InitGin(cfg *config.Config) *gin.Engine {
 	gin.SetMode(cfg.Server.Mode)
 	return gin.New()
-}
-
-// MustRunHTTP 启动 HTTP 服务，失败时终止进程。
-func MustRunHTTP(r *gin.Engine, cfg *config.Config, zapLogger *zap.Logger) {
-	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	zapLogger.Info(fmt.Sprintf("服务启动，监听 %s (模式: %s)", addr, cfg.Server.Mode))
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("服务启动失败: %v", err)
-	}
 }

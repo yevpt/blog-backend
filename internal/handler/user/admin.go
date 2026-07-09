@@ -108,8 +108,7 @@ func (h *UserAdminHandler) RevokeVip(c *gin.Context) {
 func (h *UserAdminHandler) NormalizeAvatars(c *gin.Context) {
 	var req dto.NormalizeAvatarsReq
 	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.Fail(c, response.CodeBadRequest, "参数错误")
+		if !reqbind.JSON(c, &req) {
 			return
 		}
 	}

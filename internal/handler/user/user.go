@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
+	"github.com/vpt/blog-backend/internal/handler/reqbind"
 	"github.com/vpt/blog-backend/internal/middleware"
 	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/response"
@@ -175,8 +176,7 @@ func (h *UserHandler) ListAll(c *gin.Context) {
 // @Router /users/me [put]
 func (h *UserHandler) Update(c *gin.Context) {
 	var req dto.UserUpdateReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -313,8 +313,7 @@ func (h *UserHandler) CountMoments(c *gin.Context) {
 // @Router /users/me/profile [patch]
 func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	var req dto.UpdateProfileReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -340,8 +339,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 // @Router /users/me/meta [patch]
 func (h *UserHandler) UpdateMeta(c *gin.Context) {
 	var req dto.UpdateMetaReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -373,8 +371,7 @@ func (h *UserHandler) UpdateSocialLink(c *gin.Context) {
 		return
 	}
 	var req dto.UpdateSocialLinkReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -400,8 +397,7 @@ func (h *UserHandler) UpdateSocialLink(c *gin.Context) {
 // @Router /users/me/username [patch]
 func (h *UserHandler) UpdateUsername(c *gin.Context) {
 	var req dto.UpdateUsernameReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -430,8 +426,7 @@ func (h *UserHandler) UpdateUsername(c *gin.Context) {
 // @Router /users/me/password [patch]
 func (h *UserHandler) UpdatePassword(c *gin.Context) {
 	var req dto.UpdatePasswordReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -462,8 +457,7 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 // @Router /users/me/password/initial [patch]
 func (h *UserHandler) SetInitialPassword(c *gin.Context) {
 	var req dto.SetInitialPasswordReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -491,8 +485,7 @@ func (h *UserHandler) SetInitialPassword(c *gin.Context) {
 // @Router /users/me/email/code [post]
 func (h *UserHandler) SendEmailCode(c *gin.Context) {
 	var req dto.SendAccountEmailCodeReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -519,8 +512,7 @@ func (h *UserHandler) SendEmailCode(c *gin.Context) {
 // @Router /users/me/email [patch]
 func (h *UserHandler) UpdateEmail(c *gin.Context) {
 	var req dto.UpdateEmailReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
@@ -545,8 +537,7 @@ func (h *UserHandler) UpdateEmail(c *gin.Context) {
 // @Router /users/me/email/display [patch]
 func (h *UserHandler) UpdateEmailDisplay(c *gin.Context) {
 	var req dto.EmailDisplayReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Fail(c, response.CodeBadRequest, "参数错误")
+	if !reqbind.JSON(c, &req) {
 		return
 	}
 	detail := middleware.GetUserDetail(c)
