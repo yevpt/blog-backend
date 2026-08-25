@@ -3,6 +3,8 @@ package user_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +88,20 @@ func newTestRedis(t *testing.T) *redis.Client {
 	return redis.NewClient(&redis.Options{Addr: mr.Addr()})
 }
 
+type rotatingAvatarResolver struct {
+	objectURLCalls int
+}
+
+func (r *rotatingAvatarResolver) ObjectURL(_ context.Context, objectName string) (string, error) {
+	r.objectURLCalls++
+	return fmt.Sprintf("https://cdn.example.com/blog/%s?signature=%d", objectName, r.objectURLCalls), nil
+}
+
+func (r *rotatingAvatarResolver) ObjectKey(value string) (string, error) {
+	withoutQuery := strings.SplitN(value, "?", 2)[0]
+	return strings.TrimPrefix(withoutQuery, "https://cdn.example.com/blog/"), nil
+}
+
 func TestUserCacheService_Get_CacheMiss_ThenHit(t *testing.T) {
 	rdb := newTestRedis(t)
 	ctx := context.Background()
@@ -115,6 +131,58 @@ func TestUserCacheService_Get_CacheMiss_ThenHit(t *testing.T) {
 	profile2, err := svc.Get(ctx, 1)
 	require.NoError(t, err)
 	assert.Equal(t, "alice", profile2.Username)
+}
+
+func TestUserCacheService_Get_CacheHitRefreshesManagedAvatarURL(t *testing.T) {
+	rdb := newTestRedis(t)
+	ctx := context.Background()
+	avatarKey := "avatar/user/alice.jpg"
+	stub := &stubUserRepo{
+		aggregate: &userrepo.UserDetailAggregate{
+			User:  model.User{Base: model.Base{ID: 1}, Username: "alice", AvatarUrl: &avatarKey, Status: 1},
+			Roles: []string{"ROLE_NORMAL"},
+		},
+	}
+	resolver := &rotatingAvatarResolver{}
+	svc := user.NewUserCacheService(stub, resolver, rdb)
+
+	first, err := svc.Get(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, first.AvatarUrl)
+	assert.Equal(t, "https://cdn.example.com/blog/avatar/user/alice.jpg?signature=1", *first.AvatarUrl)
+
+	cached, err := rdb.Get(ctx, "user:profile:1").Result()
+	require.NoError(t, err)
+	var cachedProfile dto.UserDetailResp
+	require.NoError(t, json.Unmarshal([]byte(cached), &cachedProfile))
+	require.NotNil(t, cachedProfile.AvatarUrl)
+	assert.Equal(t, avatarKey, *cachedProfile.AvatarUrl)
+
+	// 第二次命中用户缓存时不查 DB，但会为头像生成本次请求有效的新签名。
+	stub.aggregate = nil
+	second, err := svc.Get(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, second.AvatarUrl)
+	assert.Equal(t, "https://cdn.example.com/blog/avatar/user/alice.jpg?signature=2", *second.AvatarUrl)
+	assert.Equal(t, 2, resolver.objectURLCalls)
+}
+
+func TestUserCacheService_Get_RefreshesLegacySignedAvatarURL(t *testing.T) {
+	rdb := newTestRedis(t)
+	ctx := context.Background()
+	staleURL := "https://cdn.example.com/blog/avatar/user/alice.jpg?signature=expired"
+	legacyProfile := &dto.UserDetailResp{ID: 1, Username: "alice", AvatarUrl: &staleURL}
+	cached, err := json.Marshal(legacyProfile)
+	require.NoError(t, err)
+	require.NoError(t, rdb.Set(ctx, "user:profile:1", cached, 7*24*time.Hour).Err())
+
+	resolver := &rotatingAvatarResolver{}
+	svc := user.NewUserCacheService(&stubUserRepo{}, resolver, rdb)
+
+	profile, err := svc.Get(ctx, 1)
+	require.NoError(t, err)
+	require.NotNil(t, profile.AvatarUrl)
+	assert.Equal(t, "https://cdn.example.com/blog/avatar/user/alice.jpg?signature=1", *profile.AvatarUrl)
 }
 
 func TestUserCacheService_Get_UserNotFound(t *testing.T) {

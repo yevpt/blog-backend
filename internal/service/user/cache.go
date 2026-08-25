@@ -54,6 +54,8 @@ func (s *userCacheService) Get(ctx context.Context, userId int64) (*dto.UserDeta
 	if err == nil {
 		var profile dto.UserDetailResp
 		if jsonErr := json.Unmarshal([]byte(val), &profile); jsonErr == nil {
+			// 缓存只保存对象 key；每次读取时重新生成头像访问地址，避免 CDN 签名过期。
+			profile.AvatarUrl = refreshCachedAvatarURL(s.resolver, profile.AvatarUrl)
 			return &profile, nil
 		}
 		// JSON 损坏，删掉强制重建（Del 失败时忽略，下次读取会再次尝试重建）
@@ -76,11 +78,38 @@ func (s *userCacheService) Get(ctx context.Context, userId int64) (*dto.UserDeta
 }
 
 func (s *userCacheService) Set(ctx context.Context, userId int64, profile *dto.UserDetailResp) error {
-	data, err := json.Marshal(profile)
+	// 不把带时效签名的 URL 写入长期滑动缓存，防止缓存命中后持续返回失效地址。
+	cachedProfile := *profile
+	cachedProfile.AvatarUrl = cachedAvatarValue(s.resolver, profile.AvatarUrl)
+
+	data, err := json.Marshal(&cachedProfile)
 	if err != nil {
 		return err
 	}
 	return s.rdb.Set(ctx, userCacheKey(userId), string(data), userCacheTTL).Err()
+}
+
+// refreshCachedAvatarURL 将缓存中的本站对象 key（兼容历史签名 URL）转为本次请求可用的访问地址。
+func refreshCachedAvatarURL(resolver storage.ObjectURLResolver, avatarURL *string) *string {
+	return resolveUserAvatarURL(resolver, cachedAvatarValue(resolver, avatarURL))
+}
+
+// cachedAvatarValue 将本站托管头像归一为对象 key；外部头像地址保持不变。
+func cachedAvatarValue(resolver storage.ObjectURLResolver, avatarURL *string) *string {
+	if avatarURL == nil {
+		return nil
+	}
+
+	keyResolver, ok := resolver.(storage.ObjectKeyResolver)
+	if !ok {
+		return avatarURL
+	}
+
+	objectKey, err := keyResolver.ObjectKey(*avatarURL)
+	if err != nil {
+		return avatarURL
+	}
+	return &objectKey
 }
 
 func (s *userCacheService) Invalidate(ctx context.Context, userId int64) error {
