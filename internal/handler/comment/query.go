@@ -108,7 +108,7 @@ func (h *CommentHandler) listTargetComments(c *gin.Context, targetType string, p
 		return
 	}
 
-	resp, err := h.svc.List(targetType, targetID, req, optionalCommentUser(c))
+	resp, err := h.svc.List(c.Request.Context(), targetType, targetID, req, optionalCommentUser(c))
 	writeCommentResponse(c, resp, err)
 }
 
@@ -123,6 +123,6 @@ func (h *CommentHandler) listTargetReplies(c *gin.Context, targetType string, pa
 		return
 	}
 
-	resp, err := h.svc.ListReplies(targetType, commentID, req, optionalCommentUser(c))
+	resp, err := h.svc.ListReplies(c.Request.Context(), targetType, commentID, req, optionalCommentUser(c))
 	writeCommentResponse(c, resp, err)
 }

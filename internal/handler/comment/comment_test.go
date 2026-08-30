@@ -2,6 +2,7 @@ package comment_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 )
 
 type stubCommentService struct {
+	ctx                   context.Context
 	listTargetType        string
 	listTargetID          uint
 	listReq               dto.CommentListReq
@@ -59,7 +61,8 @@ type stubCommentService struct {
 	listAdminErr          error
 }
 
-func (s *stubCommentService) List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error) {
+func (s *stubCommentService) List(ctx context.Context, targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error) {
+	s.ctx = ctx
 	s.listTargetType = targetType
 	s.listTargetID = targetID
 	s.listReq = req
@@ -67,12 +70,12 @@ func (s *stubCommentService) List(targetType string, targetID uint, req dto.Comm
 	return s.listResp, s.listErr
 }
 
-func (s *stubCommentService) ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error) {
+func (s *stubCommentService) ListAdmin(_ context.Context, req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error) {
 	s.listAdminReq = req
 	return s.listAdminResp, s.listAdminErr
 }
 
-func (s *stubCommentService) Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
+func (s *stubCommentService) Create(_ context.Context, targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error) {
 	s.createTargetType = targetType
 	s.createTargetID = targetID
 	s.createReq = req
@@ -80,14 +83,14 @@ func (s *stubCommentService) Create(targetType string, targetID uint, req dto.Co
 	return s.createResp, s.createErr
 }
 
-func (s *stubCommentService) EditComment(_ string, id uint, req dto.CommentCreateReq, userID uint, _ []string) (*dto.CommentItemResp, error) {
+func (s *stubCommentService) EditComment(_ context.Context, _ string, id uint, req dto.CommentCreateReq, userID uint, _ []string) (*dto.CommentItemResp, error) {
 	s.editCommentID = id
 	s.editCommentReq = req
 	s.editCommentUserID = userID
 	return &dto.CommentItemResp{ID: id}, nil
 }
 
-func (s *stubCommentService) ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error) {
+func (s *stubCommentService) ListReplies(_ context.Context, targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error) {
 	s.listRepliesTargetType = targetType
 	s.listRepliesCommentID = commentID
 	s.listRepliesReq = req
@@ -95,7 +98,7 @@ func (s *stubCommentService) ListReplies(targetType string, commentID uint, req 
 	return s.listRepliesResp, s.listRepliesErr
 }
 
-func (s *stubCommentService) Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
+func (s *stubCommentService) Reply(_ context.Context, targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error) {
 	s.replyTargetType = targetType
 	s.replyCommentID = commentID
 	s.replyReq = req
@@ -103,26 +106,26 @@ func (s *stubCommentService) Reply(targetType string, commentID uint, req dto.Co
 	return s.replyResp, s.replyErr
 }
 
-func (s *stubCommentService) EditReply(string, uint, dto.CommentReplyCreateReq, uint, []string) (*dto.CommentReplyResp, error) {
+func (s *stubCommentService) EditReply(context.Context, string, uint, dto.CommentReplyCreateReq, uint, []string) (*dto.CommentReplyResp, error) {
 	return nil, nil
 }
 
-func (s *stubCommentService) ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error) {
+func (s *stubCommentService) ToggleLike(_ context.Context, targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error) {
 	s.toggleLikeTargetType = targetType
 	s.toggleLikeCommentID = commentID
 	s.toggleLikeUserID = userID
 	return s.toggleLikeResp, s.toggleLikeErr
 }
 
-func (s *stubCommentService) ToggleReplyLike(targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error) {
+func (s *stubCommentService) ToggleReplyLike(_ context.Context, targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error) {
 	return &dto.CommentLikeResp{IsLiked: true, LikeCount: 1}, nil
 }
 
-func (s *stubCommentService) DeleteComment(targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
+func (s *stubCommentService) DeleteComment(_ context.Context, targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
 	return &dto.CommentDeleteResp{ID: commentID}, nil
 }
 
-func (s *stubCommentService) DeleteReply(targetType string, replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
+func (s *stubCommentService) DeleteReply(_ context.Context, targetType string, replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error) {
 	return &dto.CommentDeleteResp{ID: replyID}, nil
 }
 
@@ -177,6 +180,7 @@ func TestCommentHandler_ListArticle_UsesPathTargetAndOptionalViewer(t *testing.T
 	assert.Equal(t, uint(3), stub.listTargetID)
 	assert.Equal(t, 2, stub.listReq.Page)
 	assert.Equal(t, 5, stub.listReq.PageSize)
+	assert.Equal(t, req.Context(), stub.ctx)
 	require.NotNil(t, stub.listViewerID)
 	assert.Equal(t, uint(9), *stub.listViewerID)
 }

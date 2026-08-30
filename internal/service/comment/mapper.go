@@ -12,7 +12,7 @@ import (
 	"github.com/vpt/blog-backend/pkg/storage"
 )
 
-func commentPageToDTO(result *commentrepo.PageResult, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentPageResp {
+func commentPageToDTO(ctx context.Context, result *commentrepo.PageResult, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentPageResp {
 	pages := 0
 	if result.PageSize > 0 {
 		pages = int((result.Total + int64(result.PageSize) - 1) / int64(result.PageSize))
@@ -20,7 +20,7 @@ func commentPageToDTO(result *commentrepo.PageResult, commentType uint8, resolve
 
 	items := make([]dto.CommentItemResp, 0, len(result.Comments))
 	for _, aggregate := range result.Comments {
-		items = append(items, *commentToDTO(aggregate, commentType, resolver, rolesMap, views))
+		items = append(items, *commentToDTO(ctx, aggregate, commentType, resolver, rolesMap, views))
 	}
 	return &dto.CommentPageResp{
 		Total:    result.Total,
@@ -31,7 +31,7 @@ func commentPageToDTO(result *commentrepo.PageResult, commentType uint8, resolve
 	}
 }
 
-func adminCommentPageToDTO(result *commentrepo.AdminPageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.AdminCommentPageResp {
+func adminCommentPageToDTO(ctx context.Context, result *commentrepo.AdminPageResult, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.AdminCommentPageResp {
 	pages := 0
 	if result.PageSize > 0 {
 		pages = int((result.Total + int64(result.PageSize) - 1) / int64(result.PageSize))
@@ -44,14 +44,14 @@ func adminCommentPageToDTO(result *commentrepo.AdminPageResult, resolver storage
 			TargetType: targetTypeName(aggregate.TargetType),
 			TargetID:   aggregate.Comment.TargetID,
 			UserID:     aggregate.Comment.UserID,
-			Content:    commentasset.ResolveContent(context.Background(), resolver, aggregate.Comment.Content),
-			User:       userToDTO(aggregate.User, resolver, rolesMap),
+			Content:    commentasset.ResolveContent(ctx, resolver, aggregate.Comment.Content),
+			User:       userToDTO(ctx, aggregate.User, resolver, rolesMap),
 			ReplyCount: aggregate.ReplyCount,
 			LikeCount:  aggregate.LikeCount,
 			CreatedAt:  aggregate.Comment.CreatedAt,
 			UpdatedAt:  aggregate.Comment.UpdatedAt,
 		}
-		applyCommentModeration(&item, commentSubjectType(aggregate.TargetType), aggregate.Comment.ID, resolver, views)
+		applyCommentModeration(ctx, &item, commentSubjectType(aggregate.TargetType), aggregate.Comment.ID, resolver, views)
 		items = append(items, item)
 	}
 	return &dto.AdminCommentPageResp{
@@ -63,25 +63,25 @@ func adminCommentPageToDTO(result *commentrepo.AdminPageResult, resolver storage
 	}
 }
 
-func commentToDTO(aggregate commentrepo.CommentAggregate, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentItemResp {
+func commentToDTO(ctx context.Context, aggregate commentrepo.CommentAggregate, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentItemResp {
 	result := &dto.CommentItemResp{
 		ID:         aggregate.Comment.ID,
 		TargetType: targetTypeName(commentType),
 		TargetID:   aggregate.Comment.TargetID,
 		UserID:     aggregate.Comment.UserID,
-		Content:    commentasset.ResolveContent(context.Background(), resolver, aggregate.Comment.Content),
-		User:       userToDTO(aggregate.User, resolver, rolesMap),
+		Content:    commentasset.ResolveContent(ctx, resolver, aggregate.Comment.Content),
+		User:       userToDTO(ctx, aggregate.User, resolver, rolesMap),
 		ReplyCount: aggregate.ReplyCount,
 		LikeCount:  aggregate.LikeCount,
 		IsLiked:    aggregate.IsLiked,
 		CreatedAt:  aggregate.Comment.CreatedAt,
 		UpdatedAt:  aggregate.Comment.UpdatedAt,
 	}
-	applyCommentModeration(result, commentSubjectType(commentType), aggregate.Comment.ID, resolver, views)
+	applyCommentModeration(ctx, result, commentSubjectType(commentType), aggregate.Comment.ID, resolver, views)
 	return result
 }
 
-func replyToDTO(aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentReplyResp {
+func replyToDTO(ctx context.Context, aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentReplyResp {
 	reply := aggregate.Reply
 	result := &dto.CommentReplyResp{
 		ID:            reply.ID,
@@ -90,9 +90,9 @@ func replyToDTO(aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURL
 		FromUserID:    reply.FromUserID,
 		ToUserID:      reply.ToUserID,
 		ParentReplyID: reply.ParentReplyID,
-		Content:       commentasset.ResolveContent(context.Background(), resolver, reply.Content),
-		FromUser:      userToDTO(aggregate.FromUser, resolver, rolesMap),
-		ToUser:        userToDTO(aggregate.ToUser, resolver, rolesMap),
+		Content:       commentasset.ResolveContent(ctx, resolver, reply.Content),
+		FromUser:      userToDTO(ctx, aggregate.FromUser, resolver, rolesMap),
+		ToUser:        userToDTO(ctx, aggregate.ToUser, resolver, rolesMap),
 		LikeCount:     aggregate.LikeCount,
 		IsLiked:       aggregate.IsLiked,
 		CreatedAt:     reply.CreatedAt,
@@ -101,7 +101,7 @@ func replyToDTO(aggregate commentrepo.ReplyAggregate, resolver storage.ObjectURL
 	return result
 }
 
-func replyPageToDTO(result *commentrepo.ReplyPageResult, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentReplyPageResp {
+func replyPageToDTO(ctx context.Context, result *commentrepo.ReplyPageResult, commentType uint8, resolver storage.ObjectURLResolver, rolesMap map[uint][]string, views map[moderationservice.SubjectKey]moderationservice.View) *dto.CommentReplyPageResp {
 	pages := 0
 	if result.PageSize > 0 {
 		pages = int((result.Total + int64(result.PageSize) - 1) / int64(result.PageSize))
@@ -109,9 +109,9 @@ func replyPageToDTO(result *commentrepo.ReplyPageResult, commentType uint8, reso
 
 	items := make([]dto.CommentReplyResp, 0, len(result.Replies))
 	for _, aggregate := range result.Replies {
-		item := replyToDTO(aggregate, resolver, rolesMap, views)
+		item := replyToDTO(ctx, aggregate, resolver, rolesMap, views)
 		item.TargetType = targetTypeName(commentType)
-		applyReplyModeration(item, views, resolver)
+		applyReplyModeration(ctx, item, views, resolver)
 		items = append(items, *item)
 	}
 	return &dto.CommentReplyPageResp{
@@ -123,28 +123,28 @@ func replyPageToDTO(result *commentrepo.ReplyPageResult, commentType uint8, reso
 	}
 }
 
-func applyCommentModeration(result *dto.CommentItemResp, subjectType moderationservice.SubjectType, id uint, resolver storage.ObjectURLResolver, views map[moderationservice.SubjectKey]moderationservice.View) {
+func applyCommentModeration(ctx context.Context, result *dto.CommentItemResp, subjectType moderationservice.SubjectType, id uint, resolver storage.ObjectURLResolver, views map[moderationservice.SubjectKey]moderationservice.View) {
 	view, ok := views[moderationservice.SubjectKey{ContentType: subjectType, ContentID: uint64(id)}]
 	if !ok {
 		return
 	}
 	content, projected := moderationservice.ProjectView(view)
-	result.Content = commentasset.ResolveContent(context.Background(), resolver, content)
+	result.Content = commentasset.ResolveContent(ctx, resolver, content)
 	result.Moderation = projected
 }
 
-func applyReplyModeration(result *dto.CommentReplyResp, views map[moderationservice.SubjectKey]moderationservice.View, resolver storage.ObjectURLResolver) {
+func applyReplyModeration(ctx context.Context, result *dto.CommentReplyResp, views map[moderationservice.SubjectKey]moderationservice.View, resolver storage.ObjectURLResolver) {
 	subjectType := replySubjectTypeName(result.TargetType)
 	view, ok := views[moderationservice.SubjectKey{ContentType: subjectType, ContentID: uint64(result.ID)}]
 	if !ok {
 		return
 	}
 	content, projected := moderationservice.ProjectView(view)
-	result.Content = commentasset.ResolveContent(context.Background(), resolver, content)
+	result.Content = commentasset.ResolveContent(ctx, resolver, content)
 	result.Moderation = projected
 }
 
-func userToDTO(user *model.User, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.CommentUserResp {
+func userToDTO(ctx context.Context, user *model.User, resolver storage.ObjectURLResolver, rolesMap map[uint][]string) *dto.CommentUserResp {
 	if user == nil {
 		return nil
 	}
@@ -152,7 +152,7 @@ func userToDTO(user *model.User, resolver storage.ObjectURLResolver, rolesMap ma
 		ID:        user.ID,
 		Username:  user.Username,
 		Nickname:  user.Nickname,
-		AvatarUrl: storage.ResolvePtrURL(resolver, user.AvatarUrl),
+		AvatarUrl: storage.ResolvePtrURLContext(ctx, resolver, user.AvatarUrl),
 		Site:      user.Site,
 		Mark:      user.Mark,
 		Roles:     userrole.ForUser(rolesMap, user.ID),

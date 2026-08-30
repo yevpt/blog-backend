@@ -1,7 +1,9 @@
 package comment_test
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,6 +14,22 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
+
+func TestCommentRepositoryWithContextHonorsCancellation(t *testing.T) {
+	db, mock, sqlDB := newCommentMockDB(t)
+	defer sqlDB.Close()
+	repo := commentrepo.NewCommentRepository(db)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	result, err := repo.WithContext(ctx).List(commentrepo.Target{Type: commentrepo.TargetArticle, ID: 1}, nil, 1, 10)
+
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, context.Canceled))
+	assert.Nil(t, result)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
 
 func newCommentMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock, *sql.DB) {
 	t.Helper()

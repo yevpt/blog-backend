@@ -49,7 +49,7 @@ func replySubjectTypeName(targetType string) moderationservice.SubjectType {
 	}
 }
 
-func (s *commentService) loadCommentViews(result *commentrepo.PageResult, targetType uint8, targetID uint, viewer moderationservice.Viewer) (map[moderationservice.SubjectKey]moderationservice.View, error) {
+func (s *commentService) loadCommentViews(ctx context.Context, result *commentrepo.PageResult, targetType uint8, targetID uint, viewer moderationservice.Viewer) (map[moderationservice.SubjectKey]moderationservice.View, error) {
 	if s.moderation == nil || result == nil {
 		return nil, nil
 	}
@@ -59,10 +59,10 @@ func (s *commentService) loadCommentViews(result *commentrepo.PageResult, target
 			Type: commentSubjectType(targetType), ID: uint64(aggregate.Comment.ID), RootID: uint64(targetID),
 		})
 	}
-	return s.moderation.LoadViews(context.Background(), refs, viewer)
+	return s.moderation.LoadViews(ctx, refs, viewer)
 }
 
-func (s *commentService) loadAdminCommentViews(result *commentrepo.AdminPageResult) (map[moderationservice.SubjectKey]moderationservice.View, error) {
+func (s *commentService) loadAdminCommentViews(ctx context.Context, result *commentrepo.AdminPageResult) (map[moderationservice.SubjectKey]moderationservice.View, error) {
 	if s.moderation == nil || result == nil {
 		return nil, nil
 	}
@@ -73,10 +73,10 @@ func (s *commentService) loadAdminCommentViews(result *commentrepo.AdminPageResu
 			RootID: uint64(aggregate.Comment.TargetID),
 		})
 	}
-	return s.moderation.LoadViews(context.Background(), refs, moderationViewer(nil, true))
+	return s.moderation.LoadViews(ctx, refs, moderationViewer(nil, true))
 }
 
-func (s *commentService) loadReplyViews(result *commentrepo.ReplyPageResult, targetType uint8, commentID uint, viewer moderationservice.Viewer) (map[moderationservice.SubjectKey]moderationservice.View, error) {
+func (s *commentService) loadReplyViews(ctx context.Context, result *commentrepo.ReplyPageResult, targetType uint8, commentID uint, viewer moderationservice.Viewer) (map[moderationservice.SubjectKey]moderationservice.View, error) {
 	if s.moderation == nil || result == nil {
 		return nil, nil
 	}
@@ -88,5 +88,5 @@ func (s *commentService) loadReplyViews(result *commentrepo.ReplyPageResult, tar
 			RootID: uint64(commentID), ParentID: &parentID,
 		})
 	}
-	return s.moderation.LoadViews(context.Background(), refs, viewer)
+	return s.moderation.LoadViews(ctx, refs, viewer)
 }

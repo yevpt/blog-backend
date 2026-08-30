@@ -10,9 +10,9 @@ import (
 	"github.com/vpt/blog-backend/pkg/roles"
 )
 
-func (s *commentService) submitComment(target commentrepo.Target, targetID, userID uint, content, idempotencyKey string) (*dto.CommentItemResp, error) {
+func (s *commentService) submitComment(ctx context.Context, target commentrepo.Target, targetID, userID uint, content, idempotencyKey string) (*dto.CommentItemResp, error) {
 	imageKeys := moderationImageSignal(content)
-	result, err := s.moderation.Submit(context.Background(), moderationservice.SubmitCommand{
+	result, err := s.moderation.Submit(ctx, moderationservice.SubmitCommand{
 		ActorID: uint64(userID),
 		Subject: moderationservice.SubjectRef{Type: commentSubjectType(target.Type), RootID: uint64(targetID)},
 		Content: content, ImageKeys: imageKeys, IdempotencyKey: idempotencyKey,
@@ -27,7 +27,7 @@ func (s *commentService) submitComment(target commentrepo.Target, targetID, user
 	}, nil
 }
 
-func (s *commentService) EditComment(targetType string, commentID uint, req dto.CommentCreateReq, userID uint, roleNames []string) (*dto.CommentItemResp, error) {
+func (s *commentService) EditComment(ctx context.Context, targetType string, commentID uint, req dto.CommentCreateReq, userID uint, roleNames []string) (*dto.CommentItemResp, error) {
 	if s.moderation == nil {
 		return nil, moderationservice.ErrWriteDisabled
 	}
@@ -39,7 +39,7 @@ func (s *commentService) EditComment(targetType string, commentID uint, req dto.
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.moderation.Edit(context.Background(), moderationservice.EditCommand{
+	result, err := s.moderation.Edit(ctx, moderationservice.EditCommand{
 		ActorID: uint64(userID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
 		Subject: moderationservice.SubjectRef{Type: commentSubjectType(commentType), ID: uint64(commentID)},
 		Content: content, ImageKeys: moderationImageSignal(content), IdempotencyKey: req.IdempotencyKey,
@@ -54,10 +54,10 @@ func (s *commentService) EditComment(targetType string, commentID uint, req dto.
 	}, nil
 }
 
-func (s *commentService) submitReply(targetType uint8, commentID, userID uint, req dto.CommentReplyCreateReq, content string) (*dto.CommentReplyResp, error) {
+func (s *commentService) submitReply(ctx context.Context, targetType uint8, commentID, userID uint, req dto.CommentReplyCreateReq, content string) (*dto.CommentReplyResp, error) {
 	parentID := uint64(req.ParentReplyID)
 	imageKeys := moderationImageSignal(content)
-	result, err := s.moderation.Submit(context.Background(), moderationservice.SubmitCommand{
+	result, err := s.moderation.Submit(ctx, moderationservice.SubmitCommand{
 		ActorID: uint64(userID),
 		Subject: moderationservice.SubjectRef{Type: replySubjectType(targetType), RootID: uint64(commentID), ParentID: &parentID},
 		Content: content, ImageKeys: imageKeys, IdempotencyKey: req.IdempotencyKey,
@@ -72,7 +72,7 @@ func (s *commentService) submitReply(targetType uint8, commentID, userID uint, r
 	}, nil
 }
 
-func (s *commentService) EditReply(targetType string, replyID uint, req dto.CommentReplyCreateReq, userID uint, roleNames []string) (*dto.CommentReplyResp, error) {
+func (s *commentService) EditReply(ctx context.Context, targetType string, replyID uint, req dto.CommentReplyCreateReq, userID uint, roleNames []string) (*dto.CommentReplyResp, error) {
 	if s.moderation == nil {
 		return nil, moderationservice.ErrWriteDisabled
 	}
@@ -84,7 +84,7 @@ func (s *commentService) EditReply(targetType string, replyID uint, req dto.Comm
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.moderation.Edit(context.Background(), moderationservice.EditCommand{
+	result, err := s.moderation.Edit(ctx, moderationservice.EditCommand{
 		ActorID: uint64(userID), IsAdmin: roles.HasPermission(roleNames, roles.AdminRole),
 		Subject: moderationservice.SubjectRef{Type: replySubjectType(commentType), ID: uint64(replyID)},
 		Content: content, ImageKeys: moderationImageSignal(content), IdempotencyKey: req.IdempotencyKey,

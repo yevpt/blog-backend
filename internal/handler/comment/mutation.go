@@ -390,7 +390,7 @@ func (h *CommentHandler) createTargetComment(c *gin.Context, targetType string, 
 	}
 	req.IdempotencyKey = key
 
-	resp, err := h.svc.Create(targetType, targetID, req, userID)
+	resp, err := h.svc.Create(c.Request.Context(), targetType, targetID, req, userID)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -412,7 +412,7 @@ func (h *CommentHandler) editTargetComment(c *gin.Context, targetType string, pa
 		return
 	}
 	req.IdempotencyKey = key
-	resp, err := h.svc.EditComment(targetType, id, req, userID, roleNames)
+	resp, err := h.svc.EditComment(c.Request.Context(), targetType, id, req, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -436,7 +436,7 @@ func (h *CommentHandler) replyTargetComment(c *gin.Context, targetType string, p
 	}
 	req.IdempotencyKey = key
 
-	resp, err := h.svc.Reply(targetType, commentID, req, userID)
+	resp, err := h.svc.Reply(c.Request.Context(), targetType, commentID, req, userID)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -458,7 +458,7 @@ func (h *CommentHandler) editTargetReply(c *gin.Context, targetType string, para
 		return
 	}
 	req.IdempotencyKey = key
-	resp, err := h.svc.EditReply(targetType, id, req, userID, roleNames)
+	resp, err := h.svc.EditReply(c.Request.Context(), targetType, id, req, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -472,7 +472,7 @@ func (h *CommentHandler) toggleTargetCommentLike(c *gin.Context, targetType stri
 		return
 	}
 
-	resp, err := h.svc.ToggleLike(targetType, commentID, userID)
+	resp, err := h.svc.ToggleLike(c.Request.Context(), targetType, commentID, userID)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -486,7 +486,7 @@ func (h *CommentHandler) toggleTargetReplyLike(c *gin.Context, targetType string
 		return
 	}
 
-	resp, err := h.svc.ToggleReplyLike(targetType, replyID, userID)
+	resp, err := h.svc.ToggleReplyLike(c.Request.Context(), targetType, replyID, userID)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -500,7 +500,7 @@ func (h *CommentHandler) deleteTargetComment(c *gin.Context, targetType string, 
 		return
 	}
 
-	resp, err := h.svc.DeleteComment(targetType, commentID, userID, roleNames)
+	resp, err := h.svc.DeleteComment(c.Request.Context(), targetType, commentID, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }
 
@@ -514,6 +514,6 @@ func (h *CommentHandler) deleteTargetReply(c *gin.Context, targetType string, pa
 		return
 	}
 
-	resp, err := h.svc.DeleteReply(targetType, replyID, userID, roleNames)
+	resp, err := h.svc.DeleteReply(c.Request.Context(), targetType, replyID, userID, roleNames)
 	writeCommentResponse(c, resp, err)
 }

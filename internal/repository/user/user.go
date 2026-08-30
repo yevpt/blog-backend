@@ -315,6 +315,11 @@ func (r *userRepo) FindRolesByUserID(userID uint) ([]string, error) {
 }
 
 func (r *userRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error) {
+	return r.FindRolesByUserIDsContext(context.Background(), userIDs)
+}
+
+// FindRolesByUserIDsContext 使用调用方 context 批量查询用户角色。
+func (r *userRepo) FindRolesByUserIDsContext(ctx context.Context, userIDs []uint) (map[uint][]string, error) {
 	if len(userIDs) == 0 {
 		return make(map[uint][]string), nil
 	}
@@ -325,7 +330,7 @@ func (r *userRepo) FindRolesByUserIDs(userIDs []uint) (map[uint][]string, error)
 	}
 	var results []userRoleResult
 
-	err := r.db.Model(&model.UserRole{}).
+	err := r.db.WithContext(ctx).Model(&model.UserRole{}).
 		Select("user_role.user_id, role.name").
 		Joins("JOIN role ON role.id = user_role.role_id").
 		Where("user_role.user_id IN ?", userIDs).

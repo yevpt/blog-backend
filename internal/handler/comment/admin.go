@@ -29,6 +29,6 @@ func (h *CommentHandler) ListAdmin(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.ListAdmin(req)
+	resp, err := h.svc.ListAdmin(c.Request.Context(), req)
 	writeCommentResponse(c, resp, err)
 }

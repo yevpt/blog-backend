@@ -1,6 +1,7 @@
 package comment
 
 import (
+	"context"
 	"errors"
 
 	"github.com/vpt/blog-backend/internal/dto"
@@ -32,17 +33,17 @@ var (
 
 // CommentService 评论业务接口，负责评论、回复的查询、创建和删除。
 type CommentService interface {
-	List(targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error)
-	ListAdmin(req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error)
-	Create(targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error)
-	EditComment(targetType string, commentID uint, req dto.CommentCreateReq, userID uint, roleNames []string) (*dto.CommentItemResp, error)
-	ListReplies(targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error)
-	Reply(targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error)
-	EditReply(targetType string, replyID uint, req dto.CommentReplyCreateReq, userID uint, roleNames []string) (*dto.CommentReplyResp, error)
-	ToggleLike(targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error)
-	ToggleReplyLike(targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error)
-	DeleteComment(targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
-	DeleteReply(targetType string, replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
+	List(ctx context.Context, targetType string, targetID uint, req dto.CommentListReq, viewerID *uint) (*dto.CommentPageResp, error)
+	ListAdmin(ctx context.Context, req dto.AdminCommentListReq) (*dto.AdminCommentPageResp, error)
+	Create(ctx context.Context, targetType string, targetID uint, req dto.CommentCreateReq, userID uint) (*dto.CommentItemResp, error)
+	EditComment(ctx context.Context, targetType string, commentID uint, req dto.CommentCreateReq, userID uint, roleNames []string) (*dto.CommentItemResp, error)
+	ListReplies(ctx context.Context, targetType string, commentID uint, req dto.CommentReplyListReq, viewerID *uint) (*dto.CommentReplyPageResp, error)
+	Reply(ctx context.Context, targetType string, commentID uint, req dto.CommentReplyCreateReq, userID uint) (*dto.CommentReplyResp, error)
+	EditReply(ctx context.Context, targetType string, replyID uint, req dto.CommentReplyCreateReq, userID uint, roleNames []string) (*dto.CommentReplyResp, error)
+	ToggleLike(ctx context.Context, targetType string, commentID uint, userID uint) (*dto.CommentLikeResp, error)
+	ToggleReplyLike(ctx context.Context, targetType string, replyID uint, userID uint) (*dto.CommentLikeResp, error)
+	DeleteComment(ctx context.Context, targetType string, commentID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
+	DeleteReply(ctx context.Context, targetType string, replyID uint, userID uint, roleNames []string) (*dto.CommentDeleteResp, error)
 }
 
 type commentService struct {

@@ -9,7 +9,7 @@ import (
 
 // notifyCommentCreated 评论成功后发布 comment_created 事件。
 // 留言板评论的接收人是板主（target.ID 即板主用户 ID），其余目标由分发器按根对象归属解析。
-func (s *commentService) notifyCommentCreated(targetType string, targetID uint, aggregate *commentrepo.CommentAggregate) {
+func (s *commentService) notifyCommentCreated(ctx context.Context, targetType string, targetID uint, aggregate *commentrepo.CommentAggregate) {
 	if s.publisher == nil || aggregate == nil {
 		return
 	}
@@ -33,7 +33,7 @@ func (s *commentService) notifyCommentCreated(targetType string, targetID uint, 
 		)
 	}
 
-	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
+	_, _ = s.publisher.Publish(ctx, notificationservice.PublishEvent{
 		Type:           notificationservice.EventTypeCommentCreated,
 		ActorUserID:    &actorID,
 		SourceType:     "comment",
@@ -53,7 +53,7 @@ func commentCreatedRootID(targetType string, targetID uint, aggregate *commentre
 }
 
 // notifyCommentLiked 一级评论被点赞后发布 comment_liked 事件，接收人为评论作者。
-func (s *commentService) notifyCommentLiked(targetType string, commentID uint, result *commentrepo.LikeResult, actorID uint) {
+func (s *commentService) notifyCommentLiked(ctx context.Context, targetType string, commentID uint, result *commentrepo.LikeResult, actorID uint) {
 	if s.publisher == nil || result == nil || result.TargetUserID == 0 {
 		return
 	}
@@ -62,7 +62,7 @@ func (s *commentService) notifyCommentLiked(targetType string, commentID uint, r
 		return
 	}
 
-	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
+	_, _ = s.publisher.Publish(ctx, notificationservice.PublishEvent{
 		Type:        notificationservice.EventTypeCommentLiked,
 		ActorUserID: &actorID,
 		SourceType:  "comment",
@@ -78,7 +78,7 @@ func (s *commentService) notifyCommentLiked(targetType string, commentID uint, r
 }
 
 // notifyReplyCreated 回复成功后发布 reply_created 事件，接收人为被回复人。
-func (s *commentService) notifyReplyCreated(targetType string, aggregate *commentrepo.ReplyAggregate) {
+func (s *commentService) notifyReplyCreated(ctx context.Context, targetType string, aggregate *commentrepo.ReplyAggregate) {
 	if s.publisher == nil || aggregate == nil {
 		return
 	}
@@ -96,7 +96,7 @@ func (s *commentService) notifyReplyCreated(targetType string, aggregate *commen
 		aggregate.QuotedContent,
 	)
 
-	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
+	_, _ = s.publisher.Publish(ctx, notificationservice.PublishEvent{
 		Type:           notificationservice.EventTypeReplyCreated,
 		ActorUserID:    &actorID,
 		SourceType:     "reply",
@@ -109,7 +109,7 @@ func (s *commentService) notifyReplyCreated(targetType string, aggregate *commen
 }
 
 // notifyReplyLiked 回复被点赞后发布 reply_liked 事件，接收人为回复作者。
-func (s *commentService) notifyReplyLiked(targetType string, replyID uint, result *commentrepo.LikeResult, actorID uint) {
+func (s *commentService) notifyReplyLiked(ctx context.Context, targetType string, replyID uint, result *commentrepo.LikeResult, actorID uint) {
 	if s.publisher == nil || result == nil || result.TargetUserID == 0 || result.RootID == 0 {
 		return
 	}
@@ -118,7 +118,7 @@ func (s *commentService) notifyReplyLiked(targetType string, replyID uint, resul
 		return
 	}
 
-	_, _ = s.publisher.Publish(context.Background(), notificationservice.PublishEvent{
+	_, _ = s.publisher.Publish(ctx, notificationservice.PublishEvent{
 		Type:        notificationservice.EventTypeReplyLiked,
 		ActorUserID: &actorID,
 		SourceType:  "reply",

@@ -2,6 +2,7 @@ package comment_test
 
 import (
 	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,7 @@ type lifecycleCommentService struct {
 	state string
 }
 
-func (s *lifecycleCommentService) Create(string, uint, dto.CommentCreateReq, uint) (*dto.CommentItemResp, error) {
+func (s *lifecycleCommentService) Create(context.Context, string, uint, dto.CommentCreateReq, uint) (*dto.CommentItemResp, error) {
 	s.state = "low_pending"
 	return &dto.CommentItemResp{
 		ID: 9, TargetType: "article", TargetID: 3, UserID: 7, Content: "低风险正文",
@@ -32,7 +33,7 @@ func (s *lifecycleCommentService) Create(string, uint, dto.CommentCreateReq, uin
 	}, nil
 }
 
-func (s *lifecycleCommentService) List(string, uint, dto.CommentListReq, *uint) (*dto.CommentPageResp, error) {
+func (s *lifecycleCommentService) List(context.Context, string, uint, dto.CommentListReq, *uint) (*dto.CommentPageResp, error) {
 	if s.state == "deleted" || s.state == "" {
 		return &dto.CommentPageResp{Page: 1, PageSize: 10, List: []dto.CommentItemResp{}}, nil
 	}
@@ -46,15 +47,15 @@ func (s *lifecycleCommentService) List(string, uint, dto.CommentListReq, *uint) 
 	return &dto.CommentPageResp{Total: 1, Pages: 1, Page: 1, PageSize: 10, List: []dto.CommentItemResp{item}}, nil
 }
 
-func (s *lifecycleCommentService) Reply(string, uint, dto.CommentReplyCreateReq, uint) (*dto.CommentReplyResp, error) {
+func (s *lifecycleCommentService) Reply(context.Context, string, uint, dto.CommentReplyCreateReq, uint) (*dto.CommentReplyResp, error) {
 	return nil, moderationservice.ErrInteractionNotAllowed
 }
 
-func (s *lifecycleCommentService) ToggleLike(string, uint, uint) (*dto.CommentLikeResp, error) {
+func (s *lifecycleCommentService) ToggleLike(context.Context, string, uint, uint) (*dto.CommentLikeResp, error) {
 	return nil, moderationservice.ErrInteractionNotAllowed
 }
 
-func (s *lifecycleCommentService) EditComment(string, uint, dto.CommentCreateReq, uint, []string) (*dto.CommentItemResp, error) {
+func (s *lifecycleCommentService) EditComment(context.Context, string, uint, dto.CommentCreateReq, uint, []string) (*dto.CommentItemResp, error) {
 	if s.state == "deleted" {
 		return nil, moderationservice.ErrAlreadyDeleted
 	}
@@ -67,7 +68,7 @@ func (s *lifecycleCommentService) EditComment(string, uint, dto.CommentCreateReq
 	}, nil
 }
 
-func (s *lifecycleCommentService) DeleteComment(string, uint, uint, []string) (*dto.CommentDeleteResp, error) {
+func (s *lifecycleCommentService) DeleteComment(context.Context, string, uint, uint, []string) (*dto.CommentDeleteResp, error) {
 	s.state = "deleted"
 	return &dto.CommentDeleteResp{ID: 9}, nil
 }

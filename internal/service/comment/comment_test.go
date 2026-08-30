@@ -24,6 +24,7 @@ import (
 )
 
 type fakeCommentRepo struct {
+	ctx                   context.Context
 	listTarget            commentrepo.Target
 	listPage              int
 	listPageSize          int
@@ -67,6 +68,13 @@ type fakeCommentRepo struct {
 	deleteReplyID         uint
 	deleteReplyForce      bool
 	deleteErr             error
+}
+
+type commentContextKey struct{}
+
+func (f *fakeCommentRepo) WithContext(ctx context.Context) commentrepo.CommentRepository {
+	f.ctx = ctx
+	return f
 }
 
 func (f *fakeCommentRepo) List(target commentrepo.Target, viewerID *uint, page int, pageSize int) (*commentrepo.PageResult, error) {
@@ -176,9 +184,9 @@ func TestCommentServiceDeletesThroughModeration(t *testing.T) {
 
 			var err error
 			if test.deleteReply {
-				_, err = svc.DeleteReply(test.targetType, 9, 7, nil)
+				_, err = svc.DeleteReply(context.Background(), test.targetType, 9, 7, nil)
 			} else {
-				_, err = svc.DeleteComment(test.targetType, 9, 7, nil)
+				_, err = svc.DeleteComment(context.Background(), test.targetType, 9, 7, nil)
 			}
 
 			require.NoError(t, err)
@@ -202,7 +210,7 @@ func TestCommentService_List_UsesViewerAndPaging(t *testing.T) {
 	}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	resp, err := svc.List("article", 3, dto.CommentListReq{Page: 0, PageSize: 99}, &viewerID)
+	resp, err := svc.List(context.Background(), "article", 3, dto.CommentListReq{Page: 0, PageSize: 99}, &viewerID)
 
 	require.NoError(t, err)
 	assert.Equal(t, uint8(commentrepo.TargetArticle), repo.listTarget.Type)
@@ -239,7 +247,7 @@ func TestCommentServiceListProjectsModerationInOneBatch(t *testing.T) {
 	}, nil)
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, moderationSvc)
 
-	resp, err := svc.List("article", 3, dto.CommentListReq{}, &viewerID)
+	resp, err := svc.List(context.Background(), "article", 3, dto.CommentListReq{}, &viewerID)
 
 	require.NoError(t, err)
 	require.Len(t, resp.List, 1)
@@ -280,7 +288,7 @@ func TestCommentServiceRoutesAllCommentSubjectsThroughModeration(t *testing.T) {
 			}, nil)
 			svc := commentservice.NewCommentService(repo, nil, nil, nil, moderationSvc)
 
-			resp, err := svc.Create(tt.targetType, 3, dto.CommentCreateReq{
+			resp, err := svc.Create(context.Background(), tt.targetType, 3, dto.CommentCreateReq{
 				Content: "正文", IdempotencyKey: "create-key",
 			}, 7)
 
@@ -325,7 +333,7 @@ func TestCommentServiceRoutesAllReplySubjectsThroughModeration(t *testing.T) {
 			}, nil)
 			svc := commentservice.NewCommentService(repo, nil, nil, nil, moderationSvc)
 
-			resp, err := svc.Reply(tt.targetType, 9, dto.CommentReplyCreateReq{
+			resp, err := svc.Reply(context.Background(), tt.targetType, 9, dto.CommentReplyCreateReq{
 				Content: "回复", IdempotencyKey: "reply-key",
 			}, 7)
 
@@ -370,10 +378,10 @@ func TestCommentServiceRoutesEditsThroughModeration(t *testing.T) {
 	}, nil)
 	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil, moderationSvc)
 
-	comment, err := svc.EditComment("article", 9, dto.CommentCreateReq{Content: "新正文", IdempotencyKey: "edit-comment"}, 7, nil)
+	comment, err := svc.EditComment(context.Background(), "article", 9, dto.CommentCreateReq{Content: "新正文", IdempotencyKey: "edit-comment"}, 7, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "新正文", comment.Content)
-	reply, err := svc.EditReply("guestbook", 12, dto.CommentReplyCreateReq{Content: "新回复", IdempotencyKey: "edit-reply"}, 7, nil)
+	reply, err := svc.EditReply(context.Background(), "guestbook", 12, dto.CommentReplyCreateReq{Content: "新回复", IdempotencyKey: "edit-reply"}, 7, nil)
 	require.NoError(t, err)
 	assert.Empty(t, reply.Content)
 }
@@ -389,7 +397,7 @@ func TestCommentServiceSignalsImagesToModeration(t *testing.T) {
 	}, nil)
 	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil, moderationSvc)
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "![图](temp/comments/7/images/a.jpg)", IdempotencyKey: "image-key"}, 7)
+	_, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{Content: "![图](temp/comments/7/images/a.jpg)", IdempotencyKey: "image-key"}, 7)
 	require.NoError(t, err)
 }
 
@@ -400,23 +408,23 @@ func TestCommentServiceGuardsPendingTargetsBeforeWrites(t *testing.T) {
 		call func(commentservice.CommentService) error
 	}{
 		{name: "moment child comment", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectMoment, ID: 3}, call: func(svc commentservice.CommentService) error {
-			_, err := svc.Create("moment", 3, dto.CommentCreateReq{Content: "评论", IdempotencyKey: "child"}, 7)
+			_, err := svc.Create(context.Background(), "moment", 3, dto.CommentCreateReq{Content: "评论", IdempotencyKey: "child"}, 7)
 			return err
 		}},
 		{name: "direct reply", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectArticleComment, ID: 9}, call: func(svc commentservice.CommentService) error {
-			_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "回复", IdempotencyKey: "direct"}, 7)
+			_, err := svc.Reply(context.Background(), "article", 9, dto.CommentReplyCreateReq{Content: "回复", IdempotencyKey: "direct"}, 7)
 			return err
 		}},
 		{name: "nested reply", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectGuestbookReply, ID: 12}, call: func(svc commentservice.CommentService) error {
-			_, err := svc.Reply("guestbook", 9, dto.CommentReplyCreateReq{ParentReplyID: 12, Content: "回复", IdempotencyKey: "nested"}, 7)
+			_, err := svc.Reply(context.Background(), "guestbook", 9, dto.CommentReplyCreateReq{ParentReplyID: 12, Content: "回复", IdempotencyKey: "nested"}, 7)
 			return err
 		}},
 		{name: "comment like", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectMomentComment, ID: 9}, call: func(svc commentservice.CommentService) error {
-			_, err := svc.ToggleLike("moment", 9, 7)
+			_, err := svc.ToggleLike(context.Background(), "moment", 9, 7)
 			return err
 		}},
 		{name: "reply like", ref: moderationservice.SubjectRef{Type: moderationservice.SubjectArticleCommentReply, ID: 12}, call: func(svc commentservice.CommentService) error {
-			_, err := svc.ToggleReplyLike("article", 12, 7)
+			_, err := svc.ToggleReplyLike(context.Background(), "article", 12, 7)
 			return err
 		}},
 	}
@@ -465,7 +473,7 @@ func TestCommentService_ListAdmin_NormalizesFiltersAndMapsItems(t *testing.T) {
 	}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	resp, err := svc.ListAdmin(dto.AdminCommentListReq{
+	resp, err := svc.ListAdmin(context.Background(), dto.AdminCommentListReq{
 		Page:       0,
 		PageSize:   99,
 		TargetType: "moment",
@@ -500,7 +508,7 @@ func TestCommentService_Create_TrimsContentAndMapsArticleTarget(t *testing.T) {
 	}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	resp, err := svc.Create("article", 3, dto.CommentCreateReq{
+	resp, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{
 		Content: "  好文章  ",
 	}, 7)
 
@@ -520,7 +528,7 @@ func TestCommentService_Create_NormalizesTempCommentImagesBeforeCreate(t *testin
 	repo := &fakeCommentRepo{}
 	svc := commentservice.NewCommentService(repo, store, nil, nil, nil)
 
-	resp, err := svc.Create("article", 3, dto.CommentCreateReq{
+	resp, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{
 		Content: " 看图 ![cat](https://cdn.example.com/blog/temp/comments/7/images/cat.jpg?a=1) ",
 	}, 7)
 
@@ -559,7 +567,7 @@ func TestCommentService_ListReplies_UsesViewerAndPaging(t *testing.T) {
 	}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	resp, err := svc.ListReplies("article", 9, dto.CommentReplyListReq{Page: 2, PageSize: 5}, &viewerID)
+	resp, err := svc.ListReplies(context.Background(), "article", 9, dto.CommentReplyListReq{Page: 2, PageSize: 5}, &viewerID)
 
 	require.NoError(t, err)
 	assert.Equal(t, uint8(commentrepo.TargetArticle), repo.listRepliesTarget.Type)
@@ -590,7 +598,7 @@ func TestCommentService_Reply_PassesParentReplyID(t *testing.T) {
 	}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	resp, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{
+	resp, err := svc.Reply(context.Background(), "article", 9, dto.CommentReplyCreateReq{
 		ParentReplyID: 11,
 		Content:       " 收到 ",
 	}, 7)
@@ -610,7 +618,7 @@ func TestCommentService_Reply_NormalizesTempCommentImagesBeforeCreate(t *testing
 	repo := &fakeCommentRepo{}
 	svc := commentservice.NewCommentService(repo, store, nil, nil, nil)
 
-	resp, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{
+	resp, err := svc.Reply(context.Background(), "article", 9, dto.CommentReplyCreateReq{
 		Content: `<img src="https://cdn.example.com/blog/temp/comments/7/images/reply.jpg">`,
 	}, 7)
 
@@ -631,7 +639,7 @@ func TestCommentService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t *t
 	repo := &fakeCommentRepo{createErr: errors.New("db down")}
 	svc := commentservice.NewCommentService(repo, store, nil, nil, nil)
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{
+	_, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{
 		Content: "![cat](https://cdn.example.com/blog/temp/comments/7/images/cat.jpg)",
 	}, 7)
 
@@ -642,7 +650,7 @@ func TestCommentService_Create_CleansCopiedCommentImagesWhenRepositoryFails(t *t
 func TestCommentService_ToggleLike_InvalidID(t *testing.T) {
 	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil, nil)
 
-	_, err := svc.ToggleLike("article", 0, 7)
+	_, err := svc.ToggleLike(context.Background(), "article", 0, 7)
 
 	require.ErrorIs(t, err, commentservice.ErrCommentTargetInvalid)
 }
@@ -653,7 +661,7 @@ func TestCommentService_ToggleLike_ReturnsLatestState(t *testing.T) {
 	}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	resp, err := svc.ToggleLike("article", 9, 7)
+	resp, err := svc.ToggleLike(context.Background(), "article", 9, 7)
 
 	require.NoError(t, err)
 	assert.Equal(t, uint8(commentrepo.TargetArticle), repo.toggleLikeTarget.Type)
@@ -675,7 +683,7 @@ func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	resp, err := svc.ToggleReplyLike("article", 12, 7)
+	resp, err := svc.ToggleReplyLike(context.Background(), "article", 12, 7)
 
 	require.NoError(t, err)
 	assert.True(t, resp.IsLiked)
@@ -702,7 +710,7 @@ func TestCommentService_ToggleReplyLike_PublishesReplyLikedEvent(t *testing.T) {
 func TestCommentService_Create_RejectsBlankContent(t *testing.T) {
 	svc := commentservice.NewCommentService(&fakeCommentRepo{}, nil, nil, nil, nil)
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{
+	_, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{
 		Content: "  ",
 	}, 7)
 
@@ -713,7 +721,7 @@ func TestCommentService_Create_MapsClosedTarget(t *testing.T) {
 	repo := &fakeCommentRepo{createErr: commentrepo.ErrTargetCommentClosed}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{
+	_, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{
 		Content: "好文章",
 	}, 7)
 
@@ -724,7 +732,7 @@ func TestCommentService_DeleteComment_AllowsAdminForceDelete(t *testing.T) {
 	repo := &fakeCommentRepo{}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	_, err := svc.DeleteComment("article", 9, 7, []string{roles.AdminRole})
+	_, err := svc.DeleteComment(context.Background(), "article", 9, 7, []string{roles.AdminRole})
 
 	require.NoError(t, err)
 	assert.True(t, repo.deleteCommentForce)
@@ -734,7 +742,7 @@ func TestCommentService_DeleteReply_UsesTargetPrefix(t *testing.T) {
 	repo := &fakeCommentRepo{}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	_, err := svc.DeleteReply("article", 12, 7, []string{roles.AdminRole})
+	_, err := svc.DeleteReply(context.Background(), "article", 12, 7, []string{roles.AdminRole})
 
 	require.NoError(t, err)
 	assert.Equal(t, uint8(commentrepo.TargetArticle), repo.deleteReplyTarget.Type)
@@ -746,17 +754,30 @@ func TestCommentService_List_MapsRepositoryErrors(t *testing.T) {
 	repo := &fakeCommentRepo{listErr: errors.New("boom")}
 	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
 
-	_, err := svc.List("article", 3, dto.CommentListReq{Page: 1, PageSize: 10}, nil)
+	_, err := svc.List(context.Background(), "article", 3, dto.CommentListReq{Page: 1, PageSize: 10}, nil)
 
 	require.EqualError(t, err, "boom")
+}
+
+func TestCommentServiceListPropagatesContextToRepository(t *testing.T) {
+	repo := &fakeCommentRepo{listResp: &commentrepo.PageResult{Page: 1, PageSize: 10}}
+	svc := commentservice.NewCommentService(repo, nil, nil, nil, nil)
+	ctx := context.WithValue(context.Background(), commentContextKey{}, "request")
+
+	_, err := svc.List(ctx, "article", 3, dto.CommentListReq{}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, ctx, repo.ctx)
 }
 
 // recordingPublisher 记录发布的事件，用于断言业务变更是否发布通知。
 type recordingPublisher struct {
 	events []notificationservice.PublishEvent
+	ctx    context.Context
 }
 
-func (p *recordingPublisher) Publish(_ context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
+func (p *recordingPublisher) Publish(ctx context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
+	p.ctx = ctx
 	p.events = append(p.events, e)
 	return &model.NotificationEvent{}, nil
 }
@@ -826,11 +847,14 @@ func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {
 	}}
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
+	ctx := context.WithValue(context.Background(), commentContextKey{}, "comment-create")
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "好文章"}, 7)
+	_, err := svc.Create(ctx, "article", 3, dto.CommentCreateReq{Content: "好文章"}, 7)
 
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
+	assert.Equal(t, "comment-create", pub.ctx.Value(commentContextKey{}))
+	assert.NoError(t, pub.ctx.Err())
 	assert.Equal(t, notificationservice.EventTypeCommentCreated, pub.events[0].Type)
 	assert.Equal(t, "article", pub.events[0].RootType)
 	assert.Equal(t, uint(3), pub.events[0].RootID)
@@ -853,7 +877,7 @@ func TestCommentService_Create_GuestbookSetsExplicitRecipient(t *testing.T) {
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
 	// 留言板评论 target.ID 即板主用户 ID，应写入显式接收人 metadata。
-	_, err := svc.Create("guestbook", 1, dto.CommentCreateReq{Content: "留言"}, 7)
+	_, err := svc.Create(context.Background(), "guestbook", 1, dto.CommentCreateReq{Content: "留言"}, 7)
 
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
@@ -874,7 +898,7 @@ func TestCommentService_Reply_PublishesReplyEventWithRecipient(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
+	_, err := svc.Reply(context.Background(), "article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
 
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
@@ -901,7 +925,7 @@ func TestCommentService_Reply_RootIDIsTargetIDNotCommentID(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
+	_, err := svc.Reply(context.Background(), "article", 9, dto.CommentReplyCreateReq{Content: "收到"}, 7)
 
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
@@ -917,7 +941,7 @@ func TestCommentService_Create_SelfCommentDoesNotPublish(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.Create("article", 3, dto.CommentCreateReq{Content: "自评"}, 7)
+	_, err := svc.Create(context.Background(), "article", 3, dto.CommentCreateReq{Content: "自评"}, 7)
 
 	require.NoError(t, err)
 	assert.Empty(t, pub.events)
@@ -931,7 +955,7 @@ func TestCommentService_Reply_SelfReplyDoesNotPublish(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.Reply("article", 9, dto.CommentReplyCreateReq{Content: "自回"}, 7)
+	_, err := svc.Reply(context.Background(), "article", 9, dto.CommentReplyCreateReq{Content: "自回"}, 7)
 
 	require.NoError(t, err)
 	assert.Empty(t, pub.events)
@@ -947,7 +971,7 @@ func TestCommentService_ToggleReplyLike_SelfLikeDoesNotPublish(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.ToggleReplyLike("article", 12, 7)
+	_, err := svc.ToggleReplyLike(context.Background(), "article", 12, 7)
 
 	require.NoError(t, err)
 	assert.Empty(t, pub.events)
@@ -965,7 +989,7 @@ func TestCommentService_ToggleLike_PublishesCommentLikedEvent(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	resp, err := svc.ToggleLike("moment", 12, 7)
+	resp, err := svc.ToggleLike(context.Background(), "moment", 12, 7)
 
 	require.NoError(t, err)
 	assert.True(t, resp.IsLiked)
@@ -996,7 +1020,7 @@ func TestCommentService_ToggleLike_SelfLikeDoesNotPublish(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.ToggleLike("moment", 12, 7)
+	_, err := svc.ToggleLike(context.Background(), "moment", 12, 7)
 
 	require.NoError(t, err)
 	assert.Empty(t, pub.events)
@@ -1010,7 +1034,7 @@ func TestCommentService_ToggleLike_DoesNotPublishOnUnlike(t *testing.T) {
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.ToggleLike("moment", 12, 7)
+	_, err := svc.ToggleLike(context.Background(), "moment", 12, 7)
 
 	require.NoError(t, err)
 	assert.Empty(t, pub.events)
@@ -1030,7 +1054,7 @@ func TestCommentService_ToggleLike_SelfMomentSelfCommentOtherLike_Publishes(t *t
 	pub := &recordingPublisher{}
 	svc := commentservice.NewCommentService(repo, nil, pub, nil, nil)
 
-	_, err := svc.ToggleLike("moment", 20, 2) // C(2) 点赞
+	_, err := svc.ToggleLike(context.Background(), "moment", 20, 2) // C(2) 点赞
 
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)

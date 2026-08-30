@@ -1,6 +1,7 @@
 package comment
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -158,6 +159,8 @@ type ReplyData struct {
 
 // CommentRepository 评论数据访问接口。
 type CommentRepository interface {
+	// WithContext 返回绑定调用方 context 的轻量仓储副本。
+	WithContext(ctx context.Context) CommentRepository
 	// List 分页查询一级评论，并按 viewerID 附带回复数量与点赞信息。
 	List(target Target, viewerID *uint, page int, pageSize int) (*PageResult, error)
 	// ListAdmin 后台分页查询文章和碎语一级评论。
@@ -185,4 +188,8 @@ type commentRepo struct {
 // NewCommentRepository 创建评论仓储实例。
 func NewCommentRepository(db *gorm.DB) CommentRepository {
 	return &commentRepo{db: db}
+}
+
+func (r *commentRepo) WithContext(ctx context.Context) CommentRepository {
+	return &commentRepo{db: r.db.WithContext(ctx)}
 }
