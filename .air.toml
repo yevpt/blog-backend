@@ -6,7 +6,7 @@ tmp_dir = "tmp"
 
 [build]
   # 编译命令
-  cmd = "/Users/vpt/.g/go/bin/go build -o ./tmp/blog-server ./cmd/server"
+  cmd = "go build -o ./tmp/blog-server ./cmd/server"
   # 启动命令
   bin = "./tmp/blog-server"
   # 监听文件变更的目录
