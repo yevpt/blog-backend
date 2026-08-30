@@ -54,3 +54,29 @@ func TestIngestorDropWhenFull(t *testing.T) {
 	assert.LessOrEqual(t, ok, 2)
 	assert.GreaterOrEqual(t, ing.Dropped(), int64(8))
 }
+
+func TestIngestorDrainsBufferedEventsOnShutdown(t *testing.T) {
+	fr := &fakeRepo{}
+	ing := worker.NewIngestor(fr, 16, 8, time.Hour, zap.NewNop())
+	for i := 0; i < 12; i++ {
+		require.True(t, ing.Submit(model.AnalyticsEvent{EventType: "page_view"}))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan struct{})
+	go func() {
+		ing.Run(ctx)
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, 12, fr.count())
+}

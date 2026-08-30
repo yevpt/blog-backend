@@ -16,8 +16,10 @@ func TestStartModerationReviewEmailWorkerSkipsWhenModerationDisabled(t *testing.
 	core, logs := observer.New(zap.InfoLevel)
 	cfg := moderationReviewEmailWorkerConfig()
 	cfg.Moderation.Enabled = false
+	tasks, cancel := newCanceledTaskGroup(zap.New(core))
+	defer cancel()
 
-	bootstrap.StartModerationReviewEmailWorker(context.Background(), cfg, nil, nil, zap.New(core))
+	bootstrap.StartModerationReviewEmailWorker(tasks, cfg, nil, nil, zap.New(core))
 
 	assert.Empty(t, logs.All())
 }
@@ -26,8 +28,10 @@ func TestStartModerationReviewEmailWorkerSkipsWhenReviewEmailDisabled(t *testing
 	core, logs := observer.New(zap.InfoLevel)
 	cfg := moderationReviewEmailWorkerConfig()
 	cfg.Moderation.ReviewEmail.Enabled = false
+	tasks, cancel := newCanceledTaskGroup(zap.New(core))
+	defer cancel()
 
-	bootstrap.StartModerationReviewEmailWorker(context.Background(), cfg, nil, nil, zap.New(core))
+	bootstrap.StartModerationReviewEmailWorker(tasks, cfg, nil, nil, zap.New(core))
 
 	assert.Empty(t, logs.All())
 }
@@ -36,8 +40,10 @@ func TestStartModerationReviewEmailWorkerSkipsWhenAsyncEmailWorkerDisabled(t *te
 	core, logs := observer.New(zap.InfoLevel)
 	cfg := moderationReviewEmailWorkerConfig()
 	cfg.Email.WorkerEnabled = false
+	tasks, cancel := newCanceledTaskGroup(zap.New(core))
+	defer cancel()
 
-	bootstrap.StartModerationReviewEmailWorker(context.Background(), cfg, nil, nil, zap.New(core))
+	bootstrap.StartModerationReviewEmailWorker(tasks, cfg, nil, nil, zap.New(core))
 
 	assert.Empty(t, logs.All())
 }
@@ -45,12 +51,21 @@ func TestStartModerationReviewEmailWorkerSkipsWhenAsyncEmailWorkerDisabled(t *te
 func TestStartModerationReviewEmailWorkerStartsWhenEnabled(t *testing.T) {
 	core, logs := observer.New(zap.InfoLevel)
 	cfg := moderationReviewEmailWorkerConfig()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	tasks, cancel := newCanceledTaskGroup(zap.New(core))
+	defer cancel()
 
-	bootstrap.StartModerationReviewEmailWorker(ctx, cfg, nil, nil, zap.New(core))
+	bootstrap.StartModerationReviewEmailWorker(tasks, cfg, nil, nil, zap.New(core))
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), time.Second)
+	defer waitCancel()
+	assert.NoError(t, tasks.Wait(waitCtx))
 
 	assert.Len(t, logs.FilterMessage("审核待处理邮件 worker 启动").All(), 1)
+}
+
+func newCanceledTaskGroup(logger *zap.Logger) (*bootstrap.TaskGroup, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	return bootstrap.NewTaskGroup(ctx, logger), cancel
 }
 
 func moderationReviewEmailWorkerConfig() *config.Config {

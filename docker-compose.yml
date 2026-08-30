@@ -11,6 +11,7 @@ services:
     image: ${BLOG_SERVER_IMAGE:-your-registry.example.com/blog-backend:latest}
     container_name: ${COMPOSE_CONTAINER_NAME:-blog-server}
     restart: unless-stopped
+    stop_grace_period: 30s
     environment:
       APP_ENV: ${APP_ENV:-prod}
       # 宝塔管理的 MySQL 连接信息

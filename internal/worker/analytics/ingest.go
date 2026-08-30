@@ -76,11 +76,21 @@ func (i *ingestor) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			// 收尾刷盘脱离已取消的 ctx，给一个短超时确保最后一批落库。
+			// HTTP 停止接流量后排空 channel，再用短超时 context 刷完最后一批。
 			finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			flush(finalCtx)
-			cancel()
-			return
+			for {
+				select {
+				case ev := <-i.ch:
+					buf = append(buf, ev)
+					if len(buf) >= i.batchSize {
+						flush(finalCtx)
+					}
+				default:
+					flush(finalCtx)
+					cancel()
+					return
+				}
+			}
 		case ev := <-i.ch:
 			buf = append(buf, ev)
 			if len(buf) >= i.batchSize {

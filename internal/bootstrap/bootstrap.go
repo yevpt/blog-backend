@@ -1,7 +1,6 @@
 package bootstrap
 
 import (
-	"context"
 	"log"
 	"os"
 	"strconv"
@@ -96,7 +95,7 @@ func MustInitStorage(cfg *config.Config, redisClient *redis.Client) storage.Obje
 
 // StartNotificationWorker 组装并在后台启动通知 worker（dispatcher/planner/sender）。
 // 站内通知分发始终启动；email.worker_enabled=false 时仅关闭邮件聚合与发送。
-func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.DB, mailer email.MailSender, zapLogger *zap.Logger) {
+func StartNotificationWorker(tasks *TaskGroup, cfg *config.Config, db *gorm.DB, mailer email.MailSender, zapLogger *zap.Logger) {
 	// 组装数据访问与读侧适配器。
 	repo := notificationrepo.NewRepository(db)
 	directory := notificationrepo.NewDirectory(db)
@@ -133,12 +132,12 @@ func StartNotificationWorker(ctx context.Context, cfg *config.Config, db *gorm.D
 	} else {
 		zapLogger.Info("站内通知 worker 启动，邮件 worker 未启用")
 	}
-	go worker.Run(ctx)
+	tasks.Go("notification", worker.Run)
 }
 
 // StartModerationReviewEmailWorker 在审核邮件启用时启动待审核摘要邮件 worker。
 func StartModerationReviewEmailWorker(
-	ctx context.Context,
+	tasks *TaskGroup,
 	cfg *config.Config,
 	db *gorm.DB,
 	mailer email.MailSender,
@@ -168,12 +167,12 @@ func StartModerationReviewEmailWorker(
 	}, planner.PlanOnce, sender.SendOnce, zapLogger)
 
 	zapLogger.Info("审核待处理邮件 worker 启动")
-	go worker.Run(ctx)
+	tasks.Go("moderation-review-email", worker.Run)
 }
 
 // StartModerationCleanupWorker 在审核开启时启动有界审计和对象清理。
 func StartModerationCleanupWorker(
-	ctx context.Context,
+	tasks *TaskGroup,
 	cfg *config.Config,
 	db *gorm.DB,
 	store storage.ObjectStore,
@@ -188,7 +187,7 @@ func StartModerationCleanupWorker(
 			recoveryRepo, moderationmedia.NewPublisher(readable, moderationrepo.NewRepository(db)), zapLogger,
 		)
 		zapLogger.Info("碎语图片正式化补偿 worker 启动")
-		go recovery.Run(ctx)
+		tasks.Go("moderation-publish-recovery", recovery.Run)
 	}
 	cleanupStore, ok := store.(moderationworker.ObjectStore)
 	if !ok {
@@ -199,7 +198,7 @@ func StartModerationCleanupWorker(
 		moderationrepo.NewCleanupRepository(db), cleanupStore, cfg.Moderation, zapLogger, nil,
 	)
 	zapLogger.Info("审核记录与图片清理 worker 启动")
-	go worker.Run(ctx)
+	tasks.Go("moderation-cleanup", worker.Run)
 }
 
 // StartAnalyticsWorker 启动统计后台：唯一的事件落库消费 goroutine + 日聚合/清理调度器。
@@ -209,7 +208,7 @@ func StartModerationCleanupWorker(
 // 本函数全程只调用一次，保证「单 ingestor、单 scheduler」。
 // retentionDays / onlineWindow 来自 cfg.Analytics，tz 经 AnalyticsRuntime 透传。
 func StartAnalyticsWorker(
-	ctx context.Context,
+	tasks *TaskGroup,
 	redisClient *redis.Client,
 	zapLogger *zap.Logger,
 	ingestor analyticsworker.Ingestor,
@@ -223,7 +222,7 @@ func StartAnalyticsWorker(
 	}
 
 	// 启动唯一的落库消费循环：消费 collect handler 投递进来的事件。
-	go ingestor.Run(ctx)
+	tasks.Go("analytics-ingestor", ingestor.Run)
 
 	// 组装聚合器并启动调度器：每日 00:30 后对昨天执行 RollupDay + 清理，Redis 租约去重。
 	rollup := analyticsworker.NewRollup(repo, repo, zapLogger)
@@ -236,7 +235,7 @@ func StartAnalyticsWorker(
 		AfterMinute:   30,
 		LeaseTTL:      2 * time.Hour,
 	}, zapLogger)
-	go scheduler.Run(ctx)
+	tasks.Go("analytics-scheduler", scheduler.Run)
 
 	zapLogger.Info("统计 worker 启动（事件落库 + 日聚合调度）")
 }

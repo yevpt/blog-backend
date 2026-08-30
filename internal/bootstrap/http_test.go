@@ -1,11 +1,14 @@
 package bootstrap
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/vpt/blog-backend/pkg/config"
 )
@@ -24,4 +27,16 @@ func TestNewHTTPServerAppliesProductionSafeTimeouts(t *testing.T) {
 	assert.Equal(t, 60*time.Second, server.WriteTimeout)
 	assert.Equal(t, 120*time.Second, server.IdleTimeout)
 	assert.Equal(t, 1<<20, server.MaxHeaderBytes)
+}
+
+func TestRunHTTPServerStopsWhenContextCanceled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	server := newHTTPServer(gin.New(), &config.Config{
+		Server: config.ServerConfig{Port: 0},
+	})
+
+	require.NoError(t, runHTTPServer(ctx, server, zap.NewNop()))
 }
