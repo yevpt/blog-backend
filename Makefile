@@ -2,9 +2,10 @@ GO := $(shell which go || echo /Users/vpt/.g/go/bin/go)
 SWAG := $(shell command -v swag 2>/dev/null || echo "$(GO) run github.com/swaggo/swag/cmd/swag@v1.16.6")
 BINARY := bin/blog-server
 MAIN := ./cmd/server
+MIGRATE := ./cmd/migrate
 SWAG_DIRS := $(MAIN),./internal/handler,./internal/dto,./pkg/response
 
-.PHONY: run build dbsetup swag test lint tidy clean hooks skills setup
+.PHONY: run build dbsetup migrate-status migrate-adopt migrate-up swag test lint tidy clean hooks skills setup
 
 # 克隆后执行一次：启用 git hooks + 同步 AI skill 符号链接
 setup: hooks skills
@@ -34,6 +35,19 @@ build:
 # 初始化当前数据库结构和默认数据；默认管理员为 admin/admin
 dbsetup:
 	$(GO) run ./cmd/dbsetup
+
+# 只读查看数据库迁移状态
+migrate-status:
+	$(GO) run $(MIGRATE) status
+
+# 现有库首次接入台账；用法：make migrate-adopt THROUGH=20260704_admin_operation_log.sql
+migrate-adopt:
+	@test -n "$(THROUGH)" || (echo "请指定 THROUGH=<最后一个确认已执行的迁移.sql>"; exit 1)
+	$(GO) run $(MIGRATE) adopt --through "$(THROUGH)"
+
+# 显式执行尚未应用的版本化 SQL
+migrate-up:
+	$(GO) run $(MIGRATE) up
 
 # 生成 swagger 文档；未安装 swag 时通过 go run 临时执行，避免依赖全局 PATH
 swag:

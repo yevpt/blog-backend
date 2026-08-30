@@ -73,10 +73,34 @@ docker compose up -d
 
 同目录 `.env` 会自动加载，镜像默认回退到 `:latest`。
 
+## 数据库迁移
+
+镜像内包含独立的 `blog-migrate`，API 服务启动本身不会修改表结构。首次把现有生产库接入迁移台账时，先拉取新镜像，再查看状态并登记最后一个确认已经执行的迁移：
+
+```bash
+docker compose pull blog-server
+docker compose run --rm --no-deps blog-server ./blog-migrate status
+docker compose run --rm --no-deps blog-server \
+  ./blog-migrate adopt --through <最后一个确认已执行的迁移.sql>
+```
+
+`adopt` 只登记历史，不执行 SQL。若当前所有迁移都已人工执行，可把 `--through` 指向仓库中最后一个迁移；否则只能指向实际完成的位置。
+
+之后每次部署在启动新镜像前显式执行：
+
+```bash
+docker compose run --rm --no-deps blog-server ./blog-migrate status
+docker compose run --rm --no-deps blog-server ./blog-migrate up
+docker compose up -d --remove-orphans blog-server
+```
+
+当前 CI 不自动执行迁移，以免尚未完成首次 `adopt` 的生产库被误操作。迁移出现 dirty 时停止部署，先按备份和实际表结构处理，不能直接重跑。
+
 ## 部署前检查
 
 - `make test` 通过。
 - `make swag` 已更新 Swagger 产物。
 - 新增配置已同步到 `config/config.yaml`、环境覆盖文件和部署环境变量。
 - 新增表结构已提供 `migrations/` SQL。
+- 已在启动新镜像前执行 `blog-migrate up`，且不存在 pending / dirty 迁移。
 - 启用内容审核前已按 [内容审核上线与回滚](moderation-rollout.md) 完成迁移与校验。

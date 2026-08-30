@@ -57,6 +57,7 @@ blog-backend/
 ├── cmd/
 │   ├── server/              # API 服务入口
 │   ├── dbsetup/             # 当前版本新库初始化
+│   ├── migrate/             # 生产增量 SQL 台账与执行入口
 │   └── moderation-migrate/  # 历史 UGC 审核数据迁移与校验
 ├── internal/
 │   ├── bootstrap/           # config/log/db/redis/jwt/mailer/storage/worker 组装
@@ -97,6 +98,8 @@ make dev        # 热重载启动，需先安装 air
 make run        # 直接运行 API 服务
 make build      # 编译到 bin/blog-server
 make dbsetup    # 初始化当前版本新库结构和默认数据
+make migrate-status # 查看版本化 SQL 状态
+make migrate-up # 执行待应用迁移
 make swag       # 生成 Swagger 文档到 docs/
 make test       # 运行全部测试
 make tidy       # 整理依赖

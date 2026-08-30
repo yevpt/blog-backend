@@ -6,12 +6,16 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"flag"
 	"io"
 	"log"
 	"os"
 
 	"github.com/vpt/blog-backend/internal/dbschema"
+	"github.com/vpt/blog-backend/internal/migration"
+	"github.com/vpt/blog-backend/migrations"
 	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/database"
 )
@@ -46,6 +50,24 @@ func main() {
 		log.Fatalf("默认数据初始化失败: %v", err)
 	}
 	log.Println("✓ 默认数据已初始化：admin 用户固定为 id=1")
+
+	if err := recordCurrentMigrationBaseline(context.Background(), db); err != nil {
+		log.Fatalf("迁移台账初始化失败: %v", err)
+	}
+	log.Println("✓ 当前版本迁移台账已初始化")
+}
+
+func recordCurrentMigrationBaseline(ctx context.Context, db interface{ DB() (*sql.DB, error) }) error {
+	catalog, err := migration.LoadCatalog(migrations.Files)
+	if err != nil {
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+	_, err = migration.NewRunner(sqlDB, catalog).Adopt(ctx, catalog[len(catalog)-1].Version)
+	return err
 }
 
 func parseSetupOptions(args []string) (setupOptions, error) {

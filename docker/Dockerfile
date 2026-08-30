@@ -18,7 +18,8 @@ RUN CGO_ENABLED=1 go test ./...
 FROM base AS builder
 
 COPY . .
-RUN CGO_ENABLED=1 GOOS=linux go build -o /app/bin/blog-server ./cmd/server
+RUN CGO_ENABLED=1 GOOS=linux go build -o /app/bin/blog-server ./cmd/server && \
+    CGO_ENABLED=1 GOOS=linux go build -o /app/bin/blog-migrate ./cmd/migrate
 
 # ─── 阶段：运行 ───────────────────────────────────────────────────────────────
 FROM alpine:3.20
@@ -31,6 +32,7 @@ RUN apk --no-cache add ca-certificates tzdata libwebp && \
     echo "Asia/Shanghai" > /etc/timezone
 
 COPY --from=builder /app/bin/blog-server .
+COPY --from=builder /app/bin/blog-migrate .
 
 EXPOSE 8080
 
