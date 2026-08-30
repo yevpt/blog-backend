@@ -2,6 +2,31 @@
 
 个人博客 Go API 服务，前端为独立项目。项目覆盖内容发布、用户与社交登录、评论互动、站内通知、邮件通知、内容审核、自建访问统计、媒体上传与 CDN 私有访问。
 
+## ⚠️ 生产部署必读：数据库迁移
+
+> [!IMPORTANT]
+> `blog-server` 启动时不会自动修改数据库。生产发布必须先成功执行待应用迁移，再启动新镜像；迁移失败时应保留旧服务运行。
+
+现有生产库首次接入迁移台账时，如果已经确认执行完当前全部历史 SQL，只登记一次固定历史基线：
+
+```bash
+docker compose pull blog-server
+docker compose run --rm --no-deps blog-server \
+  ./blog-migrate adopt --through 20260830_user_like_lookup_index.sql
+```
+
+`adopt` 只把基线及之前的历史 SQL 登记为已执行，不会运行 SQL。这个基线代表“迁移工具接管前的历史”，以后不能提高；未来新增迁移全部交给 `up` 真正执行。
+
+之后每次生产发布使用：
+
+```bash
+docker compose run --rm --no-deps blog-server ./blog-migrate up
+docker compose up -d --remove-orphans blog-server
+docker compose run --rm --no-deps blog-server ./blog-migrate status
+```
+
+`up` 会校验历史文件、获取数据库锁，并按文件名顺序执行所有 `pending` 迁移；遇到 dirty、校验和变化或 SQL 错误会立即停止。当前 GitHub Actions 尚未自动执行这一步，完整说明见[部署与配置](docs/deployment.md#数据库迁移)。
+
 ## 项目要点
 
 - **分层架构**：`handler -> service -> repository` 单向依赖，基础设施由 `internal/bootstrap` 构造后注入。
@@ -99,6 +124,7 @@ make run        # 直接运行 API 服务
 make build      # 编译到 bin/blog-server
 make dbsetup    # 初始化当前版本新库结构和默认数据
 make migrate-status # 查看版本化 SQL 状态
+make migrate-adopt THROUGH=<file.sql> # 已有库首次登记历史基线
 make migrate-up # 执行待应用迁移
 make swag       # 生成 Swagger 文档到 docs/
 make test       # 运行全部测试
