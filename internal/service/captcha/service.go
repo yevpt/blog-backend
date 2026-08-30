@@ -29,9 +29,10 @@ var (
 
 // Service GoCaptcha 业务接口，负责注册场景的挑战生成、校验和一次性票据消费。
 type Service interface {
-	GenerateRegistrationChallenge() (*dto.CaptchaChallengeResp, error)
-	VerifyRegistrationChallenge(req *dto.CaptchaVerifyReq, ip string) (*dto.CaptchaVerifyResp, error)
+	GenerateRegistrationChallenge(ctx context.Context) (*dto.CaptchaChallengeResp, error)
+	VerifyRegistrationChallenge(ctx context.Context, req *dto.CaptchaVerifyReq, ip string) (*dto.CaptchaVerifyResp, error)
 	ConsumeRegistrationToken(token string, ip string) error
+	ConsumeRegistrationTokenContext(ctx context.Context, token string, ip string) error
 }
 
 type service struct {
@@ -53,9 +54,7 @@ func newServiceWithGenerator(rdb *redis.Client, generator slideGenerator) *servi
 	return &service{rdb: rdb, generator: generator}
 }
 
-func (s *service) GenerateRegistrationChallenge() (*dto.CaptchaChallengeResp, error) {
-	ctx := context.Background()
-
+func (s *service) GenerateRegistrationChallenge(ctx context.Context) (*dto.CaptchaChallengeResp, error) {
 	// 生成图片和后端私有答案，响应只暴露渲染所需字段。
 	challenge, err := s.generator.Generate()
 	if err != nil {
@@ -89,9 +88,7 @@ func (s *service) GenerateRegistrationChallenge() (*dto.CaptchaChallengeResp, er
 	}, nil
 }
 
-func (s *service) VerifyRegistrationChallenge(req *dto.CaptchaVerifyReq, ip string) (*dto.CaptchaVerifyResp, error) {
-	ctx := context.Background()
-
+func (s *service) VerifyRegistrationChallenge(ctx context.Context, req *dto.CaptchaVerifyReq, ip string) (*dto.CaptchaVerifyResp, error) {
 	// 读取并立即删除 challenge，保证每次挑战只能尝试一次。
 	key := challengeKey(req.ChallengeID)
 	raw, err := s.rdb.GetDel(ctx, key).Result()
@@ -126,11 +123,14 @@ func (s *service) VerifyRegistrationChallenge(req *dto.CaptchaVerifyReq, ip stri
 }
 
 func (s *service) ConsumeRegistrationToken(token string, ip string) error {
+	return s.ConsumeRegistrationTokenContext(context.Background(), token, ip)
+}
+
+// ConsumeRegistrationTokenContext 使用调用方 context 原子消费一次性票据。
+func (s *service) ConsumeRegistrationTokenContext(ctx context.Context, token string, ip string) error {
 	if token == "" {
 		return ErrInvalidCaptchaToken
 	}
-
-	ctx := context.Background()
 
 	// token 读取后删除，实现“验证通过后只能发送一次邮件验证码”。
 	raw, err := s.rdb.GetDel(ctx, tokenKey(token)).Result()

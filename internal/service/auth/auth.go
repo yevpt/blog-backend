@@ -49,23 +49,23 @@ var dummyHashForTimingProtection, _ = bcrypt.GenerateFromPassword(
 // AuthService 认证业务接口，涵盖验证码发送、注册、登录、token 刷新全链路
 type AuthService interface {
 	// SendCode 向邮箱发送验证码，内置三层频率控制（冷却 / 10分钟 / 日限）
-	SendCode(email string, ip string, captchaToken string) error
+	SendCode(ctx context.Context, email string, ip string, captchaToken string) error
 	// Register 校验验证码并创建用户，验证码一次性消费，邮箱全局唯一；成功后签发登录 token
-	Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error)
+	Register(ctx context.Context, req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error)
 	// Login 三合一登录（username / email / phone），用户不存在时仍执行 bcrypt 防止时序攻击
-	Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error)
+	Login(ctx context.Context, req *dto.LoginReq, ip string) (*dto.LoginResp, error)
 	// AdminLogin 管理后台登录，仅允许 username + password，且用户必须持有管理员角色
-	AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error)
+	AdminLogin(ctx context.Context, req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error)
 	// Refresh 用 refresh token 同时换发新的 access + refresh token（token rotation）
-	Refresh(refreshToken string) (*dto.TokenResp, error)
+	Refresh(ctx context.Context, refreshToken string) (*dto.TokenResp, error)
 	// SendPasswordResetCode 发送忘记密码验证码，不向调用方暴露邮箱是否存在。
-	SendPasswordResetCode(email string, ip string, captchaToken string) error
+	SendPasswordResetCode(ctx context.Context, email string, ip string, captchaToken string) error
 	// ResetPassword 使用邮箱验证码重置登录密码。
-	ResetPassword(req *dto.PasswordResetReq) error
+	ResetPassword(ctx context.Context, req *dto.PasswordResetReq) error
 }
 
 type authService struct {
-	repo            userrepo.UserRepository
+	repo            userrepo.AuthenticationRepository
 	jwt             *jwtpkg.Manager
 	rdb             *redis.Client
 	mailer          email.MailSender
@@ -80,7 +80,7 @@ type authService struct {
 
 // CaptchaTokenConsumer 消费注册图形验证码票据，避免 auth 直接了解 captcha 内部存储细节。
 type CaptchaTokenConsumer interface {
-	ConsumeRegistrationToken(token string, ip string) error
+	ConsumeRegistrationTokenContext(ctx context.Context, token string, ip string) error
 }
 
 // ModerationProfileInitializer 为新注册用户创建默认审核画像。
@@ -90,7 +90,7 @@ type ModerationProfileInitializer interface {
 }
 
 func NewAuthService(
-	repo userrepo.UserRepository,
+	repo userrepo.AuthenticationRepository,
 	jwt *jwtpkg.Manager,
 	rdb *redis.Client,
 	mailer email.MailSender,
@@ -119,9 +119,7 @@ func NewAuthService(
 	return service
 }
 
-func (s *authService) SendCode(to string, ip string, captchaToken string) error {
-	ctx := context.Background()
-
+func (s *authService) SendCode(ctx context.Context, to string, ip string, captchaToken string) error {
 	// 冷却检查优先，避免后续 Incr 在冷却期内重复计数
 	cdKey := fmt.Sprintf("email:cd:%s", to)
 	if n, _ := s.rdb.Exists(ctx, cdKey).Result(); n > 0 {
@@ -129,12 +127,12 @@ func (s *authService) SendCode(to string, ip string, captchaToken string) error 
 	}
 
 	// 发送邮件验证码前必须消费一次性图形验证码票据，防止绕过前端直接刷邮件接口
-	if err := s.captchaConsumer.ConsumeRegistrationToken(captchaToken, ip); err != nil {
+	if err := s.captchaConsumer.ConsumeRegistrationTokenContext(ctx, captchaToken, ip); err != nil {
 		return err
 	}
 
 	// 邮箱已注册无需再发码，尽早拦截，避免用户走完滑块+等邮件才在提交时被拒
-	taken, err := s.repo.ExistsByEmail(to)
+	taken, err := s.repo.ExistsByEmail(ctx, to)
 	if err != nil {
 		return err
 	}
@@ -177,8 +175,7 @@ func (s *authService) SendCode(to string, ip string, captchaToken string) error 
 	return s.mailer.SendVerificationCode(to, code, email.PurposeRegister)
 }
 
-func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken string) error {
-	ctx := context.Background()
+func (s *authService) SendPasswordResetCode(ctx context.Context, to string, ip string, captchaToken string) error {
 	emailAddr := normalizeEmail(to)
 
 	cdKey := fmt.Sprintf("password:reset:cd:%s", emailAddr)
@@ -186,7 +183,7 @@ func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken s
 		return ErrTooManyRequests
 	}
 
-	if err := s.captchaConsumer.ConsumeRegistrationToken(captchaToken, ip); err != nil {
+	if err := s.captchaConsumer.ConsumeRegistrationTokenContext(ctx, captchaToken, ip); err != nil {
 		return err
 	}
 
@@ -201,7 +198,7 @@ func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken s
 
 	s.rdb.Set(ctx, cdKey, 1, 60*time.Second)
 
-	user, err := s.repo.FindByEmail(emailAddr)
+	user, err := s.repo.FindByEmail(ctx, emailAddr)
 	if err != nil {
 		return err
 	}
@@ -222,8 +219,7 @@ func (s *authService) SendPasswordResetCode(to string, ip string, captchaToken s
 	return s.mailer.SendVerificationCode(emailAddr, code, email.PurposePasswordReset)
 }
 
-func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
-	ctx := context.Background()
+func (s *authService) ResetPassword(ctx context.Context, req *dto.PasswordResetReq) error {
 	emailAddr := normalizeEmail(req.Email)
 	codeKey := passwordResetCodeKey(emailAddr)
 
@@ -232,7 +228,7 @@ func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
 		return ErrInvalidCode
 	}
 
-	user, err := s.repo.FindByEmail(emailAddr)
+	user, err := s.repo.FindByEmail(ctx, emailAddr)
 	if err != nil {
 		return err
 	}
@@ -247,7 +243,7 @@ func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
 	if err != nil {
 		return err
 	}
-	if err := s.repo.UpdatePassword(user.ID, string(hash)); err != nil {
+	if err := s.repo.UpdatePassword(ctx, user.ID, string(hash)); err != nil {
 		return err
 	}
 
@@ -258,8 +254,7 @@ func (s *authService) ResetPassword(req *dto.PasswordResetReq) error {
 	return nil
 }
 
-func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
-	ctx := context.Background()
+func (s *authService) Register(ctx context.Context, req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
 	if s.profile != nil {
 		allowed, err := s.profile.RegistrationAllowed(ctx)
 		if err != nil {
@@ -280,7 +275,7 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 	s.rdb.Del(ctx, codeKey)
 
 	// 检查邮箱是否已被其他账号占用
-	taken, err := s.repo.ExistsByEmail(req.Email)
+	taken, err := s.repo.ExistsByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +284,7 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 	}
 
 	// 解析昵称：用户填写则直接用，未填写则以邮箱前缀+随机串自动生成
-	nickname, err := s.resolveNickname(req.Nickname, req.Email)
+	nickname, err := s.resolveNickname(ctx, req.Nickname, req.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +325,7 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 	}
 
 	// 在事务中同时写入用户记录和角色关联，保证两张表数据一致
-	if err := s.repo.Create(user, roles.NormalRoleId); err != nil {
+	if err := s.repo.Create(ctx, user, roles.NormalRoleId); err != nil {
 		if avatarCreated && avatarKey != nil && s.store != nil {
 			_ = s.store.DeleteObject(ctx, *avatarKey)
 		}
@@ -341,11 +336,11 @@ func (s *authService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFi
 		_ = s.profile.EnsureNewProfile(ctx, uint64(user.ID))
 	}
 
-	return s.issueLoginResp(user)
+	return s.issueLoginResp(ctx, user)
 }
 
 func (s *authService) touchLoginPresence(ctx context.Context, userID uint) {
-	_ = s.repo.TouchLoginPresence(userID)
+	_ = s.repo.TouchLoginPresence(ctx, userID)
 	if s.presence != nil {
 		_ = s.presence.TouchUserOnline(ctx, userID)
 	}
@@ -354,7 +349,7 @@ func (s *authService) touchLoginPresence(ctx context.Context, userID uint) {
 	}
 }
 
-func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
+func (s *authService) issueLoginResp(ctx context.Context, user *model.User) (*dto.LoginResp, error) {
 	userId := int64(user.ID)
 	accessToken, err := s.jwt.GenerateAccess(userId)
 	if err != nil {
@@ -365,9 +360,9 @@ func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
 		return nil, err
 	}
 
-	s.touchLoginPresence(context.Background(), user.ID)
+	s.touchLoginPresence(ctx, user.ID)
 
-	userRoles, err := s.repo.FindRolesByUserID(user.ID)
+	userRoles, err := s.repo.FindRolesByUserID(ctx, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +377,7 @@ func (s *authService) issueLoginResp(user *model.User) (*dto.LoginResp, error) {
 			Email:         user.Email,
 			EmailVerified: user.EmailVerifiedAt != nil,
 			Nickname:      user.Nickname,
-			AvatarUrl:     storage.ResolvePtrURL(s.resolver, user.AvatarUrl),
+			AvatarUrl:     storage.ResolvePtrURLContext(ctx, s.resolver, user.AvatarUrl),
 			Roles:         userRoles,
 		},
 	}, nil
@@ -396,9 +391,9 @@ func normalizeEmail(emailAddr string) string {
 	return strings.ToLower(strings.TrimSpace(emailAddr))
 }
 
-func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
+func (s *authService) Login(ctx context.Context, req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
 	// 支持 username / email / phone 三合一查询用户
-	user, err := s.repo.FindByIdentifier(req.Identifier)
+	user, err := s.repo.FindByIdentifier(ctx, req.Identifier)
 	if err != nil {
 		return nil, err
 	}
@@ -419,12 +414,12 @@ func (s *authService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error
 		return nil, ErrUserDisabled
 	}
 
-	return s.issueLoginResp(user)
+	return s.issueLoginResp(ctx, user)
 }
 
-func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
+func (s *authService) AdminLogin(ctx context.Context, req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
 	// 管理后台入口只按 username 查询，不接受邮箱或手机号作为登录标识。
-	user, err := s.repo.FindByUsername(req.Username)
+	user, err := s.repo.FindByUsername(ctx, req.Username)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +436,7 @@ func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginR
 	}
 
 	// 先读取角色并校验管理员权限，非管理员不签发管理后台登录 token。
-	userRoles, err := s.repo.FindRolesByUserID(user.ID)
+	userRoles, err := s.repo.FindRolesByUserID(ctx, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +454,7 @@ func (s *authService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginR
 		return nil, err
 	}
 
-	s.touchLoginPresence(context.Background(), user.ID)
+	s.touchLoginPresence(ctx, user.ID)
 
 	return &dto.LoginResp{
 		AccessToken:  accessToken,
@@ -480,7 +475,7 @@ func ptrTime(t time.Time) *time.Time {
 	return &t
 }
 
-func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
+func (s *authService) Refresh(ctx context.Context, refreshToken string) (*dto.TokenResp, error) {
 	// 解析并验证 token 签名与过期时间
 	claims, err := s.jwt.Parse(refreshToken)
 	if err != nil {
@@ -493,7 +488,7 @@ func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
 
 	// 验证用户仍然有效，防止被禁用的用户通过 refresh token 续签
 	if s.cache != nil {
-		detail, cacheErr := s.cache.Get(context.Background(), claims.UserId)
+		detail, cacheErr := s.cache.Get(ctx, claims.UserId)
 		if cacheErr != nil || detail == nil || detail.Status != 1 {
 			return nil, ErrInvalidToken
 		}
@@ -519,7 +514,7 @@ func (s *authService) Refresh(refreshToken string) (*dto.TokenResp, error) {
 
 // resolveNickname 优先使用用户指定昵称；未指定时以邮箱前缀（≤6字符）+ 4位随机串自动生成，
 // 最多重试 10 次避免极端碰撞情况。
-func (s *authService) resolveNickname(nickname *string, emailAddr string) (string, error) {
+func (s *authService) resolveNickname(ctx context.Context, nickname *string, emailAddr string) (string, error) {
 	// 用户已填写昵称时直接使用，不走自动生成流程
 	if nickname != nil && strings.TrimSpace(*nickname) != "" {
 		return *nickname, nil
@@ -549,7 +544,7 @@ func (s *authService) resolveNickname(nickname *string, emailAddr string) (strin
 		}
 		candidate := prefix + string(suffix)
 		// 检查候选昵称是否已被占用，未占用则直接返回
-		exists, err := s.repo.ExistsByNickname(candidate)
+		exists, err := s.repo.ExistsByNickname(ctx, candidate)
 		if err != nil {
 			return "", err
 		}

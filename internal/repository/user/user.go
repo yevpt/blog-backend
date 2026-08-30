@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"time"
@@ -113,7 +114,7 @@ type UserRepository interface {
 	// FindByID 按主键查询；未找到时返回 nil, nil
 	FindByID(id uint) (*model.User, error)
 	// FindDetailByID 查询用户详情聚合，包含角色、扩展资料、偏好设置和社交链接。
-	FindDetailByID(id uint) (*UserDetailAggregate, error)
+	FindDetailByID(ctx context.Context, id uint) (*UserDetailAggregate, error)
 	// ListLikedContent 分页查询某个用户赞过的公开内容。
 	ListLikedContent(filter LikedContentFilter) (*LikedContentPageResult, error)
 	// CountLikedContent 统计某个用户赞过的公开内容总数。
@@ -216,34 +217,42 @@ func (r *userRepo) FindByID(id uint) (*model.User, error) {
 	return &user, err
 }
 
-func (r *userRepo) FindDetailByID(id uint) (*UserDetailAggregate, error) {
+func (r *userRepo) FindDetailByID(ctx context.Context, id uint) (*UserDetailAggregate, error) {
 	// 先读取主用户记录，不存在时直接返回 nil。
-	user, err := r.FindByID(id)
-	if err != nil || user == nil {
+	var user model.User
+	err := r.db.WithContext(ctx).First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
 		return nil, err
 	}
 
 	// 再补齐角色、扩展信息、偏好设置和社交链接。
-	roles, err := r.FindRolesByUserID(id)
+	var roles []string
+	err = r.db.WithContext(ctx).Model(&model.UserRole{}).
+		Joins("JOIN role ON role.id = user_role.role_id").
+		Where("user_role.user_id = ?", id).
+		Pluck("role.name", &roles).Error
 	if err != nil {
 		return nil, err
 	}
-	meta, err := r.findUserMetaByUserID(id)
+	meta, err := r.findUserMetaByUserID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	setting, err := r.findUserSettingByUserID(id)
+	setting, err := r.findUserSettingByUserID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	socialLinks, err := r.findUserSocialLinksByUserID(id)
+	socialLinks, err := r.findUserSocialLinksByUserID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// 返回 repository 层聚合，DTO 转换交给 service。
 	return &UserDetailAggregate{
-		User:        *user,
+		User:        user,
 		Roles:       roles,
 		Meta:        meta,
 		Setting:     setting,
@@ -489,29 +498,29 @@ func (r *userRepo) ReplaceAvatarURL(oldURL, newURL string) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
-func (r *userRepo) findUserMetaByUserID(userID uint) (*model.UserMeta, error) {
+func (r *userRepo) findUserMetaByUserID(ctx context.Context, userID uint) (*model.UserMeta, error) {
 	var meta model.UserMeta
 	// 用户扩展资料是 1:1 关系，缺失时按 nil 处理。
-	err := r.db.Where("user_id = ?", userID).First(&meta).Error
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&meta).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
 	return &meta, err
 }
 
-func (r *userRepo) findUserSettingByUserID(userID uint) (*model.UserSetting, error) {
+func (r *userRepo) findUserSettingByUserID(ctx context.Context, userID uint) (*model.UserSetting, error) {
 	var setting model.UserSetting
 	// 用户偏好设置是 1:1 关系，缺失时返回 nil 让上层按未配置处理。
-	err := r.db.Where("user_id = ?", userID).First(&setting).Error
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&setting).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
 	return &setting, err
 }
 
-func (r *userRepo) findUserSocialLinksByUserID(userID uint) ([]model.UserSocialLink, error) {
+func (r *userRepo) findUserSocialLinksByUserID(ctx context.Context, userID uint) ([]model.UserSocialLink, error) {
 	var links []model.UserSocialLink
 	// 社交链接按平台名稳定排序，便于前端渲染与测试断言。
-	err := r.db.Where("user_id = ?", userID).Order("platform ASC").Find(&links).Error
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Order("platform ASC").Find(&links).Error
 	return links, err
 }

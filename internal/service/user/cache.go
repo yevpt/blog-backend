@@ -55,7 +55,7 @@ func (s *userCacheService) Get(ctx context.Context, userId int64) (*dto.UserDeta
 		var profile dto.UserDetailResp
 		if jsonErr := json.Unmarshal([]byte(val), &profile); jsonErr == nil {
 			// 缓存只保存对象 key；每次读取时重新生成头像访问地址，避免 CDN 签名过期。
-			profile.AvatarUrl = refreshCachedAvatarURL(s.resolver, profile.AvatarUrl)
+			profile.AvatarUrl = refreshCachedAvatarURL(ctx, s.resolver, profile.AvatarUrl)
 			return &profile, nil
 		}
 		// JSON 损坏，删掉强制重建（Del 失败时忽略，下次读取会再次尝试重建）
@@ -64,7 +64,7 @@ func (s *userCacheService) Get(ctx context.Context, userId int64) (*dto.UserDeta
 
 	// cache miss：高并发下多个 goroutine 可能同时到达此处（Thundering Herd）。
 	// 博客场景写操作稀少，接受此权衡；生产大流量场景可引入 singleflight 防护。
-	aggregate, dbErr := s.repo.FindDetailByID(uint(userId))
+	aggregate, dbErr := s.repo.FindDetailByID(ctx, uint(userId))
 	if dbErr != nil {
 		return nil, dbErr
 	}
@@ -72,7 +72,7 @@ func (s *userCacheService) Get(ctx context.Context, userId int64) (*dto.UserDeta
 		return nil, ErrUserNotFound
 	}
 
-	profile := assembleUserDetail(s.resolver, aggregate)
+	profile := assembleUserDetail(ctx, s.resolver, aggregate)
 	_ = s.Set(ctx, userId, profile) // 写缓存失败不影响返回
 	return profile, nil
 }
@@ -90,8 +90,8 @@ func (s *userCacheService) Set(ctx context.Context, userId int64, profile *dto.U
 }
 
 // refreshCachedAvatarURL 将缓存中的本站对象 key（兼容历史签名 URL）转为本次请求可用的访问地址。
-func refreshCachedAvatarURL(resolver storage.ObjectURLResolver, avatarURL *string) *string {
-	return resolveUserAvatarURL(resolver, cachedAvatarValue(resolver, avatarURL))
+func refreshCachedAvatarURL(ctx context.Context, resolver storage.ObjectURLResolver, avatarURL *string) *string {
+	return storage.ResolvePtrURLContext(ctx, resolver, cachedAvatarValue(resolver, avatarURL))
 }
 
 // cachedAvatarValue 将本站托管头像归一为对象 key；外部头像地址保持不变。

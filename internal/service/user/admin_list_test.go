@@ -81,7 +81,7 @@ func TestAdminService_ListAdmin_NoModerationDepsDefaultsActive(t *testing.T) {
 func TestAdminService_GetAdminDetail_NotFound(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
-	repo.EXPECT().FindDetailByID(uint(9)).Return(nil, nil)
+	repo.EXPECT().FindDetailByID(gomock.Any(), uint(9)).Return(nil, nil)
 
 	svc := userservice.NewAdminService(repo, &stubUserCacheService{})
 	resp, err := svc.GetAdminDetail(9)
@@ -92,7 +92,7 @@ func TestAdminService_GetAdminDetail_NotFound(t *testing.T) {
 func TestAdminService_GetAdminDetail_Found(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	repo := mock.NewMockUserRepository(ctrl)
-	repo.EXPECT().FindDetailByID(uint(3)).Return(&user.UserDetailAggregate{
+	repo.EXPECT().FindDetailByID(gomock.Any(), uint(3)).Return(&user.UserDetailAggregate{
 		User:  model.User{Base: model.Base{ID: 3}, Username: "vpt"},
 		Roles: []string{"ROLE_ADMIN"},
 	}, nil)

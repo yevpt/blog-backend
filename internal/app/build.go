@@ -73,6 +73,7 @@ func buildHandlers(
 		return router.Handlers{}, analyticsRuntime{}, nil, fmt.Errorf("构造验证码服务: %w", err)
 	}
 	userRepo := userrepo.NewUserRepository(deps.DB)
+	authRepo := userrepo.NewAuthenticationRepository(deps.DB)
 	userCacheSvc := userservice.NewUserCacheService(userRepo, deps.Store, deps.Redis)
 	onlineWindow := cfg.Analytics.OnlineWindow
 	if onlineWindow <= 0 {
@@ -82,7 +83,7 @@ func buildHandlers(
 	avatarSvc := avatarservice.NewService(deps.Store, avatarservice.Options{})
 	moderationGovernanceSvc := maybeNewModerationGovernanceService(deps.DB, cfg.Moderation)
 	authSvc := authservice.NewAuthService(
-		userRepo, deps.JWT, deps.Redis, deps.Mailer, captchaSvc, userCacheSvc,
+		authRepo, deps.JWT, deps.Redis, deps.Mailer, captchaSvc, userCacheSvc,
 		avatarSvc, deps.Store, userPresence, moderationGovernanceSvc,
 	)
 	userSvc := userservice.NewUserService(userCacheSvc, userRepo, deps.Store, avatarSvc, userPresence, userservice.SecurityDeps{

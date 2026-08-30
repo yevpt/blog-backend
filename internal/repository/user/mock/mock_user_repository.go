@@ -10,6 +10,7 @@
 package mock
 
 import (
+	context "context"
 	reflect "reflect"
 
 	model "github.com/vpt/blog-backend/internal/model"
@@ -250,18 +251,18 @@ func (mr *MockUserRepositoryMockRecorder) FindByUsername(username any) *gomock.C
 }
 
 // FindDetailByID mocks base method.
-func (m *MockUserRepository) FindDetailByID(id uint) (*user.UserDetailAggregate, error) {
+func (m *MockUserRepository) FindDetailByID(ctx context.Context, id uint) (*user.UserDetailAggregate, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindDetailByID", id)
+	ret := m.ctrl.Call(m, "FindDetailByID", ctx, id)
 	ret0, _ := ret[0].(*user.UserDetailAggregate)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // FindDetailByID indicates an expected call of FindDetailByID.
-func (mr *MockUserRepositoryMockRecorder) FindDetailByID(id any) *gomock.Call {
+func (mr *MockUserRepositoryMockRecorder) FindDetailByID(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindDetailByID", reflect.TypeOf((*MockUserRepository)(nil).FindDetailByID), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindDetailByID", reflect.TypeOf((*MockUserRepository)(nil).FindDetailByID), ctx, id)
 }
 
 // FindRolesByUserID mocks base method.

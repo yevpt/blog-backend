@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"mime/multipart"
@@ -37,29 +38,29 @@ type stubAuthService struct {
 	refreshErr     error
 }
 
-func (s *stubAuthService) SendCode(email, ip string, captchaToken string) error {
+func (s *stubAuthService) SendCode(_ context.Context, email, ip string, captchaToken string) error {
 	return s.sendCodeErr
 }
-func (s *stubAuthService) SendPasswordResetCode(email, ip string, captchaToken string) error {
+func (s *stubAuthService) SendPasswordResetCode(_ context.Context, email, ip string, captchaToken string) error {
 	s.resetCodeEmail = email
 	s.resetCodeToken = captchaToken
 	return s.resetCodeErr
 }
-func (s *stubAuthService) ResetPassword(req *dto.PasswordResetReq) error {
+func (s *stubAuthService) ResetPassword(_ context.Context, req *dto.PasswordResetReq) error {
 	s.resetReq = req
 	return s.resetErr
 }
-func (s *stubAuthService) Register(req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
+func (s *stubAuthService) Register(_ context.Context, req *dto.RegisterReq, avatar *dto.UploadedImageFile) (*dto.LoginResp, error) {
 	return s.registerResp, s.registerErr
 }
-func (s *stubAuthService) Login(req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
+func (s *stubAuthService) Login(_ context.Context, req *dto.LoginReq, ip string) (*dto.LoginResp, error) {
 	return s.loginResp, s.loginErr
 }
-func (s *stubAuthService) AdminLogin(req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
+func (s *stubAuthService) AdminLogin(_ context.Context, req *dto.AdminLoginReq, ip string) (*dto.LoginResp, error) {
 	s.adminLoginReq = req
 	return s.adminLoginResp, s.adminLoginErr
 }
-func (s *stubAuthService) Refresh(rt string) (*dto.TokenResp, error) {
+func (s *stubAuthService) Refresh(_ context.Context, rt string) (*dto.TokenResp, error) {
 	return s.refreshResp, s.refreshErr
 }
 

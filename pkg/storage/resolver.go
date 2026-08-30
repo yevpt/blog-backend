@@ -88,6 +88,11 @@ func IsAbsoluteURL(value string) bool {
 // 如果传入的 url 为空或者是完整的绝对路径，则直接返回原指针；
 // 否则使用传入的 resolver 进行解析，解析失败则静默返回原指针。
 func ResolvePtrURL(resolver ObjectURLResolver, url *string) *string {
+	return ResolvePtrURLContext(context.Background(), resolver, url)
+}
+
+// ResolvePtrURLContext 使用调用方 context 解析对象 URL，便于请求取消时终止缓存或存储访问。
+func ResolvePtrURLContext(ctx context.Context, resolver ObjectURLResolver, url *string) *string {
 	if url == nil || resolver == nil {
 		return url
 	}
@@ -95,7 +100,7 @@ func ResolvePtrURL(resolver ObjectURLResolver, url *string) *string {
 	if trimmed == "" || IsAbsoluteURL(trimmed) {
 		return url
 	}
-	if resolved, err := resolver.ObjectURL(context.Background(), trimmed); err == nil {
+	if resolved, err := resolver.ObjectURL(ctx, trimmed); err == nil {
 		return &resolved
 	}
 	return url
@@ -105,6 +110,11 @@ func ResolvePtrURL(resolver ObjectURLResolver, url *string) *string {
 // 如果传入的 url 为空或者是完整的绝对路径，则直接返回原字符串；
 // 否则使用传入的 resolver 进行解析，解析失败则静默返回原字符串。
 func ResolveURL(resolver ObjectURLResolver, url string) string {
+	return ResolveURLContext(context.Background(), resolver, url)
+}
+
+// ResolveURLContext 使用调用方 context 解析对象 URL。
+func ResolveURLContext(ctx context.Context, resolver ObjectURLResolver, url string) string {
 	if resolver == nil {
 		return url
 	}
@@ -112,7 +122,7 @@ func ResolveURL(resolver ObjectURLResolver, url string) string {
 	if trimmed == "" || IsAbsoluteURL(trimmed) {
 		return url
 	}
-	if resolved, err := resolver.ObjectURL(context.Background(), trimmed); err == nil {
+	if resolved, err := resolver.ObjectURL(ctx, trimmed); err == nil {
 		return resolved
 	}
 	return url

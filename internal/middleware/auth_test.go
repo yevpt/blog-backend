@@ -134,9 +134,11 @@ func TestOptionalAuth_RejectsRefreshTokenWhenPresent(t *testing.T) {
 type mockUserCache struct {
 	profile *dto.UserDetailResp
 	err     error
+	ctx     context.Context
 }
 
-func (m *mockUserCache) Get(_ context.Context, _ int64) (*dto.UserDetailResp, error) {
+func (m *mockUserCache) Get(ctx context.Context, _ int64) (*dto.UserDetailResp, error) {
+	m.ctx = ctx
 	return m.profile, m.err
 }
 func (m *mockUserCache) Set(_ context.Context, _ int64, _ *dto.UserDetailResp) error {
@@ -165,6 +167,7 @@ func TestAuth_WithCache_UserDetailInContext(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, req.Context(), cache.ctx)
 }
 
 func TestAuth_WithCache_DisabledUser_Returns401(t *testing.T) {

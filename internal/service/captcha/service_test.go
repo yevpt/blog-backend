@@ -50,7 +50,7 @@ func TestServiceGenerateRegistrationChallenge(t *testing.T) {
 	svc, rdb, mr := setupCaptchaService(t)
 	defer mr.Close()
 
-	resp, err := svc.GenerateRegistrationChallenge()
+	resp, err := svc.GenerateRegistrationChallenge(context.Background())
 
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -71,10 +71,10 @@ func TestServiceVerifyRegistrationChallengeRejectsWrongPosition(t *testing.T) {
 	svc, _, mr := setupCaptchaService(t)
 	defer mr.Close()
 
-	challenge, err := svc.GenerateRegistrationChallenge()
+	challenge, err := svc.GenerateRegistrationChallenge(context.Background())
 	require.NoError(t, err)
 
-	resp, err := svc.VerifyRegistrationChallenge(&dto.CaptchaVerifyReq{
+	resp, err := svc.VerifyRegistrationChallenge(context.Background(), &dto.CaptchaVerifyReq{
 		ChallengeID: challenge.ChallengeID,
 		X:           20,
 		Y:           82,
@@ -88,10 +88,10 @@ func TestServiceVerifyRegistrationChallengeReturnsOneTimeToken(t *testing.T) {
 	svc, _, mr := setupCaptchaService(t)
 	defer mr.Close()
 
-	challenge, err := svc.GenerateRegistrationChallenge()
+	challenge, err := svc.GenerateRegistrationChallenge(context.Background())
 	require.NoError(t, err)
 
-	resp, err := svc.VerifyRegistrationChallenge(&dto.CaptchaVerifyReq{
+	resp, err := svc.VerifyRegistrationChallenge(context.Background(), &dto.CaptchaVerifyReq{
 		ChallengeID: challenge.ChallengeID,
 		X:           162,
 		Y:           84,
@@ -101,10 +101,10 @@ func TestServiceVerifyRegistrationChallengeReturnsOneTimeToken(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.NotEmpty(t, resp.CaptchaToken)
 
-	err = svc.ConsumeRegistrationToken(resp.CaptchaToken, "127.0.0.1")
+	err = svc.ConsumeRegistrationTokenContext(context.Background(), resp.CaptchaToken, "127.0.0.1")
 	require.NoError(t, err)
 
-	err = svc.ConsumeRegistrationToken(resp.CaptchaToken, "127.0.0.1")
+	err = svc.ConsumeRegistrationTokenContext(context.Background(), resp.CaptchaToken, "127.0.0.1")
 	assert.ErrorIs(t, err, ErrInvalidCaptchaToken)
 }
 
@@ -116,8 +116,21 @@ func TestServiceGenerateRegistrationChallengeReturnsGeneratorError(t *testing.T)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	svc := newServiceWithGenerator(rdb, fakeSlideGenerator{err: errors.New("boom")})
 
-	resp, err := svc.GenerateRegistrationChallenge()
+	resp, err := svc.GenerateRegistrationChallenge(context.Background())
 
 	assert.Error(t, err)
+	assert.Nil(t, resp)
+}
+
+func TestServiceGenerateRegistrationChallengeHonorsCanceledContext(t *testing.T) {
+	svc, _, mr := setupCaptchaService(t)
+	defer mr.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	resp, err := svc.GenerateRegistrationChallenge(ctx)
+
+	assert.ErrorIs(t, err, context.Canceled)
 	assert.Nil(t, resp)
 }

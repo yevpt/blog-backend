@@ -2,6 +2,7 @@ package captcha_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -26,11 +27,11 @@ type stubCaptchaService struct {
 	consumedIP    string
 }
 
-func (s *stubCaptchaService) GenerateRegistrationChallenge() (*dto.CaptchaChallengeResp, error) {
+func (s *stubCaptchaService) GenerateRegistrationChallenge(context.Context) (*dto.CaptchaChallengeResp, error) {
 	return s.challengeResp, s.challengeErr
 }
 
-func (s *stubCaptchaService) VerifyRegistrationChallenge(req *dto.CaptchaVerifyReq, ip string) (*dto.CaptchaVerifyResp, error) {
+func (s *stubCaptchaService) VerifyRegistrationChallenge(context.Context, *dto.CaptchaVerifyReq, string) (*dto.CaptchaVerifyResp, error) {
 	return s.verifyResp, s.verifyErr
 }
 
@@ -38,6 +39,10 @@ func (s *stubCaptchaService) ConsumeRegistrationToken(token string, ip string) e
 	s.consumedToken = token
 	s.consumedIP = ip
 	return nil
+}
+
+func (s *stubCaptchaService) ConsumeRegistrationTokenContext(_ context.Context, token string, ip string) error {
+	return s.ConsumeRegistrationToken(token, ip)
 }
 
 func newTestRouter(svc captchaservice.Service) *gin.Engine {

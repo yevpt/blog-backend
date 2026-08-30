@@ -40,7 +40,7 @@ func (h *AuthHandler) SendCode(c *gin.Context) {
 	}
 
 	// 调用 service 发送验证码，IP 透传用于校验图形验证码票据归属
-	if err := h.svc.SendCode(req.Email, c.ClientIP(), req.CaptchaToken); err != nil {
+	if err := h.svc.SendCode(c.Request.Context(), req.Email, c.ClientIP(), req.CaptchaToken); err != nil {
 		// 频率超限（冷却/10分钟/日限）映射到 429，其余业务错误映射到 400
 		if isTooManyRequests(err) {
 			response.TooManyRequests(c, err.Error(), 0)
@@ -75,7 +75,7 @@ func (h *AuthHandler) SendPasswordResetCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.SendPasswordResetCode(req.Email, c.ClientIP(), req.CaptchaToken); err != nil {
+	if err := h.svc.SendPasswordResetCode(c.Request.Context(), req.Email, c.ClientIP(), req.CaptchaToken); err != nil {
 		if isTooManyRequests(err) {
 			response.TooManyRequests(c, err.Error(), 0)
 			return
@@ -102,7 +102,7 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.ResetPassword(&req); err != nil {
+	if err := h.svc.ResetPassword(c.Request.Context(), &req); err != nil {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
 	}
@@ -142,7 +142,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	loginResp, err := h.svc.Register(&req, avatar)
+	loginResp, err := h.svc.Register(c.Request.Context(), &req, avatar)
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
@@ -171,7 +171,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// 调用 service 执行登录：查用户 → 比对密码 → 校验状态 → 签发双 token
-	resp, err := h.svc.Login(&req, c.ClientIP())
+	resp, err := h.svc.Login(c.Request.Context(), &req, c.ClientIP())
 	if err != nil {
 		// 按 service 返回的明确错误选择响应，避免登录页显示 token 相关文案
 		switch {
@@ -214,7 +214,7 @@ func (h *AuthHandler) AdminLogin(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.AdminLogin(&req, c.ClientIP())
+	resp, err := h.svc.AdminLogin(c.Request.Context(), &req, c.ClientIP())
 	if err != nil {
 		switch {
 		case errors.Is(err, authservice.ErrUserNotFound):
@@ -255,7 +255,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	}
 
 	// 调用 service 换发新双 token，任何错误（格式非法、已过期、类型不匹配）均返回 401
-	resp, err := h.svc.Refresh(req.RefreshToken)
+	resp, err := h.svc.Refresh(c.Request.Context(), req.RefreshToken)
 	if err != nil {
 		response.Unauthorized(c)
 		return

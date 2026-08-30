@@ -68,7 +68,7 @@ func Auth(jwtManager *jwt.Manager, userCache UserDetailLoader) gin.HandlerFunc {
 		}
 
 		if userCache != nil {
-			detail, cacheErr := userCache.Get(context.Background(), claims.UserId)
+			detail, cacheErr := userCache.Get(c.Request.Context(), claims.UserId)
 			if cacheErr != nil || detail == nil || detail.Status != 1 {
 				response.Unauthorized(c)
 				c.Abort()

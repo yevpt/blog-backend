@@ -104,7 +104,7 @@ func (r *normalizeAvatarRepo) FindByUsername(username string) (*model.User, erro
 	return nil, nil
 }
 func (r *normalizeAvatarRepo) FindByEmail(email string) (*model.User, error) { return nil, nil }
-func (r *normalizeAvatarRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
+func (r *normalizeAvatarRepo) FindDetailByID(context.Context, uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
 func (r *normalizeAvatarRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {

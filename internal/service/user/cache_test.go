@@ -24,7 +24,7 @@ type stubUserRepo struct {
 	err       error
 }
 
-func (r *stubUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
+func (r *stubUserRepo) FindDetailByID(context.Context, uint) (*userrepo.UserDetailAggregate, error) {
 	return r.aggregate, r.err
 }
 func (r *stubUserRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {

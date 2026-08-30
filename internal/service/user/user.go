@@ -201,7 +201,7 @@ func (s *userService) Update(userID uint, req *dto.UserUpdateReq) (*dto.UserDeta
 }
 
 func (s *userService) GetPublicProfile(userID uint) (*dto.UserPublicProfileResp, error) {
-	agg, err := s.repo.FindDetailByID(userID)
+	agg, err := s.repo.FindDetailByID(context.Background(), userID)
 	if err != nil {
 		return nil, err
 	}

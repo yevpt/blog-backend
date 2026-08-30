@@ -199,7 +199,7 @@ func (s *adminService) ListAdmin(req *dto.AdminUserListReq) (*dto.AdminUserPageR
 
 // GetAdminDetail 管理端查询用户详情，含真实邮箱/手机号与审核画像摘要。
 func (s *adminService) GetAdminDetail(userID uint) (*dto.AdminUserDetailResp, error) {
-	detail, err := s.repo.FindDetailByID(userID)
+	detail, err := s.repo.FindDetailByID(context.Background(), userID)
 	if err != nil {
 		return nil, err
 	}

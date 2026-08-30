@@ -62,19 +62,19 @@ func (s *profileInitializerStub) RegistrationAllowed(context.Context) (bool, err
 	return s.registrationAllowed, s.err
 }
 
-func (m *mockCaptchaTokenConsumer) ConsumeRegistrationToken(token string, ip string) error {
+func (m *mockCaptchaTokenConsumer) ConsumeRegistrationTokenContext(_ context.Context, token string, ip string) error {
 	m.consumedToken = token
 	m.consumedIP = ip
 	return m.err
 }
 
-func setupService(t *testing.T, initializers ...authservice.ModerationProfileInitializer) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
+func setupService(t *testing.T, initializers ...authservice.ModerationProfileInitializer) (authservice.AuthService, *mock.MockAuthenticationRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
 	return setupServiceWithJWT(t, jwtpkg.NewManager("secret", 2, 168), initializers...)
 }
 
-func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager, initializers ...authservice.ModerationProfileInitializer) (authservice.AuthService, *mock.MockUserRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
+func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager, initializers ...authservice.ModerationProfileInitializer) (authservice.AuthService, *mock.MockAuthenticationRepository, *redis.Client, *miniredis.Miniredis, *mockMailSender, *mockCaptchaTokenConsumer) {
 	ctrl := gomock.NewController(t)
-	repo := mock.NewMockUserRepository(ctrl)
+	repo := mock.NewMockAuthenticationRepository(ctrl)
 
 	mr, err := miniredis.Run()
 	require.NoError(t, err)
@@ -90,9 +90,9 @@ func setupServiceWithJWT(t *testing.T, jwtMgr *jwtpkg.Manager, initializers ...a
 func TestAuthService_SendCode_Success(t *testing.T) {
 	svc, repo, rdb, mr, mailer, captchaConsumer := setupService(t)
 	defer mr.Close()
-	repo.EXPECT().ExistsByEmail("user@example.com").Return(false, nil)
+	repo.EXPECT().ExistsByEmail(gomock.Any(), "user@example.com").Return(false, nil)
 
-	err := svc.SendCode("user@example.com", "127.0.0.1", "captcha-token")
+	err := svc.SendCode(context.Background(), "user@example.com", "127.0.0.1", "captcha-token")
 	require.NoError(t, err)
 
 	// 验证码已写入 Redis
@@ -112,7 +112,7 @@ func TestAuthService_SendCode_CooldownBlocks(t *testing.T) {
 	// 预写入冷却 key（TTL=0 表示永不过期，仅测试用）
 	rdb.Set(context.Background(), "email:cd:user@example.com", 1, 0)
 
-	err := svc.SendCode("user@example.com", "127.0.0.1", "captcha-token")
+	err := svc.SendCode(context.Background(), "user@example.com", "127.0.0.1", "captcha-token")
 	assert.Error(t, err)
 }
 
@@ -121,7 +121,7 @@ func TestAuthService_SendCode_InvalidCaptchaToken(t *testing.T) {
 	defer mr.Close()
 	captchaConsumer.err = errors.New("请先完成图形验证码")
 
-	err := svc.SendCode("user@example.com", "127.0.0.1", "bad-token")
+	err := svc.SendCode(context.Background(), "user@example.com", "127.0.0.1", "bad-token")
 
 	assert.Error(t, err)
 	assert.Empty(t, mailer.sentTo)
@@ -130,12 +130,28 @@ func TestAuthService_SendCode_InvalidCaptchaToken(t *testing.T) {
 	assert.Equal(t, int64(0), exists)
 }
 
+func TestAuthServiceSendCodePropagatesCanceledContext(t *testing.T) {
+	svc, repo, _, mr, _, _ := setupService(t)
+	defer mr.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	repo.EXPECT().ExistsByEmail(gomock.Any(), "user@example.com").
+		DoAndReturn(func(got context.Context, _ string) (bool, error) {
+			return false, got.Err()
+		})
+
+	err := svc.SendCode(ctx, "user@example.com", "127.0.0.1", "captcha-token")
+
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
 func TestAuthService_SendCode_EmailAlreadyRegistered(t *testing.T) {
 	svc, repo, rdb, mr, mailer, _ := setupService(t)
 	defer mr.Close()
-	repo.EXPECT().ExistsByEmail("taken@example.com").Return(true, nil)
+	repo.EXPECT().ExistsByEmail(gomock.Any(), "taken@example.com").Return(true, nil)
 
-	err := svc.SendCode("taken@example.com", "127.0.0.1", "captcha-token")
+	err := svc.SendCode(context.Background(), "taken@example.com", "127.0.0.1", "captcha-token")
 
 	require.ErrorIs(t, err, authservice.ErrEmailTaken)
 	assert.Empty(t, mailer.sentTo)
@@ -150,9 +166,9 @@ func TestAuthService_SendPasswordResetCode_ExistingEmailWritesScopedCode(t *test
 
 	emailAddr := "user@example.com"
 	verifiedAt := time.Now()
-	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &emailAddr, EmailVerifiedAt: &verifiedAt}, nil)
+	repo.EXPECT().FindByEmail(gomock.Any(), "user@example.com").Return(&model.User{Email: &emailAddr, EmailVerifiedAt: &verifiedAt}, nil)
 
-	err := svc.SendPasswordResetCode("user@example.com", "127.0.0.1", "captcha-token")
+	err := svc.SendPasswordResetCode(context.Background(), "user@example.com", "127.0.0.1", "captcha-token")
 
 	require.NoError(t, err)
 	assert.Equal(t, "user@example.com", mailer.sentTo)
@@ -168,9 +184,9 @@ func TestAuthService_SendPasswordResetCode_UnverifiedEmailDoesNotSendCode(t *tes
 	defer mr.Close()
 
 	email := "user@example.com"
-	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{Email: &email}, nil)
+	repo.EXPECT().FindByEmail(gomock.Any(), "user@example.com").Return(&model.User{Email: &email}, nil)
 
-	err := svc.SendPasswordResetCode("user@example.com", "127.0.0.1", "captcha-token")
+	err := svc.SendPasswordResetCode(context.Background(), "user@example.com", "127.0.0.1", "captcha-token")
 
 	require.NoError(t, err)
 	assert.Empty(t, mailer.sentTo)
@@ -183,9 +199,9 @@ func TestAuthService_SendPasswordResetCode_UnknownEmailDoesNotRevealAccount(t *t
 	svc, repo, rdb, mr, mailer, captchaConsumer := setupService(t)
 	defer mr.Close()
 
-	repo.EXPECT().FindByEmail("missing@example.com").Return(nil, nil)
+	repo.EXPECT().FindByEmail(gomock.Any(), "missing@example.com").Return(nil, nil)
 
-	err := svc.SendPasswordResetCode("missing@example.com", "127.0.0.1", "captcha-token")
+	err := svc.SendPasswordResetCode(context.Background(), "missing@example.com", "127.0.0.1", "captcha-token")
 
 	require.NoError(t, err)
 	assert.Empty(t, mailer.sentTo)
@@ -202,16 +218,16 @@ func TestAuthService_ResetPassword_ValidCodeUpdatesPassword(t *testing.T) {
 
 	email := "user@example.com"
 	verifiedAt := time.Now()
-	repo.EXPECT().FindByEmail("user@example.com").Return(&model.User{
+	repo.EXPECT().FindByEmail(gomock.Any(), "user@example.com").Return(&model.User{
 		Base:            model.Base{ID: 7},
 		Email:           &email,
 		EmailVerifiedAt: &verifiedAt,
 	}, nil)
-	repo.EXPECT().UpdatePassword(uint(7), gomock.Any()).DoAndReturn(func(_ uint, hash string) error {
+	repo.EXPECT().UpdatePassword(gomock.Any(), uint(7), gomock.Any()).DoAndReturn(func(_ context.Context, _ uint, hash string) error {
 		return bcrypt.CompareHashAndPassword([]byte(hash), []byte("new-password"))
 	})
 
-	err := svc.ResetPassword(&dto.PasswordResetReq{
+	err := svc.ResetPassword(context.Background(), &dto.PasswordResetReq{
 		Email:       "user@example.com",
 		Code:        "123456",
 		NewPassword: "new-password",
@@ -231,18 +247,18 @@ func TestAuthService_Register_Success(t *testing.T) {
 	// 预写入验证码
 	rdb.Set(context.Background(), "email:code:new@example.com", "123456", 0)
 
-	repo.EXPECT().ExistsByEmail("new@example.com").Return(false, nil)
-	repo.EXPECT().ExistsByNickname(gomock.Any()).Return(false, nil).AnyTimes()
-	repo.EXPECT().Create(gomock.Any(), roles.NormalRoleId).DoAndReturn(func(user *model.User, _ uint) error {
+	repo.EXPECT().ExistsByEmail(gomock.Any(), "new@example.com").Return(false, nil)
+	repo.EXPECT().ExistsByNickname(gomock.Any(), gomock.Any()).Return(false, nil).AnyTimes()
+	repo.EXPECT().Create(gomock.Any(), gomock.Any(), roles.NormalRoleId).DoAndReturn(func(_ context.Context, user *model.User, _ uint) error {
 		user.ID = 1
 		require.NotNil(t, user.EmailVerifiedAt)
 		return nil
 	})
-	repo.EXPECT().TouchLoginPresence(uint(1)).Return(nil)
-	repo.EXPECT().FindRolesByUserID(uint(1)).Return([]string{"ROLE_NORMAL"}, nil)
+	repo.EXPECT().TouchLoginPresence(gomock.Any(), uint(1)).Return(nil)
+	repo.EXPECT().FindRolesByUserID(gomock.Any(), uint(1)).Return([]string{"ROLE_NORMAL"}, nil)
 
 	nickname := "mynick"
-	resp, err := svc.Register(&dto.RegisterReq{
+	resp, err := svc.Register(context.Background(), &dto.RegisterReq{
 		Email:    "new@example.com",
 		Password: "password123",
 		Code:     "123456",
@@ -260,7 +276,7 @@ func TestAuthServiceRegisterRejectsWhenRegistrationClosed(t *testing.T) {
 	svc, _, _, mr, _, _ := setupService(t, initializer)
 	defer mr.Close()
 
-	_, err := svc.Register(&dto.RegisterReq{Email: "new@example.com", Password: "password123", Code: "123456"}, nil)
+	_, err := svc.Register(context.Background(), &dto.RegisterReq{Email: "new@example.com", Password: "password123", Code: "123456"}, nil)
 
 	require.ErrorIs(t, err, authservice.ErrRegistrationClosed)
 }
@@ -271,7 +287,7 @@ func TestAuthService_Register_WrongCode(t *testing.T) {
 
 	rdb.Set(context.Background(), "email:code:x@example.com", "999999", 0)
 
-	_, err := svc.Register(&dto.RegisterReq{
+	_, err := svc.Register(context.Background(), &dto.RegisterReq{
 		Email:    "x@example.com",
 		Password: "password123",
 		Code:     "111111",
@@ -291,18 +307,18 @@ func TestAuthService_Login_Success(t *testing.T) {
 	email := "user@example.com"
 	nickname := "Alice"
 	gomock.InOrder(
-		repo.EXPECT().FindByIdentifier("user@example.com").Return(&model.User{
+		repo.EXPECT().FindByIdentifier(gomock.Any(), "user@example.com").Return(&model.User{
 			Username: email,
 			Password: hashedPwd,
 			Email:    &email,
 			Nickname: &nickname,
 			Status:   1,
 		}, nil),
-		repo.EXPECT().TouchLoginPresence(uint(0)).Return(nil),
-		repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
+		repo.EXPECT().TouchLoginPresence(gomock.Any(), uint(0)).Return(nil),
+		repo.EXPECT().FindRolesByUserID(gomock.Any(), uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
 	)
 
-	resp, err := svc.Login(&dto.LoginReq{
+	resp, err := svc.Login(context.Background(), &dto.LoginReq{
 		Identifier: "user@example.com",
 		Password:   "password123",
 	}, "127.0.0.1")
@@ -321,17 +337,17 @@ func TestAuthService_Login_ExpiresInFollowsJWTConfig(t *testing.T) {
 	email := "user@example.com"
 
 	gomock.InOrder(
-		repo.EXPECT().FindByIdentifier("user@example.com").Return(&model.User{
+		repo.EXPECT().FindByIdentifier(gomock.Any(), "user@example.com").Return(&model.User{
 			Username: email,
 			Password: string(hashedBytes),
 			Email:    &email,
 			Status:   1,
 		}, nil),
-		repo.EXPECT().TouchLoginPresence(uint(0)).Return(nil),
-		repo.EXPECT().FindRolesByUserID(uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
+		repo.EXPECT().TouchLoginPresence(gomock.Any(), uint(0)).Return(nil),
+		repo.EXPECT().FindRolesByUserID(gomock.Any(), uint(0)).Return([]string{"ROLE_NORMAL"}, nil),
 	)
 
-	resp, err := svc.Login(&dto.LoginReq{
+	resp, err := svc.Login(context.Background(), &dto.LoginReq{
 		Identifier: "user@example.com",
 		Password:   rawPwd,
 	}, "127.0.0.1")
@@ -347,13 +363,13 @@ func TestAuthService_Login_WrongPassword(t *testing.T) {
 	rawPwd := "password123"
 	hashedBytes, _ := bcrypt.GenerateFromPassword([]byte(rawPwd), bcrypt.MinCost)
 	email := "user@example.com"
-	repo.EXPECT().FindByIdentifier("user@example.com").Return(&model.User{
+	repo.EXPECT().FindByIdentifier(gomock.Any(), "user@example.com").Return(&model.User{
 		Password: string(hashedBytes),
 		Email:    &email,
 		Status:   1,
 	}, nil)
 
-	_, err := svc.Login(&dto.LoginReq{
+	_, err := svc.Login(context.Background(), &dto.LoginReq{
 		Identifier: "user@example.com",
 		Password:   "wrongpassword",
 	}, "127.0.0.1")
@@ -365,9 +381,9 @@ func TestAuthService_Login_UserNotFound(t *testing.T) {
 	svc, repo, _, mr, _, _ := setupService(t)
 	defer mr.Close()
 
-	repo.EXPECT().FindByIdentifier("nobody").Return(nil, nil)
+	repo.EXPECT().FindByIdentifier(gomock.Any(), "nobody").Return(nil, nil)
 
-	_, err := svc.Login(&dto.LoginReq{
+	_, err := svc.Login(context.Background(), &dto.LoginReq{
 		Identifier: "nobody",
 		Password:   "anypassword",
 	}, "127.0.0.1")
@@ -384,18 +400,18 @@ func TestAuthService_AdminLogin_Success(t *testing.T) {
 	nickname := "Root"
 
 	gomock.InOrder(
-		repo.EXPECT().FindByUsername("root").Return(&model.User{
+		repo.EXPECT().FindByUsername(gomock.Any(), "root").Return(&model.User{
 			Base:     model.Base{ID: 7},
 			Username: "root",
 			Password: string(hashedBytes),
 			Nickname: &nickname,
 			Status:   1,
 		}, nil),
-		repo.EXPECT().FindRolesByUserID(uint(7)).Return([]string{roles.AdminRole}, nil),
-		repo.EXPECT().TouchLoginPresence(uint(7)).Return(nil),
+		repo.EXPECT().FindRolesByUserID(gomock.Any(), uint(7)).Return([]string{roles.AdminRole}, nil),
+		repo.EXPECT().TouchLoginPresence(gomock.Any(), uint(7)).Return(nil),
 	)
 
-	resp, err := svc.AdminLogin(&dto.AdminLoginReq{
+	resp, err := svc.AdminLogin(context.Background(), &dto.AdminLoginReq{
 		Username: "root",
 		Password: rawPwd,
 	}, "127.0.0.1")
@@ -414,16 +430,16 @@ func TestAuthService_AdminLogin_RejectsNonAdmin(t *testing.T) {
 	hashedBytes, _ := bcrypt.GenerateFromPassword([]byte(rawPwd), bcrypt.MinCost)
 
 	gomock.InOrder(
-		repo.EXPECT().FindByUsername("alice").Return(&model.User{
+		repo.EXPECT().FindByUsername(gomock.Any(), "alice").Return(&model.User{
 			Base:     model.Base{ID: 9},
 			Username: "alice",
 			Password: string(hashedBytes),
 			Status:   1,
 		}, nil),
-		repo.EXPECT().FindRolesByUserID(uint(9)).Return([]string{roles.NormalRole}, nil),
+		repo.EXPECT().FindRolesByUserID(gomock.Any(), uint(9)).Return([]string{roles.NormalRole}, nil),
 	)
 
-	_, err := svc.AdminLogin(&dto.AdminLoginReq{
+	_, err := svc.AdminLogin(context.Background(), &dto.AdminLoginReq{
 		Username: "alice",
 		Password: rawPwd,
 	}, "127.0.0.1")
@@ -437,7 +453,7 @@ func TestAuthService_Refresh_Success(t *testing.T) {
 	jwtMgr := jwtpkg.NewManager("secret", 2, 168)
 	refreshToken, _ := jwtMgr.GenerateRefresh(1)
 
-	resp, err := svc.Refresh(refreshToken)
+	resp, err := svc.Refresh(context.Background(), refreshToken)
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.AccessToken)
 	assert.NotEmpty(t, resp.RefreshToken)
@@ -450,7 +466,7 @@ func TestAuthService_Refresh_ExpiresInFollowsJWTConfig(t *testing.T) {
 
 	refreshToken, _ := jwtMgr.GenerateRefresh(1)
 
-	resp, err := svc.Refresh(refreshToken)
+	resp, err := svc.Refresh(context.Background(), refreshToken)
 
 	require.NoError(t, err)
 	assert.Equal(t, 5*60*60, resp.ExpiresIn)
@@ -464,6 +480,6 @@ func TestAuthService_Refresh_AccessTokenRejected(t *testing.T) {
 	// access token 不能用于 refresh
 	accessToken, _ := jwtMgr.GenerateAccess(1)
 
-	_, err := svc.Refresh(accessToken)
+	_, err := svc.Refresh(context.Background(), accessToken)
 	assert.Error(t, err)
 }

@@ -37,7 +37,7 @@ func TestAdminService_GetAdminDetail_FillsIsOnlineFromPresence(t *testing.T) {
 	repo := mock.NewMockUserRepository(ctrl)
 	presence := usermock.NewMockOnlineChecker(ctrl)
 
-	repo.EXPECT().FindDetailByID(uint(5)).Return(&userrepo.UserDetailAggregate{
+	repo.EXPECT().FindDetailByID(gomock.Any(), uint(5)).Return(&userrepo.UserDetailAggregate{
 		User: model.User{Base: model.Base{ID: 5}, Username: "vpt"},
 	}, nil)
 	presence.EXPECT().IsUserOnline(gomock.Any(), uint(5)).Return(true, nil)

@@ -99,7 +99,7 @@ func (r *fakeUserRepo) FindByIdentifier(identifier string) (*model.User, error) 
 func (r *fakeUserRepo) FindByUsername(username string) (*model.User, error)     { return r.user, nil }
 func (r *fakeUserRepo) FindByEmail(email string) (*model.User, error)           { return r.user, nil }
 func (r *fakeUserRepo) FindByID(id uint) (*model.User, error)                   { return r.user, nil }
-func (r *fakeUserRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
+func (r *fakeUserRepo) FindDetailByID(context.Context, uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
 func (r *fakeUserRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {

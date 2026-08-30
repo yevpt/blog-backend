@@ -40,7 +40,7 @@ func (r *changeAvatarRepo) FindByUsername(username string) (*model.User, error) 
 	return nil, nil
 }
 func (r *changeAvatarRepo) FindByEmail(email string) (*model.User, error) { return nil, nil }
-func (r *changeAvatarRepo) FindDetailByID(id uint) (*userrepo.UserDetailAggregate, error) {
+func (r *changeAvatarRepo) FindDetailByID(context.Context, uint) (*userrepo.UserDetailAggregate, error) {
 	return nil, nil
 }
 func (r *changeAvatarRepo) ListLikedContent(filter userrepo.LikedContentFilter) (*userrepo.LikedContentPageResult, error) {

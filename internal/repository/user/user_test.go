@@ -1,6 +1,7 @@
 package user_test
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -233,7 +234,7 @@ func TestUserRepository_FindDetailByID_Found(t *testing.T) {
 		WithArgs(uint(7)).
 		WillReturnRows(socialRows)
 
-	detail, err := repo.FindDetailByID(7)
+	detail, err := repo.FindDetailByID(context.Background(), 7)
 	require.NoError(t, err)
 	require.NotNil(t, detail)
 	assert.Equal(t, uint(7), detail.User.ID)
@@ -255,7 +256,7 @@ func TestUserRepository_FindDetailByID_NotFound(t *testing.T) {
 		WithArgs(uint(99), 1).
 		WillReturnRows(sqlmock.NewRows(nil))
 
-	detail, err := repo.FindDetailByID(99)
+	detail, err := repo.FindDetailByID(context.Background(), 99)
 	require.NoError(t, err)
 	assert.Nil(t, detail)
 }

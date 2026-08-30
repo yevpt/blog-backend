@@ -22,7 +22,7 @@ var ErrAvatarNormalizeUnavailable = errors.New("头像归一化依赖未配置")
 var ErrAvatarNotManaged = errors.New("头像不是本站托管对象")
 
 // assembleUserDetail 将 DB 聚合模型转换为对外响应 DTO，供 UserCacheService 调用。
-func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *userrepo.UserDetailAggregate) *dto.UserDetailResp {
+func assembleUserDetail(ctx context.Context, resolver storage.ObjectURLResolver, aggregate *userrepo.UserDetailAggregate) *dto.UserDetailResp {
 	user := aggregate.User
 	resp := &dto.UserDetailResp{
 		ID:            user.ID,
@@ -33,7 +33,7 @@ func assembleUserDetail(resolver storage.ObjectURLResolver, aggregate *userrepo.
 		Phone:         user.Phone,
 		PasswordSet:   user.PasswordSet,
 		Site:          user.Site,
-		AvatarUrl:     resolveUserAvatarURL(resolver, user.AvatarUrl),
+		AvatarUrl:     storage.ResolvePtrURLContext(ctx, resolver, user.AvatarUrl),
 		Mark:          user.Mark,
 		Status:        user.Status,
 		LastLoginAt:   user.LastLoginAt,
@@ -105,16 +105,16 @@ func buildPublicProfile(resolver storage.ObjectURLResolver, agg *userrepo.UserDe
 	}
 
 	resp := &dto.UserPublicProfileResp{
-		ID:          user.ID,
-		Nickname:    nickname,
-		AvatarUrl:   resolveUserAvatarURL(resolver, user.AvatarUrl),
-		Mark:        user.Mark,
-		Site:        user.Site,
+		ID:           user.ID,
+		Nickname:     nickname,
+		AvatarUrl:    resolveUserAvatarURL(resolver, user.AvatarUrl),
+		Mark:         user.Mark,
+		Site:         user.Site,
 		LastLoginAt:  user.LastLoginAt,
 		LastActiveAt: user.LastActiveAt,
 		RegisterAt:   user.CreatedAt,
-		Roles:       append([]string(nil), agg.Roles...),
-		SocialLinks: userSocialLinksToDTO(agg.SocialLinks),
+		Roles:        append([]string(nil), agg.Roles...),
+		SocialLinks:  userSocialLinksToDTO(agg.SocialLinks),
 	}
 
 	if agg.Meta != nil {

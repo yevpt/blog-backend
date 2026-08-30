@@ -28,7 +28,7 @@ func NewCaptchaHandler(svc captchaservice.Service) *CaptchaHandler {
 // @Failure 500 {object} response.Response "生成失败"
 // @Router /captcha/register/challenge [post]
 func (h *CaptchaHandler) GenerateRegistrationChallenge(c *gin.Context) {
-	challenge, err := h.svc.GenerateRegistrationChallenge()
+	challenge, err := h.svc.GenerateRegistrationChallenge(c.Request.Context())
 	if err != nil {
 		response.ServerError(c)
 		return
@@ -52,7 +52,7 @@ func (h *CaptchaHandler) VerifyRegistrationChallenge(c *gin.Context) {
 		return
 	}
 
-	result, err := h.svc.VerifyRegistrationChallenge(&req, c.ClientIP())
+	result, err := h.svc.VerifyRegistrationChallenge(c.Request.Context(), &req, c.ClientIP())
 	if err != nil {
 		response.Fail(c, response.CodeBadRequest, err.Error())
 		return
