@@ -32,7 +32,7 @@ import (
 
 // MustLoadConfig 加载配置文件和环境变量，失败时终止启动。
 func MustLoadConfig() *config.Config {
-	cfg, err := config.Load()
+	cfg, err := config.LoadServer()
 	if err != nil {
 		log.Fatalf("配置加载失败: %v", err)
 	}

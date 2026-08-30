@@ -3,6 +3,7 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,8 +23,7 @@ func TestLoad_ReadsModerationConfig(t *testing.T) {
 
 	// 写入覆盖全部审核配置段的配置文件，确保嵌套字段不会被静默忽略。
 	configDir := filepath.Join(t.TempDir(), "config")
-	require.NoError(t, os.MkdirAll(configDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte(`
+	writeProjectConfigFixture(t, configDir, `
 moderation:
   enabled: true
   mode: enforce
@@ -107,7 +107,7 @@ moderation:
     low_submitted: 发布成功，内容会被审核。
     review_required: 内容已提交，等待人工审核。
     high_rejected: 内容存在较高风险，未能发布，请修改后重试。
-`), 0o644))
+`)
 
 	t.Setenv("APP_ENV", "")
 	require.NoError(t, os.Chdir(filepath.Dir(configDir)))
@@ -183,9 +183,10 @@ moderation:
 			))
 
 			t.Setenv("APP_ENV", "prod")
+			setValidProductionEnv(t)
 			require.NoError(t, os.Chdir(filepath.Dir(configDir)))
 
-			cfg, err := config.Load()
+			cfg, err := config.LoadServer()
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				assert.Nil(t, cfg)
@@ -194,8 +195,31 @@ moderation:
 			require.NoError(t, err)
 			require.NotNil(t, cfg)
 			assert.Equal(t, config.ModerationModeEnforce, cfg.Moderation.Mode)
+			assert.Equal(t, strings.Repeat("s", 32), cfg.Analytics.IPSalt)
 		})
 	}
+}
+
+func setValidProductionEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("BLOG_JWT_SECRET", strings.Repeat("j", 32))
+	t.Setenv("BLOG_DB_HOST", "127.0.0.1")
+	t.Setenv("BLOG_DB_PORT", "3306")
+	t.Setenv("BLOG_DB_NAME", "blog_prod")
+	t.Setenv("BLOG_DB_USER", "blog")
+	t.Setenv("BLOG_DB_PASSWORD", "db-secret")
+	t.Setenv("BLOG_REDIS_ADDR", "127.0.0.1:6379")
+	t.Setenv("BLOG_GARAGE_ENDPOINT", "http://garage.example.com")
+	t.Setenv("BLOG_GARAGE_BUCKET", "blog")
+	t.Setenv("BLOG_GARAGE_REGION", "garage")
+	t.Setenv("BLOG_GARAGE_ACCESSKEYID", "garage-access")
+	t.Setenv("BLOG_GARAGE_SECRETACCESSKEY", "garage-secret")
+	t.Setenv("BLOG_EMAIL_HOST", "smtp.example.com")
+	t.Setenv("BLOG_EMAIL_PORT", "465")
+	t.Setenv("BLOG_EMAIL_FROM", "noreply@example.com")
+	t.Setenv("BLOG_EMAIL_PASSWORD", "email-secret")
+	t.Setenv("BLOG_ANALYTICS_IP_SALT", strings.Repeat("s", 32))
+	t.Setenv("BLOG_ANALYTICS_SITE_HOST", "example.com")
 }
 
 func projectConfigFile(t *testing.T, name string) string {

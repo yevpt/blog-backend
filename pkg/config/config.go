@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -171,11 +172,15 @@ func Load() (*Config, error) {
 	// 按运行环境叠加对应的环境配置（如 APP_ENV=prod 则叠加 config.prod.yaml）
 	env := os.Getenv("APP_ENV")
 	if env != "" {
-		mergeConfig(v, fmt.Sprintf("config.%s", env))
+		if err := mergeConfig(v, fmt.Sprintf("config.%s", env)); err != nil {
+			return nil, fmt.Errorf("叠加环境配置失败: %w", err)
+		}
 	}
 
 	// 叠加本地开发配置（敏感凭证不提交版本库，通过 config.local.yaml 覆盖）
-	mergeConfig(v, "config.local")
+	if err := mergeConfig(v, "config.local"); err != nil {
+		return nil, fmt.Errorf("叠加本地配置失败: %w", err)
+	}
 
 	// 环境变量优先级最高，点号层级用下划线替代，例如 BLOG_DB_PASSWORD → db.password
 	v.SetEnvPrefix("BLOG")
@@ -189,12 +194,24 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("解析配置结构体失败: %w", err)
 	}
 
-	// 使用实际 APP_ENV 校验最终叠加结果，避免覆盖配置绕过生产审核约束。
+	// 通用加载保留审核策略校验；CLI 可在不依赖 HTTP、邮件和存储配置时复用。
 	if err := cfg.Moderation.Validate(env); err != nil {
 		return nil, fmt.Errorf("校验审核配置失败: %w", err)
 	}
 
 	return &cfg, nil
+}
+
+// LoadServer 加载并校验 HTTP 服务启动所需的全部运行配置。
+func LoadServer() (*Config, error) {
+	cfg, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	if err := cfg.Validate(os.Getenv("APP_ENV")); err != nil {
+		return nil, fmt.Errorf("校验服务配置失败: %w", err)
+	}
+	return cfg, nil
 }
 
 func bindRuntimeEnv(v *viper.Viper) {
@@ -232,6 +249,9 @@ func bindRuntimeEnv(v *viper.Viper) {
 		"email.port",
 		"email.from",
 		"email.password",
+		"email.from_name",
+		"email.brand_name",
+		"email.site_url",
 		"email.provider",
 		"email.provider_daily_hard_limit",
 		"email.site_daily_safe_limit",
@@ -260,7 +280,7 @@ func bindRuntimeEnv(v *viper.Viper) {
 }
 
 // mergeConfig 将可选配置文件的所有键值叠加到主配置，文件不存在时静默忽略
-func mergeConfig(v *viper.Viper, name string) {
+func mergeConfig(v *viper.Viper, name string) error {
 	// 创建独立 viper 实例加载覆盖配置，避免与主配置实例互相干扰
 	override := viper.New()
 	override.SetConfigName(name)
@@ -272,11 +292,13 @@ func mergeConfig(v *viper.Viper, name string) {
 
 	// 文件不存在时静默忽略，所有覆盖配置文件均为可选
 	if err := override.ReadInConfig(); err != nil {
-		return
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
+			return nil
+		}
+		return err
 	}
 
-	// 将覆盖配置的所有键逐一写入主配置，实现增量叠加（后者覆盖前者）
-	for _, key := range override.AllKeys() {
-		v.Set(key, override.Get(key))
-	}
+	// 合并到配置层而非调用 Set，确保环境变量仍保持最高优先级。
+	return v.MergeConfigMap(override.AllSettings())
 }
