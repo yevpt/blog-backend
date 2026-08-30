@@ -6,7 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vpt/blog-backend/internal/dto"
-	userservice "github.com/vpt/blog-backend/internal/service/user"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -14,6 +13,11 @@ import (
 type userDetailContextKey string
 
 const userDetailKey userDetailContextKey = "userDetail"
+
+// UserDetailLoader 是认证中间件加载登录用户资料所需的最小接口。
+type UserDetailLoader interface {
+	Get(ctx context.Context, userID int64) (*dto.UserDetailResp, error)
+}
 
 // GetUserDetail 从 gin.Context 读取已认证用户资料，须在 Auth 中间件之后调用。
 // 返回 nil 时表示未经过 Auth 中间件或用户加载失败。
@@ -34,7 +38,7 @@ func SetUserDetail(c *gin.Context, detail *dto.UserDetailResp) {
 // Auth 校验 Bearer access token，并从 Redis/DB 加载完整用户资料写入 Context。
 // userCache 为 nil 时跳过缓存加载（仅用于测试）。
 // 用户被禁用（Status != 1）时也返回 401。
-func Auth(jwtManager *jwt.Manager, userCache userservice.UserCacheService) gin.HandlerFunc {
+func Auth(jwtManager *jwt.Manager, userCache UserDetailLoader) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {

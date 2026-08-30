@@ -16,7 +16,6 @@ import (
 	moderationhandler "github.com/vpt/blog-backend/internal/handler/moderation"
 	articleservice "github.com/vpt/blog-backend/internal/service/article"
 	moderationservice "github.com/vpt/blog-backend/internal/service/moderation"
-	"github.com/vpt/blog-backend/pkg/config"
 	"github.com/vpt/blog-backend/pkg/jwt"
 	"github.com/vpt/blog-backend/pkg/response"
 )
@@ -144,7 +143,7 @@ func TestRegisterAdminRoutesSkipsModerationWhenDisabled(t *testing.T) {
 	r := gin.New()
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
-	registerAdminRoutes(r, routeHandlers{}, jwtManager, nil)
+	registerAdminRoutes(r, Handlers{}, jwtManager, nil)
 
 	for _, route := range r.Routes() {
 		assert.NotContains(t, route.Path, "/moderation/")
@@ -157,8 +156,8 @@ func TestRegisterPublicRoutes_ArticlesListAllowsOptionalAuth(t *testing.T) {
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 	stubSvc := &stubArticleServiceForRouter{}
 
-	registerPublicRoutes(r, routeHandlers{
-		article: articlehandler.NewArticleHandler(stubSvc),
+	registerPublicRoutes(r, Handlers{
+		Article: articlehandler.NewArticleHandler(stubSvc),
 	}, jwtManager, nil)
 
 	token, err := jwtManager.GenerateAccess(9)
@@ -178,31 +177,12 @@ func TestRegisterPublicRoutes_ArticlesListAllowsOptionalAuth(t *testing.T) {
 	assert.Equal(t, response.CodeOK, resp.Code)
 }
 
-func TestNewOAuthManager_RegistersEnabledSocialProviders(t *testing.T) {
-	cfg := &config.Config{
-		OAuth: config.OAuthConfig{
-			Providers: map[string]config.OAuthProviderConfig{
-				"github": {Enabled: true},
-				"gitee":  {Enabled: true},
-				"qq":     {Enabled: true},
-				"weibo":  {Enabled: true},
-				"baidu":  {Enabled: true},
-				"google": {Enabled: false},
-			},
-		},
-	}
-
-	manager := newOAuthManager(nil, cfg)
-
-	assert.Equal(t, []string{"baidu", "gitee", "github", "qq", "weibo"}, manager.Sources())
-}
-
 func TestRegisterAuthedRoutes_RegistersTempUpload(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
-	registerAuthedRoutes(r, routeHandlers{}, jwtManager, nil)
+	registerAuthedRoutes(r, Handlers{}, jwtManager, nil)
 
 	paths := make([]string, 0, len(r.Routes()))
 	for _, route := range r.Routes() {
@@ -218,7 +198,7 @@ func TestRegisterAuthedRoutesRegistersModerationEditRoutes(t *testing.T) {
 	router := gin.New()
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
-	registerAuthedRoutes(router, routeHandlers{}, jwtManager, nil)
+	registerAuthedRoutes(router, Handlers{}, jwtManager, nil)
 
 	want := map[string]bool{
 		"/articles/comments/:id": false, "/articles/comment-replies/:id": false,
@@ -246,7 +226,7 @@ func TestRegisterAdminRoutes_RegistersFriendLinkMutationRoutes(t *testing.T) {
 	r := gin.New()
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
-	registerAdminRoutes(r, routeHandlers{}, jwtManager, nil)
+	registerAdminRoutes(r, Handlers{}, jwtManager, nil)
 
 	paths := make([]string, 0, len(r.Routes()))
 	for _, route := range r.Routes() {
@@ -262,8 +242,8 @@ func TestRegisterAdminRoutesRegistersModerationReviewRoutes(t *testing.T) {
 	r := gin.New()
 	jwtManager := jwt.NewManager("test-secret", 2, 24)
 
-	registerAdminRoutes(r, routeHandlers{
-		moderationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}, nil, moderationOperationsStub{}),
+	registerAdminRoutes(r, Handlers{
+		ModerationAdmin: moderationhandler.NewAdminHandler(&moderationReviewStub{}, nil, moderationOperationsStub{}),
 	}, jwtManager, nil)
 
 	want := map[string]string{

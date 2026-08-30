@@ -1,4 +1,4 @@
-package router
+package app
 
 import (
 	moderationhandler "github.com/vpt/blog-backend/internal/handler/moderation"
@@ -10,23 +10,23 @@ import (
 )
 
 func newModerationAdminHandler(
-	svc moderationservice.ReviewService,
+	service moderationservice.ReviewService,
 	userCache userservice.UserCacheService,
 	operations moderationservice.OperationsService,
 	maxImportFileMB int,
 	resolver storage.ObjectURLResolver,
 	recorder adminlog.Recorder,
-	ruleSvc ...rulemod.Service,
+	ruleService rulemod.Service,
 ) *moderationhandler.AdminHandler {
-	if svc == nil {
+	if service == nil {
 		return nil
 	}
-	handler := moderationhandler.NewAdminHandler(svc, userCache, operations)
+	handler := moderationhandler.NewAdminHandler(service, userCache, operations)
 	handler.SetRuleImportMaxFileBytes(maxImportFileMB * 1024 * 1024)
 	handler.SetObjectURLResolver(resolver)
 	handler.SetOperationLogRecorder(recorder)
-	if len(ruleSvc) > 0 && ruleSvc[0] != nil {
-		handler.SetRuleService(ruleSvc[0])
+	if ruleService != nil {
+		handler.SetRuleService(ruleService)
 	}
 	return handler
 }

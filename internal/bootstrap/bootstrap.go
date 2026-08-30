@@ -203,10 +203,10 @@ func StartModerationCleanupWorker(
 
 // StartAnalyticsWorker 启动统计后台：唯一的事件落库消费 goroutine + 日聚合/清理调度器。
 //
-// 关键约束：ingestor 必须是 router 里 collect handler 投递的同一个实例（经 AnalyticsRuntime 透传），
+// 关键约束：ingestor 必须是 app 组合根里 collect handler 投递的同一个实例，
 // 否则消费者会从一个空实例 Run，而生产事件全部堆在另一个实例上被丢弃。
 // 本函数全程只调用一次，保证「单 ingestor、单 scheduler」。
-// retentionDays / onlineWindow 来自 cfg.Analytics，tz 经 AnalyticsRuntime 透传。
+// retentionDays / onlineWindow 来自 cfg.Analytics，tz 经应用运行时透传。
 func StartAnalyticsWorker(
 	tasks *TaskGroup,
 	redisClient *redis.Client,
@@ -249,7 +249,7 @@ func notificationWorkerID() string {
 	return host + "-" + strconv.Itoa(os.Getpid())
 }
 
-// InitGin 设置 Gin 运行模式并创建空引擎，具体中间件由 router.Setup 注册。
+// InitGin 设置 Gin 运行模式并创建空引擎，具体中间件由应用注册。
 func InitGin(cfg *config.Config) *gin.Engine {
 	gin.SetMode(cfg.Server.Mode)
 	return gin.New()

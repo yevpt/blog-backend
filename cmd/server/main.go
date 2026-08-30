@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vpt/blog-backend/internal/app"
 	"github.com/vpt/blog-backend/internal/bootstrap"
-	"github.com/vpt/blog-backend/internal/router"
 	"go.uber.org/zap"
 )
 
@@ -73,31 +73,19 @@ func run() error {
 	// 初始化 HTTP 引擎：设置 Gin 模式并创建空路由引擎。
 	r := bootstrap.InitGin(cfg)
 
-	// 注册路由：注入基础设施依赖，并按公开、登录、VIP、admin 分组挂载接口。
-	// 返回复合运行时（含统计 ingestor 和规则构建 worker），供 main 启动后台任务。
-	runtime := router.Setup(r, zapLogger, jwtManager, db, redisClient, mailer, objectURLResolver, cfg)
+	// 构造应用：组合根统一组装仓储、服务、Handler 和后台运行时。
+	application, err := app.Build(signalCtx, app.Dependencies{
+		Config: cfg, Logger: zapLogger, DB: db, Redis: redisClient,
+		JWT: jwtManager, Mailer: mailer, Store: objectURLResolver,
+	})
+	if err != nil {
+		return fmt.Errorf("构造应用: %w", err)
+	}
+	application.RegisterHTTP(r)
+
 	workerCtx, cancelWorkers := context.WithCancel(context.Background())
 	workers := bootstrap.NewTaskGroup(workerCtx, zapLogger)
-
-	// 启动通知后台 worker：事件分发、邮件聚合与发送，依赖 MySQL 租约可恢复。
-	bootstrap.StartNotificationWorker(workers, cfg, db, mailer, zapLogger)
-
-	// 启动待审核摘要邮件 worker：先规划批次再发送，复用邮件 worker 总开关。
-	bootstrap.StartModerationReviewEmailWorker(workers, cfg, db, mailer, zapLogger)
-
-	// 审核开启后启动有界清理：过期审计、无引用版本、图片记录和孤儿对象。
-	bootstrap.StartModerationCleanupWorker(workers, cfg, db, objectURLResolver, zapLogger)
-
-	// 启动统计后台 worker：唯一事件落库消费 + 日聚合/清理调度，与 collect handler 共享同一 ingestor。
-	bootstrap.StartAnalyticsWorker(workers, redisClient, zapLogger,
-		runtime.Analytics.Ingestor, runtime.Analytics.Repo, runtime.Analytics.TZ,
-		cfg.Analytics.RetentionDays, cfg.Analytics.OnlineWindow)
-
-	// 启动规则构建 worker：串行处理候选索引构建和导入校验，与核心审核共享同一分类器。
-	if runtime.ModerationRules != nil {
-		workers.Go("moderation-rules", runtime.ModerationRules.Run)
-		zapLogger.Info("审核规则构建 worker 启动")
-	}
+	application.StartWorkers(workers)
 
 	// HTTP 先停止接流量并等待请求完成，再取消后台任务并等待收尾。
 	httpErr := bootstrap.RunHTTP(signalCtx, r, cfg, zapLogger)
