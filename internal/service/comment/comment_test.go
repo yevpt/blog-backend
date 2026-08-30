@@ -774,10 +774,12 @@ func TestCommentServiceListPropagatesContextToRepository(t *testing.T) {
 type recordingPublisher struct {
 	events []notificationservice.PublishEvent
 	ctx    context.Context
+	ctxErr error
 }
 
 func (p *recordingPublisher) Publish(ctx context.Context, e notificationservice.PublishEvent) (*model.NotificationEvent, error) {
 	p.ctx = ctx
+	p.ctxErr = ctx.Err()
 	p.events = append(p.events, e)
 	return &model.NotificationEvent{}, nil
 }
@@ -854,7 +856,7 @@ func TestCommentService_Create_PublishesCommentEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, pub.events, 1)
 	assert.Equal(t, "comment-create", pub.ctx.Value(commentContextKey{}))
-	assert.NoError(t, pub.ctx.Err())
+	assert.NoError(t, pub.ctxErr)
 	assert.Equal(t, notificationservice.EventTypeCommentCreated, pub.events[0].Type)
 	assert.Equal(t, "article", pub.events[0].RootType)
 	assert.Equal(t, uint(3), pub.events[0].RootID)
