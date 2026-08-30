@@ -13,6 +13,9 @@ func AutoMigrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(moderationModels()...); err != nil {
 		return err
 	}
+	if err := ApplySchemaIndexes(db); err != nil {
+		return err
+	}
 	return ApplySchemaComments(db)
 }
 
