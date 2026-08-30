@@ -5,9 +5,9 @@
 ## ⚠️ 生产部署必读：数据库迁移
 
 > [!IMPORTANT]
-> `blog-server` 启动时不会自动修改数据库。生产发布必须先成功执行待应用迁移，再启动新镜像；迁移失败时应保留旧服务运行。
+> `blog-server` 启动时不会自动修改数据库。GitHub Actions 会在启动新镜像前执行数据库迁移，迁移失败时停止部署并保留旧服务运行。
 
-现有生产库首次接入迁移台账时，如果已经确认执行完当前全部历史 SQL，只登记一次固定历史基线：
+现有生产库与 staging 已确认执行完当前全部历史 SQL，CI 首次接入迁移台账时会自动登记固定历史基线。以下是等价的手动命令，仅用于排障：
 
 ```bash
 docker compose pull blog-server
@@ -17,7 +17,7 @@ docker compose run --rm --no-deps blog-server \
 
 `adopt` 只把基线及之前的历史 SQL 登记为已执行，不会运行 SQL。这个基线代表“迁移工具接管前的历史”，以后不能提高；未来新增迁移全部交给 `up` 真正执行。
 
-之后每次生产发布使用：
+之后每次发布由 CI 自动执行以下等价流程：
 
 ```bash
 docker compose run --rm --no-deps blog-server ./blog-migrate up
@@ -25,7 +25,7 @@ docker compose up -d --remove-orphans blog-server
 docker compose run --rm --no-deps blog-server ./blog-migrate status
 ```
 
-`up` 会校验历史文件、获取数据库锁，并按文件名顺序执行所有 `pending` 迁移；遇到 dirty、校验和变化或 SQL 错误会立即停止。当前 GitHub Actions 尚未自动执行这一步，完整说明见[部署与配置](docs/deployment.md#数据库迁移)。
+`up` 会校验历史文件、获取数据库锁，并按文件名顺序执行所有 `pending` 迁移；遇到 dirty、校验和变化或 SQL 错误会立即停止。服务更新后，CI 还会验证 `/health` 中 MySQL 与 Redis 均为 `ok`。完整说明见[部署与配置](docs/deployment.md#数据库迁移)。
 
 ## 项目要点
 

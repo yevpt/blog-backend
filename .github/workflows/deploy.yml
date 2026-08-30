@@ -111,6 +111,8 @@ jobs:
       REMOTE_PORT: ${{ vars.REMOTE_PORT }}
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
       IMAGE_REF: ${{ needs.image.outputs.image }}:${{ needs.image.outputs.tag }}
+      # 生产与 staging 在迁移工具接管前均已人工执行到此版本；该历史基线不得随未来迁移提高。
+      LEGACY_MIGRATION_BASELINE: 20260830_user_like_lookup_index.sql
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -139,8 +141,8 @@ jobs:
           scp -i ~/.ssh/deploy_key -P "$REMOTE_PORT" "config/config.yaml" "config/$CONFIG_OVERLAY" \
             "$REMOTE_USER@$REMOTE_HOST:$DEPLOY_DIR/config/"
 
-      # 远程服务器只负责拉取指定 SHA 镜像并重启服务，避免在服务器上构建。
-      - name: Deploy with Docker Compose
+      # 远程服务器拉取指定 SHA 镜像、执行迁移并更新服务，避免在服务器上构建。
+      - name: Migrate and deploy with Docker Compose
         run: |
           set -euo pipefail
           REMOTE_PORT="${REMOTE_PORT:-22}"
@@ -151,6 +153,7 @@ jobs:
              APP_ENV_NAME='$APP_ENV_NAME' \
              CONTAINER_NAME='$CONTAINER_NAME' \
              DEPLOY_TARGET='$DEPLOY_TARGET' \
+             LEGACY_MIGRATION_BASELINE='$LEGACY_MIGRATION_BASELINE' \
              REGISTRY='${{ env.REGISTRY }}' \
              REGISTRY_USERNAME='${{ secrets.REGISTRY_USERNAME }}' \
              REGISTRY_PASSWORD='${{ secrets.REGISTRY_PASSWORD }}' \
@@ -169,6 +172,13 @@ jobs:
           export COMPOSE_CONTAINER_NAME="$CONTAINER_NAME"
           printf '%s\n' "$REGISTRY_PASSWORD" | docker login "$REGISTRY" -u "$REGISTRY_USERNAME" --password-stdin
           docker compose pull blog-server
+
+          # 首次自动登记迁移工具接管前的固定历史基线；后续重复执行只做校验，不会重放 SQL。
+          docker compose run --rm --no-deps blog-server \
+            ./blog-migrate adopt --through "$LEGACY_MIGRATION_BASELINE"
+          # 新增迁移一律由 up 按顺序真实执行；失败时 set -e 会阻止新镜像启动。
+          docker compose run --rm --no-deps blog-server ./blog-migrate up
+
           # 正常 up；若因历史遗留容器（旧 compose 项目名）占用固定 container_name 而冲突，
           # 强制移除同名散落容器后重试一次，避免人工 SSH 清理
           if ! docker compose up -d --remove-orphans blog-server; then
@@ -176,6 +186,28 @@ jobs:
             docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
             docker compose up -d --remove-orphans blog-server
           fi
+
+          # 容器内探测同时确认 HTTP、MySQL 和 Redis；最多等待 60 秒。
+          health_attempt=1
+          while [ "$health_attempt" -le 30 ]; do
+            health_payload="$(docker compose exec -T blog-server \
+              wget -q -O - http://127.0.0.1:8080/health 2>/dev/null || true)"
+            if printf '%s' "$health_payload" | grep -q '"db":"ok"' && \
+               printf '%s' "$health_payload" | grep -q '"redis":"ok"'; then
+              echo "服务健康检查通过。"
+              break
+            fi
+            if [ "$health_attempt" -eq 30 ]; then
+              echo "服务健康检查失败：$health_payload"
+              docker compose ps blog-server
+              docker compose logs --tail=100 blog-server
+              exit 1
+            fi
+            health_attempt=$((health_attempt + 1))
+            sleep 2
+          done
+
+          docker compose run --rm --no-deps blog-server ./blog-migrate status
           docker compose ps blog-server
           docker image prune -f
           REMOTE

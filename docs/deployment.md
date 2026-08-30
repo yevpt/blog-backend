@@ -75,18 +75,17 @@ docker compose up -d
 
 ## 数据库迁移
 
-镜像内包含独立的 `blog-migrate`，API 服务启动本身不会修改表结构。首次把现有生产库接入迁移台账时，先拉取新镜像，再查看状态并登记最后一个确认已经执行的迁移：
+镜像内包含独立的 `blog-migrate`，API 服务启动本身不会修改表结构。生产库与 staging 在迁移工具接管前均已确认执行到 `20260830_user_like_lookup_index.sql`，GitHub Actions 会自动执行以下首次登记：
 
 ```bash
 docker compose pull blog-server
-docker compose run --rm --no-deps blog-server ./blog-migrate status
 docker compose run --rm --no-deps blog-server \
-  ./blog-migrate adopt --through <最后一个确认已执行的迁移.sql>
+  ./blog-migrate adopt --through 20260830_user_like_lookup_index.sql
 ```
 
-`adopt` 只登记历史，不执行 SQL。若当前所有迁移都已人工执行，可把 `--through` 指向仓库中最后一个迁移；否则只能指向实际完成的位置。
+`adopt` 只登记历史，不执行 SQL。`20260830_user_like_lookup_index.sql` 是迁移工具接管旧数据库的固定历史基线，未来新增迁移时不得提高。
 
-之后每次部署在启动新镜像前显式执行：
+之后每次部署由 CI 在启动新镜像前自动执行 `up`。以下命令只用于手动部署或排障：
 
 ```bash
 docker compose run --rm --no-deps blog-server ./blog-migrate status
@@ -94,7 +93,7 @@ docker compose run --rm --no-deps blog-server ./blog-migrate up
 docker compose up -d --remove-orphans blog-server
 ```
 
-当前 CI 不自动执行迁移，以免尚未完成首次 `adopt` 的生产库被误操作。迁移出现 dirty 时停止部署，先按备份和实际表结构处理，不能直接重跑。
+CI 的实际顺序为：拉取精确 SHA 镜像、幂等登记固定历史基线、执行所有 pending 迁移、更新服务、轮询 `/health`，最后输出迁移状态。迁移出现 dirty 时会在更新服务前停止；应先按备份和实际表结构处理，不能直接重跑。
 
 ## 部署前检查
 
